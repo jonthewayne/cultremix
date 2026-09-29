@@ -159,8 +159,8 @@ async function chatgptImage(args: {
 }
 
 // One transparent 1024x1536 design. Gateway: Sunburst edit with an image, Flare for text only.
-async function designImage(text: string, image?: Uint8Array) {
-  if (imageProvider() === "chatgpt") {
+async function designImage(text: string, image?: Uint8Array, provider: Provider | null = imageProvider()) {
+  if (provider === "chatgpt") {
     return await chatgptImage({ text, images: image ? [image] : [], background: "transparent", size: "1024x1536" });
   }
   const model = image ? "openai/gpt-image-2.5-sunburst" : "openai/gpt-image-2.5-flare";
@@ -182,8 +182,8 @@ async function designImage(text: string, image?: Uint8Array) {
 }
 
 // The model photo: one opaque 1024x1024 edit with the design as input.
-async function photoImage(art: Uint8Array, backgroundColor: string) {
-  if (imageProvider() === "chatgpt") {
+async function photoImage(art: Uint8Array, backgroundColor: string, provider: Provider | null = imageProvider()) {
+  if (provider === "chatgpt") {
     return await chatgptImage({ text: photoPrompt(backgroundColor), images: [art], background: "opaque", size: "1024x1024" });
   }
   const result = await generateImage({
@@ -379,6 +379,7 @@ export const publishAssets = internalAction({
 export const selfTest = internalAction({
   args: {
     mode: v.union(v.literal("text"), v.literal("edit"), v.literal("photo")),
+    provider: v.optional(v.union(v.literal("chatgpt"), v.literal("gateway"))),
     imageKey: v.optional(v.string()),
     instruction: v.optional(v.string()),
     // false: call the provider only (no R2), to check the provider from Convex.
@@ -394,19 +395,20 @@ export const selfTest = internalAction({
       let out;
       if (args.mode === "photo") {
         if (!args.imageKey) return { error: "photo needs imageKey" };
-        out = await photoImage(await fetchPublicImage(args.imageKey, ctx), "#143cc8");
+        out = await photoImage(await fetchPublicImage(args.imageKey, ctx), "#143cc8", args.provider ?? imageProvider());
       } else if (args.mode === "edit") {
         if (!args.imageKey) return { error: "edit needs imageKey" };
         out = await designImage(
           designPrompt({ instruction, presets: [], hasInspiration: true }),
           await fetchPublicImage(args.imageKey, ctx),
+          args.provider ?? imageProvider(),
         );
       } else {
-        out = await designImage(designPrompt({ instruction, presets: [], hasInspiration: false }));
+        out = await designImage(designPrompt({ instruction, presets: [], hasInspiration: false }), undefined, args.provider ?? imageProvider());
       }
       if (args.store === false) {
         return {
-          provider: imageProvider(),
+          provider: args.provider ?? imageProvider(),
           ms: Date.now() - started,
           bytes: out.bytes.byteLength,
           png: pngInfo(out.bytes),
