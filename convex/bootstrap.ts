@@ -35,3 +35,43 @@ export const ensureDefaults = internalMutation({
     return created;
   },
 });
+
+// Dev only: clears studio and publishing data so the dev feed starts clean
+// (the CR counter restarts at 101). Run with `bunx convex run bootstrap:devReset`.
+export const devReset = internalMutation({
+  args: {},
+  returns: v.array(v.string()),
+  handler: async (ctx) => {
+    if (process.env.DEPLOYMENT_ENV !== "dev") throw new Error("devReset runs only on dev.");
+    const cleared: Array<string> = [];
+    const tables = [
+      "shootPhotos",
+      "shoots",
+      "works",
+      "crFamilies",
+      "generations",
+      "batches",
+      "creativeSessions",
+    ] as const;
+    for (const table of tables) {
+      const rows = await ctx.db.query(table).collect();
+      for (const row of rows) await ctx.db.delete(table, row._id);
+      cleared.push(`${table}: ${rows.length}`);
+    }
+    const ledger = await ctx.db.query("creditLedger").collect();
+    let ledgerRows = 0;
+    for (const row of ledger) {
+      if (row.kind !== "grant") {
+        await ctx.db.delete("creditLedger", row._id);
+        ledgerRows++;
+      }
+    }
+    cleared.push(`creditLedger (non-grant): ${ledgerRows}`);
+    const counter = await ctx.db
+      .query("counters")
+      .withIndex("by_name", (q) => q.eq("name", "crFamily"))
+      .unique();
+    if (counter) await ctx.db.patch("counters", counter._id, { next: 101 });
+    return cleared;
+  },
+});
