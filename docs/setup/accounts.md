@@ -30,6 +30,14 @@ Production uses the console email provider: nothing is sent, and each sign-in co
 - R2 buckets `cultremix-dev-public` (https://pub-9fa5537465754fb5a384ad1a5109a04f.r2.dev) and `cultremix-prod-public` (https://pub-4c63aeb732c445d5b2850fa3e9485f53.r2.dev), both with CORS for GET and PUT from the tailnet dev URLs, `http://localhost:3000`, and the production URL (`~/cultremix-ops/r2-cors.json`). Unused until an R2 token exists.
 - Production Worker `cultremix-prod` at https://cultremix-prod.jonthewayne.workers.dev (`wrangler.jsonc` `env.production`, `.env.production`); deploy with `bun run deploy:prod` from the deploy clone.
 
+## Domain
+
+- `cultremix.com` is registered through Vercel (Name.com) with DNS on Cloudflare since 4:20 p.m. (zone active; nameservers `brenna.ns.cloudflare.com` and `leonidas.ns.cloudflare.com`).
+- `cultremix.com` and `www.cultremix.com` are custom domains on `cultremix-prod` (`wrangler.jsonc` `env.production.routes`); `workers.dev` stays on.
+- Production `SITE_URL=https://cultremix.com` (Convex and Worker); `AUTH_TRUSTED_ORIGINS` = `https://cultremix.com`, `https://www.cultremix.com`, `https://cultremix-prod.jonthewayne.workers.dev`. R2 CORS includes both new origins.
+- Wrangler's OAuth login cannot read or edit DNS records, so conflicting records must be deleted in the dashboard before attaching a custom domain.
+- Share tags (`og:url`, `og:image`) come from the hardcoded `SITE_URL` in `src/lib/site.ts`, still the `workers.dev` URL.
+
 ## Log
 
 - 1:26 R2 enabled; buckets created; `r2.dev` URLs on; CORS set.
@@ -38,3 +46,5 @@ Production uses the console email provider: nothing is sent, and each sign-in co
 - 3:09 Production redeployed from `dev` at `7b273ee`; `IMAGE_STORE=convex` on production; production self-test generated and stored a transparent design through the gateway; Worker version `9a5df58e`.
 - 3:12 Image check and demo seeds done (`docs/setup/image-check.md`, `~/cultremix-seed/`); submission draft in `docs/hackathon/submission.md`.
 - 3:50 Production deployed from `dev` at `f2d02db` (Convex, then Worker version `5dfc3fb0`); `AUTH_INSTANT_SIGNIN=true` (the first try got a Convex 503; the retry worked); `bootstrap:ensureDefaults` had nothing to add. Smoke test in fresh browser sessions: a new email reached onboarding in 6.6 s with no code; the owner email got the code box. Test account `ops-smoke-280336@example.com` left on production. Turn off with `bunx convex env set --prod AUTH_INSTANT_SIGNIN false`.
+- 4:24 Production Worker deployed from `dev` at `bf3191c` (icon, share image, metadata); version `d973e362`.
+- 4:37 Custom domains attached after Jon deleted the Vercel records imported into the zone; 4:40 `SITE_URL` and `AUTH_TRUSTED_ORIGINS` switched to `cultremix.com`; Worker version `ac0e8b3b`. Instant sign-in checked in fresh browser sessions on `cultremix.com` (6.8 s to onboarding) and `workers.dev` (8.5 s). Test accounts `ops-smoke-crworkers-32803@example.com` and `ops-smoke-domain-57972@example.com` left on production.

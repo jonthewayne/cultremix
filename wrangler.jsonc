@@ -15,9 +15,13 @@
     "production": {
       "name": "cultremix-prod",
       "workers_dev": true,
+      "routes": [
+        { "pattern": "cultremix.com", "custom_domain": true },
+        { "pattern": "www.cultremix.com", "custom_domain": true }
+      ],
       "vars": {
         "ENVIRONMENT": "production",
-        "SITE_URL": "https://cultremix-prod.jonthewayne.workers.dev",
+        "SITE_URL": "https://cultremix.com",
         "VITE_CONVEX_URL": "https://savory-tiger-504.convex.cloud",
         "VITE_CONVEX_SITE_URL": "https://savory-tiger-504.convex.site"
       }
