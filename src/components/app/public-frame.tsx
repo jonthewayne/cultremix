@@ -1,29 +1,23 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { BrandMark } from "~/components/app/brand-mark";
-import { ThemeToggle } from "~/components/ui/theme-toggle";
 import { cn } from "~/lib/utils";
 
+// CultRemix frame for the sign-in pages: wordmark top left, big type, lots of white.
 export function PublicFrame({
   children,
   className,
-  maxWidth = "max-w-sm",
+  maxWidth = "max-w-lg",
 }: {
   children: ReactNode;
   className?: string;
   maxWidth?: "max-w-sm" | "max-w-md" | "max-w-lg";
 }) {
   return (
-    <main className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 text-foreground md:p-10">
-      <div className="absolute right-4 top-4 md:right-6 md:top-6">
-        <ThemeToggle />
-      </div>
-      <div className={cn("flex w-full flex-col gap-6", maxWidth, className)}>
-        <Link to="/login" className="self-center">
-          <BrandMark />
-        </Link>
-        {children}
-      </div>
+    <main className="min-h-svh bg-white px-4 py-4 text-black md:px-10 md:py-6">
+      <Link to="/" className="text-base font-black uppercase tracking-[0.2em] md:text-lg">
+        CultRemix
+      </Link>
+      <div className={cn("mt-16 flex w-full flex-col gap-6 md:mt-24", maxWidth, className)}>{children}</div>
     </main>
   );
 }

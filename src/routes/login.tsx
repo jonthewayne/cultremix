@@ -148,16 +148,16 @@ function LoginPage() {
 
   return (
     <PublicFrame>
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl">Sign in</CardTitle>
-          <CardDescription>
+      <Card className="w-full border-0 bg-transparent shadow-none">
+        <CardHeader className="p-0">
+          <CardTitle className="text-6xl font-black leading-[0.9] tracking-tighter md:text-8xl">Sign in</CardTitle>
+          <CardDescription className="mt-4 text-lg text-neutral-600">
             {phoneEnabled
               ? "Use an email code or phone code."
-              : "Use an email code to sign in."}
+              : "We’ll email you a 6-digit code."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="mt-10 p-0">
           {phoneEnabled && (
             <div className="mb-4 grid grid-cols-2 gap-2">
               <Button
@@ -190,12 +190,13 @@ function LoginPage() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
+                  className="h-14 rounded-xl border-2 border-black px-4 text-lg"
                   required
                 />
               </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button className="w-full" type="submit" disabled={loading}>
-                {loading ? "Sending..." : "Continue"}
+              {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
+              <Button className="h-14 w-full rounded-2xl bg-black text-lg font-black text-white hover:bg-neutral-800" type="submit" disabled={loading}>
+                {loading ? "Sending…" : "Email me a code"}
               </Button>
             </form>
           ) : (

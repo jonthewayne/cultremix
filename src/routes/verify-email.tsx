@@ -85,12 +85,12 @@ function VerifyEmailPage() {
 
   return (
     <PublicFrame>
-      <Card className="w-full">
-        <CardHeader className="text-center">
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>Enter the code sent to {email}.</CardDescription>
+      <Card className="w-full border-0 bg-transparent shadow-none">
+        <CardHeader className="p-0">
+          <CardTitle className="text-6xl font-black leading-[0.9] tracking-tighter md:text-8xl">Check your email</CardTitle>
+          <CardDescription className="mt-4 text-lg text-neutral-600">Enter the 6-digit code we sent to {email}.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="mt-10 p-0">
           <form className="space-y-4" onSubmit={verify}>
             <Input
               inputMode="numeric"
@@ -100,13 +100,13 @@ function VerifyEmailPage() {
               onChange={(event) =>
                 setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
               }
-              className="h-12 text-center text-xl tracking-[0.5em]"
+              className="font-cr h-20 rounded-xl border-2 border-black text-center text-4xl tracking-[0.4em]"
               autoFocus
               required
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button className="w-full" type="submit" disabled={loading || code.length !== 6}>
-              {loading ? "Verifying..." : "Verify"}
+            {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
+            <Button className="h-14 w-full rounded-2xl bg-black text-lg font-black text-white hover:bg-neutral-800" type="submit" disabled={loading || code.length !== 6}>
+              {loading ? "Checking…" : "Sign in"}
             </Button>
           </form>
         </CardContent>
