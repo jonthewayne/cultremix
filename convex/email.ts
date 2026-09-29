@@ -2,6 +2,7 @@ import { Resend } from "@convex-dev/resend";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { internalAction } from "./_generated/server";
+import { authEmailContent } from "./lib/authEmail";
 import { shouldUseConsoleEmailProvider } from "./lib/providerConfig";
 import type { DataModel } from "./_generated/dataModel";
 import type { GenericCtx } from "@convex-dev/better-auth";
@@ -14,14 +15,15 @@ type EmailMessage = {
   to: string;
   subject: string;
   html: string;
+  text?: string;
 };
 
 function appName() {
-  return process.env.APP_NAME ?? "Starter";
+  return process.env.APP_NAME ?? "CultRemix";
 }
 
 function emailFrom() {
-  return process.env.AUTH_EMAIL_FROM ?? `Starter <auth@example.com>`;
+  return process.env.AUTH_EMAIL_FROM ?? `CultRemix <auth@cultremix.com>`;
 }
 
 function useConsoleEmailProvider() {
@@ -46,6 +48,7 @@ export async function sendEmail(
     to: [message.to],
     subject: message.subject,
     html: message.html,
+    ...(message.text ? { text: message.text } : {}),
   });
 }
 
@@ -57,21 +60,9 @@ export async function sendAuthEmail(
     magicLinkUrl?: string | null;
   },
 ) {
-  const magicLinkHtml = args.magicLinkUrl
-    ? `<p>Or sign in instantly: <a href="${args.magicLinkUrl}">open your magic link</a>.</p>`
-    : "";
-
   await sendEmail(ctx, {
     to: args.email,
-    subject: `${appName()} verification code`,
-    html: [
-      `<p>Your ${appName()} verification code is <strong>${args.otp}</strong>.</p>`,
-      magicLinkHtml,
-      "<p>This code expires in 10 minutes.</p>",
-      "<p>If you did not request this, you can ignore this email.</p>",
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    ...authEmailContent({ appName: appName(), otp: args.otp, magicLinkUrl: args.magicLinkUrl }),
   });
 }
 

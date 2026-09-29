@@ -1,4 +1,4 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -28,17 +28,20 @@ export const Route = createFileRoute("/verify-email")({
   component: VerifyEmailPage,
 });
 
+const RESEND_WAIT_SECONDS = 30;
+
 function VerifyEmailPage() {
   const { email, attemptId, redirect: redirectTo, inviteId } = useSearch({
     from: "/verify-email",
   });
+  const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
-  // Early access: the code is filled in and submitted for you (AUTH_INSTANT_SIGNIN).
-  const [instant, setInstant] = useState(false);
-  const [manual, setManual] = useState(false);
-  const submittedRef = useRef(false);
+  const [resending, setResending] = useState(false);
+  const [wait, setWait] = useState(RESEND_WAIT_SECONDS);
+  const [emailDelivered, setEmailDelivered] = useState(true);
   const expiresAtRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -60,7 +63,7 @@ function VerifyEmailPage() {
     getPreauthClient()
       .query(api.auth.getAuthFeatureFlags, {})
       .then((flags) => {
-        if (active) setInstant(flags.instantSignIn);
+        if (active) setEmailDelivered(flags.emailDelivered);
       })
       .catch(() => undefined);
     return () => {
@@ -68,20 +71,26 @@ function VerifyEmailPage() {
     };
   }, []);
 
-  const submitCode = async (value: string) => {
+  useEffect(() => {
+    if (wait <= 0) return;
+    const timer = window.setTimeout(() => setWait(wait - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [wait]);
+
+  const verify = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
+    setNotice("");
     setLoading(true);
 
     try {
       if (expiresAtRef.current && Date.now() > expiresAtRef.current) {
-        setError("This code has expired. Send a new one from the login screen.");
-        setManual(true);
+        setError("This code has expired. Send a new one below.");
         return;
       }
-      const result = await authClient.signIn.emailOtp({ email, otp: value });
+      const result = await authClient.signIn.emailOtp({ email, otp: code });
       if (result.error) {
-        setError("Invalid code.");
-        setManual(true);
+        setError("That code didn’t work. Check the newest email, or send a new code.");
         return;
       }
       if (attemptId) {
@@ -96,79 +105,103 @@ function VerifyEmailPage() {
       window.location.assign(destinationFor(redirectTo, inviteId));
     } catch {
       setError("Could not verify this code.");
-      setManual(true);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (!instant || !attemptId) return;
-    // The owner and admins get no instant code; show the code box after a moment.
-    const timer = window.setTimeout(() => setManual(true), 8000);
-    const unsubscribe = getPreauthClient().onUpdate(
-      api.authVerification.instantSignInCode,
-      { attemptId: attemptId as Id<"authVerificationAttempts"> },
-      (value) => {
-        if (!value || submittedRef.current) return;
-        if ("manual" in value) {
-          window.clearTimeout(timer);
-          setManual(true);
-          return;
-        }
-        submittedRef.current = true;
-        window.clearTimeout(timer);
-        setCode(value.code);
-        void submitCode(value.code);
-      },
-    );
-    return () => {
-      window.clearTimeout(timer);
-      unsubscribe();
-    };
-    // submitCode reads only values from the URL, which do not change on this page.
-  }, [instant, attemptId]);
-
-  const verify = async (event: React.FormEvent) => {
-    event.preventDefault();
-    await submitCode(code);
+  // A new code starts a new attempt, exactly like the sign-in page, so the
+  // 10-minute window restarts. Only the newest code works.
+  const sendNewCode = async () => {
+    setError("");
+    setNotice("");
+    setResending(true);
+    try {
+      const destination = sanitizeRedirect(redirectTo);
+      const newAttemptId = await getPreauthClient().mutation(
+        api.authVerification.createEmailAuthAttempt,
+        {
+          email,
+          redirect: destination,
+          source: inviteId ? "invite" : "login",
+          inviteId: inviteId as Id<"invites"> | undefined,
+        },
+      );
+      const result = await authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+      if (result.error) {
+        setError(result.error.message ?? "Could not send a new code.");
+        return;
+      }
+      setCode("");
+      setWait(RESEND_WAIT_SECONDS);
+      setNotice("New code sent. Only the newest code works.");
+      await navigate({
+        to: "/verify-email",
+        search: { email, attemptId: newAttemptId, redirect: destination, inviteId },
+        replace: true,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setError(
+        message.includes("Too many attempts")
+          ? "Too many codes requested. Wait a few minutes, then try again."
+          : "Could not send a new code. Try again in a minute.",
+      );
+    } finally {
+      setResending(false);
+    }
   };
-
-  const automatic = instant && !manual;
 
   return (
     <PublicFrame>
       <Card className="w-full border-0 bg-transparent shadow-none">
         <CardHeader className="p-0">
-          <CardTitle className="text-6xl font-black leading-[0.9] tracking-tighter md:text-8xl">
-            {automatic ? "Signing you in" : "Check your email"}
-          </CardTitle>
+          <CardTitle className="text-6xl font-black leading-[0.9] tracking-tighter md:text-8xl">Check your email</CardTitle>
           <CardDescription className="mt-4 text-lg text-neutral-600">
-            {automatic ? `One moment, ${email}.` : `Enter the 6-digit code for ${email}.`}
+            {emailDelivered
+              ? `We sent a 6-digit code to ${email}. It works for 10 minutes.`
+              : `Enter the 6-digit code for ${email}.`}
           </CardDescription>
         </CardHeader>
-        {!automatic && (
-          <CardContent className="mt-10 p-0">
-            <form className="space-y-4" onSubmit={verify}>
-              <Input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={code}
-                onChange={(event) =>
-                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                className="font-cr h-20 rounded-xl border-2 border-black text-center text-4xl tracking-[0.4em]"
-                autoFocus
-                required
-              />
-              {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
-              <Button className="h-14 w-full rounded-2xl bg-black text-lg font-black text-white hover:bg-neutral-800" type="submit" disabled={loading || code.length !== 6}>
-                {loading ? "Checking…" : "Sign in"}
-              </Button>
-            </form>
-          </CardContent>
-        )}
+        <CardContent className="mt-10 p-0">
+          <form className="space-y-4" onSubmit={verify}>
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(event) =>
+                setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              className="font-cr h-20 rounded-xl border-2 border-black text-center text-4xl tracking-[0.4em]"
+              aria-label="6-digit code"
+              autoFocus
+              required
+            />
+            {error && <p role="alert" className="text-sm font-semibold text-red-600">{error}</p>}
+            {notice && !error && <p className="text-sm font-semibold">{notice}</p>}
+            <Button
+              className="h-14 w-full rounded-2xl bg-black text-lg font-black text-white hover:bg-neutral-800"
+              type="submit"
+              disabled={loading || code.length !== 6}
+            >
+              {loading ? "Checking…" : "Sign in"}
+            </Button>
+          </form>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold">
+            <button
+              type="button"
+              onClick={() => void sendNewCode()}
+              disabled={resending || wait > 0}
+              className="underline underline-offset-4 disabled:no-underline disabled:opacity-50"
+            >
+              {resending ? "Sending…" : wait > 0 ? `Send a new code in ${wait} s` : "Send a new code"}
+            </button>
+            <Link to="/login" search={{ redirect: redirectTo, inviteId }} className="underline underline-offset-4">
+              Use a different email
+            </Link>
+          </div>
+        </CardContent>
       </Card>
     </PublicFrame>
   );

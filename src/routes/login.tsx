@@ -45,7 +45,6 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [phoneEnabled, setPhoneEnabled] = useState(false);
   const [emailDelivered, setEmailDelivered] = useState(true);
-  const [instantSignIn, setInstantSignIn] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -55,7 +54,6 @@ function LoginPage() {
         if (active) {
           setPhoneEnabled(flags.phoneEnabled);
           setEmailDelivered(flags.emailDelivered);
-          setInstantSignIn(flags.instantSignIn);
         }
       })
       .catch(() => {
@@ -160,23 +158,16 @@ function LoginPage() {
           <CardDescription className="mt-4 text-lg text-neutral-600">
             {phoneEnabled
               ? "Use an email code or phone code."
-              : instantSignIn
-                ? "Enter your email to sign in."
-                : emailDelivered
-                  ? "We’ll email you a 6-digit code."
-                  : "Sign in with a 6-digit code."}
+              : emailDelivered
+                ? "We’ll email you a 6-digit code."
+                : "Sign in with a 6-digit code."}
           </CardDescription>
-          {instantSignIn ? (
-            <p className="mt-6 rounded-2xl bg-neutral-100 p-4 text-base">
-              <span className="font-bold">Early access.</span> Just enter your email and you’re in. No code needed
-              while email is off.
-            </p>
-          ) : !emailDelivered ? (
+          {!emailDelivered && (
             <p className="mt-6 rounded-2xl bg-neutral-100 p-4 text-base">
               <span className="font-bold">Early access.</span> Sign-in codes aren’t emailed yet, so sign-in is open to
               the CultRemix team for now. Everyone can browse the feed and shop pages.
             </p>
-          ) : null}
+          )}
         </CardHeader>
         <CardContent className="mt-10 p-0">
           {phoneEnabled && (
@@ -217,7 +208,7 @@ function LoginPage() {
               </div>
               {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
               <Button className="h-14 w-full rounded-2xl bg-black text-lg font-black text-white hover:bg-neutral-800" type="submit" disabled={loading}>
-                {loading ? "Sending…" : instantSignIn ? "Sign in" : emailDelivered ? "Email me a code" : "Get a code"}
+                {loading ? "Sending…" : emailDelivered ? "Email me a code" : "Get a code"}
               </Button>
             </form>
           ) : (
