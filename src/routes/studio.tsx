@@ -161,6 +161,7 @@ function StudioPage() {
 
   const remixInfo = session?.remix;
   const ink = inkOn(color);
+  const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < 4);
 
   // A remix session always starts from the parent design, including after a reload.
   const seededSession = useRef<string | null>(null);
@@ -304,13 +305,13 @@ function StudioPage() {
             <div className="flex flex-wrap items-center gap-4">
               <button
                 type="submit"
-                disabled={busy || inspiration?.uploading}
+                disabled={busy || inspiration?.uploading || outOfCredits}
                 className="h-16 rounded-2xl bg-black px-10 text-xl font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-40"
               >
-                {busy ? "Starting…" : "Generate 4"}
+                {outOfCredits ? "Out of credits" : busy ? "Starting…" : "Generate 4"}
               </button>
               <span className="text-sm text-neutral-600">
-                {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · 1 per design`}
+                {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · 4 per batch`}
               </span>
               {(batches.length > 0 || remixInfo) && (
                 <button type="button" onClick={() => void startOver()} className="ml-auto text-sm font-semibold underline underline-offset-4">
