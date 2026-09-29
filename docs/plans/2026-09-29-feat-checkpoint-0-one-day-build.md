@@ -1,6 +1,6 @@
 # CultRemix Checkpoint 0 — One-Day Build: Studio, Remix, Publish, Shop Page
 
-Status: Not started
+Status: Superseded for 2026-09-29 by docs/plans/2026-09-29-sprint-4pm.md (submission due 4:00); still the reference for names and data shapes
 Date: 2026-09-29 (planned the night before) · Depth: Standard · Parent plan: `docs/plans/2026-09-27-feat-cultremix-v1-core-loop.md` (V1)
 Event: one-day hackathon, 2026-09-29, 9:30 a.m.–6:00 p.m. PT. Application code starts at 9:30; plans, tests outside the repo, prompts, and image assets may be prepared the night before. The build started late: the Schedule, unit times, gates, and checkpoints are re-timed for a 12:30 p.m. start (owner revision, 12:05).
 Baseline:
