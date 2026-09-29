@@ -158,7 +158,9 @@ function LoginPage() {
           <CardDescription className="mt-4 text-lg text-neutral-600">
             {phoneEnabled
               ? "Use an email code or phone code."
-              : "We’ll email you a 6-digit code."}
+              : emailDelivered
+                ? "We’ll email you a 6-digit code."
+                : "Sign in with a 6-digit code."}
           </CardDescription>
           {!emailDelivered && (
             <p className="mt-6 rounded-2xl bg-neutral-100 p-4 text-base">
@@ -206,7 +208,7 @@ function LoginPage() {
               </div>
               {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
               <Button className="h-14 w-full rounded-2xl bg-black text-lg font-black text-white hover:bg-neutral-800" type="submit" disabled={loading}>
-                {loading ? "Sending…" : "Email me a code"}
+                {loading ? "Sending…" : emailDelivered ? "Email me a code" : "Get a code"}
               </Button>
             </form>
           ) : (
