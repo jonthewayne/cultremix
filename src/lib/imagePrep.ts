@@ -30,11 +30,15 @@ export function edgeColor(source: CanvasImageSource, width: number, height: numb
   const { data } = ctx.getImageData(0, 0, w, h);
   const bins = new Map<number, { count: number; r: number; g: number; b: number }>();
   const band = 2;
+  let edgePixels = 0;
+  let opaquePixels = 0;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (x >= band && x < w - band && y >= band && y < h - band) continue;
       const i = (y * w + x) * 4;
+      edgePixels++;
       if (data[i + 3] < 200) continue;
+      opaquePixels++;
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
@@ -47,6 +51,8 @@ export function edgeColor(source: CanvasImageSource, width: number, height: numb
       bins.set(key, bin);
     }
   }
+  // A mostly transparent edge means the image has no background color.
+  if (opaquePixels < edgePixels / 2) return DEFAULT_BG;
   let best: { count: number; r: number; g: number; b: number } | null = null;
   for (const bin of bins.values()) if (!best || bin.count > best.count) best = bin;
   if (!best) return DEFAULT_BG;
