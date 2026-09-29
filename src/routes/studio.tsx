@@ -145,6 +145,7 @@ function StudioPage() {
   const batches = session?.batches ?? [];
   const allTiles: Array<Tile> = useMemo(() => batches.flatMap((b) => b.tiles), [batches]);
   const favorites = allTiles.filter((t) => t.favorite && t.status === "succeeded");
+  const tileById = useMemo(() => new Map(allTiles.map((t) => [t.generationId, t])), [allTiles]);
 
   const openViewer = (tile: Tile, batchTiles: Array<Tile>) => {
     const list = favorites.length
@@ -169,10 +170,19 @@ function StudioPage() {
           <div>
             <h1 className="text-[18vw] font-black leading-[0.8] tracking-[-0.06em] md:text-[9.5vw]">Studio</h1>
             {remixInfo && (
-              <p className="mt-6 flex flex-wrap items-baseline gap-x-3 text-lg font-semibold">
-                Remixing <CrMark cr={remixInfo.cr} className="text-2xl" />
-                {remixInfo.title && <span className="font-normal">“{remixInfo.title}”</span>}
-              </p>
+              <div className="mt-8 flex items-center gap-4">
+                <div
+                  className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
+                  style={{ background: remixInfo.backgroundColor }}
+                >
+                  <Art url={remixInfo.artUrl} alt={`CR ${remixInfo.cr}`} className="h-full w-auto max-w-full object-contain" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-wider">Remixing</p>
+                  <CrMark cr={remixInfo.cr} className="text-4xl md:text-5xl" />
+                  {remixInfo.title && <p className="mt-1 text-base">“{remixInfo.title}”</p>}
+                </div>
+              </div>
             )}
           </div>
 
@@ -192,7 +202,7 @@ function StudioPage() {
                   void onFile(e.dataTransfer.files[0]);
                 }}
                 className={cn(
-                  "group relative flex min-h-40 items-center justify-center overflow-hidden border-2 border-dashed border-black text-left transition-colors",
+                  "group relative flex min-h-40 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-black text-left transition-colors",
                   dragging ? "bg-neutral-100" : "hover:bg-neutral-50",
                 )}
                 style={inspiration ? { background: color } : undefined}
@@ -201,7 +211,7 @@ function StudioPage() {
                   <>
                     <img src={inspiration.previewUrl.startsWith("fake:") ? undefined : inspiration.previewUrl} alt="Inspiration" className="max-h-56 w-auto object-contain" />
                     {inspiration.previewUrl.startsWith("fake:") && <Art url={inspiration.previewUrl} alt="" className="h-48" />}
-                    <span className="absolute bottom-2 left-2 bg-black px-2 py-1 text-xs font-bold text-white">
+                    <span className="absolute bottom-2 left-2 rounded-lg bg-black px-2 py-1 text-xs font-bold text-white">
                       {inspiration.uploading ? "Uploading…" : "Inspiration · click to replace"}
                     </span>
                   </>
@@ -213,7 +223,7 @@ function StudioPage() {
                 )}
               </button>
               <div className="flex w-28 flex-col gap-2">
-                <label className="flex flex-1 cursor-pointer flex-col justify-end border-2 border-black p-2" style={{ background: color, color: ink }}>
+                <label className="flex flex-1 cursor-pointer flex-col justify-end rounded-2xl border-2 border-black p-2" style={{ background: color, color: ink }}>
                   <span className="text-xs font-bold uppercase tracking-wider">Background</span>
                   <span className="font-mono text-sm">{color}</span>
                   <input
@@ -228,7 +238,7 @@ function StudioPage() {
                   <button
                     type="button"
                     onClick={() => setInspiration(null)}
-                    className="border-2 border-black px-2 py-1 text-xs font-bold hover:bg-black hover:text-white"
+                    className="rounded-xl border-2 border-black px-2 py-1 text-xs font-bold hover:bg-black hover:text-white"
                   >
                     Remove image
                   </button>
@@ -270,7 +280,7 @@ function StudioPage() {
                     type="button"
                     onClick={() => setChips(on ? chips.filter((c) => c !== chip) : [...chips, chip])}
                     className={cn(
-                      "border-2 border-black px-3 py-1 text-sm font-bold transition-colors",
+                      "rounded-full border-2 border-black px-3 py-1 text-sm font-bold transition-colors",
                       on ? "bg-black text-white" : "hover:bg-neutral-100",
                     )}
                   >
@@ -284,7 +294,7 @@ function StudioPage() {
               <button
                 type="submit"
                 disabled={busy || inspiration?.uploading}
-                className="h-16 bg-black px-10 text-xl font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+                className="h-16 rounded-2xl bg-black px-10 text-xl font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-40"
               >
                 {busy ? "Starting…" : "Generate 4"}
               </button>
@@ -347,13 +357,17 @@ function StudioPage() {
       <AnimatePresence>
         {viewer_ && (
           <Viewer
-            list={viewer_.list}
+            list={viewer_.list.map((t) => tileById.get(t.generationId) ?? t)}
             index={viewer_.index}
             onIndex={(index) => setViewer({ ...viewer_, index })}
             onClose={() => setViewer(null)}
             onPublish={(tile) => {
               setViewer(null);
               setPublishing(tile);
+            }}
+            onInspire={(tile) => {
+              setViewer(null);
+              useAsInspiration(tile);
             }}
           />
         )}
@@ -381,7 +395,7 @@ function TileCard({
   const failed = tile.status === "failed" || tile.status === "unknown_outcome" || tile.status === "expired";
   const ink = inkOn(tile.backgroundColor);
   return (
-    <div className="group relative aspect-square overflow-hidden" style={{ background: tile.backgroundColor, color: ink }}>
+    <div className="group relative aspect-square overflow-hidden rounded-2xl" style={{ background: tile.backgroundColor, color: ink }}>
       {ready ? (
         <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="Open full size">
           <Art url={tile.url} alt="Design" className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]" />
@@ -419,16 +433,16 @@ function TileCard({
             <Link
               to="/cr/$cr"
               params={{ cr: tile.publishedCr }}
-              className="absolute bottom-2 left-2 bg-black px-2 py-1 text-xs font-black text-white"
+              className="absolute bottom-2 left-2 rounded-lg bg-black px-2 py-1 text-xs font-black text-white"
             >
               CR {tile.publishedCr}
             </Link>
           ) : (
             <div className="absolute inset-x-2 bottom-2 flex gap-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-              <button type="button" onClick={onPublish} className="bg-black px-3 py-1.5 text-xs font-black text-white hover:bg-neutral-800">
+              <button type="button" onClick={onPublish} className="rounded-lg bg-black px-3 py-1.5 text-xs font-black text-white hover:bg-neutral-800">
                 Publish
               </button>
-              <button type="button" onClick={onInspire} className="bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-neutral-100">
+              <button type="button" onClick={onInspire} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-neutral-100">
                 Use as inspiration
               </button>
             </div>
@@ -445,14 +459,17 @@ function Viewer({
   onIndex,
   onClose,
   onPublish,
+  onInspire,
 }: {
   list: Array<Tile>;
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
   onPublish: (tile: Tile) => void;
+  onInspire: (tile: Tile) => void;
 }) {
   const toggle = useMutation(api.studio.toggleFavorite);
+  const [checker, setChecker] = useState(false);
   const tile = list[Math.min(index, list.length - 1)];
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -464,11 +481,12 @@ function Viewer({
     return () => window.removeEventListener("keydown", onKey);
   }, [index, list.length, onClose, onIndex]);
   if (!tile) return null;
-  const ink = inkOn(tile.backgroundColor);
+  const ink = checker ? "#000000" : inkOn(tile.backgroundColor);
+  const button = "h-11 rounded-xl px-4 text-sm font-bold";
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex flex-col"
-      style={{ background: tile.backgroundColor, color: ink }}
+      className={cn("fixed inset-0 z-50 flex flex-col", checker && "checker")}
+      style={checker ? { color: ink } : { background: tile.backgroundColor, color: ink }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -477,25 +495,43 @@ function Viewer({
       aria-modal="true"
       aria-label="Design viewer"
     >
-      <div className="flex items-center justify-between px-4 py-3 md:px-8">
-        <span className="font-cr text-3xl tabular-nums md:text-4xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-8">
+        <span className="font-cr text-4xl md:text-5xl">
           {index + 1} / {list.length}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => void toggle({ generationId: tile.generationId })}
-            className="h-11 px-3 text-3xl"
+            className="h-11 px-3 text-3xl leading-none"
             aria-label={tile.favorite ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={tile.favorite}
           >
             {tile.favorite ? "♥" : "♡"}
           </button>
-          {!tile.publishedCr && (
-            <button type="button" onClick={() => onPublish(tile)} className="h-11 bg-black px-5 text-sm font-black text-white">
+          <button
+            type="button"
+            onClick={() => setChecker(!checker)}
+            aria-pressed={checker}
+            className={cn(button, "border-2", checker ? "border-black bg-black text-white" : "border-current")}
+          >
+            Transparency
+          </button>
+          {tile.key && (
+            <button type="button" onClick={() => onInspire(tile)} className={cn(button, "border-2 border-current")}>
+              Use as inspiration
+            </button>
+          )}
+          {tile.publishedCr ? (
+            <Link to="/cr/$cr" params={{ cr: tile.publishedCr }} className={cn(button, "flex items-center bg-black text-white")}>
+              CR {tile.publishedCr}
+            </Link>
+          ) : (
+            <button type="button" onClick={() => onPublish(tile)} className={cn(button, "bg-black text-white")}>
               Publish
             </button>
           )}
-          <button type="button" onClick={onClose} className="h-11 px-3 text-sm font-bold underline underline-offset-4">
+          <button type="button" onClick={onClose} className="h-11 px-2 text-sm font-bold underline underline-offset-4">
             Close (Esc)
           </button>
         </div>
@@ -510,15 +546,25 @@ function Viewer({
             exit={{ opacity: 0, x: -30 }}
             transition={{ duration: 0.18 }}
           >
-            <Art url={tile.url} alt="Design, full size" className="h-full max-h-[82vh] w-auto max-w-full object-contain" />
+            <Art url={tile.url} alt="Design, full size" className="h-full max-h-[80vh] w-auto max-w-full object-contain" />
           </motion.div>
         </AnimatePresence>
         {list.length > 1 && (
           <>
-            <button type="button" onClick={() => onIndex((index - 1 + list.length) % list.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-3 text-4xl font-black md:left-6" aria-label="Previous">
+            <button
+              type="button"
+              onClick={() => onIndex((index - 1 + list.length) % list.length)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-3 text-5xl font-black md:left-6"
+              aria-label="Previous"
+            >
               ←
             </button>
-            <button type="button" onClick={() => onIndex((index + 1) % list.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-3 text-4xl font-black md:right-6" aria-label="Next">
+            <button
+              type="button"
+              onClick={() => onIndex((index + 1) % list.length)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-3 text-5xl font-black md:right-6"
+              aria-label="Next"
+            >
               →
             </button>
           </>
@@ -535,7 +581,14 @@ function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
   const [result, setResult] = useState<{ cr: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const ink = inkOn(tile.backgroundColor);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, saving]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -546,9 +599,66 @@ function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
       setResult({ cr: published.cr });
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
       setSaving(false);
     }
   };
+
+  if (result) {
+    return (
+      <motion.div
+        className="fixed inset-0 z-50 flex flex-col justify-between gap-8 overflow-y-auto bg-black p-6 text-white md:p-12"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Published"
+      >
+        <p className="text-sm font-bold uppercase tracking-[0.3em]">Published</p>
+        <div>
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 170, damping: 20 }}
+          >
+            <CrMark cr={result.cr} className="text-[18vw] md:text-[16vw]" />
+          </motion.div>
+          {title && (
+            <motion.p
+              className="mt-4 text-3xl font-bold md:text-5xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.35 }}
+            >
+              {title}
+            </motion.p>
+          )}
+        </div>
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
+              style={{ background: tile.backgroundColor }}
+            >
+              <Art url={tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
+            </div>
+            <p className="max-w-xs text-sm text-neutral-300">
+              The model photo is developing. It appears on the feed in a minute or two.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link to="/cr/$cr" params={{ cr: result.cr }} className="rounded-2xl bg-white px-7 py-4 text-base font-black text-black">
+              View shop page
+            </Link>
+            <button type="button" onClick={onClose} className="rounded-2xl border-2 border-white px-7 py-4 text-base font-black">
+              Keep creating
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -564,70 +674,46 @@ function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
       aria-label="Publish"
     >
       <motion.div
-        className="grid w-full max-w-4xl overflow-hidden bg-white text-black md:grid-cols-2"
+        className="grid w-full max-w-4xl overflow-hidden rounded-3xl bg-white text-black md:grid-cols-2"
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
       >
         <div className="flex aspect-square items-center justify-center p-[8%]" style={{ background: tile.backgroundColor }}>
-          <Art url={tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
+          <Art url={tile.url} alt="Design on the shirt color" className="h-full w-auto max-w-full object-contain" />
         </div>
-        <div className="flex flex-col justify-between gap-8 p-6 md:p-10">
-          {result ? (
-            <div>
-              <p className="text-sm font-bold uppercase tracking-wider">Published</p>
-              <motion.div
-                initial={{ scale: 0.6, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", stiffness: 260, damping: 18 }}
-              >
-                <CrMark cr={result.cr} className="mt-4 text-6xl md:text-7xl" />
-              </motion.div>
-              {title && <p className="mt-4 text-2xl font-semibold">{title}</p>}
-              <p className="mt-6 text-sm text-neutral-600">The model photo is developing. It will show up in the feed in a minute or two.</p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/cr/$cr" params={{ cr: result.cr }} className="bg-black px-6 py-3 text-sm font-black text-white">
-                  View the shop page
-                </Link>
-                <Link to="/" className="border-2 border-black px-6 py-3 text-sm font-black">
-                  See the feed
-                </Link>
-                <button type="button" onClick={onClose} className="px-2 py-3 text-sm font-semibold underline underline-offset-4">
-                  Keep designing
-                </button>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={submit} className="flex h-full flex-col justify-between gap-8">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-wider">Publish</p>
-                <h2 className="mt-3 text-4xl font-black leading-none tracking-tight">Give it a title</h2>
-                <input
-                  autoFocus
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  maxLength={80}
-                  placeholder="Optional"
-                  className="mt-6 w-full border-b-4 border-black bg-transparent py-2 text-2xl font-semibold outline-none placeholder:text-neutral-300"
-                />
-                <p className="mt-4 text-sm text-neutral-600">
-                  It gets the next CR number and goes on the feed. Shirt color:{" "}
-                  <span className="inline-block h-3 w-3 border border-black align-middle" style={{ background: tile.backgroundColor, color: ink }} />{" "}
-                  <span className="font-mono">{tile.backgroundColor}</span>
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <button type="submit" disabled={saving} className="h-14 bg-black px-8 text-lg font-black text-white disabled:opacity-50">
-                  {saving ? "Publishing…" : "Publish"}
-                </button>
-                <button type="button" onClick={onClose} disabled={saving} className="px-2 text-sm font-semibold underline underline-offset-4">
-                  Cancel
-                </button>
-              </div>
-              {error && <p role="alert" className="font-semibold text-red-600">{error}</p>}
-            </form>
+        <form onSubmit={submit} className="flex flex-col justify-between gap-8 p-6 md:p-10">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wider">Publish</p>
+            <h2 className="mt-3 text-4xl font-black leading-none tracking-tight">Give it a title</h2>
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={80}
+              placeholder="Optional"
+              className="mt-6 w-full border-b-4 border-black bg-transparent py-2 text-2xl font-semibold outline-none placeholder:text-neutral-300"
+            />
+            <p className="mt-4 text-sm text-neutral-600">
+              It gets the next CR number and goes on the feed, printed on a{" "}
+              <span className="inline-block h-3 w-3 rounded-sm border border-black align-middle" style={{ background: tile.backgroundColor }} />{" "}
+              <span className="font-mono">{tile.backgroundColor}</span> shirt.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" disabled={saving} className="h-14 rounded-2xl bg-black px-8 text-lg font-black text-white disabled:opacity-50">
+              {saving ? "Publishing…" : "Publish"}
+            </button>
+            <button type="button" onClick={onClose} disabled={saving} className="px-2 text-sm font-semibold underline underline-offset-4">
+              Cancel
+            </button>
+          </div>
+          {error && (
+            <p role="alert" className="font-semibold text-red-600">
+              {error}
+            </p>
           )}
-        </div>
+        </form>
       </motion.div>
     </motion.div>
   );

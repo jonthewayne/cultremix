@@ -76,6 +76,15 @@ export const viewer = query({
   },
 });
 
+export const signupCredits = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const settings = await getAppSettings(ctx);
+    return settings.signupGrant.enabled ? settings.signupGrant.credits : 0;
+  },
+});
+
 // Saves the username once and applies the signup grant in the same mutation;
 // `signupGrantAt` makes the grant impossible to repeat.
 export const completeOnboarding = mutation({

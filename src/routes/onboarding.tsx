@@ -21,6 +21,7 @@ function OnboardingPage() {
   const { redirect } = Route.useSearch();
   const router = useRouter();
   const viewer = useQuery(convexQuery(api.identity.viewer, {}));
+  const startingCredits = useQuery(convexQuery(api.identity.signupCredits, {})).data;
   const complete = useMutation(api.identity.completeOnboarding);
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +65,7 @@ function OnboardingPage() {
         </h1>
         <p className="mt-8 max-w-md text-lg leading-snug">
           It goes on every design you publish.
+          {startingCredits ? ` You start with ${startingCredits} credits, one per design.` : ""}
         </p>
         <form onSubmit={submit} className="mt-14 flex flex-col gap-6 md:flex-row md:items-end">
           <label className="flex-1">
@@ -86,7 +88,7 @@ function OnboardingPage() {
           <button
             type="submit"
             disabled={saving}
-            className="h-16 bg-black px-10 text-lg font-bold text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
+            className="h-16 rounded-2xl bg-black px-10 text-lg font-bold text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Continue"}
           </button>

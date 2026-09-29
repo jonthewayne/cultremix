@@ -30,14 +30,19 @@ function FeedPage() {
           <p className="mt-8 max-w-xl text-lg leading-snug md:text-xl">
             Every design gets a CR number. Anyone can remix it into the next one.
           </p>
-          <Link to="/studio" className="mt-8 inline-block bg-black px-8 py-4 text-lg font-black text-white transition-transform hover:-translate-y-0.5">
+          <Link to="/studio" className="mt-8 inline-block rounded-2xl bg-black px-8 py-4 text-lg font-black text-white transition-transform hover:-translate-y-0.5">
             Open the studio
           </Link>
         </section>
         <section className="mt-20 flex flex-col gap-16 md:gap-24">
           {feed.isLoading && <p className="text-neutral-500">Loading…</p>}
           {!feed.isLoading && items.length === 0 && (
-            <p className="text-2xl font-semibold text-neutral-400">Nothing published yet. The first one gets CR 101-001.</p>
+            <div>
+              <p className="text-2xl font-semibold text-neutral-400">Nothing published yet. The first one gets CR 101-001.</p>
+              <Link to="/studio" className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
+                Make it in the studio
+              </Link>
+            </div>
           )}
           {items.map((item, i) => (
             <FeedRow key={item.workId} item={item} index={i} />
@@ -58,7 +63,7 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
     >
       <Link to="/cr/$cr" params={{ cr: item.cr }} className="group block">
         <div className="grid grid-cols-2 gap-2 md:gap-4">
-          <div className="relative flex aspect-square items-center justify-center overflow-hidden p-[7%]" style={{ background: item.backgroundColor }}>
+          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%]" style={{ background: item.backgroundColor }}>
             <Art url={item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
           </div>
           <PhotoSquare item={item} />
@@ -82,7 +87,7 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
 export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: boolean }) {
   if (item.photoUrl) {
     return (
-      <div className="relative aspect-square overflow-hidden bg-neutral-100">
+      <div className="relative aspect-square overflow-hidden rounded-2xl bg-neutral-100">
         {item.photoUrl.startsWith("fake:") ? (
           <div className="flex h-full w-full items-center justify-center" style={{ background: item.backgroundColor }}>
             <span className="text-sm font-bold opacity-60">Model photo (dev placeholder)</span>
@@ -95,7 +100,7 @@ export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: b
   }
   const failed = item.photoState === "failed";
   return (
-    <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-neutral-950 text-white">
+    <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 text-white">
       {!failed && (
         <motion.div
           className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-950 to-neutral-800"

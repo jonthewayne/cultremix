@@ -45,7 +45,7 @@ function ShopPage() {
       <SiteHeader />
       <main className="px-4 pb-24 md:px-10">
         <div className="grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2 md:gap-4">
-          <div className="flex aspect-square items-center justify-center overflow-hidden p-[7%]" style={{ background: item.backgroundColor }}>
+          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%]" style={{ background: item.backgroundColor }}>
             <Art url={item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain" />
           </div>
           <PhotoSquare item={item} large />
@@ -77,7 +77,7 @@ function ShopPage() {
             <div>
               <p className="text-sm font-bold uppercase tracking-wider">Color</p>
               <p className="mt-2 flex items-center gap-3 text-lg">
-                <span className="h-7 w-7 border-2 border-black" style={{ background: item.backgroundColor }} />
+                <span className="h-7 w-7 rounded-full border-2 border-black" style={{ background: item.backgroundColor }} />
                 <span className="capitalize">{colorName(item.backgroundColor)}</span>
               </p>
             </div>
@@ -85,19 +85,19 @@ function ShopPage() {
               <p className="text-sm font-bold uppercase tracking-wider">Size</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {SIZES.map((size) => (
-                  <span key={size} className="flex h-11 min-w-11 items-center justify-center border-2 border-black px-3 font-bold">
+                  <span key={size} className="flex h-11 min-w-11 items-center justify-center rounded-xl border-2 border-black px-3 font-bold">
                     {size}
                   </span>
                 ))}
               </div>
             </div>
-            <button type="button" disabled className="h-14 w-full cursor-not-allowed bg-neutral-200 text-lg font-black text-neutral-500">
+            <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-2xl bg-neutral-200 text-lg font-black text-neutral-500">
               Buying opens soon
             </button>
             <Link
               to="/studio"
               search={{ remix: item.cr }}
-              className="flex h-14 w-full items-center justify-center bg-black text-lg font-black text-white transition-transform hover:-translate-y-0.5"
+              className="flex h-14 w-full items-center justify-center rounded-2xl bg-black text-lg font-black text-white transition-transform hover:-translate-y-0.5"
             >
               Remix this
             </Link>
@@ -117,7 +117,7 @@ function ShopPage() {
             <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
               {remixes.map((remix) => (
                 <Link key={remix.workId} to="/cr/$cr" params={{ cr: remix.cr }} className="group block">
-                  <div className="flex aspect-square items-center justify-center overflow-hidden p-[8%]" style={{ background: remix.backgroundColor }}>
+                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[8%]" style={{ background: remix.backgroundColor }}>
                     <Art url={remix.artUrl} alt={`CR ${remix.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
                   </div>
                   <CrMark cr={remix.cr} className="mt-2 text-3xl" />

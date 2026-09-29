@@ -1,10 +1,28 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { authClient } from "~/lib/auth-client";
 
 export function SiteHeader() {
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
+  const [open, setOpen] = useState(false);
+  const menu = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!menu.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const signOut = async () => {
+    await authClient.signOut({ fetchOptions: { onSuccess: () => location.assign("/") } });
+  };
+
   return (
     <header className="flex items-center justify-between gap-4 px-4 py-4 md:px-10 md:py-6">
       <Link to="/" className="text-base font-black uppercase tracking-[0.2em] md:text-lg">
@@ -18,11 +36,37 @@ export function SiteHeader() {
           Studio
         </Link>
         {viewer ? (
-          <Link to="/settings" className="hidden tabular-nums sm:inline">
-            {viewer.username ? `@${viewer.username}` : "You"} · {viewer.unlimited ? "Unlimited" : `${viewer.credits} credits`}
-          </Link>
+          <div ref={menu} className="relative">
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              aria-expanded={open}
+              className="flex items-center gap-2 rounded-full border-2 border-black px-3 py-1 tabular-nums"
+            >
+              <span className="max-w-28 truncate">{viewer.username ? `@${viewer.username}` : "You"}</span>
+              <span className="hidden text-neutral-500 sm:inline">
+                {viewer.unlimited ? "Unlimited" : `${viewer.credits} credits`}
+              </span>
+            </button>
+            {open && (
+              <div className="absolute right-0 top-full z-40 mt-2 w-48 overflow-hidden rounded-2xl border-2 border-black bg-white shadow-xl">
+                <p className="border-b border-neutral-200 px-4 py-3 text-xs text-neutral-500 sm:hidden">
+                  {viewer.unlimited ? "Unlimited credits" : `${viewer.credits} credits left`}
+                </p>
+                {viewer.creatorNumber === 1 && (
+                  <p className="border-b border-neutral-200 px-4 py-3 text-xs font-bold">Creator № 1</p>
+                )}
+                <Link to="/settings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
+                  Settings
+                </Link>
+                <button type="button" onClick={() => void signOut()} className="block w-full px-4 py-3 text-left hover:bg-neutral-100">
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
-          <Link to="/login" search={{ redirect: "/studio" }}>
+          <Link to="/login" search={{ redirect: "/studio" }} className="rounded-full bg-black px-4 py-1.5 text-white">
             Sign in
           </Link>
         )}

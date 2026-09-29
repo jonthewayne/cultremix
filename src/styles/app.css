@@ -137,12 +137,27 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* The CR number lockup: big, blocky digits. */
+/* The CR number lockup: big, blocky monospaced digits with a slashed zero
+   (JetBrains Mono ExtraBold until the brand font arrives). */
 .font-cr {
-  font-family: "Archivo Black", Inter, ui-sans-serif, system-ui, sans-serif;
-  font-weight: 400;
-  letter-spacing: -0.04em;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+  font-variant-numeric: slashed-zero tabular-nums;
+  font-feature-settings: "zero" 1;
+  letter-spacing: -0.06em;
   text-transform: uppercase;
+}
+
+/* Shows transparency behind a design. */
+.checker {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #d9d9d9 25%, transparent 25%),
+    linear-gradient(-45deg, #d9d9d9 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d9d9d9 75%),
+    linear-gradient(-45deg, transparent 75%, #d9d9d9 75%);
+  background-size: 28px 28px;
+  background-position: 0 0, 0 14px, 14px -14px, -14px 0;
 }
 
 @keyframes caret-blink {
