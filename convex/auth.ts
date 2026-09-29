@@ -296,11 +296,13 @@ export const getAuthFeatureFlags = query({
     emailOtpEnabled: v.boolean(),
     magicLinkEnabled: v.boolean(),
     phoneEnabled: v.boolean(),
+    emailDelivered: v.boolean(),
   }),
   handler: () => ({
     emailOtpEnabled: process.env.AUTH_EMAIL_OTP_ENABLED !== "false",
     magicLinkEnabled: process.env.AUTH_MAGIC_LINK_ENABLED === "true",
     phoneEnabled: process.env.AUTH_PHONE_ENABLED === "true",
+    emailDelivered: process.env.AUTH_EMAIL_PROVIDER === "resend",
   }),
 });
 

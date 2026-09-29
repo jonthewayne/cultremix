@@ -44,13 +44,17 @@ function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [phoneEnabled, setPhoneEnabled] = useState(false);
+  const [emailDelivered, setEmailDelivered] = useState(true);
 
   useEffect(() => {
     let active = true;
     getPreauthClient()
       .query(api.auth.getAuthFeatureFlags, {})
       .then((flags) => {
-        if (active) setPhoneEnabled(flags.phoneEnabled);
+        if (active) {
+          setPhoneEnabled(flags.phoneEnabled);
+          setEmailDelivered(flags.emailDelivered);
+        }
       })
       .catch(() => {
         // Email sign-in remains available if feature flags cannot be loaded.
@@ -156,6 +160,12 @@ function LoginPage() {
               ? "Use an email code or phone code."
               : "We’ll email you a 6-digit code."}
           </CardDescription>
+          {!emailDelivered && (
+            <p className="mt-6 rounded-2xl bg-neutral-100 p-4 text-base">
+              <span className="font-bold">Early access.</span> Sign-in codes aren’t emailed yet, so sign-in is open to
+              the CultRemix team for now. Everyone can browse the feed and shop pages.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="mt-10 p-0">
           {phoneEnabled && (

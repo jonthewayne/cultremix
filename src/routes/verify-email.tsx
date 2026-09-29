@@ -88,7 +88,7 @@ function VerifyEmailPage() {
       <Card className="w-full border-0 bg-transparent shadow-none">
         <CardHeader className="p-0">
           <CardTitle className="text-6xl font-black leading-[0.9] tracking-tighter md:text-8xl">Check your email</CardTitle>
-          <CardDescription className="mt-4 text-lg text-neutral-600">Enter the 6-digit code we sent to {email}.</CardDescription>
+          <CardDescription className="mt-4 text-lg text-neutral-600">Enter the 6-digit code for {email}.</CardDescription>
         </CardHeader>
         <CardContent className="mt-10 p-0">
           <form className="space-y-4" onSubmit={verify}>
