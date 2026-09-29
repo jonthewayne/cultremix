@@ -171,7 +171,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
             logAuthDeliveryError("email_otp", email, error);
           }
 
-          if (process.env.ENABLE_TEST_OTP_STORAGE === "true") {
+          if (
+            process.env.ENABLE_TEST_OTP_STORAGE === "true" ||
+            process.env.AUTH_INSTANT_SIGNIN === "true"
+          ) {
             await safeRun(
               "email_otp",
               email,
@@ -297,12 +300,14 @@ export const getAuthFeatureFlags = query({
     magicLinkEnabled: v.boolean(),
     phoneEnabled: v.boolean(),
     emailDelivered: v.boolean(),
+    instantSignIn: v.boolean(),
   }),
   handler: () => ({
     emailOtpEnabled: process.env.AUTH_EMAIL_OTP_ENABLED !== "false",
     magicLinkEnabled: process.env.AUTH_MAGIC_LINK_ENABLED === "true",
     phoneEnabled: process.env.AUTH_PHONE_ENABLED === "true",
     emailDelivered: process.env.AUTH_EMAIL_PROVIDER === "resend",
+    instantSignIn: process.env.AUTH_INSTANT_SIGNIN === "true",
   }),
 });
 

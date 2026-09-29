@@ -135,7 +135,12 @@ export const storeTestOtp = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, { email, otpCode }) => {
-    if (process.env.ENABLE_TEST_OTP_STORAGE !== "true") return null;
+    if (
+      process.env.ENABLE_TEST_OTP_STORAGE !== "true" &&
+      process.env.AUTH_INSTANT_SIGNIN !== "true"
+    ) {
+      return null;
+    }
 
     const attempt = await ctx.db
       .query("authVerificationAttempts")
@@ -147,6 +152,34 @@ export const storeTestOtp = internalMutation({
 
     if (attempt) await ctx.db.patch("authVerificationAttempts", attempt._id, { otpCode });
     return null;
+  },
+});
+
+// Early access (AUTH_INSTANT_SIGNIN=true, while email isn't sent): hands the
+// sign-in code for this attempt back to the page that started it, so entering
+// an email signs you in. The owner and admin accounts still need the code from
+// the logs.
+export const instantSignInCode = query({
+  args: { attemptId: v.id("authVerificationAttempts") },
+  returns: v.union(
+    v.null(),
+    v.object({ code: v.string() }),
+    v.object({ manual: v.literal(true) }),
+  ),
+  handler: async (ctx, { attemptId }) => {
+    if (process.env.AUTH_INSTANT_SIGNIN !== "true") return null;
+    const attempt = await ctx.db.get("authVerificationAttempts", attemptId);
+    if (!attempt || attempt.status !== "pending") return null;
+    const email = attempt.email.trim().toLowerCase();
+    const owner = process.env.FIRST_SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+    if (owner && email === owner) return { manual: true as const };
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+    if (user?.platformRole && user.platformRole !== "user") return { manual: true as const };
+    if (!attempt.otpCode || attempt.expiresAtMs < Date.now()) return null;
+    return { code: attempt.otpCode };
   },
 });
 
