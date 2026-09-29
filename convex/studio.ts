@@ -12,7 +12,7 @@ export const TILES_PER_BATCH = 4;
 export const MODEL_TEXT = "openai/gpt-image-2.5-flare";
 export const MODEL_EDIT = "openai/gpt-image-2.5-sunburst";
 const HEX = /^#[0-9a-f]{6}$/iu;
-const IMAGE_KEY = /^(inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)$/u;
+const IMAGE_KEY = /^((inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)|cvx:[A-Za-z0-9_-]{8,64})$/u;
 
 export const tileStatus = v.union(
   v.literal("queued"),
@@ -284,7 +284,13 @@ export const generate = mutation({
       session = (await ctx.db.get("creativeSessions", sessionId))!;
     }
     const operation = session.remixOfWorkId ? "remix" : inspirationKey ? "edit" : "create";
-    const model = inspirationKey ? MODEL_EDIT : MODEL_TEXT;
+    const chatgpt = Boolean(process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID);
+    const provider = chatgpt ? "chatgpt" : "gateway";
+    const model = chatgpt
+      ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
+      : inspirationKey
+        ? MODEL_EDIT
+        : MODEL_TEXT;
     const batchId = await ctx.db.insert("batches", {
       sessionId: session._id,
       ownerId: user._id,
@@ -304,7 +310,7 @@ export const generate = mutation({
         index,
         kind: operation === "create" ? "concept" : operation,
         status: "queued",
-        provider: "gateway",
+        provider,
         model,
         charged: !owner,
         favorite: false,

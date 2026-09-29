@@ -18,11 +18,24 @@ export function isDevDeployment() {
   return process.env.DEPLOYMENT_ENV === "dev";
 }
 
+// R2 whenever its keys are set. IMAGE_STORE=convex is today's switch for Convex
+// file storage while the R2 token is missing (keys "cvx:<storageId>", served by
+// the /img/ HTTP route).
+export function storageMode(): "r2" | "convex" | null {
+  if (r2Configured()) return "r2";
+  if (process.env.IMAGE_STORE === "convex") return "convex";
+  return null;
+}
+
 // Keys starting with "fake:" come from the dev stand-in before keys exist;
 // the client draws a placeholder for them.
 export function publicUrl(key: string | undefined): string | undefined {
   if (!key) return undefined;
   if (key.startsWith("fake:")) return key;
+  if (key.startsWith("cvx:")) {
+    const site = process.env.CONVEX_SITE_URL?.replace(/\/$/u, "");
+    return site ? `${site}/img/${key.slice(4)}` : undefined;
+  }
   const base = process.env.R2_PUBLIC_URL?.replace(/\/$/u, "");
   return base ? `${base}/${key}` : undefined;
 }
