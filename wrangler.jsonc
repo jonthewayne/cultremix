@@ -17,9 +17,9 @@
       "workers_dev": true,
       "vars": {
         "ENVIRONMENT": "production",
-        "SITE_URL": "https://cultremix-prod.REPLACE_WITH_WORKERS_SUBDOMAIN.workers.dev",
-        "VITE_CONVEX_URL": "https://REPLACE_WITH_PROD_DEPLOYMENT.convex.cloud",
-        "VITE_CONVEX_SITE_URL": "https://REPLACE_WITH_PROD_DEPLOYMENT.convex.site"
+        "SITE_URL": "https://cultremix-prod.jonthewayne.workers.dev",
+        "VITE_CONVEX_URL": "https://savory-tiger-504.convex.cloud",
+        "VITE_CONVEX_SITE_URL": "https://savory-tiger-504.convex.site"
       }
     },
     "development": {
