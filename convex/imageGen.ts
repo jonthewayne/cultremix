@@ -53,6 +53,55 @@ function liveGeneration() {
   return Boolean(process.env.AI_GATEWAY_API_KEY) && r2Configured();
 }
 
+// One transparent 1024x1536 design: Sunburst edit with an image, Flare for text only.
+async function designImage(model: string, text: string, image?: Uint8Array) {
+  const result = await generateImage({
+    model: gateway.image(model),
+    prompt: image ? { images: [image], text } : text,
+    size: "1024x1536",
+    providerOptions: {
+      openai: {
+        background: "transparent",
+        output_format: "png",
+        quality: process.env.IMAGE_QUALITY ?? "medium",
+      },
+    },
+    maxRetries: 0,
+    abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
+  });
+  return { bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata };
+}
+
+// The model photo: one opaque 1024x1024 Sunburst edit with the design as input.
+async function photoImage(art: Uint8Array, backgroundColor: string) {
+  const result = await generateImage({
+    model: gateway.image("openai/gpt-image-2.5-sunburst"),
+    prompt: { images: [art], text: photoPrompt(backgroundColor) },
+    size: "1024x1024",
+    providerOptions: {
+      openai: {
+        background: "opaque",
+        output_format: "png",
+        quality: process.env.PHOTO_QUALITY ?? "medium",
+      },
+    },
+    maxRetries: 0,
+    abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
+  });
+  return { bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata };
+}
+
+async function storePng(ctx: Parameters<typeof r2.store>[0], prefix: string, bytes: Uint8Array) {
+  const sha256 = sha256Hex(bytes);
+  const key = `${prefix}/${sha256}.png`;
+  await r2.store(ctx, bytes, {
+    key,
+    type: "image/png",
+    cacheControl: "public, max-age=31536000, immutable",
+  });
+  return { key, sha256 };
+}
+
 export const runTile = internalAction({
   args: { generationId: v.id("generations") },
   returns: v.null(),
@@ -82,33 +131,11 @@ export const runTile = internalAction({
         presets: job.presets,
         hasInspiration: Boolean(job.inspirationKey),
       });
-      const prompt = job.inspirationKey
-        ? { images: [await fetchPublicImage(job.inspirationKey)], text }
-        : text;
+      const image = job.inspirationKey ? await fetchPublicImage(job.inspirationKey) : undefined;
       const started = Date.now();
-      const result = await generateImage({
-        model: gateway.image(job.model),
-        prompt,
-        size: "1024x1536",
-        providerOptions: {
-          openai: {
-            background: "transparent",
-            output_format: "png",
-            quality: process.env.IMAGE_QUALITY ?? "medium",
-          },
-        },
-        maxRetries: 0,
-        abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
-      });
-      const bytes = result.image.uint8Array;
+      const { bytes } = await designImage(job.model, text, image);
       const info = pngInfo(bytes);
-      const sha256 = sha256Hex(bytes);
-      const key = `gen/${sha256}.png`;
-      await r2.store(ctx, bytes, {
-        key,
-        type: "image/png",
-        cacheControl: "public, max-age=31536000, immutable",
-      });
+      const { key, sha256 } = await storePng(ctx, "gen", bytes);
       console.log("runTile ok", job.model, Date.now() - started, "ms", info);
       await ctx.runMutation(internal.studio.markSucceeded, {
         generationId,
@@ -206,27 +233,8 @@ export const publishAssets = internalAction({
         photoKey = `fake:photo-${workId}`;
       } else {
         const art = await fetchPublicImage(artKey);
-        const result = await generateImage({
-          model: gateway.image("openai/gpt-image-2.5-sunburst"),
-          prompt: { images: [art], text: photoPrompt(job.backgroundColor) },
-          size: "1024x1024",
-          providerOptions: {
-            openai: {
-              background: "opaque",
-              output_format: "png",
-              quality: process.env.PHOTO_QUALITY ?? "medium",
-            },
-          },
-          maxRetries: 0,
-          abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
-        });
-        const bytes = result.image.uint8Array;
-        photoKey = `photo/${sha256Hex(bytes)}.png`;
-        await r2.store(ctx, bytes, {
-          key: photoKey,
-          type: "image/png",
-          cacheControl: "public, max-age=31536000, immutable",
-        });
+        const { bytes } = await photoImage(art, job.backgroundColor);
+        photoKey = (await storePng(ctx, "photo", bytes)).key;
       }
       await ctx.runMutation(internal.publish.recordPhoto, { shootId, publicKey: photoKey });
     } catch (error) {
@@ -237,5 +245,52 @@ export const publishAssets = internalAction({
       });
     }
     return null;
+  },
+});
+
+// Diagnostic for the real image path: `bunx convex run imageGen:selfTest '{"mode":"text"}'`,
+// then "edit" or "photo" with the returned key as `imageKey`. Stores the result in R2.
+export const selfTest = internalAction({
+  args: {
+    mode: v.union(v.literal("text"), v.literal("edit"), v.literal("photo")),
+    imageKey: v.optional(v.string()),
+    instruction: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    if (!liveGeneration()) return { error: "AI_GATEWAY_API_KEY or R2 keys are missing." };
+    const started = Date.now();
+    const instruction = args.instruction ?? "A neon motel sign that says NO VACANCY FOR BAD VIBES";
+    try {
+      let out;
+      if (args.mode === "photo") {
+        if (!args.imageKey) return { error: "photo needs imageKey" };
+        out = await photoImage(await fetchPublicImage(args.imageKey), "#143cc8");
+      } else if (args.mode === "edit") {
+        if (!args.imageKey) return { error: "edit needs imageKey" };
+        out = await designImage(
+          "openai/gpt-image-2.5-sunburst",
+          designPrompt({ instruction, presets: [], hasInspiration: true }),
+          await fetchPublicImage(args.imageKey),
+        );
+      } else {
+        out = await designImage(
+          "openai/gpt-image-2.5-flare",
+          designPrompt({ instruction, presets: [], hasInspiration: false }),
+        );
+      }
+      const { key } = await storePng(ctx, args.mode === "photo" ? "photo" : "gen", out.bytes);
+      return {
+        ms: Date.now() - started,
+        bytes: out.bytes.byteLength,
+        png: pngInfo(out.bytes),
+        key,
+        url: publicUrl(key),
+        warnings: JSON.parse(JSON.stringify(out.warnings ?? [])),
+        providerMetadata: JSON.parse(JSON.stringify(out.providerMetadata ?? {})),
+      };
+    } catch (error) {
+      return { ms: Date.now() - started, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
+    }
   },
 });
