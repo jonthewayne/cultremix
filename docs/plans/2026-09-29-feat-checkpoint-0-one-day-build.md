@@ -522,7 +522,7 @@ Never cut: sign-in and onboarding, credits and budget, create/favorite/viewer, r
 | 2 | Prompt pack: create, branch, remix, fork templates; six worlds with keywords and casting lines, in `docs/setup/prompt-pack.md` | ops lane | after 1; due 2:00 |
 | 3 | Seed images for eight families and their shoots in `~/cultremix-seed/`, with the manifest C14 reads | ops lane | after 2; due 3:40 |
 | 4 | Updated starter with email sign-in (gate G3) | starter thread | done: `4b5d609` |
-| 5 | Convex login on mighteous; projects `cultremix` and `cultremix-accept` in team `curiousentity` | planning thread | waiting for Jon to approve the Convex login (12:11) |
+| 5 | Convex login on mighteous; projects `cultremix` and `cultremix-accept` in team `curiousentity` | planning thread | done 12:13: `cultremix` (dev `vibrant-rook-798`; its production deployment serves cultremix.com) and `cultremix-accept` (dev `rare-chinchilla-611`); in C1 choose existing projects |
 | 6 | The rest of G2a and G2b: Resend key and domain, `FIRST_SUPER_ADMIN_EMAIL`, Cloudflare zone and Worker access, R2 buckets, CORS, and keys, media DNS, the production deploy key in `~/.config/cultremix/prod.env`, the acceptance deploy key; recorded without secrets in `docs/setup/accounts.md` | ops lane with Jon | G2a by 12:30, G2b by 1:20 |
 | 7 | Font link | Jon | open |
 | 8 | The event's submission requirements (repo, video, form) | Jon | open |
