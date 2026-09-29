@@ -7,7 +7,7 @@ Targets: **V1 core loop complete by 2026-10-04**; hackathon build live on **stag
 Origin documents: `docs/CultRemix_Product_Vision_Architecture_Build_Plan.md` (vision + architecture), `docs/reference/cultremix-chatgpt.md` (planning conversation, 2026-06-18 → 2026-09-23)
 Baseline:
   CultRemix: `github.com/jonthewayne/cultremix` (private); `main` and `dev` start at the docs-only initial commit (A13)
-  starter source: ~/Projects/starter @ a754258 (copied in U1)
+  starter source: ~/Projects/starter @ 4b5d609 (imported in Checkpoint 0 C1; A14)
  planned: 2026-09-27
 
 ---
@@ -29,6 +29,7 @@ Checkpoint 0 (`docs/plans/2026-09-29-feat-checkpoint-0-one-day-build.md`) builds
 - **A11. Provider boundary.** U3 extends `convex/lib/providers/` from Checkpoint 0 (adding `chatgpt.ts` and the provider policy there) instead of creating `convex/lib/imageProviders/`.
 - **A12. Production starts at Checkpoint 0.** `cultremix.com` runs production (Convex `cultremix` production deployment, `cultremix-prod-*` buckets, `DEPLOYMENT_ENV=prod`) from 2026-09-29 with commerce, chain, and Circle off by flag. KTD-21's "production starts empty and is seeded by script" happens that day: 101-001 in production is CuriousEntity's first seeded original, and automated tests never write to production. Staging is created when V1 first needs Monad testnet or the Shopify development store (U7/U9), seeded by script with its own numbering. U15 becomes turning on commerce and chain writes in the live production. Which link the Monad submission uses (R44: production with mainnet writes if U7's production gates pass, otherwise staging on testnet) is decided when V1 is re-dated.
 - **A13. Repo and branches.** The code lives at `github.com/jonthewayne/cultremix` (private; the V1 accounts table's submission sharing still applies). Work lands on `dev`; `main` holds only what production runs and is fast-forwarded to each deployed commit, never committed to directly. CI, when added, deploys `dev` to the dev deployment and release tags to staging, then production.
+- **A14. Starter 4b5d609.** The updated starter (2026-09-29) replaces a754258 wherever this plan or V1 cites it. It is Bun-only (`bun install`, `bun run <script>`, `bunx`; tests run with `bun run test`, never `bun test`, which starts Bun's own runner), is imported with `bun run new-project` and configured with `bun run setup`, and renames what the plans assumed: `OWNER_EMAIL` → `FIRST_SUPER_ADMIN_EMAIL`; `BETTER_AUTH_SECRET` → `AUTH_SECRET`; `AUTH_CONSUMER_PHONE_ENABLED` → `AUTH_PHONE_ENABLED` (off by default); platform roles `admin_owner`, `admin_ops`, `admin_support` → `super_admin_owner`, `super_admin_ops`, `super_admin_support`; `convex/lib/authzCapabilities.ts` → `PLATFORM_CAPABILITIES` in `convex/lib/authz.ts` with checks in `convex/lib/permissions.ts`; `convex/lib/sanitizeRedirect.ts` → `convex/lib/redirect.ts` (default `/dashboard`). The owner claim extends the starter's `auth.bootstrapFirstSuperAdmin`. The starter also brings organizations, resources, memberships, and invites, which stay in the schema unused, and no longer has a `/health` page (C4 adds one).
 - **Also added by Checkpoint 0:** `appSettings`, `waitlist`, `shoots`, `shootPhotos`, `workColorways`; `generations.kind` value `shoot`; `creativeSessions.remixMode`, `purpose`, `shootWorkId`; `users.signupGrantAt`; `creditLedger.reason`, `note`; `creatorAccess.activatedAt`; `works.offeredColors`, `publishedAt`, `artKey`, `artThumbKey`, `printSha256` and index `by_status_publishedAt`; the `gen.shoots` flag; bootstrap defaults. The Checkpoint 0 plan's "Settled validators" fix the shapes of the tables it writes.
 
 ---
@@ -1105,3 +1106,7 @@ Added "Checkpoint 0 amendments" (A1–A9) after the one-day plan was drafted; de
 ### Owner revision — 2026-09-29 (GitHub repo and branches)
 
 The repo is on GitHub as `jonthewayne/cultremix` (private) with `dev` and `main`; amendment A13 added and the promotion policy's code line changed to match. Not yet reviewed.
+
+### Owner revision — 2026-09-29 (starter 4b5d609)
+
+Amendment A14 maps this plan's starter references (a754258) to the updated starter `4b5d609`: Bun, `new-project` and `setup`, and the renamed owner email, auth secret, phone switch, platform roles, and capability files. Not yet reviewed.
