@@ -37,7 +37,15 @@ export const Route = createRootRouteWithContext<{
         content: "Design a shirt, publish it with a CR number, and let anyone remix it.",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800;900&display=swap",
+      },
+      { rel: "stylesheet", href: appCss },
+    ],
   }),
   beforeLoad: async (ctx) => {
     const token = await getAuth();
@@ -74,12 +82,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{const t=localStorage.getItem('theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch{}",
-          }}
-        />
         <HeadContent />
       </head>
       <body>
