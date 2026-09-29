@@ -342,6 +342,9 @@ function StudioPage() {
                     {batch.instruction || "From the inspiration image"}
                     {batch.presets.length > 0 && <span className="font-normal text-neutral-500"> · {batch.presets.join(", ")}</span>}
                   </p>
+                  {batch.tiles.some((t) => t.status === "queued" || t.status === "dispatched") && (
+                    <Elapsed since={batch.createdAt} />
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
                   {batch.tiles.map((tile) => (
@@ -461,6 +464,20 @@ function TileCard({
         </>
       )}
     </div>
+  );
+}
+
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.round((now - since) / 1000));
+  return (
+    <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-neutral-500">
+      Designing · {seconds} s
+    </span>
   );
 }
 
