@@ -8,5 +8,5 @@ export const SITE_DESCRIPTION =
 export const SHARE_DESCRIPTION =
   "Creators use AI to publish remixable works that others turn into their own variations, with every creation keeping its lineage and attribution. Finished works become real products, and the people who shaped them share in what they earn. Built on Monad.";
 // Bump v when og.png changes so link previews drop their cached copy.
-export const SHARE_IMAGE = `${SITE_URL}/og.png?v=2`;
+export const SHARE_IMAGE = `${SITE_URL}/og.png?v=3`;
 export const SHARE_IMAGE_ALT = "CultRemix: Remix culture, get paid.";
