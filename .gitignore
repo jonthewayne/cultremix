@@ -1,0 +1,12 @@
+node_modules
+.output
+dist
+.env.local
+.env
+.env.development
+.env.test
+.starter
+.dev.vars
+.wrangler
+.tmp
+worker-configuration.d.ts

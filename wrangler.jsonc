@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cultremix",
+  "compatibility_date": "2026-05-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "main": "@tanstack/react-start/server-entry",
+  "vars": {
+    "ENVIRONMENT": "preview",
+    "SITE_URL": "https://mighteous.tailb6e2ea.ts.net:3000",
+    "VITE_CONVEX_URL": "https://vibrant-rook-798.convex.cloud",
+    "VITE_CONVEX_SITE_URL": "https://vibrant-rook-798.convex.site"
+  },
+  "env": {
+    "production": {
+      "name": "cultremix-prod",
+      "workers_dev": true,
+      "vars": {
+        "ENVIRONMENT": "production",
+        "SITE_URL": "https://cultremix-prod.REPLACE_WITH_WORKERS_SUBDOMAIN.workers.dev",
+        "VITE_CONVEX_URL": "https://REPLACE_WITH_PROD_DEPLOYMENT.convex.cloud",
+        "VITE_CONVEX_SITE_URL": "https://REPLACE_WITH_PROD_DEPLOYMENT.convex.site"
+      }
+    },
+    "development": {
+      "name": "cultremix-dev",
+      "workers_dev": true,
+      "vars": {
+        "ENVIRONMENT": "development",
+        "SITE_URL": "https://cultremix-dev.REPLACE_WITH_WORKERS_SUBDOMAIN.workers.dev",
+        "VITE_CONVEX_URL": "https://vibrant-rook-798.convex.cloud",
+        "VITE_CONVEX_SITE_URL": "https://vibrant-rook-798.convex.site"
+      }
+    }
+  }
+}

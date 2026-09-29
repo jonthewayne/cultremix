@@ -1,0 +1,50 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "starter-app",
+  "compatibility_date": "2026-05-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "main": "@tanstack/react-start/server-entry",
+  "vars": {
+    "ENVIRONMENT": "preview",
+    "SITE_URL": "http://localhost:3000",
+    "VITE_CONVEX_URL": "https://REPLACE_WITH_DEV_DEPLOYMENT.convex.cloud",
+    "VITE_CONVEX_SITE_URL": "https://REPLACE_WITH_DEV_DEPLOYMENT.convex.site"
+  },
+  "env": {
+    "production": {
+      "name": "starter-app-prod",
+      "workers_dev": false,
+      "routes": [
+        {
+          "pattern": "example.com",
+          "zone_name": "example.com",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "production",
+        "SITE_URL": "https://example.com",
+        "VITE_CONVEX_URL": "https://REPLACE_WITH_PROD_DEPLOYMENT.convex.cloud",
+        "VITE_CONVEX_SITE_URL": "https://REPLACE_WITH_PROD_DEPLOYMENT.convex.site"
+      }
+    },
+    "development": {
+      "name": "starter-app-dev",
+      "workers_dev": false,
+      "routes": [
+        {
+          "pattern": "dev.example.com",
+          "zone_name": "example.com",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "development",
+        "SITE_URL": "https://dev.example.com",
+        "VITE_CONVEX_URL": "https://REPLACE_WITH_DEV_DEPLOYMENT.convex.cloud",
+        "VITE_CONVEX_SITE_URL": "https://REPLACE_WITH_DEV_DEPLOYMENT.convex.site"
+      }
+    }
+  }
+}

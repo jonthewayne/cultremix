@@ -1,0 +1,75 @@
+---
+description: Convex guidelines for this starter
+globs: **/*.ts,**/*.tsx,**/*.js,**/*.jsx
+---
+
+# Convex Guidelines
+
+## Functions
+
+- Use the new object syntax for all Convex functions:
+
+```ts
+import { query } from "./_generated/server";
+import { v } from "convex/values";
+
+export const example = query({
+  args: {},
+  returns: v.null(),
+  handler: async () => {
+    return null;
+  },
+});
+```
+
+- Always include `args` and `returns` validators for `query`, `mutation`, `action`, `internalQuery`, `internalMutation`, and `internalAction`.
+- Use `v.null()` when a function returns `null` or has no meaningful return value.
+- Use public `query`, `mutation`, and `action` only for app API functions that may be called by clients.
+- Use `internalQuery`, `internalMutation`, and `internalAction` for private backend-only functions.
+- HTTP endpoints belong in `convex/http.ts` and use `httpAction`.
+
+## Calling Functions
+
+- Use `ctx.runQuery`, `ctx.runMutation`, and `ctx.runAction` with generated function references from `api` or `internal`.
+- Do not pass Convex function implementations directly.
+- Avoid splitting transactional logic across multiple queries/mutations unless there is a clear reason.
+- If calling a function in the same file via `ctx.runQuery` or similar, add an explicit return type annotation to avoid TypeScript circularity issues.
+
+## Schema And Validators
+
+- Define the database schema in `convex/schema.ts`.
+- Import schema helpers from `convex/server`.
+- Use `v.id("tableName")` and the generated `Id<"tableName">` type for document ids.
+- Use `v.int64()` instead of deprecated `v.bigint()`.
+- Use `v.record()` for records; `v.map()` and `v.set()` are not supported.
+- Convex values cannot be `undefined`; use `null` when needed.
+- Name indexes after all indexed fields, such as `by_userId_and_status`.
+- Query index fields in the same order they are defined.
+
+## Queries
+
+- Do not use `.filter()` for normal query paths. Add an index and use `.withIndex()` instead.
+- Use `.unique()` when exactly one document should match.
+- Do not use `.delete()` on queries. Collect or iterate rows, then call `ctx.db.delete(row._id)`.
+- For async iteration, prefer `for await (const row of query)` over collecting large result sets.
+
+## Mutations
+
+- Use `ctx.db.patch` for partial updates.
+- Use `ctx.db.replace` for full document replacement.
+- Validate role and ownership changes in the mutation that performs the write.
+- Keep authorization DB-authoritative. Do not trust client-provided roles.
+
+## Actions
+
+- Add `"use node";` at the top of action files that use Node.js built-ins or Node-only provider SDKs.
+- Do not use `ctx.db` inside actions.
+- Prefer shared helper functions over action-to-query/action-to-mutation calls when no runtime boundary is needed.
+
+## Auth Patterns In This Starter
+
+- Authenticated React routes use `ConvexQueryClient` with `expectAuth: true`.
+- Login, verification, invite, and other pre-session flows use `src/lib/convex-preauth.ts`.
+- Better Auth requests go through same-origin `/api/auth/*`.
+- Roles and scoped memberships live in Convex app tables, not JWT claims.
+- Provider secrets live in Convex backend environment variables by default.
