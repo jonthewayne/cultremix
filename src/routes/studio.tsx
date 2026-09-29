@@ -162,6 +162,17 @@ function StudioPage() {
   const remixInfo = session?.remix;
   const ink = inkOn(color);
 
+  // A remix session always starts from the parent design, including after a reload.
+  const seededSession = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session || !remixInfo || seededSession.current === session.sessionId) return;
+    seededSession.current = session.sessionId;
+    if (!inspiration && remixInfo.artKey && remixInfo.artUrl) {
+      setInspiration({ key: remixInfo.artKey, previewUrl: remixInfo.artUrl, uploading: false });
+      setColor(remixInfo.backgroundColor);
+    }
+  }, [session, remixInfo, inspiration]);
+
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
