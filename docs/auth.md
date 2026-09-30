@@ -11,6 +11,12 @@
 - `src/lib/auth-server.ts`: TanStack Start server helper.
 - `src/lib/convex-preauth.ts`: standalone pre-auth Convex client.
 
+## Sessions
+
+A sign-in lasts 400 days, the longest Chrome keeps a cookie. A visit more than a day after the last renewal pushes the expiry out another 400 days, in the database and in the browser, so people who come back stay signed in. The page's sign-in check (`getTokenAndRenewSession` in `src/lib/auth-server.ts`, called from the root route) passes Better Auth's renewed cookie back to the browser; the library's `getToken` drops it, which left the browser's cookie running out 400 days after sign-in. The session cookie is `__Secure-better-auth.session_token` on HTTPS (HttpOnly, SameSite=Lax). Convex calls use a separate access token that lasts an hour and renews itself from the session (`convex({ jwt: { expirationSeconds } })` in `convex/auth.ts`).
+
+Cookies belong to one address and one browser. Signing in on `cultremix-prod.jonthewayne.workers.dev` doesn't sign you in on `cultremix.com`, and a sign-in in Chrome doesn't carry over to Safari or to the in-app browser another app opens links in.
+
 ## Email OTP
 
 The login page first creates an `authVerificationAttempts` row through the pre-auth Convex client. Then it asks Better Auth to create a magic link and an email OTP. The email delivery callback reads the stored magic link URL and sends one combined email.

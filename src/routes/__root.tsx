@@ -11,7 +11,7 @@ import { Toaster } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { convexAuthClient } from "~/lib/auth-client";
-import { getToken } from "~/lib/auth-server";
+import { getTokenAndRenewSession } from "~/lib/auth-server";
 import { useOnboardingGuard } from "~/lib/onboardingGuard";
 import {
   SHARE_DESCRIPTION,
@@ -26,7 +26,7 @@ import appCss from "~/styles/app.css?url";
 
 const getAuth = createServerFn({ method: "GET" }).handler(async () => {
   try {
-    return await getToken();
+    return await getTokenAndRenewSession();
   } catch {
     return null;
   }

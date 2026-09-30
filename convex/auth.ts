@@ -96,7 +96,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     trustedOrigins: [siteUrl, ...extraOrigins],
     database: authComponent.adapter(ctx),
     session: {
-      expiresIn: 60 * 60 * 24 * 365,
+      // Keep people signed in as long as browsers allow: Chrome keeps a cookie at most
+      // 400 days. Any visit after a day renews it, so people who come back never expire.
+      expiresIn: 60 * 60 * 24 * 400,
       updateAge: 60 * 60 * 24,
     },
     plugins: [
