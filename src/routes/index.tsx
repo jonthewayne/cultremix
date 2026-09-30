@@ -23,12 +23,12 @@ function FeedPage() {
       <main className="px-4 pb-24 md:px-10">
         <section className="pt-6 md:pt-10">
           <h1 className="text-[17vw] font-black leading-[0.8] tracking-[-0.06em] md:text-[11vw]">
-            Wear the
+            Remix culture,
             <br />
-            remix.
+            get paid.
           </h1>
-          <p className="mt-8 max-w-xl text-lg leading-snug md:text-xl">
-            Every design gets a CR number. Anyone can remix it into the next one.
+          <p className="mt-10 max-w-xl text-xl font-medium leading-snug md:mt-14 md:text-2xl">
+            <span className="block sm:inline">Remix what you see.</span> Wear it, sell it, share it.
           </p>
           <Link to="/studio" className="mt-8 inline-block rounded-2xl bg-black px-8 py-4 text-lg font-black text-white transition-transform hover:-translate-y-0.5">
             Open the studio
