@@ -17,6 +17,7 @@ import type * as http from "../http.js";
 import type * as identity from "../identity.js";
 import type * as imageGen from "../imageGen.js";
 import type * as invites from "../invites.js";
+import type * as lib_authEmail from "../lib/authEmail.js";
 import type * as lib_authRateLimit from "../lib/authRateLimit.js";
 import type * as lib_authVerification from "../lib/authVerification.js";
 import type * as lib_authz from "../lib/authz.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   identity: typeof identity;
   imageGen: typeof imageGen;
   invites: typeof invites;
+  "lib/authEmail": typeof lib_authEmail;
   "lib/authRateLimit": typeof lib_authRateLimit;
   "lib/authVerification": typeof lib_authVerification;
   "lib/authz": typeof lib_authz;
