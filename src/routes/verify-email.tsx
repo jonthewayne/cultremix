@@ -43,6 +43,8 @@ function VerifyEmailPage() {
   const [wait, setWait] = useState(RESEND_WAIT_SECONDS);
   const [emailDelivered, setEmailDelivered] = useState(true);
   const expiresAtRef = useRef<number | null>(null);
+  // The last code submitted on its own, so a failed code isn't retried in a loop.
+  const autoSubmittedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!attemptId) return;
@@ -77,8 +79,7 @@ function VerifyEmailPage() {
     return () => window.clearTimeout(timer);
   }, [wait]);
 
-  const verify = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submitCode = async (otp: string) => {
     setError("");
     setNotice("");
     setLoading(true);
@@ -88,7 +89,7 @@ function VerifyEmailPage() {
         setError("This code has expired. Send a new one below.");
         return;
       }
-      const result = await authClient.signIn.emailOtp({ email, otp: code });
+      const result = await authClient.signIn.emailOtp({ email, otp });
       if (result.error) {
         setError("That code didn’t work. Check the newest email, or send a new code.");
         return;
@@ -107,6 +108,21 @@ function VerifyEmailPage() {
       setError("Could not verify this code.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verify = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await submitCode(code);
+  };
+
+  // Six digits (pasted, typed, or filled in from a phone's code suggestion) submit on their own.
+  const onCodeChange = (value: string) => {
+    const next = value.replace(/\D/g, "").slice(0, 6);
+    setCode(next);
+    if (next.length === 6 && !loading && autoSubmittedRef.current !== next) {
+      autoSubmittedRef.current = next;
+      void submitCode(next);
     }
   };
 
@@ -168,11 +184,8 @@ function VerifyEmailPage() {
             <Input
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
               value={code}
-              onChange={(event) =>
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-              }
+              onChange={(event) => onCodeChange(event.target.value)}
               className="font-cr h-20 rounded-xl border-2 border-black text-center text-4xl tracking-[0.4em]"
               aria-label="6-digit code"
               autoFocus
