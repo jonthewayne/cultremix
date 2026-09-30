@@ -402,7 +402,7 @@ export const selfTest = internalAction({
     if (!imageProvider()) return { error: "No image provider: set CHATGPT_ACCESS_TOKEN or AI_GATEWAY_API_KEY." };
     if (args.store !== false && !storageMode()) return { error: "No image storage: R2 keys are missing and IMAGE_STORE is not convex." };
     const started = Date.now();
-    const instruction = args.instruction ?? "A neon motel sign that says NO VACANCY FOR BAD VIBES";
+    const instruction = args.instruction ?? "A psychedelic 70s mushroom graphic that says GROW SLOW";
     try {
       let out;
       if (args.mode === "photo") {

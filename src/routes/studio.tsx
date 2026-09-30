@@ -278,7 +278,7 @@ function StudioPage() {
                 }}
                 rows={3}
                 maxLength={600}
-                placeholder={inspiration ? "Make it a motel sign that says NO VACANCY FOR BAD VIBES" : "A neon motel sign that says NO VACANCY FOR BAD VIBES"}
+                placeholder="Change the words to…"
                 className="mt-2 w-full resize-none border-b-4 border-black bg-transparent py-2 text-2xl font-semibold leading-tight outline-none placeholder:text-neutral-300 md:text-3xl"
               />
             </label>
