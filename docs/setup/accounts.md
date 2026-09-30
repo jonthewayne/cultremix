@@ -22,7 +22,9 @@ The app stores images in R2 whenever `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_
 
 ## Email
 
-Production sends sign-in codes through Resend from `CultRemix <auth@cultremix.com>` (`AUTH_EMAIL_PROVIDER=resend`, since 4:47). `cultremix.com` is verified in Resend; its DKIM (`resend._domainkey`) and `send` records were added to Cloudflare by Resend's automatic setup. The Convex Resend component runs with `testMode: false`. Instant sign-in (`AUTH_INSTANT_SIGNIN=true`) stays on during judging; PR #1 removes it afterward.
+Production sends sign-in codes through Resend from `CultRemix <heyyo@cultremix.com>` (changed from `auth@` at 5:01) (`AUTH_EMAIL_PROVIDER=resend`, since 4:47). `cultremix.com` is verified in Resend; its DKIM (`resend._domainkey`) and `send` records were added to Cloudflare by Resend's automatic setup. The Convex Resend component runs with `testMode: false`. Instant sign-in (`AUTH_INSTANT_SIGNIN=true`) stays on during judging; PR #1 removes it afterward.
+
+Inbound: Cloudflare Email Routing is enabled on `cultremix.com` (MX `route1-3.mx.cloudflare.net`, root SPF `include:_spf.mx.cloudflare.net`, DKIM `cf2024-1._domainkey`). Rule `heyyo-to-gmail` forwards `heyyo@cultremix.com` to `jonthewayne@gmail.com` (a verified destination). The catch-all is off, so other addresses are dropped. Manage with `wrangler email routing rules list cultremix.com`.
 
 ## Cloudflare
 
@@ -49,3 +51,4 @@ Production sends sign-in codes through Resend from `CultRemix <auth@cultremix.co
 - 4:24 Production Worker deployed from `dev` at `bf3191c` (icon, share image, metadata); version `d973e362`.
 - 4:37 Custom domains attached after Jon deleted the Vercel records imported into the zone; 4:40 `SITE_URL` and `AUTH_TRUSTED_ORIGINS` switched to `cultremix.com`; Worker version `ac0e8b3b`. Instant sign-in checked in fresh browser sessions on `cultremix.com` (6.8 s to onboarding) and `workers.dev` (8.5 s). Test accounts `ops-smoke-crworkers-32803@example.com` and `ops-smoke-domain-57972@example.com` left on production.
 - 4:46 Resend key saved (Jon pasted it in chat; rotate it). A send from `auth@cultremix.com` to `delivered@resend.dev` was accepted, so the domain is verified. 4:47 Production switched to Resend with `AUTH_EMAIL_FROM="CultRemix <auth@cultremix.com>"`; a sign-in code for Jon's Gmail was requested on `cultremix.com` and the Resend component queued it with no failures.
+- 5:01 `AUTH_EMAIL_FROM="CultRemix <heyyo@cultremix.com>"` on production (Resend accepted a test send). 5:02 Email Routing enabled with wrangler; destination `jonthewayne@gmail.com`; rule `heyyo-to-gmail`; a sign-in code for Jon and a forwarding test to `heyyo@` sent.
