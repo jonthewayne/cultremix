@@ -24,6 +24,9 @@ export const Route = createFileRoute("/studio")({
 
 const CHIPS = ["Bold type", "Vintage", "Hand-drawn", "Y2K", "Minimal", "Psychedelic", "Collage", "Neon"];
 
+// Stamps for tiles the content filter refused; a blocked batch shows each once.
+const BLOCKED_STAMPS = ["Too hot to print", "The ink said no", "Our printer blushed", "Too spicy for cotton"];
+
 type Inspiration = { key?: string; previewUrl: string; uploading: boolean };
 type Tile = {
   generationId: Id<"generations">;
@@ -32,6 +35,7 @@ type Tile = {
   url?: string;
   favorite: boolean;
   error?: string;
+  blocked?: boolean;
   backgroundColor: string;
   publishedCr?: string;
   key?: string;
@@ -390,10 +394,11 @@ function StudioPage() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-                  {batch.tiles.map((tile) => (
+                  {batch.tiles.map((tile, index) => (
                     <TileCard
                       key={tile.generationId}
                       tile={tile}
+                      index={index}
                       onOpen={() => openViewer(tile, batch.tiles)}
                       onPublish={() => setPublishing(tile)}
                       onInspire={() => useAsInspiration(tile)}
@@ -497,11 +502,13 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
 
 function TileCard({
   tile,
+  index,
   onOpen,
   onPublish,
   onInspire,
 }: {
   tile: Tile;
+  index: number;
   onOpen: () => void;
   onPublish: () => void;
   onInspire: () => void;
@@ -516,6 +523,13 @@ function TileCard({
         <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="Open full size">
           <Art url={tile.url} alt="Design" className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]" />
         </button>
+      ) : failed && tile.blocked ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-4 text-center">
+          <span className="-rotate-6 rounded-lg border-[3px] border-current px-3 py-1.5 text-base font-black uppercase leading-tight tracking-wide md:text-xl">
+            {BLOCKED_STAMPS[index % BLOCKED_STAMPS.length]}
+          </span>
+          <span className="max-w-[15rem] text-xs opacity-75 md:text-sm">Our filter flagged this one. Try other words. Credit’s back.</span>
+        </div>
       ) : failed ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
           <span className="text-lg font-black">Didn’t work</span>

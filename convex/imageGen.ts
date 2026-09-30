@@ -6,6 +6,7 @@ import { generateImage } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
+import { NO_IMAGE_REPLY } from "./lib/imageErrors";
 import { designPrompt, photoPrompt, pickLook } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { isDevDeployment, publicUrl, r2, storageMode } from "./lib/r2";
@@ -127,6 +128,8 @@ async function chatgptImage(args: {
   const decoder = new TextDecoder();
   let buffer = "";
   let failure: string | undefined;
+  // A reply in words with no image is almost always a refusal; keep it for the error.
+  let said: string | undefined;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -137,7 +140,13 @@ async function chatgptImage(args: {
       buffer = buffer.slice(newline + 1);
       newline = buffer.indexOf("\n");
       if (!line.startsWith("data:")) continue;
-      let event: { type?: string; item?: { type?: string; result?: string }; response?: { error?: unknown }; error?: unknown };
+      let event: {
+        type?: string;
+        item?: { type?: string; result?: string };
+        response?: { error?: unknown };
+        error?: unknown;
+        text?: string;
+      };
       try {
         event = JSON.parse(line.slice(5).trim());
       } catch {
@@ -154,9 +163,13 @@ async function chatgptImage(args: {
       if (event.type === "response.failed" || event.type === "error") {
         failure = JSON.stringify(event.response?.error ?? event.error ?? event).slice(0, 200);
       }
+      if (event.type === "response.output_text.done" && typeof event.text === "string") {
+        said = event.text.slice(0, 160);
+      }
     }
   }
-  throw new Error(failure ? `The image service refused: ${failure}` : "The image service returned no image.");
+  if (failure) throw new Error(`The image service refused: ${failure}`);
+  throw new Error(said ? `${NO_IMAGE_REPLY} ${said}` : "The image service returned no image.");
 }
 
 // One transparent 1024x1536 design. Gateway: Sunburst edit with an image, Flare for text only.

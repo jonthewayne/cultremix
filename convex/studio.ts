@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
+import { isBlockedError } from "./lib/imageErrors";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -33,6 +34,8 @@ const tileView = v.object({
   key: v.optional(v.string()),
   favorite: v.boolean(),
   error: v.optional(v.string()),
+  // The provider's content filter refused it; the studio shows a friendly stamp instead of the error.
+  blocked: v.boolean(),
   backgroundColor: v.string(),
   publishedCr: v.optional(v.string()),
 });
@@ -107,17 +110,21 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       presets: batch.presets,
       backgroundColor: batch.backgroundColor,
       inspirationUrl: publicUrl(batch.inspirationKey),
-      tiles: generations.map((g) => ({
-        generationId: g._id,
-        batchId: g.batchId,
-        status: g.status,
-        url: publicUrl(g.fullKey),
-        key: g.fullKey,
-        favorite: g.favorite,
-        error: g.error,
-        backgroundColor: batch.backgroundColor,
-        publishedCr: published.get(g._id),
-      })),
+      tiles: generations.map((g) => {
+        const blocked = g.status === "failed" && isBlockedError(g.error);
+        return {
+          generationId: g._id,
+          batchId: g.batchId,
+          status: g.status,
+          url: publicUrl(g.fullKey),
+          key: g.fullKey,
+          favorite: g.favorite,
+          error: blocked ? undefined : g.error,
+          blocked,
+          backgroundColor: batch.backgroundColor,
+          publishedCr: published.get(g._id),
+        };
+      }),
     });
   }
   const favorites = await ctx.db
