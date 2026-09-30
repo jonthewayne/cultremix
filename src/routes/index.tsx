@@ -96,7 +96,7 @@ export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: b
             <span className="text-sm font-bold opacity-60">Model photo (dev placeholder)</span>
           </div>
         ) : (
-          <Art url={item.photoUrl} alt={`Model wearing CR ${item.cr}`} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]" />
+          <Art url={item.photoUrl} alt={`Model wearing CR ${item.cr}`} className="h-full w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]" />
         )}
       </div>
     );
