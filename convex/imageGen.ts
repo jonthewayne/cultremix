@@ -395,6 +395,8 @@ export const selfTest = internalAction({
     provider: v.optional(v.union(v.literal("chatgpt"), v.literal("gateway"))),
     imageKey: v.optional(v.string()),
     instruction: v.optional(v.string()),
+    // edit only: use the remix prompt (the image is the design being remixed).
+    remix: v.optional(v.boolean()),
     // false: call the provider only (no R2), to check the provider from Convex.
     store: v.optional(v.boolean()),
   },
@@ -417,7 +419,7 @@ export const selfTest = internalAction({
       } else if (args.mode === "edit") {
         if (!args.imageKey) return { error: "edit needs imageKey" };
         out = await designImage(
-          designPrompt({ instruction, presets: [], hasInspiration: true }),
+          designPrompt({ instruction, presets: [], hasInspiration: true, remix: args.remix }),
           await fetchPublicImage(args.imageKey, ctx),
           args.provider ?? imageProvider(),
         );
@@ -435,7 +437,7 @@ export const selfTest = internalAction({
       }
       const { key } = await storePng(ctx, args.mode === "photo" ? "photo" : "gen", out.bytes);
       return {
-        provider: imageProvider(),
+        provider: args.provider ?? imageProvider(),
         ms: Date.now() - started,
         bytes: out.bytes.byteLength,
         png: pngInfo(out.bytes),
