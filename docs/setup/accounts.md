@@ -39,7 +39,7 @@ Inbound: Cloudflare Email Routing is enabled on `cultremix.com` (MX `route1-3.mx
 - `www.cultremix.com` redirects to the root with a zone Redirect Rule, "Redirect from WWW to root [Template]" (`https://www.*` to `https://${1}`, 301, query string kept). `www` stays a custom domain on `cultremix-prod` only so it keeps a proxied DNS record; the rule answers before the Worker runs. The dashboard's warning that `www` may not be proxied does not apply to custom domains. "Always Use HTTPS" is on for the zone, so `http://` requests reach HTTPS first. Keep `www` in the app's routes: removing it deletes its DNS record and the rule stops matching.
 - Production `SITE_URL=https://cultremix.com` (Convex and Worker); `AUTH_TRUSTED_ORIGINS` = `https://cultremix.com`, `https://www.cultremix.com`, `https://cultremix-prod.jonthewayne.workers.dev`. R2 CORS includes both new origins.
 - Wrangler's OAuth login cannot read or edit DNS records, so conflicting records must be deleted in the dashboard before attaching a custom domain.
-- Share tags (`og:url`, `og:image`) come from the hardcoded `SITE_URL` in `src/lib/site.ts`, still the `workers.dev` URL.
+- Share tags (`og:url`, `og:image`) come from `SITE_URL` in `src/lib/site.ts`, now `https://cultremix.com` (deployed 5:44).
 
 ## Log
 
@@ -57,3 +57,4 @@ Inbound: Cloudflare Email Routing is enabled on `cultremix.com` (MX `route1-3.mx
 - 5:14 `www` now redirects to the root: `cultremix-www-redirect` (version `3cf72cc2`) owns `www.cultremix.com`; the app Worker was redeployed with only `cultremix.com` (version `34c6d44f`).
 - 5:16 Jon confirmed the email from `heyyo@cultremix.com` reached his Gmail.
 - 5:24 Switched `www` to the Redirect Rule Jon created; he turned on Always Use HTTPS. `www` moved back to the app Worker (version `219c8907`) and the temporary `cultremix-www-redirect` Worker was deleted. Checked: http and https `www` URLs end on `https://cultremix.com` with path and query kept; `http://cultremix.com` goes to HTTPS; no loops.
+- 5:44 Production Worker deployed from `dev` at `8bc367d` (home page hero; share tags on `cultremix.com`); version `930af695`. Checked: the hero shows "The social creative-commerce platform", "Remix culture, get paid.", and "Remix anything you see. Wear it, share it, sell it."; `og:url` is `https://cultremix.com` and `og:image` is `https://cultremix.com/og.png?v=3` (serves 200).
