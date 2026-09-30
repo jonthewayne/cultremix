@@ -62,7 +62,7 @@ Start the app, then run:
 BASE_URL=http://localhost:3000 bun run test:e2e
 ```
 
-The smoke checks the shared public auth frame, verifies that the theme toggle is present, and captures light/dark screenshots for login, email verification, phone verification, invite, and unauthorized screens. Screenshots are saved to `.tmp/screenshots/`.
+The smoke opens the public sign-in pages (login, email verification, phone verification, invite, and unauthorized), checks each page's heading text, and saves screenshots to `.tmp/screenshots/`. CultRemix's sign-in pages have one black-and-white look, so the smoke no longer looks for the starter's theme toggle.
 
 ## Fresh Project Acceptance Test
 
