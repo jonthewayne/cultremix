@@ -2,8 +2,20 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { requireMember } from "./studio";
-import { formatCr } from "./lib/r2";
+import { formatCr, parseCr } from "./lib/r2";
+import { pickLook } from "./lib/prompts";
 import type { MutationCtx } from "./_generated/server";
+
+const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
+
+// Castings and settings of the most recently updated shoots, newest first.
+async function recentLooks(ctx: MutationCtx) {
+  const shoots = await ctx.db.query("shoots").order("desc").take(50);
+  return shoots
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 10)
+    .map((shoot) => ({ casting: shoot.castingNote, world: shoot.world }));
+}
 
 async function nextFamily(ctx: MutationCtx) {
   const counter = await ctx.db
@@ -114,7 +126,7 @@ export const assetJob = internalQuery({
 
 export const markPublished = internalMutation({
   args: { workId: v.id("works"), artKey: v.string(), contentHash: v.string() },
-  returns: v.union(v.null(), v.id("shoots")),
+  returns: v.union(v.null(), v.object({ shootId: v.id("shoots"), look: lookValidator })),
   handler: async (ctx, args) => {
     const work = await ctx.db.get("works", args.workId);
     if (!work || work.status !== "preparing") return null;
@@ -125,12 +137,16 @@ export const markPublished = internalMutation({
       artKey: args.artKey,
       contentHash: args.contentHash,
     });
+    const look = pickLook(work._id, await recentLooks(ctx));
     const shootId = await ctx.db.insert("shoots", {
       workId: work._id,
       status: "running",
       requestedBy: work.creatorId,
       createdAt: now,
       updatedAt: now,
+      castingNote: look.casting,
+      pose: look.pose,
+      world: look.world,
     });
     await ctx.db.insert("shootPhotos", {
       shootId,
@@ -138,7 +154,83 @@ export const markPublished = internalMutation({
       index: 1,
       state: "pending",
     });
-    return shootId;
+    return { shootId, look };
+  },
+});
+
+// Starts a new model photo for a published work with a different casting. The
+// current photo stays up until the new one is recorded.
+export const beginReshoot = internalMutation({
+  args: { cr: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      shootId: v.id("shoots"),
+      artKey: v.string(),
+      backgroundColor: v.string(),
+      look: lookValidator,
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const parsed = parseCr(args.cr);
+    if (!parsed) return null;
+    const work = await ctx.db
+      .query("works")
+      .withIndex("by_family_expression", (q) =>
+        q.eq("crFamily", parsed.family).eq("crExpression", parsed.expression),
+      )
+      .unique();
+    if (!work || work.status !== "published" || !work.artKey) return null;
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("shoots")
+      .withIndex("by_work", (q) => q.eq("workId", work._id))
+      .first();
+    const look = pickLook(`${work._id}:${now}`, [
+      { casting: existing?.castingNote, world: existing?.world },
+      ...(await recentLooks(ctx)),
+    ]);
+    const fields = { castingNote: look.casting, pose: look.pose, world: look.world };
+    let shootId = existing?._id;
+    if (shootId) {
+      await ctx.db.patch("shoots", shootId, { ...fields, updatedAt: now });
+    } else {
+      shootId = await ctx.db.insert("shoots", {
+        workId: work._id,
+        status: "running",
+        requestedBy: work.creatorId,
+        createdAt: now,
+        updatedAt: now,
+        ...fields,
+      });
+    }
+    const photo = await ctx.db
+      .query("shootPhotos")
+      .withIndex("by_shoot_index", (q) => q.eq("shootId", shootId).eq("index", 1))
+      .unique();
+    if (!photo) {
+      await ctx.db.insert("shootPhotos", { shootId, workId: work._id, index: 1, state: "pending" });
+    }
+    return { shootId, artKey: work.artKey, backgroundColor: work.backgroundColor, look };
+  },
+});
+
+// Reshoots every published work's model photo, a couple of seconds apart:
+// bunx convex run publish:reshootAll
+export const reshootAll = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const works = await ctx.db
+      .query("works")
+      .withIndex("by_status_publishedAt", (q) => q.eq("status", "published"))
+      .collect();
+    for (const [i, work] of works.entries()) {
+      await ctx.scheduler.runAfter(i * 3000, internal.imageGen.reshoot, {
+        cr: formatCr(work.crFamily, work.crExpression),
+      });
+    }
+    return works.length;
   },
 });
 

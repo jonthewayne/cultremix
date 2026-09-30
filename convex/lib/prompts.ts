@@ -17,12 +17,96 @@ export function designPrompt(args: {
   ).slice(0, 1000);
 }
 
-export function photoPrompt(backgroundColor: string) {
+// Who wears the shirt in the model photo: adult women, varied in background and look.
+export const CASTING = [
+  "a Black woman in her twenties with natural coily hair and gold hoop earrings",
+  "a Black woman in her twenties with long box braids",
+  "a Korean woman in her twenties with a sleek black bob",
+  "a Japanese woman in her twenties with a shaggy layered haircut",
+  "a Chinese woman in her twenties with long straight black hair and blunt bangs",
+  "a Mexican woman in her twenties with long dark wavy hair",
+  "a Mexican woman in her twenties with a slicked-back bun and bold brows",
+  "a Swedish woman in her twenties with platinum blonde hair",
+  "a South Asian woman in her twenties with long black hair and a small nose ring",
+  "a Middle Eastern woman in her twenties with voluminous dark curls",
+  "an Irish woman in her twenties with copper-red hair and freckles",
+  "a Filipina woman in her twenties with a short pixie cut",
+  "a Brazilian woman in her twenties with a bleached buzz cut",
+  "a mixed-race woman in her twenties with curly hair and freckles",
+];
+
+// How she stands. Every pose works in any setting and keeps the graphic facing the camera.
+export const POSES = [
+  "walking toward the camera mid-stride",
+  "leaning back against a wall with one knee bent",
+  "sitting on a low ledge with her forearms resting on her knees",
+  "standing square to the camera, chin up, hands at her sides",
+  "mid-laugh with her head tilted and her hands in her back pockets",
+  "turning back toward the camera over her shoulder, chest facing the lens",
+  "looking just past the camera with one hand in her hair",
+  "pushing her sunglasses up into her hair",
+  "holding a coffee cup down at her side",
+  "stepping forward with her weight on one leg and her hands in her front pockets",
+];
+
+// Where the shoot happens: urban and a little hip.
+export const SETTINGS = [
+  "on a neon-lit street corner at night",
+  "in a graffiti-covered alley",
+  "on a rooftop at golden hour with the skyline behind her",
+  "on a tiled subway platform",
+  "outside a corner bodega at dusk",
+  "inside a laundromat under bright fluorescent light",
+  "in the aisle of a record store",
+  "at a concrete skatepark at sunset",
+  "in a crosswalk on a busy downtown street",
+  "in front of a bold painted mural",
+  "in a parking garage under harsh overhead lights",
+  "on a fire escape above a city street",
+];
+
+export type ShootLook = { casting: string; pose: string; world: string };
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+// A stable pick for the seed that skips recently used options when it can.
+export function pickFrom(options: Array<string>, seed: string, recent: Array<string | undefined>) {
+  const used = new Set(recent.filter((c): c is string => Boolean(c)));
+  const fresh = options.filter((c) => !used.has(c));
+  const pool = fresh.length > 0 ? fresh : options;
+  return pool[hashString(seed) % pool.length];
+}
+
+// Casting and setting avoid the most recent shoots; the pose varies freely.
+export function pickLook(
+  seed: string,
+  recent: Array<{ casting?: string; world?: string }>,
+): ShootLook {
+  return {
+    casting: pickFrom(CASTING, `${seed}:casting`, recent.slice(0, 10).map((r) => r.casting)),
+    world: pickFrom(SETTINGS, `${seed}:world`, recent.slice(0, 6).map((r) => r.world)),
+    pose: pickFrom(POSES, `${seed}:pose`, []),
+  };
+}
+
+export function photoPrompt(
+  backgroundColor: string,
+  look: ShootLook = { casting: CASTING[0], pose: POSES[0], world: SETTINGS[0] },
+) {
   const color = colorName(backgroundColor);
   return (
-    `An editorial fashion photograph of a stylish young person wearing a plain ${color} crew-neck t-shirt (color ${backgroundColor}) ` +
-    "with this exact graphic printed large on the chest, reproduced faithfully with no changes. " +
-    "House style: raw on-camera flash, 35mm film grain, a real place at dusk, candid and confident, natural skin, minimal retouching. " +
+    `An editorial street-style fashion photograph of ${look.casting}, ${look.pose}, ${look.world}. ` +
+    "The pose feels natural for the place. " +
+    `She wears a plain ${color} crew-neck t-shirt (color ${backgroundColor}) with this exact graphic printed large on the chest, ` +
+    "reproduced faithfully with no changes; no jacket or anything else covers the graphic. " +
+    "House style: raw on-camera flash, 35mm film grain, candid and confident, natural skin, minimal retouching. " +
     "Framed from mid-thigh up, the shirt and print clearly visible."
   ).slice(0, 1000);
 }

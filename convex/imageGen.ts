@@ -6,7 +6,8 @@ import { generateImage } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
-import { designPrompt, photoPrompt } from "./lib/prompts";
+import { designPrompt, photoPrompt, pickLook } from "./lib/prompts";
+import type { ShootLook } from "./lib/prompts";
 import { isDevDeployment, publicUrl, r2, storageMode } from "./lib/r2";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -182,13 +183,23 @@ async function designImage(text: string, image?: Uint8Array, provider: Provider 
 }
 
 // The model photo: one opaque 1024x1024 edit with the design as input.
-async function photoImage(art: Uint8Array, backgroundColor: string, provider: Provider | null = imageProvider()) {
+async function photoImage(
+  art: Uint8Array,
+  backgroundColor: string,
+  look: ShootLook,
+  provider: Provider | null = imageProvider(),
+) {
   if (provider === "chatgpt") {
-    return await chatgptImage({ text: photoPrompt(backgroundColor), images: [art], background: "opaque", size: "1024x1024" });
+    return await chatgptImage({
+      text: photoPrompt(backgroundColor, look),
+      images: [art],
+      background: "opaque",
+      size: "1024x1024",
+    });
   }
   const result = await generateImage({
     model: gateway.image("openai/gpt-image-2.5-sunburst"),
-    prompt: { images: [art], text: photoPrompt(backgroundColor) },
+    prompt: { images: [art], text: photoPrompt(backgroundColor, look) },
     size: "1024x1024",
     providerOptions: {
       openai: {
@@ -344,12 +355,13 @@ export const publishAssets = internalAction({
       });
       return null;
     }
-    const shootId = await ctx.runMutation(internal.publish.markPublished, {
+    const shoot = await ctx.runMutation(internal.publish.markPublished, {
       workId,
       artKey,
       contentHash,
     });
-    if (!shootId) return null;
+    if (!shoot) return null;
+    const { shootId, look } = shoot;
 
     try {
       let photoKey: string;
@@ -359,7 +371,7 @@ export const publishAssets = internalAction({
         photoKey = `fake:photo-${workId}`;
       } else {
         const art = await fetchPublicImage(artKey, ctx);
-        const { bytes } = await photoImage(art, job.backgroundColor);
+        const { bytes } = await photoImage(art, job.backgroundColor, look);
         photoKey = (await storePng(ctx, "photo", bytes)).key;
       }
       await ctx.runMutation(internal.publish.recordPhoto, { shootId, publicKey: photoKey });
@@ -395,7 +407,12 @@ export const selfTest = internalAction({
       let out;
       if (args.mode === "photo") {
         if (!args.imageKey) return { error: "photo needs imageKey" };
-        out = await photoImage(await fetchPublicImage(args.imageKey, ctx), "#143cc8", args.provider ?? imageProvider());
+        out = await photoImage(
+          await fetchPublicImage(args.imageKey, ctx),
+          "#143cc8",
+          pickLook(String(Date.now()), []),
+          args.provider ?? imageProvider(),
+        );
       } else if (args.mode === "edit") {
         if (!args.imageKey) return { error: "edit needs imageKey" };
         out = await designImage(
@@ -429,5 +446,34 @@ export const selfTest = internalAction({
     } catch (error) {
       return { ms: Date.now() - started, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
     }
+  },
+});
+
+// Gives a published work a new model photo with a different model, pose, and
+// setting; the current photo stays up until the new one is recorded.
+// bunx convex run imageGen:reshoot '{"cr":"101-001"}'
+export const reshoot = internalAction({
+  args: { cr: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({ cr: v.string(), look: v.object({ casting: v.string(), pose: v.string(), world: v.string() }) }),
+  ),
+  // Explicit types: publish.reshootAll schedules this action, so inference would be circular.
+  handler: async (ctx, args): Promise<{ cr: string; look: ShootLook } | null> => {
+    const job: {
+      shootId: Id<"shoots">;
+      artKey: string;
+      backgroundColor: string;
+      look: ShootLook;
+    } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr });
+    if (!job) return null;
+    if (!liveGeneration() || job.artKey.startsWith("fake:")) {
+      throw new Error("Image generation is not configured.");
+    }
+    const art = await fetchPublicImage(job.artKey, ctx);
+    const { bytes } = await photoImage(art, job.backgroundColor, job.look);
+    const { key } = await storePng(ctx, "photo", bytes);
+    await ctx.runMutation(internal.publish.recordPhoto, { shootId: job.shootId, publicKey: key });
+    return { cr: args.cr, look: job.look };
   },
 });

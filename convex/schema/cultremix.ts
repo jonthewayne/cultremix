@@ -151,6 +151,9 @@ export const cultremixTables = {
     requestedBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.number(),
+    castingNote: v.optional(v.string()),
+    pose: v.optional(v.string()),
+    world: v.optional(v.string()),
   }).index("by_work", ["workId"]),
 
   shootPhotos: defineTable({
