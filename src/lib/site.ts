@@ -1,5 +1,5 @@
-// Public origin for share links and images. Change it when cultremix.com is live.
-export const SITE_URL = "https://cultremix-prod.jonthewayne.workers.dev";
+// Public origin for share links and images.
+export const SITE_URL = "https://cultremix.com";
 
 export const SITE_NAME = "CultRemix";
 export const SITE_TITLE = "CultRemix — Remix culture, get paid.";
