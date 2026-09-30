@@ -10,6 +10,7 @@ import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
+import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { cn } from "~/lib/utils";
 
@@ -57,6 +58,10 @@ function StudioPage() {
   const [publishing, setPublishing] = useState<Tile | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const remixStarted = useRef<string | null>(null);
+  // Ideas for starting from scratch, picked after mount so the server and client render the same page.
+  const [ideas, setIdeas] = useState<Array<string> | null>(null);
+  const [showIdeas, setShowIdeas] = useState(false);
+  useEffect(() => setIdeas(pickIdeas(3)), []);
 
   // Remix: open a remix session with the published design as the inspiration.
   useEffect(() => {
@@ -99,6 +104,12 @@ function StudioPage() {
     setInspiration({ key: tile.key, previewUrl: tile.url, uploading: false });
     setColor(tile.backgroundColor);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const applyIdea = (idea: string) => {
+    setInstruction(idea);
+    setError(null);
+    setShowIdeas(false);
   };
 
   const submit = async (event?: React.FormEvent) => {
@@ -160,6 +171,7 @@ function StudioPage() {
   };
 
   const remixInfo = session?.remix;
+  const hasReference = Boolean(inspiration);
   const ink = inkOn(color);
   const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < 4);
 
@@ -269,19 +281,49 @@ function StudioPage() {
             </div>
 
             <label className="block">
-              <span className="text-sm font-bold uppercase tracking-wider">What should change?</span>
+              <span className="text-sm font-bold uppercase tracking-wider">
+                {hasReference ? "What should change?" : "What do you want to make?"}
+              </span>
               <textarea
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
                 }}
-                rows={3}
+                rows={2}
                 maxLength={600}
-                placeholder="Change the words to…"
+                placeholder={hasReference ? "Change the words / colors / characters to…" : "Describe your design…"}
                 className="mt-2 w-full resize-none border-b-4 border-black bg-transparent py-2 text-2xl font-semibold leading-tight outline-none placeholder:text-neutral-300 md:text-3xl"
               />
             </label>
+
+            {!hasReference && ideas && (
+              <div>
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-sm font-bold uppercase tracking-wider">Need an idea?</span>
+                  <span className="flex gap-4 text-sm font-semibold">
+                    <button type="button" onClick={() => setIdeas(pickIdeas(3, ideas))} className="underline underline-offset-4">
+                      Shuffle
+                    </button>
+                    <button type="button" onClick={() => setShowIdeas(true)} className="underline underline-offset-4">
+                      All ideas
+                    </button>
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-col items-start gap-2">
+                  {ideas.map((idea) => (
+                    <button
+                      key={idea}
+                      type="button"
+                      onClick={() => applyIdea(idea)}
+                      className="rounded-xl bg-neutral-100 px-3 py-1.5 text-left text-sm font-semibold transition-colors hover:bg-black hover:text-white"
+                    >
+                      {idea}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               {CHIPS.map((chip) => {
@@ -390,7 +432,66 @@ function StudioPage() {
       <AnimatePresence>
         {publishing && <PublishDialog tile={publishing} onClose={() => setPublishing(null)} />}
       </AnimatePresence>
+      <AnimatePresence>
+        {showIdeas && <IdeasSheet onPick={applyIdea} onClose={() => setShowIdeas(false)} />}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 md:items-center md:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ideas"
+    >
+      <motion.div
+        className="max-h-[88svh] w-full max-w-4xl overflow-y-auto rounded-t-3xl bg-white p-6 text-black md:rounded-3xl md:p-10"
+        initial={{ y: 30, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
+      >
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="text-4xl font-black leading-none tracking-tight md:text-5xl">Ideas</h2>
+          <button type="button" onClick={onClose} className="text-sm font-semibold underline underline-offset-4">
+            Close
+          </button>
+        </div>
+        <p className="mt-3 text-neutral-600">Pick one to start. Change anything before you generate.</p>
+        <div className="mt-8 grid gap-x-10 gap-y-8 md:grid-cols-2">
+          {PROMPT_IDEAS.map((group) => (
+            <section key={group.group}>
+              <h3 className="text-sm font-bold uppercase tracking-wider">{group.group}</h3>
+              <ul className="mt-2 divide-y divide-neutral-200 border-t-2 border-black">
+                {group.ideas.map((idea) => (
+                  <li key={idea}>
+                    <button type="button" onClick={() => onPick(idea)} className="w-full py-2 text-left font-semibold hover:underline">
+                      {idea}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
