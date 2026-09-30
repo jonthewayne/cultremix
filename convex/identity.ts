@@ -19,6 +19,8 @@ export const viewerValidator = v.object({
   username: v.optional(v.string()),
   needsUsername: v.boolean(),
   isOwner: v.boolean(),
+  // True only for the FIRST_SUPER_ADMIN_EMAIL account while nobody owns the platform.
+  canClaimOwner: v.boolean(),
   creatorNumber: v.optional(v.number()),
   credits: v.number(),
   unlimited: v.boolean(),
@@ -35,6 +37,17 @@ export async function getViewerUser(ctx: Ctx): Promise<Doc<"users"> | null> {
 
 export function isOwner(user: Doc<"users">) {
   return user.platformRole === "super_admin_owner";
+}
+
+async function canClaimOwner(ctx: Ctx, user: Doc<"users">) {
+  if (isOwner(user)) return false;
+  const target = process.env.FIRST_SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+  if (!target || user.email?.trim().toLowerCase() !== target) return false;
+  const owner = await ctx.db
+    .query("users")
+    .withIndex("by_platformRole", (q) => q.eq("platformRole", "super_admin_owner"))
+    .first();
+  return owner === null;
 }
 
 export async function getAppSettings(ctx: Ctx) {
@@ -60,6 +73,7 @@ async function toViewer(ctx: Ctx, user: Doc<"users">) {
     username: user.username,
     needsUsername: !user.username,
     isOwner: isOwner(user),
+    canClaimOwner: await canClaimOwner(ctx, user),
     creatorNumber: user.creatorNumber,
     credits: await creditBalance(ctx, user._id),
     unlimited: isOwner(user),

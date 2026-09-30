@@ -34,28 +34,30 @@ function SettingsPage() {
           <Row label="Username" value={viewer?.username ? `@${viewer.username}` : "—"} />
           <Row label="Email" value={user?.email ?? "—"} />
           <Row label="Credits" value={viewer ? (viewer.unlimited ? "Unlimited" : String(viewer.credits)) : "—"} />
-          <Row label="Creator" value={viewer?.creatorNumber ? `№ ${viewer.creatorNumber}` : "—"} />
+          {viewer?.creatorNumber ? <Row label="Creator" value={`№ ${viewer.creatorNumber}`} /> : null}
         </dl>
-        <section className="mt-12">
-          <h2 className="text-2xl font-black tracking-tight">Owner</h2>
-          {isOwner ? (
-            <p className="mt-3 text-lg">This account owns CultRemix and is Creator № 1.</p>
-          ) : (
-            <>
-              <p className="mt-3 max-w-xl text-neutral-600">
-                Claims the owner role and Creator № 1 for the address set in FIRST_SUPER_ADMIN_EMAIL. It works once.
-              </p>
-              <button
-                type="button"
-                onClick={() => void runBootstrap()}
-                className="mt-5 h-14 rounded-2xl bg-black px-8 text-lg font-black text-white hover:bg-neutral-800"
-              >
-                Bootstrap my account
-              </button>
-            </>
-          )}
-          {message && <p className="mt-4 font-semibold">{message}</p>}
-        </section>
+        {(isOwner || viewer?.canClaimOwner || message) && (
+          <section className="mt-12">
+            <h2 className="text-2xl font-black tracking-tight">Owner</h2>
+            {isOwner ? (
+              <p className="mt-3 text-lg">This account owns CultRemix and is Creator № 1.</p>
+            ) : viewer?.canClaimOwner ? (
+              <>
+                <p className="mt-3 max-w-xl text-neutral-600">
+                  This account can claim the owner role and Creator № 1. It works once.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void runBootstrap()}
+                  className="mt-5 h-14 rounded-2xl bg-black px-8 text-lg font-black text-white hover:bg-neutral-800"
+                >
+                  Claim ownership
+                </button>
+              </>
+            ) : null}
+            {message && <p className="mt-4 font-semibold">{message}</p>}
+          </section>
+        )}
       </main>
     </div>
   );
