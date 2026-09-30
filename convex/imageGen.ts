@@ -257,6 +257,7 @@ export const runTile = internalAction({
         instruction: job.instruction,
         presets: job.presets,
         hasInspiration: Boolean(job.inspirationKey),
+        remix: job.remixOfParent,
       });
       const image = job.inspirationKey ? await fetchPublicImage(job.inspirationKey, ctx) : undefined;
       const started = Date.now();

@@ -4,12 +4,16 @@ export function designPrompt(args: {
   instruction: string;
   presets: Array<string>;
   hasInspiration: boolean;
+  // The reference image is the published design being remixed.
+  remix?: boolean;
 }) {
   const ask = args.instruction.trim();
   const style = args.presets.length ? ` Style: ${args.presets.join(", ")}.` : "";
-  const lead = args.hasInspiration
-    ? `Create a new t-shirt graphic using the reference image as inspiration. ${ask || "Keep its spirit and make it a bold, wearable graphic."}`
-    : `A t-shirt graphic: ${ask}`;
+  const lead = args.remix
+    ? `Remix this t-shirt graphic. Keep its layout, illustration, lettering style, and colors, and change only this: ${ask || "make a fresh variation"}. If new words are given, use exactly those words and drop the old ones.`
+    : args.hasInspiration
+      ? `Create a new t-shirt graphic using the reference image as inspiration. ${ask || "Keep its spirit and make it a bold, wearable graphic."}`
+      : `A t-shirt graphic: ${ask}`;
   return (
     `${lead}${style} ` +
     "Output only the artwork itself on a fully transparent background: no t-shirt, no mockup, no person, no scene, no frame, no drop shadow. " +

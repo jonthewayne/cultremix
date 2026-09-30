@@ -367,6 +367,7 @@ export const tileJob = internalQuery({
       presets: v.array(v.string()),
       inspirationKey: v.optional(v.string()),
       model: v.string(),
+      remixOfParent: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -374,12 +375,20 @@ export const tileJob = internalQuery({
     if (!generation) return null;
     const batch = await ctx.db.get("batches", generation.batchId);
     if (!batch) return null;
+    // A remix keeps the parent's look only while the parent is still the reference image.
+    let remixOfParent = false;
+    if (batch.operation === "remix" && batch.inspirationKey) {
+      const session = await ctx.db.get("creativeSessions", batch.sessionId);
+      const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
+      remixOfParent = parent?.artKey === batch.inspirationKey;
+    }
     return {
       status: generation.status,
       instruction: batch.instruction,
       presets: batch.presets,
       inspirationKey: batch.inspirationKey,
       model: generation.model,
+      remixOfParent,
     };
   },
 });
