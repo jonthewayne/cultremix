@@ -35,7 +35,8 @@ Inbound: Cloudflare Email Routing is enabled on `cultremix.com` (MX `route1-3.mx
 ## Domain
 
 - `cultremix.com` is registered through Vercel (Name.com) with DNS on Cloudflare since 4:20 p.m. (zone active; nameservers `brenna.ns.cloudflare.com` and `leonidas.ns.cloudflare.com`).
-- `cultremix.com` and `www.cultremix.com` are custom domains on `cultremix-prod` (`wrangler.jsonc` `env.production.routes`); `workers.dev` stays on.
+- `cultremix.com` is the custom domain on `cultremix-prod` (`wrangler.jsonc` `env.production.routes`); `workers.dev` stays on.
+- `www.cultremix.com` belongs to a separate Worker, `cultremix-www-redirect` (source in `~/cultremix-ops/www-redirect/` on mighteous; deploy with `wrangler deploy` there). It answers every request with a 301 to the same path and query on `https://cultremix.com`. Keep `www` out of the app's routes, or the next app deploy takes it back. A zone Redirect Rule would do the same job, but wrangler's OAuth login cannot edit rulesets.
 - Production `SITE_URL=https://cultremix.com` (Convex and Worker); `AUTH_TRUSTED_ORIGINS` = `https://cultremix.com`, `https://www.cultremix.com`, `https://cultremix-prod.jonthewayne.workers.dev`. R2 CORS includes both new origins.
 - Wrangler's OAuth login cannot read or edit DNS records, so conflicting records must be deleted in the dashboard before attaching a custom domain.
 - Share tags (`og:url`, `og:image`) come from the hardcoded `SITE_URL` in `src/lib/site.ts`, still the `workers.dev` URL.
@@ -53,3 +54,4 @@ Inbound: Cloudflare Email Routing is enabled on `cultremix.com` (MX `route1-3.mx
 - 4:46 Resend key saved (Jon pasted it in chat; rotate it). A send from `auth@cultremix.com` to `delivered@resend.dev` was accepted, so the domain is verified. 4:47 Production switched to Resend with `AUTH_EMAIL_FROM="CultRemix <auth@cultremix.com>"`; a sign-in code for Jon's Gmail was requested on `cultremix.com` and the Resend component queued it with no failures.
 - 5:01 `AUTH_EMAIL_FROM="CultRemix <heyyo@cultremix.com>"` on production (Resend accepted a test send). 5:02 Email Routing enabled with wrangler; destination `jonthewayne@gmail.com`; rule `heyyo-to-gmail`; a sign-in code for Jon and a forwarding test to `heyyo@` sent.
 - 5:06 Instant sign-in turned off; PR #1 merged into `dev` (`00ac78c`); typecheck and 64 tests passed; Convex and Worker (`b1bbb140`) deployed; `AUTH_INSTANT_SIGNIN` removed. Smoke test on `cultremix.com` with an outside mail.tm inbox: the code arrived in 6.9 s; "Send a new code" unlocked at 30 s and the new code arrived in 4.2 s; the older code was refused; the newest signed in to onboarding. Test account `crsmoke6928504@uberip.com` left on production.
+- 5:14 `www` now redirects to the root: `cultremix-www-redirect` (version `3cf72cc2`) owns `www.cultremix.com`; the app Worker was redeployed with only `cultremix.com` (version `34c6d44f`).

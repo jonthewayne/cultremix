@@ -16,8 +16,7 @@
       "name": "cultremix-prod",
       "workers_dev": true,
       "routes": [
-        { "pattern": "cultremix.com", "custom_domain": true },
-        { "pattern": "www.cultremix.com", "custom_domain": true }
+        { "pattern": "cultremix.com", "custom_domain": true }
       ],
       "vars": {
         "ENVIRONMENT": "production",
