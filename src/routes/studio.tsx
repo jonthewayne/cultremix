@@ -1,5 +1,5 @@
 import { convexQuery } from "@convex-dev/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAction, useMutation } from "convex/react";
 import { AnimatePresence, motion } from "motion/react";
@@ -9,6 +9,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
+import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
 import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
@@ -22,9 +24,6 @@ export const Route = createFileRoute("/studio")({
   component: StudioPage,
 });
 
-const CHIPS = ["Bold type", "Vintage", "Hand-drawn", "Y2K", "Minimal", "Psychedelic", "Collage", "Neon"];
-
-type Inspiration = { key?: string; previewUrl: string; uploading: boolean };
 type Tile = {
   generationId: Id<"generations">;
   batchId: Id<"batches">;
@@ -38,6 +37,9 @@ type Tile = {
   key?: string;
 };
 
+let slotCounter = 0;
+const newSlotId = () => `slot-${Date.now()}-${slotCounter++}`;
+
 function StudioPage() {
   const { remix } = Route.useSearch();
   const navigate = useNavigate();
@@ -47,64 +49,165 @@ function StudioPage() {
   const startRemix = useMutation(api.studio.startRemix);
   const newSession = useMutation(api.studio.newSession);
   const upload = useAction(api.imageGen.uploadInspiration);
+  const adopt = useMutation(api.images.adopt);
+  const markStyle = useMutation(api.images.markStyle);
 
   const [instruction, setInstruction] = useState("");
-  const [chips, setChips] = useState<Array<string>>([]);
   const [color, setColor] = useState(DEFAULT_BG);
-  const [inspiration, setInspiration] = useState<Inspiration | null>(null);
+  // Numbered images to work on, and the style mix. Nothing joins the mix unless the member adds it.
+  const [images, setImages] = useState<Array<Slot>>([]);
+  const [styles, setStyles] = useState<Array<StyleSlot>>([]);
+  const [mixerOpen, setMixerOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [viewer_, setViewer] = useState<{ list: Array<Tile>; index: number } | null>(null);
   const [publishing, setPublishing] = useState<Tile | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
   const remixStarted = useRef<string | null>(null);
+  const imagesRef = useRef(images);
+  const stylesRef = useRef(styles);
+  imagesRef.current = images;
+  stylesRef.current = styles;
   // Ideas for starting from scratch, picked after mount so the server and client render the same page.
   const [ideas, setIdeas] = useState<Array<string> | null>(null);
   const [showIdeas, setShowIdeas] = useState(false);
   useEffect(() => setIdeas(pickIdeas(3)), []);
 
-  // Remix: open a remix session with the published design as the inspiration.
+  // Live state of every image in play: reading, style captured, or failed.
+  const imageIds = useMemo(
+    () => [...new Set([...images, ...styles].map((slot) => slot.imageId).filter((id): id is Id<"userImages"> => Boolean(id)))],
+    [images, styles],
+  );
+  const statusList = useQuery({ ...convexQuery(api.images.status, { imageIds }), placeholderData: keepPreviousData }).data;
+  const states = useMemo(
+    () => new Map<string, ImageState>((statusList ?? []).map((image) => [image.imageId, image])),
+    [statusList],
+  );
+
+  // A finished upload: keep the slot, or drop it if the same image is already there.
+  const settle = (id: string, imageId: Id<"userImages">, asStyle: boolean) => {
+    const update = <T extends Slot>(list: Array<T>) =>
+      list.some((slot) => slot.id !== id && slot.imageId === imageId)
+        ? list.filter((slot) => slot.id !== id)
+        : list.map((slot) => (slot.id === id ? { ...slot, imageId, uploading: false } : slot));
+    if (asStyle) setStyles(update);
+    else setImages(update);
+  };
+  const dropSlot = (id: string) => {
+    setImages((list) => list.filter((slot) => slot.id !== id));
+    setStyles((list) => list.filter((slot) => slot.id !== id));
+  };
+
+  // Files from the tray (images to work on) or the mixer and its picker (styles).
+  const addFiles = useCallback(
+    async (files: Array<File>, asStyle: boolean) => {
+      if (files.length === 0) return;
+      setError(null);
+      const current = asStyle ? stylesRef.current.length : imagesRef.current.length;
+      const max = asStyle ? MAX_STYLES : MAX_IMAGES;
+      const room = max - current;
+      if (room <= 0) {
+        setError(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
+        return;
+      }
+      const firstImage = !asStyle && current === 0;
+      const prepared = [];
+      for (const file of files.slice(0, room)) {
+        try {
+          prepared.push({ id: newSlotId(), ...(await prepareInspiration(file)) });
+        } catch (err) {
+          setError(errorMessage(err));
+        }
+      }
+      if (prepared.length === 0) return;
+      const slots = prepared.map((p) => ({ id: p.id, previewUrl: p.previewUrl, uploading: true }));
+      if (asStyle) {
+        setStyles((list) => [...list, ...slots.map((slot) => ({ ...slot, weight: 100 }))]);
+        setMixerOpen(true);
+      } else {
+        setImages((list) => [...list, ...slots]);
+        if (firstImage) setColor(prepared[0].color);
+      }
+      if (files.length > room) setError(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
+      await Promise.all(
+        prepared.map(async (p) => {
+          try {
+            const result = await upload({ bytes: p.bytes, contentType: p.contentType, asStyle });
+            settle(p.id, result.imageId, asStyle);
+          } catch (err) {
+            dropSlot(p.id);
+            setError(errorMessage(err));
+          }
+        }),
+      );
+    },
+    [upload],
+  );
+
+  // A design or a published work's art, brought in as an image or a style.
+  const addExisting = useCallback(
+    async (key: string, url: string, asStyle: boolean) => {
+      const list = asStyle ? stylesRef.current : imagesRef.current;
+      if (list.some((slot) => slot.previewUrl === url)) return;
+      if (list.length >= (asStyle ? MAX_STYLES : MAX_IMAGES)) {
+        setError(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
+        return;
+      }
+      const id = newSlotId();
+      const slot = { id, previewUrl: url, uploading: true };
+      if (asStyle) {
+        setStyles((current) => [...current, { ...slot, weight: 100 }]);
+        setMixerOpen(true);
+      } else {
+        setImages((current) => [...current, slot]);
+      }
+      try {
+        const imageId = await adopt({ key, asStyle });
+        settle(id, imageId, asStyle);
+      } catch (err) {
+        dropSlot(id);
+        setError(errorMessage(err));
+      }
+    },
+    [adopt],
+  );
+
+  // Remix: open a remix session with the published design as image 1.
   useEffect(() => {
     if (!remix || remixStarted.current === remix || !viewer?.username) return;
     remixStarted.current = remix;
     startRemix({ cr: remix })
       .then((result) => {
-        if (result.artKey && result.artUrl) {
-          setInspiration({ key: result.artKey, previewUrl: result.artUrl, uploading: false });
-        }
         setColor(result.backgroundColor);
+        if (result.artKey && result.artUrl) void addExisting(result.artKey, result.artUrl, false);
       })
       .catch((err) => setError(errorMessage(err)));
-  }, [remix, viewer?.username, startRemix]);
+  }, [remix, viewer?.username, startRemix, addExisting]);
 
-  const onFile = useCallback(
-    async (file: File | undefined) => {
-      if (!file) return;
-      if (!file.type.startsWith("image/")) {
-        setError("Drop an image file.");
-        return;
-      }
-      setError(null);
-      try {
-        const prepared = await prepareInspiration(file);
-        setInspiration({ previewUrl: prepared.previewUrl, uploading: true });
-        setColor(prepared.color);
-        const result = await upload({ bytes: prepared.bytes, contentType: prepared.contentType });
-        setInspiration({ key: result.key, previewUrl: prepared.previewUrl, uploading: false });
-      } catch (err) {
-        setInspiration(null);
-        setError(errorMessage(err));
-      }
-    },
-    [upload],
-  );
-
-  const useAsInspiration = (tile: Tile) => {
+  const useAsImage = (tile: Tile) => {
     if (!tile.key || !tile.url) return;
-    setInspiration({ key: tile.key, previewUrl: tile.url, uploading: false });
-    setColor(tile.backgroundColor);
+    if (imagesRef.current.length === 0) setColor(tile.backgroundColor);
+    void addExisting(tile.key, tile.url, false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const useAsStyle = (tile: Tile) => {
+    if (!tile.key || !tile.url) return;
+    void addExisting(tile.key, tile.url, true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const addImageLook = (slot: Slot) => {
+    if (!slot.imageId || stylesRef.current.length >= MAX_STYLES) return;
+    if (stylesRef.current.some((style) => style.imageId === slot.imageId)) return;
+    setStyles((list) => [...list, { id: newSlotId(), imageId: slot.imageId, previewUrl: slot.previewUrl, uploading: false, weight: 100 }]);
+  };
+  const pickStyle = (image: { imageId: Id<"userImages">; url?: string }) => {
+    if (!image.url || stylesRef.current.length >= MAX_STYLES) return;
+    if (stylesRef.current.some((style) => style.imageId === image.imageId)) return;
+    setStyles((list) => [...list, { id: newSlotId(), imageId: image.imageId, previewUrl: image.url!, uploading: false, weight: 100 }]);
+    setMixerOpen(true);
+    setLibraryOpen(false);
+    void markStyle({ imageId: image.imageId }).catch(() => undefined);
   };
 
   const applyIdea = (idea: string) => {
@@ -113,22 +216,22 @@ function StudioPage() {
     setShowIdeas(false);
   };
 
+  const uploading = [...images, ...styles].some((slot) => slot.uploading || !slot.imageId);
   const submit = async (event?: React.FormEvent) => {
     event?.preventDefault();
-    if (busy) return;
-    if (!instruction.trim() && !inspiration?.key) {
-      setError("Say what to make, or drop in an inspiration image.");
+    if (busy || uploading) return;
+    if (!instruction.trim() && images.length === 0 && !styles.some((style) => style.weight > 0)) {
+      setError("Say what to make, or add an image.");
       return;
     }
-    if (inspiration?.uploading) return;
     setBusy(true);
     setError(null);
     try {
       const result = await generate({
         instruction,
-        presets: chips,
         backgroundColor: color,
-        inspirationKey: inspiration?.key,
+        images: images.map((slot) => slot.imageId!),
+        styles: styles.map((slot) => ({ imageId: slot.imageId!, weight: slot.weight })),
       });
       if ("refused" in result) {
         setError(
@@ -145,9 +248,10 @@ function StudioPage() {
   };
 
   const startOver = async () => {
-    setInspiration(null);
+    setImages([]);
+    setStyles([]);
+    setMixerOpen(false);
     setInstruction("");
-    setChips([]);
     setColor(DEFAULT_BG);
     remixStarted.current = null;
     await newSession({});
@@ -172,7 +276,7 @@ function StudioPage() {
   };
 
   const remixInfo = session?.remix;
-  const hasReference = Boolean(inspiration);
+  const count = images.length;
   const ink = inkOn(color);
   const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < 4);
 
@@ -181,11 +285,11 @@ function StudioPage() {
   useEffect(() => {
     if (!session || !remixInfo || seededSession.current === session.sessionId) return;
     seededSession.current = session.sessionId;
-    if (!inspiration && remixInfo.artKey && remixInfo.artUrl) {
-      setInspiration({ key: remixInfo.artKey, previewUrl: remixInfo.artUrl, uploading: false });
+    if (imagesRef.current.length === 0 && remixInfo.artKey && remixInfo.artUrl) {
       setColor(remixInfo.backgroundColor);
+      void addExisting(remixInfo.artKey, remixInfo.artUrl, false);
     }
-  }, [session, remixInfo, inspiration]);
+  }, [session, remixInfo, addExisting]);
 
   return (
     <div className="min-h-svh bg-white text-black">
@@ -212,78 +316,19 @@ function StudioPage() {
           </div>
 
           <form onSubmit={submit} className="flex flex-col gap-5">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4">
-              <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragging(false);
-                  void onFile(e.dataTransfer.files[0]);
-                }}
-                className={cn(
-                  "group relative flex min-h-40 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-black text-left transition-colors",
-                  dragging ? "bg-neutral-100" : "hover:bg-neutral-50",
-                )}
-                style={inspiration ? { background: color } : undefined}
-              >
-                {inspiration ? (
-                  <>
-                    <img src={inspiration.previewUrl.startsWith("fake:") ? undefined : inspiration.previewUrl} alt="Inspiration" className="max-h-56 w-auto object-contain" />
-                    {inspiration.previewUrl.startsWith("fake:") && <Art url={inspiration.previewUrl} alt="" className="h-48" />}
-                    <span className="absolute bottom-2 left-2 rounded-lg bg-black px-2 py-1 text-xs font-bold text-white">
-                      {inspiration.uploading ? "Uploading…" : "Inspiration · click to replace"}
-                    </span>
-                  </>
-                ) : (
-                  <span className="px-6 py-8 text-center">
-                    <span className="block text-2xl font-black tracking-tight">Drop an inspiration image</span>
-                    <span className="mt-1 block text-sm text-neutral-600">or click to choose one (optional)</span>
-                  </span>
-                )}
-              </button>
-              <div className="flex w-28 flex-col gap-2">
-                <label className="flex flex-1 cursor-pointer flex-col justify-end rounded-2xl border-2 border-black p-2" style={{ background: color, color: ink }}>
-                  <span className="text-xs font-bold uppercase tracking-wider">Background</span>
-                  <span className="font-mono text-sm">{color}</span>
-                  <input
-                    type="color"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    className="sr-only"
-                    aria-label="Background color"
-                  />
-                </label>
-                {inspiration && (
-                  <button
-                    type="button"
-                    onClick={() => setInspiration(null)}
-                    className="rounded-xl border-2 border-black px-2 py-1 text-xs font-bold hover:bg-black hover:text-white"
-                  >
-                    Remove image
-                  </button>
-                )}
-              </div>
-              <input
-                ref={fileInput}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                onChange={(e) => {
-                  void onFile(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-            </div>
+            <ImageTray
+              images={images}
+              states={states}
+              color={color}
+              ink={ink}
+              onColor={setColor}
+              onFiles={(files) => void addFiles(files, false)}
+              onRemove={dropSlotFromTray(setImages)}
+            />
 
             <label className="block">
               <span className="text-sm font-bold uppercase tracking-wider">
-                {hasReference ? "What should change?" : "What do you want to make?"}
+                {count === 0 ? "What do you want to make?" : "What should change?"}
               </span>
               <textarea
                 value={instruction}
@@ -293,12 +338,18 @@ function StudioPage() {
                 }}
                 rows={2}
                 maxLength={600}
-                placeholder={hasReference ? "Change the words / colors / characters to…" : "Describe your design…"}
+                placeholder={
+                  count === 0
+                    ? "Describe your design…"
+                    : count === 1
+                      ? "Change the words, colors, characters…"
+                      : `Refer to them as ${listNames(count)}…`
+                }
                 className="mt-2 w-full resize-none border-b-4 border-black bg-transparent py-2 text-2xl font-semibold leading-tight outline-none placeholder:text-neutral-300 md:text-3xl"
               />
             </label>
 
-            {!hasReference && ideas && (
+            {count === 0 && ideas && (
               <div>
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-sm font-bold uppercase tracking-wider">Need an idea?</span>
@@ -326,32 +377,26 @@ function StudioPage() {
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
-              {CHIPS.map((chip) => {
-                const on = chips.includes(chip);
-                return (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => setChips(on ? chips.filter((c) => c !== chip) : [...chips, chip])}
-                    className={cn(
-                      "rounded-full border-2 border-black px-3 py-1 text-sm font-bold transition-colors",
-                      on ? "bg-black text-white" : "hover:bg-neutral-100",
-                    )}
-                  >
-                    {chip}
-                  </button>
-                );
-              })}
-            </div>
+            <StyleMixer
+              open={mixerOpen}
+              onOpen={setMixerOpen}
+              styles={styles}
+              images={images}
+              states={states}
+              onWeight={(id, weight) => setStyles((list) => list.map((slot) => (slot.id === id ? { ...slot, weight } : slot)))}
+              onRemove={(id) => setStyles((list) => list.filter((slot) => slot.id !== id))}
+              onAddImage={addImageLook}
+              onBrowse={() => setLibraryOpen(true)}
+              onFiles={(files) => void addFiles(files, true)}
+            />
 
             <div className="flex flex-wrap items-center gap-4">
               <button
                 type="submit"
-                disabled={busy || inspiration?.uploading || outOfCredits}
+                disabled={busy || uploading || outOfCredits}
                 className="h-16 rounded-2xl bg-black px-10 text-xl font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-40"
               >
-                {outOfCredits ? "Out of credits" : busy ? "Starting…" : "Generate 4"}
+                {outOfCredits ? "Out of credits" : busy ? "Starting…" : uploading ? "Uploading…" : "Generate 4"}
               </button>
               <span className="text-sm text-neutral-600">
                 {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · 4 per batch`}
@@ -380,11 +425,26 @@ function StudioPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
               >
-                <div className="mb-3 flex items-baseline gap-3 border-t-2 border-black pt-3">
+                <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t-2 border-black pt-3">
                   <span className="h-4 w-4 shrink-0 border border-black" style={{ background: batch.backgroundColor }} />
-                  <p className="truncate text-base font-semibold">
-                    {batch.instruction || "From the inspiration image"}
+                  {batch.images.length > 0 && (
+                    <span className="flex shrink-0 gap-1">
+                      {batch.images.map((image, i) => (
+                        <span key={i} className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
+                          {image.url && <Art url={image.url} alt={`Image ${i + 1}`} className="max-h-full max-w-full object-contain" />}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <p className="min-w-0 flex-1 truncate text-base font-semibold">
+                    {batch.instruction || "From your images"}
                     {batch.presets.length > 0 && <span className="font-normal text-neutral-500"> · {batch.presets.join(", ")}</span>}
+                    {batch.styles.length > 0 && (
+                      <span className="font-normal text-neutral-500">
+                        {" · Style: "}
+                        {batch.styles.map((style) => `${style.summary ?? "image"} ${style.share}%`).join(" · ")}
+                      </span>
+                    )}
                   </p>
                   {batch.tiles.some((t) => t.status === "queued" || t.status === "dispatched") && (
                     <Elapsed since={batch.createdAt} />
@@ -397,7 +457,7 @@ function StudioPage() {
                       tile={tile}
                       onOpen={() => openViewer(tile, batch.tiles)}
                       onPublish={() => setPublishing(tile)}
-                      onInspire={() => useAsInspiration(tile)}
+                      onInspire={() => useAsImage(tile)}
                     />
                   ))}
                 </div>
@@ -425,7 +485,11 @@ function StudioPage() {
             }}
             onInspire={(tile) => {
               setViewer(null);
-              useAsInspiration(tile);
+              useAsImage(tile);
+            }}
+            onStyle={(tile) => {
+              setViewer(null);
+              useAsStyle(tile);
             }}
           />
         )}
@@ -436,8 +500,23 @@ function StudioPage() {
       <AnimatePresence>
         {showIdeas && <IdeasSheet onPick={applyIdea} onClose={() => setShowIdeas(false)} />}
       </AnimatePresence>
+      <AnimatePresence>
+        {libraryOpen && (
+          <StyleLibrary
+            taken={new Set(styles.map((slot) => slot.imageId).filter((id): id is Id<"userImages"> => Boolean(id)))}
+            onPick={pickStyle}
+            onFiles={(files) => void addFiles(files, true)}
+            onClose={() => setLibraryOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+// Removing an image from the tray leaves any style made from it in the mix.
+function dropSlotFromTray(setImages: (update: (list: Array<Slot>) => Array<Slot>) => void) {
+  return (id: string) => setImages((list) => list.filter((slot) => slot.id !== id));
 }
 
 function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClose: () => void }) {
@@ -567,7 +646,7 @@ function TileCard({
                 Publish
               </button>
               <button type="button" onClick={onInspire} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-neutral-100">
-                Use as inspiration
+                Use as image
               </button>
             </div>
           )}
@@ -598,6 +677,7 @@ function Viewer({
   onClose,
   onPublish,
   onInspire,
+  onStyle,
 }: {
   list: Array<Tile>;
   index: number;
@@ -605,6 +685,7 @@ function Viewer({
   onClose: () => void;
   onPublish: (tile: Tile) => void;
   onInspire: (tile: Tile) => void;
+  onStyle: (tile: Tile) => void;
 }) {
   const toggle = useMutation(api.studio.toggleFavorite);
   const [checker, setChecker] = useState(false);
@@ -657,7 +738,12 @@ function Viewer({
           </button>
           {tile.key && (
             <button type="button" onClick={() => onInspire(tile)} className={cn(button, "border-2 border-current")}>
-              Use as inspiration
+              Use as image
+            </button>
+          )}
+          {tile.key && (
+            <button type="button" onClick={() => onStyle(tile)} className={cn(button, "border-2 border-current")}>
+              Use as style
             </button>
           )}
           {tile.publishedCr ? (

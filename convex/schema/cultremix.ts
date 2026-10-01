@@ -57,17 +57,46 @@ export const cultremixTables = {
   }).index("by_owner_updated", ["ownerId", "updatedAt"]),
 
   // Today's additions: instruction, inspirationKey, backgroundColor, operation, model.
+  // images: the studio's numbered images (what to work on); styles: the style mix, each with a
+  // 0-100 slider value. inspirationKey repeats the first image for older readers.
   batches: defineTable({
     sessionId: v.id("creativeSessions"),
     ownerId: v.id("users"),
     instruction: v.string(),
     presets: v.array(v.string()),
     inspirationKey: v.optional(v.string()),
+    images: v.optional(v.array(v.object({ imageId: v.id("userImages"), key: v.string() }))),
+    styles: v.optional(
+      v.array(v.object({ imageId: v.id("userImages"), key: v.string(), weight: v.number() })),
+    ),
     backgroundColor: v.string(),
     operation: v.union(v.literal("create"), v.literal("edit"), v.literal("remix")),
     model: v.string(),
     count: v.number(),
   }).index("by_session", ["sessionId"]),
+
+  // Every image a member brings into the studio: uploads, their own designs, and remix sources.
+  // A vision model writes its notes once (what's in it and how it looks); the studio reuses them.
+  userImages: defineTable({
+    ownerId: v.id("users"),
+    key: v.string(),
+    sha256: v.optional(v.string()),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    analysis: v.union(v.literal("pending"), v.literal("ready"), v.literal("failed")),
+    summary: v.optional(v.string()),
+    kind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
+    notes: v.optional(v.string()),
+    analysisModel: v.optional(v.string()),
+    analysisError: v.optional(v.string()),
+    usedAt: v.number(),
+    // Set when the image was added to a style mix; the style picker lists these first.
+    styleAt: v.optional(v.number()),
+  })
+    .index("by_owner_used", ["ownerId", "usedAt"])
+    .index("by_owner_style", ["ownerId", "styleAt"])
+    .index("by_owner_key", ["ownerId", "key"])
+    .index("by_owner_sha", ["ownerId", "sha256"]),
 
   generations: defineTable({
     sessionId: v.id("creativeSessions"),

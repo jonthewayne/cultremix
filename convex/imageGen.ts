@@ -7,13 +7,15 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { NO_IMAGE_REPLY } from "./lib/imageErrors";
-import { designPrompt, photoPrompt, pickLook } from "./lib/prompts";
+import { photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { isDevDeployment, publicUrl, r2, storageMode } from "./lib/r2";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 const DESIGN_TIMEOUT_MS = 170_000;
+// How long a design waits for its images' notes before going without them.
+const NOTES_WAIT_MS = 15_000;
 const INSPIRATION_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -61,7 +63,11 @@ export async function fetchPublicImage(key: string, ctx?: ActionCtx) {
 type Provider = "chatgpt" | "gateway";
 
 // Today's order: Jon's ChatGPT login when its token is set, else the AI Gateway.
+// IMAGE_PROVIDER=gateway (or chatgpt) overrides it, so dev can test the production models.
 export function imageProvider(): Provider | null {
+  const forced = process.env.IMAGE_PROVIDER;
+  if (forced === "gateway" && process.env.AI_GATEWAY_API_KEY) return "gateway";
+  if (forced === "chatgpt" && process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID) return "chatgpt";
   if (process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID) return "chatgpt";
   if (process.env.AI_GATEWAY_API_KEY) return "gateway";
   return null;
@@ -71,7 +77,7 @@ function liveGeneration() {
   return imageProvider() !== null && storageMode() !== null;
 }
 
-function mimeOf(bytes: Uint8Array) {
+export function mimeOf(bytes: Uint8Array) {
   if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
   if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[8] === 0x57 && bytes[9] === 0x45) return "image/webp";
   return "image/png";
@@ -172,15 +178,15 @@ async function chatgptImage(args: {
   throw new Error(said ? `${NO_IMAGE_REPLY} ${said}` : "The image service returned no image.");
 }
 
-// One transparent 1024x1536 design. Gateway: Sunburst edit with an image, Flare for text only.
-async function designImage(text: string, image?: Uint8Array, provider: Provider | null = imageProvider()) {
+// One transparent 1024x1536 design. Gateway: Sunburst edit with images, Flare for text only.
+async function designImage(text: string, images: Array<Uint8Array>, provider: Provider | null = imageProvider()) {
   if (provider === "chatgpt") {
-    return await chatgptImage({ text, images: image ? [image] : [], background: "transparent", size: "1024x1536" });
+    return await chatgptImage({ text, images, background: "transparent", size: "1024x1536" });
   }
-  const model = image ? "openai/gpt-image-2.5-sunburst" : "openai/gpt-image-2.5-flare";
+  const model = images.length > 0 ? "openai/gpt-image-2.5-sunburst" : "openai/gpt-image-2.5-flare";
   const result = await generateImage({
     model: gateway.image(model),
-    prompt: image ? { images: [image], text } : text,
+    prompt: images.length > 0 ? { images, text } : text,
     size: "1024x1536",
     providerOptions: {
       openai: {
@@ -245,8 +251,8 @@ async function storePng(ctx: ActionCtx, prefix: string, bytes: Uint8Array) {
 export const runTile = internalAction({
   args: { generationId: v.id("generations") },
   returns: v.null(),
-  handler: async (ctx, { generationId }) => {
-    const job = await ctx.runQuery(internal.studio.tileJob, { generationId });
+  handler: async (ctx, { generationId }): Promise<null> => {
+    let job = await ctx.runQuery(internal.studio.tileJob, { generationId });
     if (!job || job.status !== "queued") return null;
     const claimed = await ctx.runMutation(internal.studio.markDispatched, { generationId });
     if (!claimed) return null;
@@ -266,18 +272,32 @@ export const runTile = internalAction({
         return null;
       }
 
-      const text = designPrompt({
-        instruction: job.instruction,
-        presets: job.presets,
-        hasInspiration: Boolean(job.inspirationKey),
+      // Notes still being written: wait a little, then go without them.
+      for (let waited = 0; job && job.attachments.some((a) => a.analysis === "pending") && waited < NOTES_WAIT_MS; waited += 2500) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        job = await ctx.runQuery(internal.studio.tileJob, { generationId });
+      }
+      if (!job) throw new Error("The design was removed.");
+      const text = studioPrompt({
+        layout: "single",
+        // Style words from the previous studio's buttons, on batches it started.
+        instruction: job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction,
+        attachments: job.attachments.map((a) => ({
+          summary: a.analysis === "ready" ? a.summary : undefined,
+          kind: a.kind,
+          notes: a.analysis === "ready" ? a.notes : undefined,
+          styleOnly: a.styleOnly,
+        })),
+        styles: job.styles,
         remix: job.remixOfParent,
       });
-      const image = job.inspirationKey ? await fetchPublicImage(job.inspirationKey, ctx) : undefined;
+      const images = await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
+      const provider = job.provider === "gateway" || job.provider === "chatgpt" ? job.provider : imageProvider();
       const started = Date.now();
-      const { bytes } = await designImage(text, image);
+      const { bytes } = await designImage(text, images, provider);
       const info = pngInfo(bytes);
       const { key, sha256 } = await storePng(ctx, "gen", bytes);
-      console.log("runTile ok", imageProvider(), Date.now() - started, "ms", info);
+      console.log("runTile ok", provider, images.length, "images", text.length, "chars", Date.now() - started, "ms", info);
       await ctx.runMutation(internal.studio.markSucceeded, {
         generationId,
         fullKey: key,
@@ -297,12 +317,14 @@ export const runTile = internalAction({
   },
 });
 
-// The browser downsizes the inspiration image (long side <= 1024 px) and sends
-// the bytes here; they are stored content-addressed in the public bucket.
+// The browser downsizes an image (long side <= 1024 px) and sends the bytes here. They're stored
+// once per member (content-addressed in R2), and the image joins the member's images, which
+// starts its notes. asStyle: added in the style mixer, so the style picker lists it first.
 export const uploadInspiration = action({
-  args: { bytes: v.bytes(), contentType: v.string() },
-  returns: v.object({ key: v.string(), url: v.optional(v.string()) }),
-  handler: async (ctx, args) => {
+  args: { bytes: v.bytes(), contentType: v.string(), asStyle: v.optional(v.boolean()) },
+  returns: v.object({ key: v.string(), url: v.optional(v.string()), imageId: v.id("userImages") }),
+  // Explicit types: recording the upload goes through the generated API, which includes this action.
+  handler: async (ctx, args): Promise<{ key: string; url?: string; imageId: Id<"userImages"> }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError({ code: "SIGNED_OUT", message: "Sign in first." });
     const ext = INSPIRATION_TYPES[args.contentType];
@@ -313,23 +335,40 @@ export const uploadInspiration = action({
       throw new ConvexError({ code: "INVALID_INPUT", message: "That image is too large." });
     }
     const bytes = new Uint8Array(args.bytes);
+    const sha256 = sha256Hex(bytes);
+    const info = pngInfo(bytes);
     const mode = storageMode();
+    let key: string;
     if (!mode) {
-      if (isDevDeployment()) return { key: `fake:inspo-${sha256Hex(bytes).slice(0, 12)}` };
-      throw new ConvexError({ code: "NOT_CONFIGURED", message: "Uploads are not configured." });
+      if (!isDevDeployment()) {
+        throw new ConvexError({ code: "NOT_CONFIGURED", message: "Uploads are not configured." });
+      }
+      key = `fake:inspo-${sha256.slice(0, 12)}`;
+    } else {
+      const existing = await ctx.runQuery(internal.images.findUpload, { authId: identity.subject, sha256 });
+      if (existing) {
+        key = existing.key;
+      } else if (mode === "convex") {
+        const id = await ctx.storage.store(new Blob([new Uint8Array(bytes)], { type: args.contentType }));
+        key = `cvx:${id}`;
+      } else {
+        key = `inspo/${sha256}.${ext}`;
+        await r2.store(ctx, bytes, {
+          key,
+          type: args.contentType,
+          cacheControl: "public, max-age=31536000, immutable",
+        });
+      }
     }
-    if (mode === "convex") {
-      const id = await ctx.storage.store(new Blob([new Uint8Array(bytes)], { type: args.contentType }));
-      const key = `cvx:${id}`;
-      return { key, url: publicUrl(key) };
-    }
-    const key = `inspo/${sha256Hex(bytes)}.${ext}`;
-    await r2.store(ctx, bytes, {
+    const imageId: Id<"userImages"> = await ctx.runMutation(internal.images.recordUpload, {
+      authId: identity.subject,
       key,
-      type: args.contentType,
-      cacheControl: "public, max-age=31536000, immutable",
+      sha256,
+      width: info.width || undefined,
+      height: info.height || undefined,
+      asStyle: Boolean(args.asStyle),
     });
-    return { key, url: publicUrl(key) };
+    return { key, url: publicUrl(key), imageId };
   },
 });
 
@@ -432,12 +471,22 @@ export const selfTest = internalAction({
       } else if (args.mode === "edit") {
         if (!args.imageKey) return { error: "edit needs imageKey" };
         out = await designImage(
-          designPrompt({ instruction, presets: [], hasInspiration: true, remix: args.remix }),
-          await fetchPublicImage(args.imageKey, ctx),
+          studioPrompt({
+            layout: "single",
+            instruction,
+            attachments: [{ styleOnly: false }],
+            styles: [],
+            remix: args.remix,
+          }),
+          [await fetchPublicImage(args.imageKey, ctx)],
           args.provider ?? imageProvider(),
         );
       } else {
-        out = await designImage(designPrompt({ instruction, presets: [], hasInspiration: false }), undefined, args.provider ?? imageProvider());
+        out = await designImage(
+          studioPrompt({ layout: "single", instruction, attachments: [], styles: [] }),
+          [],
+          args.provider ?? imageProvider(),
+        );
       }
       if (args.store === false) {
         return {

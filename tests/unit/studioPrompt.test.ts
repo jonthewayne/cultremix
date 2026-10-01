@@ -1,0 +1,184 @@
+import { describe, expect, it } from "vitest";
+import {
+  noteSections,
+  parseStyleNotes,
+  pickSections,
+  requestedWords,
+  signatureTraits,
+  styleShares,
+  studioPrompt,
+  withoutWords,
+} from "../../convex/lib/prompts";
+
+const POSTER = [
+  "### Subject and layout",
+  "A raccoon on a trash can inside an oval of mushrooms.",
+  "### Words",
+  "- “TRASH ROYALTY” — headline across the top.",
+  "### Technique",
+  "Vintage screen print with stippled grain.",
+  "### Color",
+  "Cream (#F5E7B8), orange (#F47A19), and near-black outlines.",
+  "### Line and shading",
+  "Heavy black outlines with engraved hatching.",
+  "### Lettering",
+  "Bubble letters with layered multicolor outlines.",
+  "### People and characters",
+  "Two friends with long wavy hair in patterned dresses.",
+  "### Figure drawing",
+  "Characters have elongated faces and long chins.",
+  "### Signature traits",
+  "- Huge bubble lettering",
+  "- Engraved line detail",
+  "- Elongated caricature faces",
+].join("\n");
+
+const GLITTER = [
+  "Technique: holographic glitter and chrome.",
+  "Signature traits:",
+  "1. Holographic glitter on the fills",
+  "2. Glossy chrome lettering",
+  "3. Hot pink and lilac highlights",
+].join("\n");
+
+const PHOTO = [
+  "Subject and layout: a girl laughing on a beach, framed from the waist up.",
+  "Technique: a photograph with soft daylight.",
+  "People and characters: round face, dimples, curly red hair, about eight years old.",
+  "Figure drawing: realistic proportions.",
+].join("\n");
+
+describe("image notes", () => {
+  it("reads the summary and kind lines", () => {
+    const parsed = parseStyleNotes('Summary: "a photo of a girl on a beach".\nKind: photo\n\n### Technique\nPhotograph.');
+    expect(parsed.summary).toBe("a photo of a girl on a beach");
+    expect(parsed.kind).toBe("photo");
+    expect(parsed.notes).toBe("### Technique\nPhotograph.");
+  });
+
+  it("splits sections in either heading form", () => {
+    expect(noteSections(PHOTO).map((s) => s.name)).toEqual(["Subject and layout", "Technique", "People and characters", "Figure drawing"]);
+    expect(pickSections(POSTER, ["Technique", "Color"])).toBe(
+      "Technique:\nVintage screen print with stippled grain.\n\nColor:\nCream (#F5E7B8), orange (#F47A19), and near-black outlines.",
+    );
+    expect(withoutWords(POSTER)).not.toContain("TRASH ROYALTY");
+  });
+
+  it("lists the ranked signature traits", () => {
+    expect(signatureTraits(POSTER)).toEqual(["Huge bubble lettering", "Engraved line detail", "Elongated caricature faces"]);
+    expect(signatureTraits(GLITTER)).toEqual([
+      "Holographic glitter on the fills",
+      "Glossy chrome lettering",
+      "Hot pink and lilac highlights",
+    ]);
+  });
+
+  it("finds words written in capitals or quotes", () => {
+    expect(requestedWords('A raccoon that says TRASH ROYALTY and "stay weird"')).toEqual(["stay weird", "TRASH ROYALTY"]);
+  });
+});
+
+describe("studio prompt", () => {
+  it("turns slider values into shares", () => {
+    expect(styleShares([100, 100])).toEqual([50, 50]);
+    expect(styleShares([100, 50])).toEqual([67, 33]);
+    expect(styleShares([80, 0, 20])).toEqual([80, 0, 20]);
+    expect(styleShares([0, 0])).toEqual([0, 0]);
+  });
+
+  it("restyles a photo with one style image and keeps her likeness", () => {
+    const prompt = studioPrompt({
+      layout: "single",
+      instruction: "Reimagine image 1 in this style",
+      attachments: [
+        { summary: "a photo of a girl on a beach", kind: "photo", notes: PHOTO, styleOnly: false },
+        { summary: "a 70s “TRASH ROYALTY” poster", kind: "art", notes: POSTER, styleOnly: true },
+      ],
+      styles: [{ attachment: 2, weight: 100 }],
+    });
+    expect(prompt).toContain("- Image 2: a 70s poster (style only: use its look, never its subjects or words).");
+    expect(prompt).toContain("otherwise keep the words from image 1. Never copy words from a style-only image.");
+    expect(prompt).toContain("keep every person and animal in image 1 recognizable by what identifies them");
+    expect(prompt).toContain("Don't keep their real face shape, features, or proportions");
+    expect(prompt).toContain("Style: image 2 sets the whole look.");
+    // The style's way of drawing people goes in; the photo's realistic rendering stays out.
+    expect(prompt).toContain("Figure drawing, required for every person and animal: Characters have elongated faces and long chins.");
+    expect(prompt).not.toContain("Figure drawing:\nrealistic proportions.");
+    // The photo's own look stays out once a style is chosen; who's in it stays in.
+    expect(prompt).toContain("round face, dimples, curly red hair");
+    expect(prompt).not.toContain("a photograph with soft daylight");
+    // A style image's words, subjects, and people never reach the prompt.
+    expect(prompt).not.toContain("TRASH ROYALTY");
+    expect(prompt).not.toContain("inside an oval of mushrooms");
+    expect(prompt).not.toContain("patterned dresses");
+    expect(prompt.split("\n\n").at(-1)).toMatch(/^Request \(this wins/u);
+  });
+
+  it("blends two styles by their sliders, and the smaller one has to show", () => {
+    const prompt = studioPrompt({
+      layout: "single",
+      instruction: "A raccoon in a tiny crown that says TRASH ROYALTY",
+      attachments: [
+        { summary: "a glitter sample", notes: GLITTER, styleOnly: true },
+        { summary: "a mushroom poster", notes: POSTER, styleOnly: true },
+      ],
+      styles: [
+        { attachment: 1, weight: 20 },
+        { attachment: 2, weight: 80 },
+      ],
+    });
+    expect(prompt).toContain("- Image 2 (80%): leads.");
+    expect(prompt).toContain(
+      "- Image 1 (20%): clearly visible in every design, not a faint hint, through these traits: Holographic glitter on the fills; Glossy chrome lettering.",
+    );
+    expect(prompt).toContain("T-R-A-S-H R-O-Y-A-L-T-Y");
+    expect(prompt).toContain("never copy words from a style image");
+  });
+
+  it("calls two equal sliders a shared lead", () => {
+    const prompt = studioPrompt({
+      layout: "single",
+      instruction: "A cat",
+      attachments: [
+        { notes: GLITTER, styleOnly: true },
+        { notes: POSTER, styleOnly: true },
+      ],
+      styles: [
+        { attachment: 1, weight: 100 },
+        { attachment: 2, weight: 100 },
+      ],
+    });
+    expect(prompt).toContain("- Image 1 (50%): shares the lead with image 2.");
+    expect(prompt).toContain("- Image 2 (50%): shares the lead with image 1.");
+  });
+
+  it("drops styles at zero and keeps the image's own look", () => {
+    const prompt = studioPrompt({
+      layout: "single",
+      instruction: "Change the words to GROW WILD",
+      attachments: [{ summary: "a mushroom graphic", notes: POSTER, styleOnly: false }],
+      styles: [{ attachment: 1, weight: 0 }],
+    });
+    expect(prompt).not.toContain("Style mix");
+    expect(prompt).toContain("Keep its own look unless the request asks for a different style.");
+    expect(prompt).toContain("Notes on image 1");
+    expect(prompt).toContain("G-R-O-W W-I-L-D");
+  });
+
+  it("writes a plain prompt with no images", () => {
+    const prompt = studioPrompt({ layout: "single", instruction: "A sunset badge that says DESERT PEOPLE CLUB", attachments: [], styles: [] });
+    expect(prompt).not.toContain("Attached images");
+    expect(prompt).toContain("Request: A sunset badge that says DESERT PEOPLE CLUB.");
+  });
+
+  it("asks a grid for four designs that share the mix", () => {
+    const prompt = studioPrompt({
+      layout: "grid",
+      instruction: "A raccoon",
+      attachments: [{ notes: POSTER, styleOnly: true }],
+      styles: [{ attachment: 1, weight: 100 }],
+    });
+    expect(prompt).toContain("Arrange them in a 2x2 grid");
+    expect(prompt).toContain("Keep the same style mix in all four and vary their composition.");
+  });
+});

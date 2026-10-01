@@ -1,8 +1,10 @@
 import { ConvexError, v } from "convex/values";
+import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
 import { isBlockedError } from "./lib/imageErrors";
+import { styleShares } from "./lib/prompts";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -12,8 +14,11 @@ type Ctx = QueryCtx | MutationCtx;
 export const TILES_PER_BATCH = 4;
 export const MODEL_TEXT = "openai/gpt-image-2.5-flare";
 export const MODEL_EDIT = "openai/gpt-image-2.5-sunburst";
+// The studio's limits: numbered images to work on, and styles in the mixer.
+export const MAX_IMAGES = 4;
+export const MAX_STYLES = 3;
 const HEX = /^#[0-9a-f]{6}$/iu;
-const IMAGE_KEY = /^((inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)|cvx:[A-Za-z0-9_-]{8,64})$/u;
+export const IMAGE_KEY = /^((inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)|cvx:[A-Za-z0-9_-]{8,64})$/u;
 
 export const tileStatus = v.union(
   v.literal("queued"),
@@ -47,6 +52,10 @@ const batchView = v.object({
   presets: v.array(v.string()),
   backgroundColor: v.string(),
   inspirationUrl: v.optional(v.string()),
+  images: v.array(v.object({ url: v.optional(v.string()) })),
+  styles: v.array(
+    v.object({ url: v.optional(v.string()), share: v.number(), summary: v.optional(v.string()) }),
+  ),
   tiles: v.array(tileView),
 });
 
@@ -103,6 +112,13 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
       .collect();
     generations.sort((a, b) => a.index - b.index);
+    const shares = styleShares((batch.styles ?? []).map((s) => s.weight));
+    const styles = [];
+    for (const [i, style] of (batch.styles ?? []).entries()) {
+      if (shares[i] <= 0) continue;
+      const image = await ctx.db.get("userImages", style.imageId);
+      styles.push({ url: publicUrl(style.key), share: shares[i], summary: image?.summary });
+    }
     batchViews.push({
       batchId: batch._id,
       createdAt: batch._creationTime,
@@ -110,6 +126,8 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       presets: batch.presets,
       backgroundColor: batch.backgroundColor,
       inspirationUrl: publicUrl(batch.inspirationKey),
+      images: (batch.images ?? []).map((image) => ({ url: publicUrl(image.key) })),
+      styles,
       tiles: generations.map((g) => {
         const blocked = g.status === "failed" && isBlockedError(g.error);
         return {
@@ -241,8 +259,12 @@ export const startRemix = mutation({
 export const generate = mutation({
   args: {
     instruction: v.string(),
-    presets: v.array(v.string()),
     backgroundColor: v.string(),
+    // The studio's numbered images in order, and its style mix (a 0-100 slider per style).
+    images: v.optional(v.array(v.id("userImages"))),
+    styles: v.optional(v.array(v.object({ imageId: v.id("userImages"), weight: v.number() }))),
+    // Sent by pages still running the previous studio until they reload.
+    presets: v.optional(v.array(v.string())),
     inspirationKey: v.optional(v.string()),
   },
   returns: v.union(
@@ -254,23 +276,56 @@ export const generate = mutation({
   handler: async (ctx, args) => {
     const user = await requireMember(ctx);
     const instruction = args.instruction.trim().slice(0, 600);
-    const presets = args.presets.map((p) => p.trim()).filter(Boolean).slice(0, 6);
-    const inspirationKey = args.inspirationKey;
-    if (!instruction && !inspirationKey) {
+    const imageIds = args.images ?? [];
+    const styleArgs = args.styles ?? [];
+    if (imageIds.length > MAX_IMAGES || styleArgs.length > MAX_STYLES) {
       throw new ConvexError({
         code: "INVALID_INPUT",
-        message: "Say what to make, or add an inspiration image.",
+        message: `Use up to ${MAX_IMAGES} images and ${MAX_STYLES} styles.`,
+      });
+    }
+    if (
+      new Set(imageIds).size !== imageIds.length ||
+      new Set(styleArgs.map((s) => s.imageId)).size !== styleArgs.length
+    ) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Each image can be added once." });
+    }
+    const load = async (imageId: Id<"userImages">) => {
+      const image = await ctx.db.get("userImages", imageId);
+      if (!image || image.ownerId !== user._id) {
+        throw new ConvexError({ code: "NOT_FOUND", message: "That image is not available." });
+      }
+      return image;
+    };
+    const images = [];
+    for (const imageId of imageIds) {
+      const image = await load(imageId);
+      images.push({ imageId: image._id, key: image.key });
+    }
+    const styles = [];
+    for (const style of styleArgs) {
+      if (!Number.isFinite(style.weight) || style.weight < 0 || style.weight > 100) {
+        throw new ConvexError({ code: "INVALID_INPUT", message: "Style sliders go from 0 to 100." });
+      }
+      const image = await load(style.imageId);
+      styles.push({ imageId: image._id, key: image.key, weight: Math.round(style.weight) });
+    }
+    const styleOnly = styles.filter((s) => s.weight > 0 && !imageIds.includes(s.imageId));
+    // The previous studio's one image, used as it was: no notes and no style mix.
+    const legacyKey = images.length === 0 && styles.length === 0 ? args.inspirationKey : undefined;
+    if (legacyKey && !IMAGE_KEY.test(legacyKey) && !(isDevDeployment() && legacyKey.startsWith("fake:"))) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "That image did not upload." });
+    }
+    const presets = (args.presets ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 6);
+    const attached = images.length + styleOnly.length + (legacyKey ? 1 : 0);
+    if (!instruction && attached === 0) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: "Say what to make, or add an image.",
       });
     }
     if (!HEX.test(args.backgroundColor)) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "Pick a background color." });
-    }
-    if (
-      inspirationKey &&
-      !IMAGE_KEY.test(inspirationKey) &&
-      !(isDevDeployment() && inspirationKey.startsWith("fake:"))
-    ) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: "That image did not upload." });
     }
     if (!(await flagEnabled(ctx, "gen.vercel"))) return { refused: "GENERATION_OFF" as const };
     const owner = isOwner(user);
@@ -286,16 +341,18 @@ export const generate = mutation({
         updatedAt: now,
         phrase: instruction,
         styleDirection: "",
-        presets,
+        presets: [],
       });
       session = (await ctx.db.get("creativeSessions", sessionId))!;
     }
-    const operation = session.remixOfWorkId ? "remix" : inspirationKey ? "edit" : "create";
+    const inspirationKey = images[0]?.key ?? legacyKey;
+    const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
     const chatgpt = Boolean(process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID);
-    const provider = chatgpt ? "chatgpt" : "gateway";
-    const model = chatgpt
+    const forced = process.env.IMAGE_PROVIDER;
+    const provider = forced === "gateway" || forced === "chatgpt" ? forced : chatgpt ? "chatgpt" : "gateway";
+    const model = provider === "chatgpt"
       ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
-      : inspirationKey
+      : attached > 0
         ? MODEL_EDIT
         : MODEL_TEXT;
     const batchId = await ctx.db.insert("batches", {
@@ -304,6 +361,8 @@ export const generate = mutation({
       instruction,
       presets,
       inspirationKey,
+      images: legacyKey ? undefined : images,
+      styles: legacyKey ? undefined : styles,
       backgroundColor: args.backgroundColor.toLowerCase(),
       operation,
       model,
@@ -332,10 +391,13 @@ export const generate = mutation({
       }
       await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
     }
+    for (const image of images) await ctx.db.patch("userImages", image.imageId, { usedAt: now });
+    for (const style of styles) {
+      await ctx.db.patch("userImages", style.imageId, { usedAt: now, styleAt: now });
+    }
     await ctx.db.patch("creativeSessions", session._id, {
       updatedAt: now,
       phrase: instruction,
-      presets,
     });
     return { batchId };
   },
@@ -364,6 +426,15 @@ export const toggleFavorite = mutation({
 
 // ---- Internal steps used by imageGen.runTile ----
 
+const attachmentView = v.object({
+  key: v.string(),
+  styleOnly: v.boolean(),
+  analysis: v.optional(v.union(v.literal("pending"), v.literal("ready"), v.literal("failed"))),
+  summary: v.optional(v.string()),
+  kind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
+  notes: v.optional(v.string()),
+});
+
 export const tileJob = internalQuery({
   args: { generationId: v.id("generations") },
   returns: v.union(
@@ -372,9 +443,13 @@ export const tileJob = internalQuery({
       status: tileStatus,
       instruction: v.string(),
       presets: v.array(v.string()),
-      inspirationKey: v.optional(v.string()),
       model: v.string(),
+      provider: v.string(),
       remixOfParent: v.boolean(),
+      // Every image sent with the call: the numbered images, then images added only as styles.
+      attachments: v.array(attachmentView),
+      // Each style's 1-based attachment number and slider value.
+      styles: v.array(v.object({ attachment: v.number(), weight: v.number() })),
     }),
   ),
   handler: async (ctx, args) => {
@@ -389,13 +464,43 @@ export const tileJob = internalQuery({
       const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
       remixOfParent = parent?.artKey === batch.inspirationKey;
     }
+    const describe = async (imageId: Id<"userImages">, key: string, styleOnly: boolean) => {
+      const image = await ctx.db.get("userImages", imageId);
+      return {
+        key,
+        styleOnly,
+        analysis: image?.analysis,
+        summary: image?.summary,
+        kind: image?.kind,
+        notes: image?.notes,
+      };
+    };
+    const attachments: Array<Infer<typeof attachmentView>> = [];
+    const styles: Array<{ attachment: number; weight: number }> = [];
+    if (batch.images || batch.styles) {
+      const workIds = (batch.images ?? []).map((image) => image.imageId);
+      for (const image of batch.images ?? []) attachments.push(await describe(image.imageId, image.key, false));
+      for (const style of batch.styles ?? []) {
+        if (style.weight <= 0) continue;
+        let index = workIds.indexOf(style.imageId);
+        if (index < 0) {
+          attachments.push(await describe(style.imageId, style.key, true));
+          index = attachments.length - 1;
+        }
+        styles.push({ attachment: index + 1, weight: style.weight });
+      }
+    } else if (batch.inspirationKey) {
+      attachments.push({ key: batch.inspirationKey, styleOnly: false });
+    }
     return {
       status: generation.status,
       instruction: batch.instruction,
       presets: batch.presets,
-      inspirationKey: batch.inspirationKey,
       model: generation.model,
+      provider: generation.provider,
       remixOfParent,
+      attachments,
+      styles,
     };
   },
 });
