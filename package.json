@@ -63,6 +63,7 @@
     "concurrently": "^10.0.5",
     "convex": "^1.46.0",
     "convex-helpers": "^0.1.124",
+    "fast-png": "^8.0.0",
     "libphonenumber-js": "^1.13.14",
     "lucide-react": "^1.48.0",
     "motion": "^13.4.6",
