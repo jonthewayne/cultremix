@@ -32,6 +32,7 @@ import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_providerConfig from "../lib/providerConfig.js";
 import type * as lib_r2 from "../lib/r2.js";
 import type * as lib_redirect from "../lib/redirect.js";
+import type * as lib_sessions from "../lib/sessions.js";
 import type * as lib_username from "../lib/username.js";
 import type * as organizations from "../organizations.js";
 import type * as phoneVerification from "../phoneVerification.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   "lib/providerConfig": typeof lib_providerConfig;
   "lib/r2": typeof lib_r2;
   "lib/redirect": typeof lib_redirect;
+  "lib/sessions": typeof lib_sessions;
   "lib/username": typeof lib_username;
   organizations: typeof organizations;
   phoneVerification: typeof phoneVerification;

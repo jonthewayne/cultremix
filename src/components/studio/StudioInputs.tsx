@@ -140,7 +140,7 @@ export function ImageTray({
         className="flex h-28 w-24 cursor-pointer flex-col justify-end rounded-2xl border-2 border-black p-2"
         style={{ background: color, color: ink }}
       >
-        <span className="text-[11px] font-bold uppercase tracking-wider">Background</span>
+        <span className="text-[10px] font-bold uppercase tracking-wide">Background</span>
         <span className="font-mono text-xs">{color}</span>
         <input type="color" value={color} onChange={(e) => onColor(e.target.value)} className="sr-only" aria-label="Background color" />
       </label>

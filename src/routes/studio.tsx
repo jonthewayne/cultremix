@@ -11,14 +11,20 @@ import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
+import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
+import type { MenuItem } from "~/components/studio/StudioSessions";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
 import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
+import { designFilename, isTouchDevice, prefetchImage, saveImage } from "~/lib/saveImage";
 import { cn } from "~/lib/utils";
 
+// /studio is always a blank design with the member's sessions below it; /studio?s=<id> opens a
+// session (every batch made in it, newest first); /studio?remix=<CR> starts a new remix session.
 export const Route = createFileRoute("/studio")({
-  validateSearch: (search: Record<string, unknown>): { remix?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { remix?: string; s?: string } => ({
     remix: typeof search.remix === "string" ? search.remix : undefined,
+    s: typeof search.s === "string" ? search.s : undefined,
   }),
   beforeLoad: requireAuthenticatedRoute,
   component: StudioPage,
@@ -41,13 +47,13 @@ let slotCounter = 0;
 const newSlotId = () => `slot-${Date.now()}-${slotCounter++}`;
 
 function StudioPage() {
-  const { remix } = Route.useSearch();
+  const { remix, s } = Route.useSearch();
   const navigate = useNavigate();
-  const session = useQuery(convexQuery(api.studio.current, {})).data;
+  const sessionQuery = useQuery(convexQuery(api.studio.session, s ? { sessionId: s } : "skip"));
+  const session = s ? sessionQuery.data : undefined;
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
   const generate = useMutation(api.studio.generate);
   const startRemix = useMutation(api.studio.startRemix);
-  const newSession = useMutation(api.studio.newSession);
   const upload = useAction(api.imageGen.uploadInspiration);
   const adopt = useMutation(api.images.adopt);
   const markStyle = useMutation(api.images.markStyle);
@@ -172,17 +178,70 @@ function StudioPage() {
     [adopt],
   );
 
-  // Remix: open a remix session with the published design as image 1.
+  // Moving between sessions (or back to a blank studio) clears the form, except when the studio
+  // itself just opened the session (first batch or a remix link), which keeps what's in the form.
+  const adopted = useRef<string | undefined>(undefined);
+  const seeded = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    setViewer(null);
+    if (s && s === adopted.current) {
+      seeded.current = s;
+      return;
+    }
+    seeded.current = undefined;
+    setImages([]);
+    setStyles([]);
+    setInstruction("");
+    setColor(DEFAULT_BG);
+    setMixerOpen(false);
+    setError(null);
+  }, [s]);
+  // An opened session picks up where it left off: its newest batch's words, images, and styles.
+  useEffect(() => {
+    if (!s || !session || seeded.current === s) return;
+    seeded.current = s;
+    const last = session.lastInputs;
+    if (last) {
+      setInstruction(last.instruction);
+      setColor(last.backgroundColor);
+      setImages(last.images.flatMap((image) => (image.url ? [{ id: newSlotId(), imageId: image.imageId, previewUrl: image.url, uploading: false }] : [])));
+      setStyles(
+        last.styles.flatMap((style) =>
+          style.url ? [{ id: newSlotId(), imageId: style.imageId, previewUrl: style.url, uploading: false, weight: style.weight }] : [],
+        ),
+      );
+      if (last.legacyKey && last.legacyUrl) void addExisting(last.legacyKey, last.legacyUrl, false);
+    } else if (session.remix?.artKey && session.remix.artUrl) {
+      setColor(session.remix.backgroundColor);
+      void addExisting(session.remix.artKey, session.remix.artUrl, false);
+    }
+  }, [s, session, addExisting]);
+  // A session that isn't the member's (or no longer exists) falls back to a blank studio.
+  useEffect(() => {
+    if (s && sessionQuery.data === null) void navigate({ to: "/studio", search: {}, replace: true });
+  }, [s, sessionQuery.data, navigate]);
+
+  // Remix: a new session with the published design as image 1.
   useEffect(() => {
     if (!remix || remixStarted.current === remix || !viewer?.username) return;
     remixStarted.current = remix;
-    startRemix({ cr: remix })
+    startRemix({ cr: remix, fresh: true })
       .then((result) => {
+        adopted.current = result.sessionId;
+        setImages([]);
+        setStyles([]);
+        setInstruction("");
         setColor(result.backgroundColor);
         if (result.artKey && result.artUrl) void addExisting(result.artKey, result.artUrl, false);
+        void navigate({ to: "/studio", search: { s: result.sessionId }, replace: true });
       })
       .catch((err) => setError(errorMessage(err)));
-  }, [remix, viewer?.username, startRemix, addExisting]);
+  }, [remix, viewer?.username, startRemix, addExisting, navigate]);
+
+  const openSession = (sessionId: string) => {
+    void navigate({ to: "/studio", search: { s: sessionId } });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const useAsImage = (tile: Tile) => {
     if (!tile.key || !tile.url) return;
@@ -224,10 +283,12 @@ function StudioPage() {
       setError("Say what to make, or add an image.");
       return;
     }
+    if (s && !session) return;
     setBusy(true);
     setError(null);
     try {
       const result = await generate({
+        ...(session ? { sessionId: session.sessionId } : { newSession: true }),
         instruction,
         backgroundColor: color,
         images: images.map((slot) => slot.imageId!),
@@ -239,23 +300,15 @@ function StudioPage() {
             ? "You're out of credits for today."
             : "Generation is paused right now.",
         );
+      } else if (result.sessionId !== s) {
+        adopted.current = result.sessionId;
+        await navigate({ to: "/studio", search: { s: result.sessionId } });
       }
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
-  };
-
-  const startOver = async () => {
-    setImages([]);
-    setStyles([]);
-    setMixerOpen(false);
-    setInstruction("");
-    setColor(DEFAULT_BG);
-    remixStarted.current = null;
-    await newSession({});
-    if (remix) navigate({ to: "/studio", search: {} });
   };
 
   const batches = session?.batches ?? [];
@@ -279,43 +332,47 @@ function StudioPage() {
   const count = images.length;
   const ink = inkOn(color);
   const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < 4);
-
-  // A remix session always starts from the parent design, including after a reload.
-  const seededSession = useRef<string | null>(null);
-  useEffect(() => {
-    if (!session || !remixInfo || seededSession.current === session.sessionId) return;
-    seededSession.current = session.sessionId;
-    if (imagesRef.current.length === 0 && remixInfo.artKey && remixInfo.artUrl) {
-      setColor(remixInfo.backgroundColor);
-      void addExisting(remixInfo.artKey, remixInfo.artUrl, false);
-    }
-  }, [session, remixInfo, addExisting]);
+  const loadingSession = Boolean(s && session === undefined);
 
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
       <main className="px-4 pb-24 md:px-10">
-        <section className="grid gap-8 pt-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12 md:pt-10">
-          <div>
+        <section className="grid grid-cols-1 gap-8 pt-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12 md:pt-10">
+          <div className="flex min-w-0 flex-col gap-6">
             <h1 className="text-[18vw] font-black leading-[0.8] tracking-[-0.06em] md:text-[9.5vw]">Studio</h1>
-            {remixInfo && (
-              <div className="mt-8 flex items-center gap-4">
-                <div
-                  className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
-                  style={{ background: remixInfo.backgroundColor }}
+            {session ? (
+              <div className="flex flex-col gap-4">
+                <SessionTitle key={session.sessionId} sessionId={session.sessionId} name={session.name} batches={session.batches.length} />
+                {remixInfo && (
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
+                      style={{ background: remixInfo.backgroundColor }}
+                    >
+                      <Art url={remixInfo.artUrl} alt={`CR ${remixInfo.cr}`} className="h-full w-auto max-w-full object-contain" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-wider">Remixing</p>
+                      <CrMark cr={remixInfo.cr} className="text-3xl md:text-4xl" />
+                      {remixInfo.title && <p className="mt-1 text-base">“{remixInfo.title}”</p>}
+                    </div>
+                  </div>
+                )}
+                <Link
+                  to="/studio"
+                  search={{}}
+                  className="self-start rounded-xl border-2 border-black px-4 py-2 text-sm font-bold transition-colors hover:bg-black hover:text-white"
                 >
-                  <Art url={remixInfo.artUrl} alt={`CR ${remixInfo.cr}`} className="h-full w-auto max-w-full object-contain" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-wider">Remixing</p>
-                  <CrMark cr={remixInfo.cr} className="text-4xl md:text-5xl" />
-                  {remixInfo.title && <p className="mt-1 text-base">“{remixInfo.title}”</p>}
-                </div>
+                  + New design
+                </Link>
               </div>
+            ) : (
+              !loadingSession && <p className="text-lg text-neutral-600">New design. Your sessions are below.</p>
             )}
           </div>
 
-          <form onSubmit={submit} className="flex flex-col gap-5">
+          <form onSubmit={submit} className="flex min-w-0 flex-col gap-5">
             <ImageTray
               images={images}
               states={states}
@@ -323,7 +380,7 @@ function StudioPage() {
               ink={ink}
               onColor={setColor}
               onFiles={(files) => void addFiles(files, false)}
-              onRemove={dropSlotFromTray(setImages)}
+              onRemove={(id) => setImages((list) => list.filter((slot) => slot.id !== id))}
             />
 
             <label className="block">
@@ -393,7 +450,7 @@ function StudioPage() {
             <div className="flex flex-wrap items-center gap-4">
               <button
                 type="submit"
-                disabled={busy || uploading || outOfCredits}
+                disabled={busy || uploading || outOfCredits || loadingSession}
                 className="h-16 rounded-2xl bg-black px-10 text-xl font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-40"
               >
                 {outOfCredits ? "Out of credits" : busy ? "Starting…" : uploading ? "Uploading…" : "Generate 4"}
@@ -401,11 +458,6 @@ function StudioPage() {
               <span className="text-sm text-neutral-600">
                 {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · 4 per batch`}
               </span>
-              {(batches.length > 0 || remixInfo) && (
-                <button type="button" onClick={() => void startOver()} className="ml-auto text-sm font-semibold underline underline-offset-4">
-                  Start over
-                </button>
-              )}
             </div>
             {error && (
               <p role="alert" className="text-base font-semibold text-red-600">
@@ -416,6 +468,8 @@ function StudioPage() {
         </section>
 
         <section className="mt-16 flex flex-col gap-14">
+          {!s && <SessionList onOpen={openSession} />}
+          {loadingSession && <p className="text-neutral-500">Opening the session…</p>}
           <AnimatePresence initial={false}>
             {batches.map((batch) => (
               <motion.div
@@ -458,15 +512,16 @@ function StudioPage() {
                       onOpen={() => openViewer(tile, batch.tiles)}
                       onPublish={() => setPublishing(tile)}
                       onInspire={() => useAsImage(tile)}
+                      onStyle={() => useAsStyle(tile)}
                     />
                   ))}
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
-          {batches.length === 0 && (
+          {session && batches.length === 0 && (
             <p className="max-w-lg text-lg text-neutral-500">
-              Your designs show up here, four at a time, newest on top. Heart the ones you like, then publish one to get its CR number.
+              Designs in this session show up here, four at a time, newest on top. Heart the ones you like, then publish one to get its CR number.
             </p>
           )}
         </section>
@@ -514,9 +569,23 @@ function StudioPage() {
   );
 }
 
-// Removing an image from the tray leaves any style made from it in the mix.
-function dropSlotFromTray(setImages: (update: (list: Array<Slot>) => Array<Slot>) => void) {
-  return (id: string) => setImages((list) => list.filter((slot) => slot.id !== id));
+// The ⋯ menu's choices for a finished design.
+function designItems(
+  tile: Tile,
+  actions: { onOpen: () => void; onPublish: () => void; onInspire: () => void; onStyle: () => void },
+): Array<MenuItem> {
+  const filename = designFilename(tile);
+  const items: Array<MenuItem> = [
+    { label: "View large", onSelect: actions.onOpen },
+    { label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, filename) },
+  ];
+  if (tile.url && !tile.url.startsWith("fake:")) items.push({ label: "Open full size", href: tile.url });
+  if (tile.key) {
+    items.push({ label: "Use as image", onSelect: actions.onInspire });
+    items.push({ label: "Use as style", onSelect: actions.onStyle });
+  }
+  if (!tile.publishedCr) items.push({ label: "Publish", onSelect: actions.onPublish });
+  return items;
 }
 
 function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClose: () => void }) {
@@ -580,20 +649,23 @@ function TileCard({
   onOpen,
   onPublish,
   onInspire,
+  onStyle,
 }: {
   tile: Tile;
   onOpen: () => void;
   onPublish: () => void;
   onInspire: () => void;
+  onStyle: () => void;
 }) {
   const toggle = useMutation(api.studio.toggleFavorite);
+  const [menuOpen, setMenuOpen] = useState(false);
   const ready = tile.status === "succeeded";
   const failed = tile.status === "failed" || tile.status === "unknown_outcome" || tile.status === "expired";
   const ink = inkOn(tile.backgroundColor);
   return (
     <div className="group relative aspect-square overflow-hidden rounded-2xl" style={{ background: tile.backgroundColor, color: ink }}>
       {ready ? (
-        <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="Open full size">
+        <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="View large">
           <Art url={tile.url} alt="Design" className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]" />
         </button>
       ) : failed && tile.blocked ? (
@@ -620,6 +692,17 @@ function TileCard({
       )}
       {ready && (
         <>
+          <DesignMenu
+            items={designItems(tile, { onOpen, onPublish, onInspire, onStyle })}
+            onOpenChange={(open) => {
+              setMenuOpen(open);
+              if (open) prefetchImage(tile.url);
+            }}
+            className={cn(
+              "absolute left-2 top-2",
+              menuOpen ? "opacity-100" : "opacity-100 md:opacity-0 md:focus-visible:opacity-100 md:group-hover:opacity-100",
+            )}
+          />
           <button
             type="button"
             onClick={() => void toggle({ generationId: tile.generationId })}
@@ -641,14 +724,13 @@ function TileCard({
               CR {tile.publishedCr}
             </Link>
           ) : (
-            <div className="absolute inset-x-2 bottom-2 flex gap-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-              <button type="button" onClick={onPublish} className="rounded-lg bg-black px-3 py-1.5 text-xs font-black text-white hover:bg-neutral-800">
-                Publish
-              </button>
-              <button type="button" onClick={onInspire} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-neutral-100">
-                Use as image
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onPublish}
+              className="absolute bottom-2 left-2 rounded-lg bg-black px-3 py-1.5 text-xs font-black text-white opacity-100 transition-opacity hover:bg-neutral-800 md:opacity-0 md:group-hover:opacity-100"
+            >
+              Publish
+            </button>
           )}
         </>
       )}
@@ -699,9 +781,20 @@ function Viewer({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [index, list.length, onClose, onIndex]);
+  // Ready to save the moment it's tapped (phones only share files during the tap).
+  useEffect(() => prefetchImage(tile?.url), [tile?.url]);
   if (!tile) return null;
   const ink = checker ? "#000000" : inkOn(tile.backgroundColor);
   const button = "h-11 rounded-xl px-4 text-sm font-bold";
+  const items: Array<MenuItem> = [
+    { label: checker ? "Show the background color" : "Show transparency", onSelect: () => setChecker(!checker) },
+    ...designItems(tile, {
+      onOpen: () => undefined,
+      onPublish: () => onPublish(tile),
+      onInspire: () => onInspire(tile),
+      onStyle: () => onStyle(tile),
+    }).filter((item) => item.label !== "View large" && item.label !== "Download" && item.label !== "Save image" && item.label !== "Publish"),
+  ];
   return (
     <motion.div
       className={cn("fixed inset-0 z-50 flex flex-col", checker && "checker")}
@@ -714,15 +807,15 @@ function Viewer({
       aria-modal="true"
       aria-label="Design viewer"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-8">
-        <span className="font-cr text-4xl md:text-5xl">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
+        <span className="font-cr text-3xl md:text-5xl">
           {index + 1} / {list.length}
         </span>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => void toggle({ generationId: tile.generationId })}
-            className="h-11 px-3 text-3xl leading-none"
+            className="h-11 px-2 text-3xl leading-none"
             aria-label={tile.favorite ? "Remove from favorites" : "Add to favorites"}
             aria-pressed={tile.favorite}
           >
@@ -730,22 +823,11 @@ function Viewer({
           </button>
           <button
             type="button"
-            onClick={() => setChecker(!checker)}
-            aria-pressed={checker}
-            className={cn(button, "border-2", checker ? "border-black bg-black text-white" : "border-current")}
+            onClick={() => saveImage(tile.url, designFilename(tile))}
+            className={cn(button, "hidden border-2 border-current sm:block")}
           >
-            Transparency
+            {isTouchDevice() ? "Save image" : "Download"}
           </button>
-          {tile.key && (
-            <button type="button" onClick={() => onInspire(tile)} className={cn(button, "border-2 border-current")}>
-              Use as image
-            </button>
-          )}
-          {tile.key && (
-            <button type="button" onClick={() => onStyle(tile)} className={cn(button, "border-2 border-current")}>
-              Use as style
-            </button>
-          )}
           {tile.publishedCr ? (
             <Link to="/cr/$cr" params={{ cr: tile.publishedCr }} className={cn(button, "flex items-center bg-black text-white")}>
               CR {tile.publishedCr}
@@ -755,12 +837,15 @@ function Viewer({
               Publish
             </button>
           )}
+          <DesignMenu
+            items={[{ label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, designFilename(tile)) }, ...items]}
+          />
           <button type="button" onClick={onClose} className="h-11 px-2 text-sm font-bold underline underline-offset-4">
-            Close (Esc)
+            Close
           </button>
         </div>
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-14 pb-6">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 pb-6 md:px-14">
         <AnimatePresence mode="wait">
           <motion.div
             key={tile.generationId}
@@ -769,8 +854,15 @@ function Viewer({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
             transition={{ duration: 0.18 }}
+            drag={list.length > 1 ? "x" : false}
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.6}
+            onDragEnd={(_, info) => {
+              if (info.offset.x < -80) onIndex((index + 1) % list.length);
+              else if (info.offset.x > 80) onIndex((index - 1 + list.length) % list.length);
+            }}
           >
-            <Art url={tile.url} alt="Design, full size" className="h-full max-h-[80vh] w-auto max-w-full object-contain" />
+            <Art url={tile.url} alt="Design, full size" className="pointer-events-none h-full max-h-[82vh] w-auto max-w-full select-none object-contain" />
           </motion.div>
         </AnimatePresence>
         {list.length > 1 && (
@@ -778,7 +870,7 @@ function Viewer({
             <button
               type="button"
               onClick={() => onIndex((index - 1 + list.length) % list.length)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-3 text-5xl font-black md:left-6"
+              className="absolute left-1 top-1/2 hidden -translate-y-1/2 p-3 text-5xl font-black sm:block md:left-6"
               aria-label="Previous"
             >
               ←
@@ -786,7 +878,7 @@ function Viewer({
             <button
               type="button"
               onClick={() => onIndex((index + 1) % list.length)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-3 text-5xl font-black md:right-6"
+              className="absolute right-1 top-1/2 hidden -translate-y-1/2 p-3 text-5xl font-black sm:block md:right-6"
               aria-label="Next"
             >
               →

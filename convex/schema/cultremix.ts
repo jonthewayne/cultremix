@@ -54,6 +54,8 @@ export const cultremixTables = {
     remixOfWorkId: v.optional(v.id("works")),
     remixMode: v.optional(v.union(v.literal("variation"), v.literal("fork"))),
     purpose: v.optional(v.union(v.literal("studio"), v.literal("shoot"))),
+    // A name the member gave the session; without one the studio uses its first request.
+    title: v.optional(v.string()),
   }).index("by_owner_updated", ["ownerId", "updatedAt"]),
 
   // Today's additions: instruction, inspirationKey, backgroundColor, operation, model.

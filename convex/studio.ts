@@ -6,6 +6,7 @@ import { creditBalance, getViewerUser, isOwner } from "./identity";
 import { isBlockedError } from "./lib/imageErrors";
 import { styleShares } from "./lib/prompts";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
+import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -61,6 +62,10 @@ const batchView = v.object({
 
 const sessionView = v.object({
   sessionId: v.id("creativeSessions"),
+  // The member's title, and the name shown (title, "Remix of CR …", or the first request).
+  title: v.optional(v.string()),
+  name: v.string(),
+  createdAt: v.number(),
   remix: v.optional(
     v.object({
       workId: v.id("works"),
@@ -73,6 +78,20 @@ const sessionView = v.object({
   ),
   batches: v.array(batchView),
   favorites: v.array(v.id("generations")),
+  // The newest batch's settings, so reopening a session picks up where it left off.
+  lastInputs: v.optional(
+    v.object({
+      instruction: v.string(),
+      backgroundColor: v.string(),
+      images: v.array(v.object({ imageId: v.id("userImages"), url: v.optional(v.string()) })),
+      styles: v.array(
+        v.object({ imageId: v.id("userImages"), url: v.optional(v.string()), weight: v.number() }),
+      ),
+      // A batch from the previous studio: its one image, not yet in the member's images.
+      legacyKey: v.optional(v.string()),
+      legacyUrl: v.optional(v.string()),
+    }),
+  ),
 });
 
 export async function flagEnabled(ctx: Ctx, key: string) {
@@ -89,6 +108,22 @@ async function latestSession(ctx: Ctx, ownerId: Id<"users">) {
     .withIndex("by_owner_updated", (q) => q.eq("ownerId", ownerId))
     .order("desc")
     .first();
+}
+
+// The session's first request, for its default name.
+async function firstInstruction(ctx: Ctx, sessionId: Id<"creativeSessions">) {
+  const early = await ctx.db
+    .query("batches")
+    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+    .order("asc")
+    .take(5);
+  return early.find((batch) => batch.instruction.trim())?.instruction;
+}
+
+async function remixCrOf(ctx: Ctx, session: Doc<"creativeSessions">) {
+  if (!session.remixOfWorkId) return undefined;
+  const work = await ctx.db.get("works", session.remixOfWorkId);
+  return work ? formatCr(work.crFamily, work.crExpression) : undefined;
 }
 
 async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
@@ -166,14 +201,38 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       };
     }
   }
+  const newest = batches[0];
+  const lastInputs = newest
+    ? {
+        instruction: newest.instruction,
+        backgroundColor: newest.backgroundColor,
+        images: (newest.images ?? []).map((image) => ({ imageId: image.imageId, url: publicUrl(image.key) })),
+        styles: (newest.styles ?? []).map((style) => ({
+          imageId: style.imageId,
+          url: publicUrl(style.key),
+          weight: style.weight,
+        })),
+        legacyKey: newest.images || newest.styles ? undefined : newest.inspirationKey,
+        legacyUrl: newest.images || newest.styles ? undefined : publicUrl(newest.inspirationKey),
+      }
+    : undefined;
   return {
     sessionId: session._id,
+    title: session.title,
+    name: sessionName({
+      title: session.title,
+      remixCr: remix?.cr,
+      firstInstruction: await firstInstruction(ctx, session._id),
+    }),
+    createdAt: session._creationTime,
     remix,
     batches: batchViews,
     favorites: favorites.map((g) => g._id),
+    lastInputs,
   };
 }
 
+// The member's latest session (the previous studio always reopened it).
 export const current = query({
   args: {},
   returns: v.union(v.null(), sessionView),
@@ -183,6 +242,97 @@ export const current = query({
     const session = await latestSession(ctx, user._id);
     if (!session) return null;
     return await buildSessionView(ctx, session);
+  },
+});
+
+// One session, by the id in the studio's address (?s=…). Null if it isn't the member's.
+export const session = query({
+  args: { sessionId: v.string() },
+  returns: v.union(v.null(), sessionView),
+  handler: async (ctx, args) => {
+    const user = await getViewerUser(ctx);
+    if (!user) return null;
+    const sessionId = ctx.db.normalizeId("creativeSessions", args.sessionId);
+    if (!sessionId) return null;
+    const found = await ctx.db.get("creativeSessions", sessionId);
+    if (!found || found.ownerId !== user._id) return null;
+    return await buildSessionView(ctx, found);
+  },
+});
+
+const sessionCard = v.object({
+  sessionId: v.id("creativeSessions"),
+  name: v.string(),
+  updatedAt: v.number(),
+  batches: v.number(),
+  // The newest finished designs, newest first.
+  thumbs: v.array(v.object({ url: v.optional(v.string()), backgroundColor: v.string() })),
+});
+
+// The member's sessions with work in them, most recently used first, for the blank studio.
+export const sessions = query({
+  args: { limit: v.optional(v.number()) },
+  returns: v.object({ sessions: v.array(sessionCard), more: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await getViewerUser(ctx);
+    if (!user) return { sessions: [], more: false };
+    const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 12)), 60);
+    const cards = [];
+    let more = false;
+    // Sessions with no batches (opened, then left) are skipped.
+    for await (const row of ctx.db
+      .query("creativeSessions")
+      .withIndex("by_owner_updated", (q) => q.eq("ownerId", user._id))
+      .order("desc")) {
+      const batches = await ctx.db
+        .query("batches")
+        .withIndex("by_session", (q) => q.eq("sessionId", row._id))
+        .order("desc")
+        .take(100);
+      if (batches.length === 0) continue;
+      if (cards.length === limit) {
+        more = true;
+        break;
+      }
+      const thumbs = [];
+      for (const batch of batches.slice(0, 6)) {
+        const generations = await ctx.db
+          .query("generations")
+          .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
+          .collect();
+        generations.sort((a, b) => a.index - b.index);
+        for (const g of generations) {
+          if (g.status === "succeeded" && g.fullKey && thumbs.length < 4) {
+            thumbs.push({ url: publicUrl(g.fullKey), backgroundColor: batch.backgroundColor });
+          }
+        }
+        if (thumbs.length >= 4) break;
+      }
+      const first = [...batches].reverse().find((batch) => batch.instruction.trim())?.instruction;
+      cards.push({
+        sessionId: row._id,
+        name: sessionName({ title: row.title, remixCr: await remixCrOf(ctx, row), firstInstruction: first }),
+        updatedAt: row.updatedAt,
+        batches: batches.length,
+        thumbs,
+      });
+    }
+    return { sessions: cards, more };
+  },
+});
+
+export const renameSession = mutation({
+  args: { sessionId: v.id("creativeSessions"), title: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await requireMember(ctx);
+    const found = await ctx.db.get("creativeSessions", args.sessionId);
+    if (!found || found.ownerId !== user._id) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Session not found." });
+    }
+    const title = args.title.replace(/\s+/gu, " ").trim().slice(0, SESSION_TITLE_MAX);
+    await ctx.db.patch("creativeSessions", found._id, { title: title || undefined });
+    return null;
   },
 });
 
@@ -213,7 +363,9 @@ export const newSession = mutation({
 // Opens a remix session on a published work; the studio then uses the work's
 // art and background color as the inspiration.
 export const startRemix = mutation({
-  args: { cr: v.string() },
+  // fresh: always a new session (the studio's remix links); otherwise the latest session
+  // remixing this work is reused.
+  args: { cr: v.string(), fresh: v.optional(v.boolean()) },
   returns: v.object({
     sessionId: v.id("creativeSessions"),
     artKey: v.optional(v.string()),
@@ -239,7 +391,7 @@ export const startRemix = mutation({
       backgroundColor: work.backgroundColor,
     };
     const existing = await latestSession(ctx, user._id);
-    if (existing && existing.remixOfWorkId === work._id) {
+    if (!args.fresh && existing && existing.remixOfWorkId === work._id) {
       await ctx.db.patch("creativeSessions", existing._id, { updatedAt: Date.now() });
       return { sessionId: existing._id, ...result };
     }
@@ -258,6 +410,10 @@ export const startRemix = mutation({
 
 export const generate = mutation({
   args: {
+    // The session to add the batch to (from the studio's address). Without it, a new session
+    // starts; pages from the previous studio send nothing and keep using their latest session.
+    sessionId: v.optional(v.id("creativeSessions")),
+    newSession: v.optional(v.boolean()),
     instruction: v.string(),
     backgroundColor: v.string(),
     // The studio's numbered images in order, and its style mix (a 0-100 slider per style).
@@ -268,7 +424,7 @@ export const generate = mutation({
     inspirationKey: v.optional(v.string()),
   },
   returns: v.union(
-    v.object({ batchId: v.id("batches") }),
+    v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
     v.object({
       refused: v.union(v.literal("NO_CREDITS"), v.literal("GENERATION_OFF")),
     }),
@@ -334,7 +490,15 @@ export const generate = mutation({
     }
 
     const now = Date.now();
-    let session = await latestSession(ctx, user._id);
+    let session: Doc<"creativeSessions"> | null = null;
+    if (args.sessionId) {
+      session = await ctx.db.get("creativeSessions", args.sessionId);
+      if (!session || session.ownerId !== user._id) {
+        throw new ConvexError({ code: "NOT_FOUND", message: "Session not found." });
+      }
+    } else if (!args.newSession) {
+      session = await latestSession(ctx, user._id);
+    }
     if (!session) {
       const sessionId = await ctx.db.insert("creativeSessions", {
         ownerId: user._id,
@@ -399,7 +563,7 @@ export const generate = mutation({
       updatedAt: now,
       phrase: instruction,
     });
-    return { batchId };
+    return { batchId, sessionId: session._id };
   },
 });
 
