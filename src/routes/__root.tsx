@@ -12,7 +12,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { convexAuthClient } from "~/lib/auth-client";
 import { getTokenAndRenewSession } from "~/lib/auth-server";
-import { useOnboardingGuard } from "~/lib/onboardingGuard";
+import { redirectForOnboarding, useOnboardingGuard } from "~/lib/onboardingGuard";
 import {
   SHARE_DESCRIPTION,
   SHARE_IMAGE,
@@ -78,6 +78,11 @@ export const Route = createRootRouteWithContext<{
     const token = await getAuth();
     if (token) {
       ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
+      await redirectForOnboarding({
+        queryClient: ctx.context.queryClient,
+        convexQueryClient: ctx.context.convexQueryClient,
+        location: ctx.location,
+      });
     }
     return { isAuthenticated: !!token, token };
   },

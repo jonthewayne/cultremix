@@ -14,6 +14,8 @@ export const Route = createFileRoute("/onboarding")({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
   }),
   beforeLoad: requireAuthenticatedRoute,
+  // Loads the starting credits with the page, so the line that mentions them doesn't pop in.
+  loader: ({ context }) => context.queryClient.ensureQueryData(convexQuery(api.identity.signupCredits, {})),
   component: OnboardingPage,
 });
 
@@ -28,6 +30,8 @@ function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const destination = sanitizeRedirect(redirect, "/studio");
 
+  // Leaves once the saved name reaches this page's live viewer, so the next page's check already
+  // sees it (leaving right after the save could beat that update and bounce back here).
   useEffect(() => {
     if (viewer.data && !viewer.data.needsUsername) {
       router.history.replace(destination);
@@ -45,7 +49,6 @@ function OnboardingPage() {
     setError(null);
     try {
       await complete({ username: check.username });
-      router.history.replace(destination);
     } catch (err) {
       const message =
         err instanceof ConvexError
