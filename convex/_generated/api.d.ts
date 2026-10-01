@@ -23,6 +23,7 @@ import type * as lib_authEmail from "../lib/authEmail.js";
 import type * as lib_authRateLimit from "../lib/authRateLimit.js";
 import type * as lib_authVerification from "../lib/authVerification.js";
 import type * as lib_authz from "../lib/authz.js";
+import type * as lib_colors from "../lib/colors.js";
 import type * as lib_gridCut from "../lib/gridCut.js";
 import type * as lib_imageErrors from "../lib/imageErrors.js";
 import type * as lib_otp from "../lib/otp.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authRateLimit": typeof lib_authRateLimit;
   "lib/authVerification": typeof lib_authVerification;
   "lib/authz": typeof lib_authz;
+  "lib/colors": typeof lib_colors;
   "lib/gridCut": typeof lib_gridCut;
   "lib/imageErrors": typeof lib_imageErrors;
   "lib/otp": typeof lib_otp;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBlockedError } from "../../convex/lib/imageErrors";
+import { isBlockedError, publicTileError } from "../../convex/lib/imageErrors";
 
 describe("content filter errors", () => {
   it("recognizes the provider's refusals", () => {
@@ -26,5 +26,17 @@ describe("content filter errors", () => {
     ]) {
       expect(isBlockedError(error)).toBe(false);
     }
+  });
+});
+
+describe("failed design messages", () => {
+  it("never pass the provider's own text to the studio", () => {
+    // On the ChatGPT path the model's reply can repeat the prompt.
+    const reply = "The image service answered without an image: Sure! I'll draw image 1 with the long faces from the style definitions.";
+    expect(publicTileError(reply)).toBe("The image service had a problem.");
+    expect(publicTileError("Image service error 400. Invalid request: Make a t-shirt graphic.")).toBe("The image service had a problem.");
+    expect(publicTileError("Timed out.")).toBe("It took too long.");
+    expect(publicTileError("Image fetch failed (502).")).toBe("One of the images couldn't be loaded.");
+    expect(publicTileError(undefined)).toBeUndefined();
   });
 });

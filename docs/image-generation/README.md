@@ -72,7 +72,7 @@ The prompt placeholder follows the images: "Describe your design…" with none, 
 
 When an image first comes into the studio, `convex/imageNotes.ts` asks GPT-6 Luna for notes with `STYLE_NOTES_PROMPT`, and `userImages` stores them once per member and image (matched by SHA-256), so reusing an image costs nothing. Transparent images go to Luna on flat gray with a note saying so, since vision models read clear pixels as black. The notes have these parts:
 
-- **Summary** and **Kind** (photo or art): the image's short name in the studio and in prompts.
+- **Summary** and **Kind** (photo or art): the image's short name in prompts. Neither is shown in the studio (see "What stays on the server").
 - **Subject and layout**, **Words** (every piece of text, most prominent first, with its exact spelling, role, position, size, and lettering), **People and characters** (who is in it and what makes each person recognizable, without naming anyone).
 - **Technique**, **Color** (with hex codes), **Line and shading**, **Lettering** (the overall approach), **Figure drawing** (how the image draws faces and bodies compared with real proportions, with numbers where possible), and ranked **Signature traits**.
 
@@ -101,6 +101,17 @@ Unit tests: `tests/unit/studioPrompt.test.ts`.
 - **Mixing.** The model gives each style about three visible levels: off, a visible accent, or leading. At 80/20 the smaller style vanished until the prompt required it to show in every design; then it showed in all four. 50/50 blends clearly. With three styles, the model spread them across the four designs instead of blending all three into each. The prompt still sends exact percentages, so finer settings will show as models improve.
 - **A photo in a style.** A photo of a woman plus a 70s poster of elongated figures: the first prompt kept her realistic face in all eight designs. Separating likeness from figure drawing (in the notes and in the prompt) gave three of three single designs her hair, glasses, freckles, sweater, and smile with the poster's longer face, long neck, and simplified features. The studio's batches still render her closer to realistic, so the stretch is weaker there than in the direct test; stronger wording or a second pass is the next thing to try.
 - **Color blocks.** Asked for four solid rectangular posters, the model left the space around every panel transparent, and the cutter cut all four.
+
+## What stays on the server
+
+Nothing the vision model writes about an image, and no prompt, reaches the browser. The browser sends image IDs, slider values, and the creator's own words. `imageGen.runTile`, an internal Convex action, builds the prompt and sends it straight to the image model, and no prompt is stored. A member can still guess a style by looking at the images, but the notes and our wording are never shown.
+
+- `images.status` and `images.library` return an image's URL and whether its notes are pending, ready, or failed, never the notes, summary, or kind. The studio names a style by where it came from ("Image 1's look", "Style image") and shows a mix as thumbnails with their shares.
+- A failed design shows one of a few fixed messages (`publicTileError` in `convex/lib/imageErrors.ts`). The raw error stays in `generations.error`, because a provider's error text, or the model's own reply on the ChatGPT path, can quote the prompt.
+- Every public function declares the fields it returns, and Convex refuses to return a field that isn't declared, so a new field on `userImages` can't reach the browser by accident.
+- No browser code imports prompt code. `tests/unit/clientBoundary.test.ts` follows every import from `src/` and fails if it reaches a `convex/` file outside a short list of files that are safe in the browser (`_generated/api.js`, `lib/authz.ts`, `lib/colors.ts`, `lib/username.ts`). The shop page's shirt-color names moved from `prompts.ts` to `lib/colors.ts` for this.
+- The style library from Style Of will follow the same rule: its style definitions live in Convex, public queries return a style's name, category, and preview images, and a member's pick reaches the server as an ID and a slider value. Keep the definitions out of this repository.
+- This repository is public for judging, so the prompt templates in `convex/lib/prompts.ts`, and this README, can be read on GitHub until it's made private. The notes for each image and the prompts built from them live only in the database.
 
 ## Upscaling for print
 

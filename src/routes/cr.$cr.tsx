@@ -5,7 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
-import { colorName } from "../../convex/lib/prompts";
+import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
 
 export const Route = createFileRoute("/cr/$cr")({

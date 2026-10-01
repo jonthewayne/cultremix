@@ -8,7 +8,8 @@ import { Art } from "~/components/cr/Art";
 import { cn } from "~/lib/utils";
 
 // The studio's inputs: numbered images to work on, and the style mixer with its picker.
-// Nothing becomes a style unless the member adds it; see docs/usage-flow.md.
+// Nothing becomes a style unless the member adds it. What the server knows about an image stays
+// there; docs/image-generation/README.md covers both.
 
 export const MAX_IMAGES = 4;
 export const MAX_STYLES = 3;
@@ -20,10 +21,9 @@ export type Slot = {
   uploading: boolean;
 };
 export type StyleSlot = Slot & { weight: number };
+// The server only says whether an image's notes are ready; the notes themselves never leave it.
 export type ImageState = {
   analysis: "pending" | "ready" | "failed";
-  summary?: string;
-  kind?: "photo" | "art";
 };
 
 // Slider values (0-100) as shares of the mix; two equal values split evenly.
@@ -53,6 +53,22 @@ function Dots() {
       <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity }}>
         …
       </motion.span>
+    </span>
+  );
+}
+
+// A style mix as small thumbnails with their shares: the mixer's closed bar and each batch.
+export function StyleChips({ items, className }: { items: Array<{ url?: string; share: number }>; className?: string }) {
+  return (
+    <span className={cn("flex shrink-0 items-center gap-2", className)}>
+      {items.map((item, i) => (
+        <span key={i} className="flex items-center gap-1">
+          <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
+            {item.url && <Thumb url={item.url} className="max-h-full max-w-full object-contain" />}
+          </span>
+          <span className="text-xs font-bold tabular-nums text-black">{item.share > 0 ? `${item.share}%` : "off"}</span>
+        </span>
+      ))}
     </span>
   );
 }
@@ -99,7 +115,6 @@ export function ImageTray({
             key={slot.id}
             className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border-2 border-black p-1.5"
             style={{ background: color }}
-            title={state?.summary}
           >
             <Thumb url={slot.previewUrl} className="max-h-full max-w-full object-contain" />
             <span className="absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black text-xs font-black text-white">
@@ -162,6 +177,7 @@ export function ImageTray({
 function StyleRow({
   slot,
   label,
+  position,
   share,
   state,
   onWeight,
@@ -169,27 +185,34 @@ function StyleRow({
 }: {
   slot: StyleSlot;
   label: string;
+  position: number;
   share: number;
   state?: ImageState;
   onWeight: (weight: number) => void;
   onRemove: () => void;
 }) {
   const analysis = slot.uploading ? undefined : state?.analysis;
-  // "Style captured" shows for a moment when the notes arrive (or a captured style is added).
-  const [justCaptured, setJustCaptured] = useState(false);
-  const [known, setKnown] = useState<string | undefined>(undefined);
-  const previous = useRef<string | undefined>(undefined);
+  // The last state seen, kept while the status reloads.
+  const [known, setKnown] = useState(analysis);
+  // "Style captured" shows for a moment when this row's notes arrive while it's on screen
+  // (uploading or analyzing, then ready); a style that was already captured goes straight to its
+  // slider. The timer lives in its own effect so React's development double-run can't cancel it.
+  const [capturedAt, setCapturedAt] = useState<number | null>(null);
+  const previous = useRef<string | undefined>(slot.uploading ? "uploading" : analysis);
   useEffect(() => {
-    // Unknown while the status loads: keep showing the last known state.
-    if (analysis === undefined) return;
+    const observed = slot.uploading ? "uploading" : analysis;
+    if (observed === undefined) return;
     const before = previous.current;
-    previous.current = analysis;
-    setKnown(analysis);
-    if (analysis !== "ready" || before === "ready") return;
-    setJustCaptured(true);
-    const timer = window.setTimeout(() => setJustCaptured(false), 1800);
+    previous.current = observed;
+    if (analysis) setKnown(analysis);
+    if (observed === "ready" && (before === "pending" || before === "uploading")) setCapturedAt(Date.now());
+  }, [analysis, slot.uploading]);
+  useEffect(() => {
+    if (capturedAt === null) return;
+    const timer = window.setTimeout(() => setCapturedAt(null), 1800);
     return () => window.clearTimeout(timer);
-  }, [analysis]);
+  }, [capturedAt]);
+  const justCaptured = capturedAt !== null;
   const current = slot.uploading ? undefined : (analysis ?? known);
   const settled = current === "ready" || current === "failed";
   return (
@@ -221,7 +244,7 @@ function StyleRow({
                 value={slot.weight}
                 onChange={(e) => onWeight(Number(e.target.value))}
                 className="h-2 w-full cursor-pointer accent-black"
-                aria-label={`How much of ${label}`}
+                aria-label={`How much of style ${position}, ${label}`}
               />
               <span className="w-9 shrink-0 text-right font-mono text-xs">{slot.weight}</span>
               <span className="w-12 shrink-0 text-right text-sm font-bold">{share > 0 ? `${share}%` : "off"}</span>
@@ -236,7 +259,7 @@ function StyleRow({
         type="button"
         onClick={onRemove}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-black hover:bg-black hover:text-white"
-        aria-label={`Remove ${label}`}
+        aria-label={`Remove style ${position}, ${label}`}
       >
         ×
       </button>
@@ -269,18 +292,12 @@ export function StyleMixer({
 }) {
   const [dragging, setDragging] = useState(false);
   const mix = shares(styles.map((s) => s.weight));
+  // Rows are named by where the image came from; what it was read as stays on the server.
   const labelFor = (slot: Slot) => {
     const index = images.findIndex((image) => image.imageId && image.imageId === slot.imageId);
-    const state = slot.imageId ? states.get(slot.imageId) : undefined;
-    const name = state?.summary ?? (slot.uploading ? "New style image" : "Style image");
-    return index >= 0 ? `Image ${index + 1} · ${name}` : name;
+    if (index >= 0) return `Image ${index + 1}'s look`;
+    return slot.uploading ? "New style image" : "Style image";
   };
-  const summary =
-    styles.length === 0
-      ? "Optional"
-      : styles.length === 1
-        ? labelFor(styles[0])
-        : styles.map((s, i) => `${labelFor(s)} ${mix[i]}%`).join(" · ");
   const addable = images.filter((image) => image.imageId && !styles.some((s) => s.imageId === image.imageId));
   const room = MAX_STYLES - styles.length;
   return (
@@ -305,7 +322,9 @@ export function StyleMixer({
         aria-expanded={open}
       >
         <span className="text-sm font-bold uppercase tracking-wider">Style mixer</span>
-        <span className="min-w-0 flex-1 truncate text-sm text-neutral-600">{summary}</span>
+        <span className="flex min-w-0 flex-1 items-center overflow-hidden text-sm text-neutral-600">
+          {styles.length === 0 ? "Optional" : <StyleChips items={styles.map((s, i) => ({ url: s.previewUrl, share: mix[i] }))} />}
+        </span>
         <span className={cn("text-lg font-black transition-transform", open && "rotate-180")} aria-hidden="true">
           ▾
         </span>
@@ -327,6 +346,7 @@ export function StyleMixer({
                       key={slot.id}
                       slot={slot}
                       label={labelFor(slot)}
+                      position={i + 1}
                       share={mix[i]}
                       state={slot.imageId ? states.get(slot.imageId) : undefined}
                       onWeight={(weight) => onWeight(slot.id, weight)}
@@ -382,7 +402,6 @@ type LibraryImage = {
   key: string;
   url?: string;
   analysis: "pending" | "ready" | "failed";
-  summary?: string;
 };
 
 export function StyleLibrary({
@@ -417,7 +436,6 @@ export function StyleLibrary({
             type="button"
             disabled={used || !image.url}
             onClick={() => onPick(image)}
-            title={image.summary}
             className="group relative flex aspect-square items-center justify-center overflow-hidden rounded-xl border-2 border-black bg-neutral-100 p-1 disabled:opacity-40"
           >
             {image.url && <Thumb url={image.url} className="max-h-full max-w-full object-contain" />}

@@ -3,7 +3,7 @@ import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
-import { isBlockedError } from "./lib/imageErrors";
+import { isBlockedError, publicTileError } from "./lib/imageErrors";
 import { styleShares } from "./lib/prompts";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
@@ -39,6 +39,7 @@ const tileView = v.object({
   url: v.optional(v.string()),
   key: v.optional(v.string()),
   favorite: v.boolean(),
+  // A fixed message (publicTileError); the provider's own error text stays on the server.
   error: v.optional(v.string()),
   // The provider's content filter refused it; the studio shows a friendly stamp instead of the error.
   blocked: v.boolean(),
@@ -54,9 +55,8 @@ const batchView = v.object({
   backgroundColor: v.string(),
   inspirationUrl: v.optional(v.string()),
   images: v.array(v.object({ url: v.optional(v.string()) })),
-  styles: v.array(
-    v.object({ url: v.optional(v.string()), share: v.number(), summary: v.optional(v.string()) }),
-  ),
+  // The style mix as thumbnails and shares; what the styles were read as stays on the server.
+  styles: v.array(v.object({ url: v.optional(v.string()), share: v.number() })),
   tiles: v.array(tileView),
 });
 
@@ -148,12 +148,9 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       .collect();
     generations.sort((a, b) => a.index - b.index);
     const shares = styleShares((batch.styles ?? []).map((s) => s.weight));
-    const styles = [];
-    for (const [i, style] of (batch.styles ?? []).entries()) {
-      if (shares[i] <= 0) continue;
-      const image = await ctx.db.get("userImages", style.imageId);
-      styles.push({ url: publicUrl(style.key), share: shares[i], summary: image?.summary });
-    }
+    const styles = (batch.styles ?? [])
+      .map((style, i) => ({ url: publicUrl(style.key), share: shares[i] }))
+      .filter((style) => style.share > 0);
     batchViews.push({
       batchId: batch._id,
       createdAt: batch._creationTime,
@@ -172,7 +169,7 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
           url: publicUrl(g.fullKey),
           key: g.fullKey,
           favorite: g.favorite,
-          error: blocked ? undefined : g.error,
+          error: blocked ? undefined : publicTileError(g.error),
           blocked,
           backgroundColor: batch.backgroundColor,
           publishedCr: published.get(g._id),

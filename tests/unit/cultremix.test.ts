@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateUsername } from "../../convex/lib/username";
-import { colorName } from "../../convex/lib/prompts";
+import { colorName } from "../../convex/lib/colors";
 import { formatCr, parseCr } from "../../convex/lib/r2";
 
 describe("CR numbers", () => {

@@ -13,3 +13,14 @@ export function isBlockedError(error: string | undefined) {
   if (FILTER_PATTERNS.some((pattern) => pattern.test(error))) return true;
   return error.startsWith(NO_IMAGE_REPLY) && REFUSAL.test(error);
 }
+
+// What the studio shows for a failed design. The raw error stays in generations.error: a
+// provider's error text, or the model's own reply on the ChatGPT path, can quote the prompt.
+export function publicTileError(error: string | undefined) {
+  if (!error) return undefined;
+  if (error === "Timed out.") return "It took too long.";
+  if (error.startsWith("Image unavailable") || error.startsWith("Image fetch failed")) {
+    return "One of the images couldn't be loaded.";
+  }
+  return "The image service had a problem.";
+}

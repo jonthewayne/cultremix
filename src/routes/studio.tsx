@@ -9,7 +9,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
-import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
+import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
 import type { MenuItem } from "~/components/studio/StudioSessions";
@@ -493,13 +493,13 @@ function StudioPage() {
                   <p className="min-w-0 flex-1 truncate text-base font-semibold">
                     {batch.instruction || "From your images"}
                     {batch.presets.length > 0 && <span className="font-normal text-neutral-500"> · {batch.presets.join(", ")}</span>}
-                    {batch.styles.length > 0 && (
-                      <span className="font-normal text-neutral-500">
-                        {" · Style: "}
-                        {batch.styles.map((style) => `${style.summary ?? "image"} ${style.share}%`).join(" · ")}
-                      </span>
-                    )}
                   </p>
+                  {batch.styles.length > 0 && (
+                    <span className="flex shrink-0 items-center gap-2 text-sm text-neutral-500">
+                      Style
+                      <StyleChips items={batch.styles} />
+                    </span>
+                  )}
                   {batch.tiles.some((t) => t.status === "queued" || t.status === "dispatched") && (
                     <Elapsed since={batch.createdAt} />
                   )}

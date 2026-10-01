@@ -12,13 +12,13 @@ import type { MutationCtx } from "./_generated/server";
 
 const analysisState = v.union(v.literal("pending"), v.literal("ready"), v.literal("failed"));
 
+// What the browser gets for an image: where it is and whether its notes are ready. The notes,
+// summary, and kind stay on the server, where only the prompt builder reads them.
 export const imageView = v.object({
   imageId: v.id("userImages"),
   key: v.string(),
   url: v.optional(v.string()),
   analysis: analysisState,
-  summary: v.optional(v.string()),
-  kind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
   styleAt: v.optional(v.number()),
 });
 
@@ -28,8 +28,6 @@ function toView(image: Doc<"userImages">) {
     key: image.key,
     url: publicUrl(image.key),
     analysis: image.analysis,
-    summary: image.summary,
-    kind: image.kind,
     styleAt: image.styleAt,
   };
 }
