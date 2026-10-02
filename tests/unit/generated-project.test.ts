@@ -71,5 +71,7 @@ describe("generated project acceptance", () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
-  }, 30_000);
+    // It copies the project and runs setup in a child process: about 20 s on an idle machine,
+    // past 30 s when other work is using the disk.
+  }, 120_000);
 });

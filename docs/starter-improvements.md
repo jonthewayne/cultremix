@@ -25,6 +25,7 @@ agent workflow changes make the starter easier to use.
 - Keep email delivery on the console provider by default. Phone authentication stays disabled by default, and Telnyx credentials are only needed when phone auth and the Telnyx SMS provider are both selected.
 - Add local contract tests for the Convex React Query SSR auth handoff and Telnyx SDK surface without requiring a live backend or SMS credentials.
 - Add a generated-project acceptance test for copy exclusions, non-interactive setup, and the non-secret setup report.
+- Give that acceptance test two minutes: it copies the project and runs setup in child processes, about 20 s on an idle machine, and it timed out at 30 s on a shared dev machine whose disk was busy with other projects' builds and Spotlight.
 - Start the web server through Convex's `--start` option so account-free local development completes its initial push and watcher setup in one process.
 - Reject invite replays from any account other than the original recipient, including another account with the same email.
 - Prevent scoped admins from granting owner roles through invites, matching direct membership edits.
