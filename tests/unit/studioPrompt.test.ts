@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  namedStyles,
   noteSections,
   parseStyleNotes,
   pickSections,
@@ -104,8 +105,10 @@ describe("studio prompt", () => {
     // The style's way of drawing people goes in; the photo's realistic rendering stays out.
     expect(prompt).toContain("Figure drawing, required for every person and animal: Characters have elongated faces and long chins.");
     expect(prompt).not.toContain("Figure drawing:\nrealistic proportions.");
-    // The photo's own look stays out once a style is chosen; who's in it stays in.
-    expect(prompt).toContain("round face, dimples, curly red hair");
+    // Once a style is chosen, the photo's scene stays in; its look and its description of faces
+    // stay out, so the style decides how faces are drawn.
+    expect(prompt).toContain("a girl laughing on a beach, framed from the waist up");
+    expect(prompt).not.toContain("round face, dimples");
     expect(prompt).not.toContain("a photograph with soft daylight");
     // A style image's words, subjects, and people never reach the prompt.
     expect(prompt).not.toContain("TRASH ROYALTY");
@@ -160,7 +163,7 @@ describe("studio prompt", () => {
       styles: [{ attachment: 1, weight: 0 }],
     });
     expect(prompt).not.toContain("Style mix");
-    expect(prompt).toContain("Keep its own look unless the request asks for a different style.");
+    expect(prompt).toContain("Keep its own look unless the request asks for a different style;");
     expect(prompt).toContain("Notes on image 1");
     expect(prompt).toContain("G-R-O-W W-I-L-D");
   });
@@ -180,5 +183,92 @@ describe("studio prompt", () => {
     });
     expect(prompt).toContain("Arrange them in a 2x2 grid");
     expect(prompt).toContain("Keep the same style mix in all four and vary their composition.");
+  });
+
+  it("lets the style's own treatment of hair, freckles, and color win over the photo", () => {
+    const prompt = studioPrompt({
+      layout: "single",
+      instruction: "Reimagine image 1 in this style",
+      attachments: [
+        { summary: "a photo of a girl on a beach", kind: "photo", notes: PHOTO, styleOnly: false },
+        { notes: POSTER, styleOnly: true },
+      ],
+      styles: [{ attachment: 2, weight: 100 }],
+    });
+    expect(prompt).toContain("The style decides how all of it is drawn.");
+    expect(prompt).toContain("use the style's treatment and keep them recognizable within it.");
+  });
+});
+
+describe("styles named in the request", () => {
+  const photo = { summary: "a photo of a girl on a beach", kind: "photo" as const, notes: PHOTO };
+  const poster = { summary: "a 70s “TRASH ROYALTY” poster", kind: "art" as const, notes: POSTER };
+
+  it("treats a style named in words exactly like a mixer style", () => {
+    const instruction = "Reimagine image 1 in the style of image 2";
+    const typed = studioPrompt({
+      layout: "single",
+      instruction,
+      attachments: [{ ...photo, styleOnly: false }, { ...poster, styleOnly: false }],
+      styles: [],
+    });
+    const mixer = studioPrompt({
+      layout: "single",
+      instruction,
+      attachments: [{ ...photo, styleOnly: false }, { ...poster, styleOnly: true }],
+      styles: [{ attachment: 2, weight: 100 }],
+    });
+    expect(typed).toBe(mixer);
+    expect(typed).toContain("- Image 2: a 70s poster (style only: use its look, never its subjects or words).");
+    expect(typed).toContain("Figure drawing, required for every person and animal: Characters have elongated faces and long chins.");
+    // The poster's people and words stay out, as they do from the mixer.
+    expect(typed).not.toContain("patterned dresses");
+    expect(typed).not.toContain("TRASH ROYALTY");
+    expect(typed).toContain("otherwise keep the words from image 1. Never copy words from a style-only image.");
+  });
+
+  it("keeps a mixer slider that's already on, and turns one that's off back on", () => {
+    const glitter = { summary: "a glitter sample", notes: GLITTER, styleOnly: true };
+    const withSlider = (weight: number) =>
+      studioPrompt({
+        layout: "single",
+        instruction: "image 1 in the style of image 2",
+        attachments: [{ ...photo, styleOnly: false }, { ...poster, styleOnly: false }, glitter],
+        styles: [
+          { attachment: 2, weight },
+          { attachment: 3, weight: 70 },
+        ],
+      });
+    expect(withSlider(30)).toContain("- Image 3 (70%): leads.");
+    expect(withSlider(0)).toContain("- Image 2 (59%): leads.");
+  });
+
+  it.each([
+    ["Reimagine image 1 in the style of image 2", 2, [{ n: 2, only: true }]],
+    ["image 1 in image 2's style", 2, [{ n: 2, only: true }]],
+    ["Put her in the same style as image 2", 2, [{ n: 2, only: true }]],
+    ["Make image 1 look like image 2", 2, [{ n: 2, only: true }]],
+    ["Use image 2 as the style for image 1", 2, [{ n: 2, only: true }]],
+    ["Draw image 1 with the aesthetic of the second image", 2, [{ n: 2, only: true }]],
+    ["Mix the styles of images 2 and 3 into image 1", 3, [{ n: 2, only: true }, { n: 3, only: true }]],
+    ["A cat in the style of image 1", 1, [{ n: 1, only: true }]],
+    // Named for its look and for its content: a style, and still something to work on.
+    ["Use image 2's style and keep image 2's words", 2, [{ n: 2, only: false }]],
+    ["Keep image 1's look and change the words to NIGHT SHIFT", 1, [{ n: 1, only: false }]],
+    // Not a style.
+    ["Change the words to NIGHT SHIFT", 1, []],
+    ["Change the words but not the style of image 1", 1, []],
+    ["Don't use image 2's style", 2, []],
+    ["Make the lion look like the cat in image 2", 2, []],
+    ["Make image 1 look cooler", 1, []],
+    ["Keep the look of image 1's woman but put her in a forest", 1, []],
+    // Only the numbered images count.
+    ["in the style of image 3", 2, []],
+  ])("reads %j", (instruction, count, expected) => {
+    expect(namedStyles(instruction, count)).toEqual(expected);
+  });
+
+  it("never turns the design being remixed into a style only", () => {
+    expect(namedStyles("Remix it in the style of image 1", 1, true)).toEqual([{ n: 1, only: false }]);
   });
 });

@@ -63,10 +63,17 @@ const SECTION_NAMES = [
 ] as const;
 const SECTION =
   /^\s*(?:#+\s*|\*\*)?(Subject and layout|Words|Technique|Colou?r|Line and shading|Lettering|People and characters|Figure drawing|Signature traits)\b\**:?\**\s*(.*)$/iu;
-// What an image contains (kept when it's an image to work on) and how it looks (used when it's a style).
-// A person's likeness is content; the way an image draws faces and bodies is style.
-const CONTENT_SECTIONS = ["Subject and layout", "Words", "People and characters"];
+// How an image looks, used when it's a style. A person's likeness is content; the way an image
+// draws faces and bodies is style.
 const STYLE_SECTIONS = ["Technique", "Color", "Line and shading", "Lettering", "Figure drawing", "Signature traits"];
+// With a style, an image to work on sends only its scene and its words. Its "People and characters"
+// notes describe real faces ("a softly rounded face, small chin"), which held faces back from the
+// style's way of drawing them, and the model keeps people recognizable from the image itself.
+// Tested 2026-10-01: a photo in a 70s poster style gave round faces in 8 of 8 designs with all of
+// its notes and the poster's longer faces without the people notes, with hair, glasses, freckles,
+// and clothing kept either way. Without any notes the faces stretched most, but the photo's setting
+// gave way to the poster's.
+const CONTENT_WITH_STYLE = ["Subject and layout", "Words"];
 
 function canonicalSection(name: string) {
   const lower = name.toLowerCase();
@@ -192,7 +199,8 @@ export type PromptImage = {
   summary?: string;
   kind?: "photo" | "art";
   notes?: string;
-  // Added in the style mixer only: its look is used, never its subjects or words.
+  // Added only in the style mixer: its look is used, never its subjects or words. studioPrompt
+  // also treats a numbered image this way when the request names it only for its look.
   styleOnly: boolean;
 };
 // attachment: the 1-based number of the image the style comes from.
@@ -239,6 +247,70 @@ export function figureDrawing(notes: string | undefined) {
   return text;
 }
 
+// ---- Styles named in the request ----
+
+// "Reimagine image 1 in the style of image 2" names image 2 for its look. The server treats that
+// exactly like adding image 2 in the style mixer, so a member can say it either way; the studio
+// itself never reads the request. Recognized: "the style/look/aesthetic/vibe of image 2", "same
+// style as image 2", "image 2's style", "drawn/look like image 2", "image 2 as the style", lists
+// ("images 2 and 3"), and "the second image". "Keep image 1's look" and "not the style of image 1"
+// don't turn an image into a style.
+const REF_NOUN = "(?:images?|imgs?|pics?|pictures?|photos?)";
+const IMAGE_REF = new RegExp(
+  String.raw`\b${REF_NOUN}\s*(?:#\s*|no\.?\s*|number\s+)?([1-4])\b((?:\s*(?:,\s*(?:and\s+|&\s*)?|and\s+|&\s*|\+\s*|or\s+)(?:${REF_NOUN}\s*)?(?:#\s*)?[1-4]\b)*)` +
+    String.raw`|\b(?:the\s+)?(first|second|third|fourth|1st|2nd|3rd|4th)\s+(?:image|picture|photo|pic)s?\b`,
+  "giu",
+);
+const ORDINAL: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4, "1st": 1, "2nd": 2, "3rd": 3, "4th": 4 };
+const STYLE_KIND = String.raw`(?:(?:art|drawing|illustration|visual|graphic|painting|design)\s+)?`;
+const STYLE_WORD = "(?:style|styles|look|looks|aesthetic|vibe|feel|technique)";
+// Right before the reference: "in the style of", "the look from", "same style as", "drawn like".
+const STYLE_BEFORE = new RegExp(String.raw`\b${STYLE_KIND}${STYLE_WORD}\s+(?:of|from|in|as(?:\s+in)?|like)\s+(?:the\s+)?$`, "iu");
+const LIKE_BEFORE =
+  /\b(?:styled|drawn|painted|rendered|illustrated|done|made|designed|look|looks|looking|feel|feels)\s+(?:(?:more|just|exactly|a\s+bit|a\s+lot|a\s+little)\s+)?like\s+(?:the\s+)?$/iu;
+// Right after it: "image 2's style", "image 2 style", "image 2's look" (a bare "look" is a verb),
+// or "image 2 as the style".
+const STYLE_AFTER = new RegExp(
+  String.raw`^(?:\s*(?:'s|’s|'|’)\s*(?:own\s+)?${STYLE_KIND}${STYLE_WORD}|\s+${STYLE_KIND}(?:style|styles|aesthetic|vibe|technique)|\s+(?:as|for)\s+(?:the\s+|a\s+|its\s+|my\s+|our\s+)?${STYLE_KIND}${STYLE_WORD})\b`,
+  "iu",
+);
+// "the look of image 1's woman" is about the woman, not image 1's look.
+const PART_AFTER = /^\s*(?:'s|’s|'|’)\s+[a-z]/iu;
+const NEGATED =
+  /\b(?:not|no|never|without|don't|don’t|dont|do\s+not|instead\s+of|rather\s+than|except)\s+(?:(?:use|using|in|with|the|a|an|any|of|same|its|copy|copying|keep|keeping)\s+){0,3}$/iu;
+const KEEPING = /\b(?:keep|keeping|preserve|preserving|maintain|maintaining|retain|retaining)\s+(?:(?:the|its|their|same|original|all|of)\s+){0,3}$/iu;
+
+// The numbered images (1..count) the request names for their look. only: named for nothing else,
+// so its subjects and words stay out, as with a mixer style. A remix's image 1 is the design being
+// remixed and always stays something to work on.
+export function namedStyles(instruction: string, count: number, remix = false) {
+  const style = new Set<number>();
+  const alsoContent = new Set<number>();
+  for (const match of instruction.matchAll(IMAGE_REF)) {
+    const numbers = match[1]
+      ? [match[1], ...[...(match[2] ?? "").matchAll(/[1-4]/gu)].map((m) => m[0])].map(Number)
+      : [ORDINAL[match[3].toLowerCase()]];
+    const before = instruction.slice(0, match.index);
+    const after = instruction.slice(match.index + match[0].length);
+    const lead = STYLE_BEFORE.exec(before) ?? LIKE_BEFORE.exec(before);
+    const ownLook = STYLE_AFTER.test(after);
+    const named = ownLook || (lead !== null && !PART_AFTER.test(after));
+    const head = ownLook || !lead ? before : before.slice(0, lead.index);
+    for (const n of numbers) {
+      if (!named || NEGATED.test(head)) {
+        alsoContent.add(n);
+        continue;
+      }
+      style.add(n);
+      if (KEEPING.test(head)) alsoContent.add(n);
+    }
+  }
+  return [...style]
+    .filter((n) => n >= 1 && n <= count)
+    .sort((a, b) => a - b)
+    .map((n) => ({ n, only: !alsoContent.has(n) && !(remix && n === 1) }));
+}
+
 // One design (layout "single") or four in a grid. attachments are every image sent with the
 // call, in order: the studio's numbered images first, then images added only in the style mixer.
 export function studioPrompt(args: {
@@ -251,10 +323,25 @@ export function studioPrompt(args: {
 }) {
   const grid = args.layout === "grid";
   const ask = sentence(args.instruction);
-  const images = args.attachments.map((image, i) => ({ ...image, n: i + 1 }));
+  // A style named in the request joins the mix like a mixer style: at full strength, or at its
+  // slider's value when the mixer already has it on.
+  let numbered = 0;
+  while (numbered < args.attachments.length && !args.attachments[numbered].styleOnly) numbered++;
+  const named = namedStyles(args.instruction, numbered, args.remix);
+  const images = args.attachments.map((image, i) => ({
+    ...image,
+    styleOnly: image.styleOnly || named.some((s) => s.n === i + 1 && s.only),
+    n: i + 1,
+  }));
+  const styleArgs = [...args.styles];
+  for (const { n } of named) {
+    const at = styleArgs.findIndex((s) => s.attachment === n);
+    if (at < 0) styleArgs.push({ attachment: n, weight: 100 });
+    else if (styleArgs[at].weight <= 0) styleArgs[at] = { attachment: n, weight: 100 };
+  }
   const work = images.filter((image) => !image.styleOnly);
-  const shares = styleShares(args.styles.map((s) => s.weight));
-  const mix = args.styles
+  const shares = styleShares(styleArgs.map((s) => s.weight));
+  const mix = styleArgs
     .map((s, i) => ({ n: s.attachment, share: shares[i], notes: images[s.attachment - 1]?.notes }))
     .filter((s) => s.share > 0 && s.n >= 1 && s.n <= images.length)
     .sort((a, b) => b.share - a.share || a.n - b.n);
@@ -289,16 +376,18 @@ export function studioPrompt(args: {
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep every person and animal in ${whose} recognizable ` +
         "by what identifies them: hair color, texture, and length; skin tone; glasses; freckles, moles, and other marks; facial hair; apparent age; " +
-        "expression; and clothing. Don't keep their real face shape, features, or proportions: redraw their faces and bodies the way the style draws people, " +
-        "even where that stretches or simplifies them.";
+        "expression; and clothing. The style decides how all of it is drawn. Don't keep their real face shape, features, or proportions: redraw their faces " +
+        "and bodies the way the style draws people, even where that stretches or simplifies them. Where the style has its own treatment for a trait, such as " +
+        "wild hair shapes, heavy freckles, or a palette that recolors skin and hair, use the style's treatment and keep them recognizable within it.";
     } else {
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the likeness of every person and animal in ${whose} recognizable: face shape, features, skin tone, hair, and age. ` +
-        `Keep ${work.length > 1 ? "the images'" : "its"} own look unless the request asks for a different style.`;
+        `Keep ${work.length > 1 ? "the images'" : "its"} own look unless the request asks for a different style; if it does, draw everything that way, ` +
+        "people included, and keep them recognizable within it.";
     }
     parts.push(keep);
     for (const image of work) {
-      const notes = mix.length > 0 ? pickSections(image.notes, CONTENT_SECTIONS) : image.notes?.trim();
+      const notes = mix.length > 0 ? pickSections(image.notes, CONTENT_WITH_STYLE) : image.notes?.trim();
       if (notes) parts.push(`Notes on image ${image.n} (a checklist; where they differ from the image, follow the image):\n${notes}`);
     }
   }
