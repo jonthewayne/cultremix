@@ -54,6 +54,11 @@ import type * as storageMoves from "../storageMoves.js";
 import type * as studio from "../studio.js";
 import type * as testHelpers from "../testHelpers.js";
 
+import type * as lib_shopFlags from "../lib/shopFlags.js";
+import type * as lib_shopify_adminClient from "../lib/shopify/adminClient.js";
+import type * as lib_shopify_productSync from "../lib/shopify/productSync.js";
+import type * as schema_shop from "../schema/shop.js";
+import type * as shopify from "../shopify.js";
 import type {
   ApiFromModules,
   FilterApi,
@@ -106,6 +111,11 @@ declare const fullApi: ApiFromModules<{
   storageMoves: typeof storageMoves;
   studio: typeof studio;
   testHelpers: typeof testHelpers;
+  "lib/shopFlags": typeof lib_shopFlags;
+  "lib/shopify/adminClient": typeof lib_shopify_adminClient;
+  "lib/shopify/productSync": typeof lib_shopify_productSync;
+  "schema/shop": typeof schema_shop;
+  shopify: typeof shopify;
 }>;
 
 /**

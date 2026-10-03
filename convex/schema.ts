@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { cultremixTables } from "./schema/cultremix";
+import { shopTables } from "./schema/shop";
 
 export const platformRoleValidator = v.union(
   v.literal("user"),
@@ -185,4 +186,5 @@ export default defineSchema({
     .index("by_status_and_expiresAtMs", ["status", "expiresAtMs"]),
 
   ...cultremixTables,
+  ...shopTables,
 });

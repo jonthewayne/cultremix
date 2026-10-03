@@ -25,6 +25,7 @@
   "include": [
     "src",
     "convex",
+    "shared",
     "tests",
     "scripts",
     "vite.config.ts",
