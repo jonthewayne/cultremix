@@ -99,8 +99,9 @@ describe("studio prompt", () => {
     });
     expect(prompt).toContain("- Image 2: a 70s poster (style only: use its look, never its subjects or words).");
     expect(prompt).toContain("otherwise keep the words from image 1. Never copy words from a style-only image.");
-    expect(prompt).toContain("keep every person and animal in image 1 recognizable by what identifies them");
-    expect(prompt).toContain("Don't keep their real face shape, features, or proportions");
+    expect(prompt).toContain(
+      "keep the recognizable likeness of every person and animal in image 1, such as their hair, glasses, and freckles, so someone who knows them would recognize them, while drawing them fully in the style.",
+    );
     expect(prompt).toContain("Style: image 2 sets the whole look.");
     // The style's way of drawing people goes in; the photo's realistic rendering stays out.
     expect(prompt).toContain("Figure drawing, required for every person and animal: Characters have elongated faces and long chins.");
@@ -185,7 +186,7 @@ describe("studio prompt", () => {
     expect(prompt).toContain("Keep the same style mix in all four and vary their composition.");
   });
 
-  it("lets the style's own treatment of hair, freckles, and color win over the photo", () => {
+  it("leaves how people are drawn to the style, without listing face shapes to keep", () => {
     const prompt = studioPrompt({
       layout: "single",
       instruction: "Reimagine image 1 in this style",
@@ -195,8 +196,8 @@ describe("studio prompt", () => {
       ],
       styles: [{ attachment: 2, weight: 100 }],
     });
-    expect(prompt).toContain("The style decides how all of it is drawn.");
-    expect(prompt).toContain("use the style's treatment and keep them recognizable within it.");
+    expect(prompt).toContain("while drawing them fully in the style.");
+    expect(prompt).not.toContain("face shape");
   });
 });
 

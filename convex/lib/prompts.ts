@@ -373,12 +373,16 @@ export function studioPrompt(args: {
     if (args.remix) {
       keep = `Keep: study image ${first} closely and keep everything the request doesn't change: its layout, illustration, lettering style, colors, texture, and how any people or characters are drawn, including their likeness.`;
     } else if (mix.length > 0) {
+      // Tested 2026-10-02 (a photo in a 70s poster style and in a pop-art style, four wordings,
+      // four designs each): listing the traits that identify a person, saying only "recognizable
+      // likeness", and dropping a rule against keeping real face shapes all scored the same for
+      // likeness and style; every wording took the style's face proportions, skin palette, and
+      // freckle treatment and kept her glasses, curls, and smile. This is the broad wording with
+      // examples. No wording recolored her red hair to the style's pink; a request can ask for that.
       keep =
-        `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep every person and animal in ${whose} recognizable ` +
-        "by what identifies them: hair color, texture, and length; skin tone; glasses; freckles, moles, and other marks; facial hair; apparent age; " +
-        "expression; and clothing. The style decides how all of it is drawn. Don't keep their real face shape, features, or proportions: redraw their faces " +
-        "and bodies the way the style draws people, even where that stretches or simplifies them. Where the style has its own treatment for a trait, such as " +
-        "wild hair shapes, heavy freckles, or a palette that recolors skin and hair, use the style's treatment and keep them recognizable within it.";
+        `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the recognizable likeness ` +
+        `of every person and animal in ${whose}, such as their hair, glasses, and freckles, so someone who knows them would recognize them, ` +
+        "while drawing them fully in the style.";
     } else {
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the likeness of every person and animal in ${whose} recognizable: face shape, features, skin tone, hair, and age. ` +

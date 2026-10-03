@@ -11,25 +11,15 @@ const sizesView = v.object({
   height: v.number(),
 });
 
-// The sizes recorded for an image's key, or for any image with the same bytes (sha256).
+// The copies recorded for an image's key. Each folder keeps its own (convex/lib/sizes.ts).
 export const find = internalQuery({
-  args: { key: v.optional(v.string()), sha256: v.optional(v.string()) },
+  args: { key: v.string() },
   returns: v.union(v.null(), sizesView),
   handler: async (ctx, args) => {
-    const key = args.key;
-    let row = key
-      ? await ctx.db
-          .query("imageSizes")
-          .withIndex("by_key", (q) => q.eq("key", key))
-          .first()
-      : null;
-    if (!row && args.sha256) {
-      const sha256 = args.sha256;
-      row = await ctx.db
-        .query("imageSizes")
-        .withIndex("by_sha", (q) => q.eq("sha256", sha256))
-        .first();
-    }
+    const row = await ctx.db
+      .query("imageSizes")
+      .withIndex("by_key", (q) => q.eq("key", args.key))
+      .first();
     return row ? { thumbKey: row.thumbKey, mediumKey: row.mediumKey, width: row.width, height: row.height } : null;
   },
 });

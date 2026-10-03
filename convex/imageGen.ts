@@ -9,7 +9,8 @@ import { NO_IMAGE_REPLY } from "./lib/imageErrors";
 import { photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
-import { fetchPublicImage, makeSizes, sha256Hex, storeObject, storePng } from "./lib/storage";
+import { designKey, photoKey, uploadKey } from "./lib/sizes";
+import { fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -266,7 +267,7 @@ export const runTile = internalAction({
       const made = Date.now();
       const info = pngInfo(bytes);
       // Stores the design with its thumbnail and medium, so pages never load the PNG first.
-      const { key, sha256 } = await storePng(ctx, "gen", bytes);
+      const { key, sha256 } = await storeNew(ctx, bytes, "image/png", designKey);
       console.log("runTile ok", provider, images.length, "images", text.length, "chars", made - started, "ms, stored and sized in", Date.now() - made, "ms", info);
       await ctx.runMutation(internal.studio.markSucceeded, {
         generationId,
@@ -319,7 +320,7 @@ export const uploadInspiration = action({
       if (existing) {
         key = existing.key;
       } else {
-        key = await storeObject(ctx, `inspo/${sha256}.${ext}`, bytes, args.contentType);
+        key = await storeObject(ctx, uploadKey(sha256, ext), bytes, args.contentType);
         // The studio shows its own preview meanwhile; pickers and chips use the thumbnail later.
         await ctx.scheduler.runAfter(0, internal.sizing.ensure, { key });
       }
@@ -336,8 +337,8 @@ export const uploadInspiration = action({
   },
 });
 
-// Publish step: copy the picked generation to art/<sha256>.png, record it, then
-// shoot the model photo (one Sunburst edit, opaque 1024x1024).
+// Publish step: the picked design's file becomes the work's art (same key, same folder), then
+// the model photo is shot (one Sunburst edit, opaque 1024x1024) and stored in the design's folder.
 export const publishAssets = internalAction({
   args: { workId: v.id("works") },
   returns: v.null(),
@@ -346,22 +347,17 @@ export const publishAssets = internalAction({
     if (!job) return null;
     let artKey: string;
     let contentHash: string;
+    let art: Uint8Array | null = null;
     try {
       if (job.fullKey.startsWith("fake:")) {
         artKey = job.fullKey;
         contentHash = sha256Hex(new TextEncoder().encode(job.fullKey));
-      } else if (job.fullKey.startsWith("cvx:")) {
-        // Convex storage: the generation's file is the art file.
-        artKey = job.fullKey;
-        const bytes = await fetchPublicImage(job.fullKey, ctx);
-        contentHash = sha256Hex(bytes);
-        await makeSizes(ctx, artKey, bytes);
       } else {
-        const bytes = await fetchPublicImage(job.fullKey, ctx);
-        contentHash = sha256Hex(bytes);
-        artKey = await storeObject(ctx, `art/${contentHash}.png`, bytes, "image/png");
-        // Same bytes as the design, so this reuses the design's sizes.
-        await makeSizes(ctx, artKey, bytes);
+        artKey = job.fullKey;
+        art = await fetchPublicImage(job.fullKey, ctx);
+        contentHash = sha256Hex(art);
+        // Designs get their copies when they're made; this covers older ones.
+        await makeSizes(ctx, artKey, art);
       }
     } catch (error) {
       console.error("publishAssets failed", workId, error);
@@ -380,17 +376,17 @@ export const publishAssets = internalAction({
     const { shootId, look } = shoot;
 
     try {
-      let photoKey: string;
+      let publicKey: string;
       if (!liveGeneration() || artKey.startsWith("fake:")) {
         if (!isDevDeployment()) throw new Error("Image generation is not configured.");
         await new Promise((resolve) => setTimeout(resolve, 4000));
-        photoKey = `fake:photo-${workId}`;
+        publicKey = `fake:photo-${workId}`;
       } else {
-        const art = await fetchPublicImage(artKey, ctx);
-        const { bytes } = await photoImage(art, job.backgroundColor, look);
-        photoKey = (await storePng(ctx, "photo", bytes)).key;
+        const source = art ?? (await fetchPublicImage(artKey, ctx));
+        const { bytes } = await photoImage(source, job.backgroundColor, look);
+        publicKey = (await storeNew(ctx, bytes, "image/png", (sha256) => photoKey(contentHash, sha256))).key;
       }
-      await ctx.runMutation(internal.publish.recordPhoto, { shootId, publicKey: photoKey });
+      await ctx.runMutation(internal.publish.recordPhoto, { shootId, publicKey });
     } catch (error) {
       console.error("model photo failed", workId, error);
       await ctx.runMutation(internal.publish.recordPhotoFailed, {
@@ -460,7 +456,7 @@ export const selfTest = internalAction({
           stored: false,
         };
       }
-      const { key } = await storePng(ctx, args.mode === "photo" ? "photo" : "gen", out.bytes);
+      const { key } = await storeNew(ctx, out.bytes, "image/png", designKey);
       return {
         provider: args.provider ?? imageProvider(),
         ms: Date.now() - started,
@@ -500,7 +496,8 @@ export const reshoot = internalAction({
     }
     const art = await fetchPublicImage(job.artKey, ctx);
     const { bytes } = await photoImage(art, job.backgroundColor, job.look);
-    const { key } = await storePng(ctx, "photo", bytes);
+    const designSha = sha256Hex(art);
+    const { key } = await storeNew(ctx, bytes, "image/png", (sha256) => photoKey(designSha, sha256));
     await ctx.runMutation(internal.publish.recordPhoto, { shootId: job.shootId, publicKey: key });
     return { cr: args.cr, look: job.look };
   },

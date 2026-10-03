@@ -11,7 +11,7 @@ Ops record for the 2026-09-29 sprint. No secrets here. Keys live only on mighteo
 | `resend.env` | `RESEND_API_KEY` (sending access only) | saved 4:46; set on production |
 | `prod.env` | `AUTH_SECRET` (production only) | set on production |
 
-The app stores images in R2 whenever `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are all set; otherwise `IMAGE_STORE=convex` uses Convex file storage served from `/img/`. Setting the R2 keys switches new images to R2 with no other change; `sizing:moveToR2` then moves the older ones (see `docs/image-generation/README.md`, "Storage and sizes"). Each key is refused by the other environment's bucket (checked Oct 2).
+The app stores images in R2 whenever `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are all set; otherwise `IMAGE_STORE=convex` uses Convex file storage served from `/img/`. Setting the R2 keys switches new images to R2 with no other change; `sizing:organize` then moves the older ones into their folders (see `docs/image-generation/README.md`, "Storage and sizes"). Each key is refused by the other environment's bucket (checked Oct 2).
 
 ## Convex
 

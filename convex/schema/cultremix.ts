@@ -101,8 +101,8 @@ export const cultremixTables = {
     .index("by_owner_sha", ["ownerId", "sha256"]),
 
   // Smaller copies of a stored image (convex/lib/sizes.ts): a WebP thumbnail and medium, made
-  // when the image is stored. key is the original's key as other tables store it; copies of the
-  // same file (a design and its published art) share one set through sha256.
+  // when the image is stored and kept beside the original in its folder. key is the original's
+  // key as other tables store it.
   imageSizes: defineTable({
     key: v.string(),
     sha256: v.string(),
@@ -114,8 +114,8 @@ export const cultremixTables = {
     .index("by_key", ["key"])
     .index("by_sha", ["sha256"]),
 
-  // Images moved from Convex file storage to R2 (convex/storageMoves.ts): the old "cvx:" key and
-  // the R2 key every table now uses.
+  // Images moved into their folders (convex/storageMoves.ts): the old key (Convex storage, or R2
+  // from before folders) and the key every table now uses.
   storageMoves: defineTable({
     from: v.string(),
     to: v.string(),

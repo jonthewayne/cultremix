@@ -20,7 +20,10 @@ export const MODEL_EDIT = "openai/gpt-image-2.5-sunburst";
 export const MAX_IMAGES = 4;
 export const MAX_STYLES = 3;
 const HEX = /^#[0-9a-f]{6}$/iu;
-export const IMAGE_KEY = /^((inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)|cvx:[A-Za-z0-9_-]{8,64})$/u;
+// An image a member can bring into the studio: a design or upload in its folder (convex/lib/sizes.ts),
+// an older key from before folders, or a Convex storage key.
+export const IMAGE_KEY =
+  /^((designs|uploads)\/[0-9a-f]{64}\/original\.(png|jpg|webp)|(inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)|cvx:[A-Za-z0-9_-]{8,64})$/u;
 
 export const tileStatus = v.union(
   v.literal("queued"),
