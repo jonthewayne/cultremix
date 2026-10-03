@@ -31,6 +31,7 @@ import type * as lib_imageUrls from "../lib/imageUrls.js";
 import type * as lib_otp from "../lib/otp.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as lib_phone from "../lib/phone.js";
+import type * as lib_pngMeta from "../lib/pngMeta.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_providerConfig from "../lib/providerConfig.js";
 import type * as lib_r2 from "../lib/r2.js";
@@ -83,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   "lib/otp": typeof lib_otp;
   "lib/permissions": typeof lib_permissions;
   "lib/phone": typeof lib_phone;
+  "lib/pngMeta": typeof lib_pngMeta;
   "lib/prompts": typeof lib_prompts;
   "lib/providerConfig": typeof lib_providerConfig;
   "lib/r2": typeof lib_r2;

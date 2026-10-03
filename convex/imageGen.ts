@@ -7,6 +7,7 @@ import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { cutGrid } from "./lib/gridCut";
 import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY } from "./lib/imageErrors";
+import { stripPngMetadata } from "./lib/pngMeta";
 import { photoPrompt, pickLook, rolesFromWords, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
@@ -168,7 +169,7 @@ async function chatgptImage(args: {
 // One transparent 1024x1536 design. Gateway: Sunburst edit with images, Flare for text only.
 async function designImage(text: string, images: Array<Uint8Array>, provider: Provider | null = imageProvider()) {
   if (provider === "chatgpt") {
-    return await chatgptImage({ text, images, background: "transparent", size: "1024x1536" });
+    return clean(await chatgptImage({ text, images, background: "transparent", size: "1024x1536" }));
   }
   const model = images.length > 0 ? "openai/gpt-image-2.5-sunburst" : "openai/gpt-image-2.5-flare";
   const result = await generateImage({
@@ -185,7 +186,14 @@ async function designImage(text: string, images: Array<Uint8Array>, provider: Pr
     maxRetries: 0,
     abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
   });
-  return { bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata };
+  return clean({ bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata });
+}
+
+// The model's PNG without its metadata: the C2PA content credential, text, and timestamps. The
+// pixels are untouched. Everything that hashes, cuts, or stores a model image starts from these
+// bytes.
+function clean<T extends { bytes: Uint8Array }>(out: T): T {
+  return { ...out, bytes: stripPngMetadata(out.bytes) };
 }
 
 // Four transparent designs in one 2x2 grid, which convex/lib/gridCut.ts cuts apart. 1920x1920 is
@@ -207,7 +215,7 @@ async function gridImage(text: string, images: Array<Uint8Array>) {
     maxRetries: 0,
     abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
   });
-  return { bytes: result.image.uint8Array };
+  return clean({ bytes: result.image.uint8Array });
 }
 
 // The model photo: one opaque 1024x1024 edit with the design as input.
@@ -218,12 +226,12 @@ async function photoImage(
   provider: Provider | null = imageProvider(),
 ) {
   if (provider === "chatgpt") {
-    return await chatgptImage({
+    return clean(await chatgptImage({
       text: photoPrompt(backgroundColor, look),
       images: [art],
       background: "opaque",
       size: "1024x1024",
-    });
+    }));
   }
   const result = await generateImage({
     model: gateway.image("openai/gpt-image-2.5-sunburst"),
@@ -239,7 +247,7 @@ async function photoImage(
     maxRetries: 0,
     abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
   });
-  return { bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata };
+  return clean({ bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata });
 }
 
 export const runTile = internalAction({

@@ -7,6 +7,10 @@
 //   designs/<sha256>/photos/<sha256>/original.png   a model photo of that design, with its own
 //                                    medium.webp and thumb.webp
 //   uploads/<sha256>/original.jpg    an image a member uploaded (png, jpg, or webp), with its copies
+//   grids/<sha256>/original.png      the 2x2 grid a batch's four designs were cut from
+//
+// Images from the image model are stored without its metadata (convex/lib/pngMeta.ts), so a
+// folder's name is the SHA-256 of the clean file.
 //
 // The print upscale will sit in the same folder of the private bucket: designs/<sha256>/print.png.
 // Keys from before folders (gen/, art/, photo/, inspo/, and sizes/<sha256>/) and Convex storage
@@ -18,6 +22,7 @@ export type SizeName = keyof typeof SIZES;
 
 const SHA = "[0-9a-f]{64}";
 const ORIGINAL = new RegExp(String.raw`^((?:designs|uploads)/${SHA}(?:/photos/${SHA})?)/original\.(?:png|jpg|webp)$`, "u");
+const GRID = new RegExp(String.raw`^grids/${SHA}/original\.png$`, "u");
 // Keys from before folders: gen/, art/, photo/, or inspo/ + <sha256>.<ext>.
 const LEGACY = new RegExp(String.raw`^(gen|art|photo|inspo)/(${SHA})\.(png|jpg|webp)$`, "u");
 
@@ -42,6 +47,12 @@ export function gridImageKey(sha256: string) {
 // The folder of an original stored in this layout, or undefined.
 export function folderOf(key: string) {
   return ORIGINAL.exec(key)?.[1];
+}
+
+// Stored in this layout: an original in its folder, or a grid. (It may still carry the image
+// model's metadata, which sizing.organize removes.)
+export function isOrganized(key: string) {
+  return Boolean(folderOf(key)) || GRID.test(key);
 }
 
 // The SHA-256 a key names: the folder's for this layout, the file name's for older keys.
