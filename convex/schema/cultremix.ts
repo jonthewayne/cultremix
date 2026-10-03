@@ -206,7 +206,9 @@ export const cultremixTables = {
     .index("by_parent", ["parentWorkId"])
     .index("by_requestId", ["requestId"])
     .index("by_creator", ["creatorId"])
-    .index("by_artKey", ["artKey"]),
+    .index("by_artKey", ["artKey"])
+    // The studio marks a design as published (its CR number) one design at a time.
+    .index("by_generation", ["generationId"]),
 
   shoots: defineTable({
     workId: v.id("works"),

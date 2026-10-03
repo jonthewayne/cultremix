@@ -29,6 +29,7 @@ import type * as lib_gridCut from "../lib/gridCut.js";
 import type * as lib_imageErrors from "../lib/imageErrors.js";
 import type * as lib_imageUrls from "../lib/imageUrls.js";
 import type * as lib_otp from "../lib/otp.js";
+import type * as lib_paging from "../lib/paging.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as lib_phone from "../lib/phone.js";
 import type * as lib_pngMeta from "../lib/pngMeta.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "lib/imageErrors": typeof lib_imageErrors;
   "lib/imageUrls": typeof lib_imageUrls;
   "lib/otp": typeof lib_otp;
+  "lib/paging": typeof lib_paging;
   "lib/permissions": typeof lib_permissions;
   "lib/phone": typeof lib_phone;
   "lib/pngMeta": typeof lib_pngMeta;

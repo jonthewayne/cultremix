@@ -1,8 +1,10 @@
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
 import { imageUrlReader } from "./lib/imageUrls";
+import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { isDevDeployment } from "./lib/r2";
 import { IMAGE_KEY, requireMember } from "./studio";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -156,28 +158,36 @@ export const markStyle = mutation({
   },
 });
 
-// The style picker: style images first, then the member's other recent images.
-export const library = query({
-  args: {},
-  returns: v.object({ styles: v.array(imageView), recent: v.array(imageView) }),
-  handler: async (ctx) => {
+// The style picker's two lists, each a page at a time: the member's style images (most recently
+// added to a mix first), then their other images (most recently used first). An image is in one
+// list or the other, so a page of the second can hold fewer images than asked.
+export const styleImages = query({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(imageView),
+  handler: async (ctx, args) => {
     const user = await getViewerUser(ctx);
-    if (!user) return { styles: [], recent: [] };
-    const styles = await ctx.db
+    if (!user) return EMPTY_PAGE;
+    const result = await ctx.db
       .query("userImages")
       .withIndex("by_owner_style", (q) => q.eq("ownerId", user._id).gt("styleAt", 0))
       .order("desc")
-      .take(24);
-    const styleIds = new Set(styles.map((image) => image._id));
-    const recent = await ctx.db
+      .paginate(cappedPage(args.paginationOpts, 48));
+    return { ...result, page: await toViews(ctx, result.page) };
+  },
+});
+
+export const recentImages = query({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(imageView),
+  handler: async (ctx, args) => {
+    const user = await getViewerUser(ctx);
+    if (!user) return EMPTY_PAGE;
+    const result = await ctx.db
       .query("userImages")
       .withIndex("by_owner_used", (q) => q.eq("ownerId", user._id))
       .order("desc")
-      .take(48);
-    return {
-      styles: await toViews(ctx, styles),
-      recent: await toViews(ctx, recent.filter((image) => !styleIds.has(image._id))),
-    };
+      .paginate(cappedPage(args.paginationOpts, 48));
+    return { ...result, page: await toViews(ctx, result.page.filter((image) => !image.styleAt)) };
   },
 });
 
