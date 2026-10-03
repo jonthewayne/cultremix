@@ -1,6 +1,5 @@
 "use node";
 
-import { createHash } from "node:crypto";
 import { gateway } from "@ai-sdk/gateway";
 import { generateImage } from "ai";
 import { ConvexError, v } from "convex/values";
@@ -9,7 +8,8 @@ import { action, internalAction } from "./_generated/server";
 import { NO_IMAGE_REPLY } from "./lib/imageErrors";
 import { photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
-import { isDevDeployment, publicUrl, r2, storageMode } from "./lib/r2";
+import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
+import { fetchPublicImage, makeSizes, sha256Hex, storeObject, storePng } from "./lib/storage";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -21,10 +21,6 @@ const INSPIRATION_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
 };
-
-function sha256Hex(bytes: Uint8Array) {
-  return createHash("sha256").update(bytes).digest("hex");
-}
 
 // PNG color types 4 and 6 carry an alpha channel; 3 may carry tRNS.
 function pngInfo(bytes: Uint8Array) {
@@ -45,19 +41,6 @@ function readableError(error: unknown) {
     return error.message.slice(0, 200) || "The image service failed.";
   }
   return "The image service failed.";
-}
-
-export async function fetchPublicImage(key: string, ctx?: ActionCtx) {
-  if (key.startsWith("cvx:") && ctx) {
-    const blob = await ctx.storage.get(key.slice(4) as Id<"_storage">);
-    if (!blob) throw new Error("Image unavailable.");
-    return new Uint8Array(await blob.arrayBuffer());
-  }
-  const url = publicUrl(key);
-  if (!url || url.startsWith("fake:")) throw new Error("Image unavailable.");
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Image fetch failed (${response.status}).`);
-  return new Uint8Array(await response.arrayBuffer());
 }
 
 type Provider = "chatgpt" | "gateway";
@@ -233,21 +216,6 @@ async function photoImage(
   return { bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata };
 }
 
-async function storePng(ctx: ActionCtx, prefix: string, bytes: Uint8Array) {
-  const sha256 = sha256Hex(bytes);
-  if (storageMode() === "convex") {
-    const id = await ctx.storage.store(new Blob([new Uint8Array(bytes)], { type: "image/png" }));
-    return { key: `cvx:${id}`, sha256 };
-  }
-  const key = `${prefix}/${sha256}.png`;
-  await r2.store(ctx, bytes, {
-    key,
-    type: "image/png",
-    cacheControl: "public, max-age=31536000, immutable",
-  });
-  return { key, sha256 };
-}
-
 export const runTile = internalAction({
   args: { generationId: v.id("generations") },
   returns: v.null(),
@@ -295,9 +263,11 @@ export const runTile = internalAction({
       const provider = job.provider === "gateway" || job.provider === "chatgpt" ? job.provider : imageProvider();
       const started = Date.now();
       const { bytes } = await designImage(text, images, provider);
+      const made = Date.now();
       const info = pngInfo(bytes);
+      // Stores the design with its thumbnail and medium, so pages never load the PNG first.
       const { key, sha256 } = await storePng(ctx, "gen", bytes);
-      console.log("runTile ok", provider, images.length, "images", text.length, "chars", Date.now() - started, "ms", info);
+      console.log("runTile ok", provider, images.length, "images", text.length, "chars", made - started, "ms, stored and sized in", Date.now() - made, "ms", info);
       await ctx.runMutation(internal.studio.markSucceeded, {
         generationId,
         fullKey: key,
@@ -348,16 +318,10 @@ export const uploadInspiration = action({
       const existing = await ctx.runQuery(internal.images.findUpload, { authId: identity.subject, sha256 });
       if (existing) {
         key = existing.key;
-      } else if (mode === "convex") {
-        const id = await ctx.storage.store(new Blob([new Uint8Array(bytes)], { type: args.contentType }));
-        key = `cvx:${id}`;
       } else {
-        key = `inspo/${sha256}.${ext}`;
-        await r2.store(ctx, bytes, {
-          key,
-          type: args.contentType,
-          cacheControl: "public, max-age=31536000, immutable",
-        });
+        key = await storeObject(ctx, `inspo/${sha256}.${ext}`, bytes, args.contentType);
+        // The studio shows its own preview meanwhile; pickers and chips use the thumbnail later.
+        await ctx.scheduler.runAfter(0, internal.sizing.ensure, { key });
       }
     }
     const imageId: Id<"userImages"> = await ctx.runMutation(internal.images.recordUpload, {
@@ -389,16 +353,15 @@ export const publishAssets = internalAction({
       } else if (job.fullKey.startsWith("cvx:")) {
         // Convex storage: the generation's file is the art file.
         artKey = job.fullKey;
-        contentHash = sha256Hex(await fetchPublicImage(job.fullKey, ctx));
+        const bytes = await fetchPublicImage(job.fullKey, ctx);
+        contentHash = sha256Hex(bytes);
+        await makeSizes(ctx, artKey, bytes);
       } else {
         const bytes = await fetchPublicImage(job.fullKey, ctx);
         contentHash = sha256Hex(bytes);
-        artKey = `art/${contentHash}.png`;
-        await r2.store(ctx, bytes, {
-          key: artKey,
-          type: "image/png",
-          cacheControl: "public, max-age=31536000, immutable",
-        });
+        artKey = await storeObject(ctx, `art/${contentHash}.png`, bytes, "image/png");
+        // Same bytes as the design, so this reuses the design's sizes.
+        await makeSizes(ctx, artKey, bytes);
       }
     } catch (error) {
       console.error("publishAssets failed", workId, error);

@@ -401,6 +401,7 @@ type LibraryImage = {
   imageId: Id<"userImages">;
   key: string;
   url?: string;
+  thumbUrl?: string;
   analysis: "pending" | "ready" | "failed";
 };
 
@@ -430,15 +431,16 @@ export function StyleLibrary({
     <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
       {list.map((image) => {
         const used = taken.has(image.imageId);
+        const preview = image.thumbUrl ?? image.url;
         return (
           <button
             key={image.imageId}
             type="button"
-            disabled={used || !image.url}
+            disabled={used || !preview}
             onClick={() => onPick(image)}
             className="group relative flex aspect-square items-center justify-center overflow-hidden rounded-xl border-2 border-black bg-neutral-100 p-1 disabled:opacity-40"
           >
-            {image.url && <Thumb url={image.url} className="max-h-full max-w-full object-contain" />}
+            {preview && <Thumb url={preview} className="max-h-full max-w-full object-contain" />}
             {used && <span className="absolute inset-x-1 bottom-1 rounded bg-black px-1 text-[10px] font-bold text-white">In the mix</span>}
             {!used && image.analysis === "pending" && (
               <span className="absolute inset-x-1 bottom-1 rounded bg-black/80 px-1 text-[10px] font-bold text-white">Analyzing…</span>

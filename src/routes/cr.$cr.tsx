@@ -46,7 +46,7 @@ function ShopPage() {
       <main className="px-4 pb-24 md:px-10">
         <div className="grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2 md:gap-4">
           <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%]" style={{ background: item.backgroundColor }}>
-            <Art url={item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain" />
+            <Art url={item.artMediumUrl ?? item.artUrl} fullUrl={item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain" />
           </div>
           <PhotoSquare item={item} large />
         </div>
@@ -118,7 +118,7 @@ function ShopPage() {
               {remixes.map((remix) => (
                 <Link key={remix.workId} to="/cr/$cr" params={{ cr: remix.cr }} className="group block">
                   <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[8%]" style={{ background: remix.backgroundColor }}>
-                    <Art url={remix.artUrl} alt={`CR ${remix.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
+                    <Art url={remix.artMediumUrl ?? remix.artUrl} alt={`CR ${remix.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
                   </div>
                   <CrMark cr={remix.cr} className="mt-2 text-3xl" />
                   <p className="text-sm">@{remix.creator.username}</p>

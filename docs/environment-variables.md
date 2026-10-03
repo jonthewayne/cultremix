@@ -47,6 +47,8 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex env (optional) | no | no | manual | design and model-photo quality (default `medium`) |
 | `STYLE_NOTES_MODEL` | Convex env (optional) | no | no | manual | model for image notes (default `openai/gpt-6-luna`) |
 | `IMAGE_STORE` | Convex env (optional) | no | no | manual | `convex` stores images in Convex when R2 keys are missing |
+| `R2_ENDPOINT`, `R2_BUCKET`, `R2_PUBLIC_URL` | Convex env | no | no | manual | image storage: the environment's public R2 bucket and its address |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Convex env | no | yes | manual | image storage; images go to R2 whenever these are set |
 
 Image settings are explained in `docs/image-generation/README.md`.
 

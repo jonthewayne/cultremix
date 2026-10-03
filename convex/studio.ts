@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
 import { isBlockedError, publicTileError } from "./lib/imageErrors";
+import { imageUrlReader } from "./lib/imageUrls";
 import { styleShares } from "./lib/prompts";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
@@ -36,7 +37,10 @@ const tileView = v.object({
   generationId: v.id("generations"),
   batchId: v.id("batches"),
   status: tileStatus,
+  // The original, for download and "Open full size"; the medium and thumbnail are for showing it.
   url: v.optional(v.string()),
+  mediumUrl: v.optional(v.string()),
+  thumbUrl: v.optional(v.string()),
   key: v.optional(v.string()),
   favorite: v.boolean(),
   // A fixed message (publicTileError); the provider's own error text stays on the server.
@@ -54,9 +58,9 @@ const batchView = v.object({
   presets: v.array(v.string()),
   backgroundColor: v.string(),
   inspirationUrl: v.optional(v.string()),
-  images: v.array(v.object({ url: v.optional(v.string()) })),
+  images: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()) })),
   // The style mix as thumbnails and shares; what the styles were read as stays on the server.
-  styles: v.array(v.object({ url: v.optional(v.string()), share: v.number() })),
+  styles: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), share: v.number() })),
   tiles: v.array(tileView),
 });
 
@@ -73,6 +77,7 @@ const sessionView = v.object({
       title: v.optional(v.string()),
       artKey: v.optional(v.string()),
       artUrl: v.optional(v.string()),
+      artThumbUrl: v.optional(v.string()),
       backgroundColor: v.string(),
     }),
   ),
@@ -83,9 +88,16 @@ const sessionView = v.object({
     v.object({
       instruction: v.string(),
       backgroundColor: v.string(),
-      images: v.array(v.object({ imageId: v.id("userImages"), url: v.optional(v.string()) })),
+      images: v.array(
+        v.object({ imageId: v.id("userImages"), url: v.optional(v.string()), thumbUrl: v.optional(v.string()) }),
+      ),
       styles: v.array(
-        v.object({ imageId: v.id("userImages"), url: v.optional(v.string()), weight: v.number() }),
+        v.object({
+          imageId: v.id("userImages"),
+          url: v.optional(v.string()),
+          thumbUrl: v.optional(v.string()),
+          weight: v.number(),
+        }),
       ),
       // A batch from the previous studio: its one image, not yet in the member's images.
       legacyKey: v.optional(v.string()),
@@ -127,6 +139,7 @@ async function remixCrOf(ctx: Ctx, session: Doc<"creativeSessions">) {
 }
 
 async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
+  const urls = imageUrlReader(ctx);
   const batches = await ctx.db
     .query("batches")
     .withIndex("by_session", (q) => q.eq("sessionId", session._id))
@@ -148,9 +161,36 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       .collect();
     generations.sort((a, b) => a.index - b.index);
     const shares = styleShares((batch.styles ?? []).map((s) => s.weight));
-    const styles = (batch.styles ?? [])
-      .map((style, i) => ({ url: publicUrl(style.key), share: shares[i] }))
-      .filter((style) => style.share > 0);
+    const styles = [];
+    for (const [i, style] of (batch.styles ?? []).entries()) {
+      if (shares[i] <= 0) continue;
+      const { url, thumbUrl } = await urls(style.key);
+      styles.push({ url, thumbUrl, share: shares[i] });
+    }
+    const images = [];
+    for (const image of batch.images ?? []) {
+      const { url, thumbUrl } = await urls(image.key);
+      images.push({ url, thumbUrl });
+    }
+    const tiles = [];
+    for (const g of generations) {
+      const blocked = g.status === "failed" && isBlockedError(g.error);
+      const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
+      tiles.push({
+        generationId: g._id,
+        batchId: g.batchId,
+        status: g.status,
+        url,
+        mediumUrl,
+        thumbUrl,
+        key: g.fullKey,
+        favorite: g.favorite,
+        error: blocked ? undefined : publicTileError(g.error),
+        blocked,
+        backgroundColor: batch.backgroundColor,
+        publishedCr: published.get(g._id),
+      });
+    }
     batchViews.push({
       batchId: batch._id,
       createdAt: batch._creationTime,
@@ -158,23 +198,9 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       presets: batch.presets,
       backgroundColor: batch.backgroundColor,
       inspirationUrl: publicUrl(batch.inspirationKey),
-      images: (batch.images ?? []).map((image) => ({ url: publicUrl(image.key) })),
+      images,
       styles,
-      tiles: generations.map((g) => {
-        const blocked = g.status === "failed" && isBlockedError(g.error);
-        return {
-          generationId: g._id,
-          batchId: g.batchId,
-          status: g.status,
-          url: publicUrl(g.fullKey),
-          key: g.fullKey,
-          favorite: g.favorite,
-          error: blocked ? undefined : publicTileError(g.error),
-          blocked,
-          backgroundColor: batch.backgroundColor,
-          publishedCr: published.get(g._id),
-        };
-      }),
+      tiles,
     });
   }
   const favorites = await ctx.db
@@ -188,31 +214,41 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
   if (session.remixOfWorkId) {
     const work = await ctx.db.get("works", session.remixOfWorkId);
     if (work) {
+      const art = await urls(work.artKey);
       remix = {
         workId: work._id,
         cr: formatCr(work.crFamily, work.crExpression),
         title: work.title,
         artKey: work.artKey,
-        artUrl: publicUrl(work.artKey),
+        artUrl: art.url,
+        artThumbUrl: art.thumbUrl,
         backgroundColor: work.backgroundColor,
       };
     }
   }
   const newest = batches[0];
-  const lastInputs = newest
-    ? {
-        instruction: newest.instruction,
-        backgroundColor: newest.backgroundColor,
-        images: (newest.images ?? []).map((image) => ({ imageId: image.imageId, url: publicUrl(image.key) })),
-        styles: (newest.styles ?? []).map((style) => ({
-          imageId: style.imageId,
-          url: publicUrl(style.key),
-          weight: style.weight,
-        })),
-        legacyKey: newest.images || newest.styles ? undefined : newest.inspirationKey,
-        legacyUrl: newest.images || newest.styles ? undefined : publicUrl(newest.inspirationKey),
-      }
-    : undefined;
+  let lastInputs = undefined;
+  if (newest) {
+    const images = [];
+    for (const image of newest.images ?? []) {
+      const { url, thumbUrl } = await urls(image.key);
+      images.push({ imageId: image.imageId, url, thumbUrl });
+    }
+    const styles = [];
+    for (const style of newest.styles ?? []) {
+      const { url, thumbUrl } = await urls(style.key);
+      styles.push({ imageId: style.imageId, url, thumbUrl, weight: style.weight });
+    }
+    const legacy = !newest.images && !newest.styles;
+    lastInputs = {
+      instruction: newest.instruction,
+      backgroundColor: newest.backgroundColor,
+      images,
+      styles,
+      legacyKey: legacy ? newest.inspirationKey : undefined,
+      legacyUrl: legacy ? publicUrl(newest.inspirationKey) : undefined,
+    };
+  }
   return {
     sessionId: session._id,
     title: session.title,
@@ -262,8 +298,8 @@ const sessionCard = v.object({
   name: v.string(),
   updatedAt: v.number(),
   batches: v.number(),
-  // The newest finished designs, newest first.
-  thumbs: v.array(v.object({ url: v.optional(v.string()), backgroundColor: v.string() })),
+  // The newest finished designs, newest first: the original and its thumbnail.
+  thumbs: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), backgroundColor: v.string() })),
 });
 
 // The member's sessions with work in them, most recently used first, for the blank studio.
@@ -273,6 +309,7 @@ export const sessions = query({
   handler: async (ctx, args) => {
     const user = await getViewerUser(ctx);
     if (!user) return { sessions: [], more: false };
+    const urls = imageUrlReader(ctx);
     const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 12)), 60);
     const cards = [];
     let more = false;
@@ -300,7 +337,8 @@ export const sessions = query({
         generations.sort((a, b) => a.index - b.index);
         for (const g of generations) {
           if (g.status === "succeeded" && g.fullKey && thumbs.length < 4) {
-            thumbs.push({ url: publicUrl(g.fullKey), backgroundColor: batch.backgroundColor });
+            const { url, thumbUrl } = await urls(g.fullKey);
+            thumbs.push({ url, thumbUrl, backgroundColor: batch.backgroundColor });
           }
         }
         if (thumbs.length >= 4) break;
@@ -367,6 +405,7 @@ export const startRemix = mutation({
     sessionId: v.id("creativeSessions"),
     artKey: v.optional(v.string()),
     artUrl: v.optional(v.string()),
+    artThumbUrl: v.optional(v.string()),
     backgroundColor: v.string(),
   }),
   handler: async (ctx, args) => {
@@ -382,9 +421,11 @@ export const startRemix = mutation({
     if (!work || work.status !== "published") {
       throw new ConvexError({ code: "NOT_FOUND", message: "That design is not published." });
     }
+    const art = await imageUrlReader(ctx)(work.artKey);
     const result = {
       artKey: work.artKey,
-      artUrl: publicUrl(work.artKey),
+      artUrl: art.url,
+      artThumbUrl: art.thumbUrl,
       backgroundColor: work.backgroundColor,
     };
     const existing = await latestSession(ctx, user._id);

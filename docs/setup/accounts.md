@@ -7,11 +7,11 @@ Ops record for the 2026-09-29 sprint. No secrets here. Keys live only on mighteo
 | File | Variables | Status |
 |---|---|---|
 | `gateway.env` | `AI_GATEWAY_API_KEY` (Vercel AI Gateway key `cultremix`) | saved 3:05; set on dev and production |
-| `r2.env` | not secret: `R2_ENDPOINT`, `R2_BUCKET_DEV`, `R2_BUCKET_PROD`, `R2_PUBLIC_URL_DEV`, `R2_PUBLIC_URL_PROD`; secret, not created today: `R2_TOKEN`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | no R2 token today; images use Convex storage |
+| `r2.env` | not secret: `R2_ENDPOINT`, `R2_BUCKET_DEV`, `R2_BUCKET_PROD`, `R2_PUBLIC_URL_DEV`, `R2_PUBLIC_URL_PROD`; secret: `R2_TOKEN_DEV`, `R2_TOKEN_PROD` (one Cloudflare token per bucket, Object Read & Write on that bucket only, created Oct 2) and the S3 keys derived from each, `R2_ACCESS_KEY_ID_DEV`/`_PROD` (the token's ID) and `R2_SECRET_ACCESS_KEY_DEV`/`_PROD` (SHA-256 of the token value) | set on dev Oct 2 (as `R2_TOKEN`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`); production waits for the Ops thread |
 | `resend.env` | `RESEND_API_KEY` (sending access only) | saved 4:46; set on production |
 | `prod.env` | `AUTH_SECRET` (production only) | set on production |
 
-The app stores images in R2 whenever `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are all set; otherwise `IMAGE_STORE=convex` uses Convex file storage served from `/img/`. Setting the two R2 keys later switches new images to R2 with no other change.
+The app stores images in R2 whenever `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are all set; otherwise `IMAGE_STORE=convex` uses Convex file storage served from `/img/`. Setting the R2 keys switches new images to R2 with no other change; `sizing:moveToR2` then moves the older ones (see `docs/image-generation/README.md`, "Storage and sizes"). Each key is refused by the other environment's bucket (checked Oct 2).
 
 ## Convex
 

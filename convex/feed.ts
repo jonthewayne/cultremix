@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { formatCr, parseCr, publicUrl } from "./lib/r2";
+import { imageUrlReader } from "./lib/imageUrls";
+import { formatCr, parseCr } from "./lib/r2";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
@@ -18,14 +19,17 @@ const feedItem = v.object({
   title: v.optional(v.string()),
   creator: v.object({ username: v.string(), creatorNumber: v.optional(v.number()) }),
   backgroundColor: v.string(),
+  // The originals, and the medium copies pages show (convex/lib/sizes.ts).
   artUrl: v.optional(v.string()),
+  artMediumUrl: v.optional(v.string()),
   photoUrl: v.optional(v.string()),
+  photoMediumUrl: v.optional(v.string()),
   photoState,
   parentCr: v.optional(v.string()),
   publishedAt: v.number(),
 });
 
-async function toFeedItem(ctx: QueryCtx, work: Doc<"works">) {
+async function toFeedItem(ctx: QueryCtx, work: Doc<"works">, urls = imageUrlReader(ctx)) {
   const creator = await ctx.db.get("users", work.creatorId);
   const shoot = await ctx.db
     .query("shoots")
@@ -38,6 +42,8 @@ async function toFeedItem(ctx: QueryCtx, work: Doc<"works">) {
         .unique()
     : null;
   const parent = work.parentWorkId ? await ctx.db.get("works", work.parentWorkId) : null;
+  const art = await urls(work.artKey);
+  const shot = photo?.state === "succeeded" ? await urls(photo.publicKey) : {};
   return {
     workId: work._id,
     cr: formatCr(work.crFamily, work.crExpression),
@@ -48,8 +54,10 @@ async function toFeedItem(ctx: QueryCtx, work: Doc<"works">) {
       creatorNumber: creator?.creatorNumber,
     },
     backgroundColor: work.backgroundColor,
-    artUrl: publicUrl(work.artKey),
-    photoUrl: photo?.state === "succeeded" ? publicUrl(photo.publicKey) : undefined,
+    artUrl: art.url,
+    artMediumUrl: art.mediumUrl,
+    photoUrl: shot.url,
+    photoMediumUrl: shot.mediumUrl,
     photoState: photo ? photo.state : ("none" as const),
     parentCr: parent ? formatCr(parent.crFamily, parent.crExpression) : undefined,
     publishedAt: work.publishedAt ?? work._creationTime,

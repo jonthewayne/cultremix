@@ -67,7 +67,7 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
       <Link to="/cr/$cr" params={{ cr: item.cr }} className="group block">
         <div className="grid grid-cols-2 gap-2 md:gap-4">
           <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%]" style={{ background: item.backgroundColor }}>
-            <Art url={item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
+            <Art url={item.artMediumUrl ?? item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
           </div>
           <PhotoSquare item={item} />
         </div>
@@ -96,7 +96,7 @@ export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: b
             <span className="text-sm font-bold opacity-60">Model photo (dev placeholder)</span>
           </div>
         ) : (
-          <Art url={item.photoUrl} alt={`Model wearing CR ${item.cr}`} className="h-full w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]" />
+          <Art url={item.photoMediumUrl ?? item.photoUrl} alt={`Model wearing CR ${item.cr}`} className="h-full w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]" />
         )}
       </div>
     );

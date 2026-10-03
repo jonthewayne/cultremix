@@ -64,7 +64,7 @@ export function SessionList({ onOpen }: { onOpen: (sessionId: Id<"creativeSessio
                     className="flex aspect-square items-center justify-center overflow-hidden p-1"
                     style={{ background: thumb?.backgroundColor ?? "#f5f5f5" }}
                   >
-                    {thumb?.url && <Art url={thumb.url} alt="" className="max-h-full max-w-full object-contain" />}
+                    {thumb && <Art url={thumb.thumbUrl ?? thumb.url} alt="" className="max-h-full max-w-full object-contain" />}
                   </div>
                 );
               })}

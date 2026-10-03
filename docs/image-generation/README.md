@@ -117,6 +117,27 @@ Nothing the vision model writes about an image, and no prompt, reaches the brows
 - The style library from Style Of will follow the same rule: its style definitions live in Convex, public queries return a style's name, category, and preview images, and a member's pick reaches the server as an ID and a slider value. Keep the definitions out of this repository.
 - This repository is public for judging, so the prompt templates in `convex/lib/prompts.ts`, and this README, can be read on GitHub until it's made private. The notes for each image and the prompts built from them live only in the database.
 
+## Storage and sizes
+
+Every image is kept in up to four versions:
+
+| Version | Size | Format | Kept in | Used for |
+|---|---|---|---|---|
+| Original | as made: 1024×1536 designs, ~650–900 px wide grid cuts, 1024×1024 model photos, uploads up to 1024 px | PNG (uploads keep JPEG or WebP) | public bucket | Download, Open full size, publishing, sending to the image models, the viewer and shop page once loaded |
+| Medium | fits inside 1200 px, never enlarged | WebP, quality 82 | public bucket | studio tiles, the feed, shop pages, the first frame of the viewer |
+| Thumbnail | fits inside 400 px | WebP, quality 78 | public bucket | session cards, image and style chips, the image tray, the style picker |
+| Print upscale | Topaz 4× (see below) | PNG | private bucket, not built yet | the printer's file and the owner's spot check |
+
+Both copies keep transparency (alpha quality 90). On dev's 52 images, the originals total 136.6 MB, the mediums 14.5 MB, and the thumbnails 2.2 MB, and all 47 transparent designs stayed transparent. The blank studio's session cards now load 28 thumbnails, about 1.2 MB, where they used to load the same number of full PNGs.
+
+**Where they live.** Each environment has one public R2 bucket, `cultremix-dev-public` and `cultremix-prod-public`, served from its r2.dev address with a one-year immutable cache. Keys name their content: `gen/`, `art/`, `photo/`, and `inspo/<sha256>.<ext>` for originals, and `sizes/<sha256>/thumb.webp` and `medium.webp` for the copies, so the same file is stored once however many places use it. Each environment's token can read and write only its own bucket. Without R2 keys, `IMAGE_STORE=convex` keeps images in Convex file storage (`cvx:<id>` keys, served by the `/img/` route). Before launch, the production bucket should get a custom domain (such as `img.cultremix.com`, in the bucket's Settings under Custom Domains): Cloudflare rate-limits r2.dev addresses (heavy traffic gets 429 Too Many Requests and slower downloads) and recommends them only for development, while a custom domain adds Cloudflare's cache (https://developers.cloudflare.com/r2/buckets/public-buckets/). Keys are stored without the address, so the switch is one change to `R2_PUBLIC_URL`, and the bucket's CORS rules carry over.
+
+**How the copies are made.** `convex/lib/storage.ts` resizes with sharp, which Convex installs on its Node runtime (`convex.json` lists it). A new design or model photo is uploaded at the same time as its two copies are made and uploaded, and the tile appears only when all three are stored, so no page loads the PNG first. With warm servers that takes 0.65–1.1 s per design (the original's upload is about 0.4 s of it); the first designs after a deploy took 2.3–2.6 s. Uploads get their copies right after they're stored; published art reuses its design's copies. The `imageSizes` table maps an original's key to its copies, and queries return `url` (the original) with `thumbUrl` and `mediumUrl`, which fall back to the original until the copies exist. Saving to R2 is one direct upload per file: the R2 component's own `store()` adds a lookup and a separate action that records each object, which this app never reads, and that doubled the time to save a design.
+
+**Older images.** `bunx convex run sizing:backfill` (add `--prod` for production) gives every stored image its copies; it skips images that have them and can run again. `bunx convex run sizing:moveToR2` copies images kept in Convex storage to R2, records each move in `storageMoves`, and points every table at the R2 copy (designs, published art, model photos, members' images, batch inputs, and the sizes table). It can run again, and it leaves the Convex copies in place; delete those only after checking the moved images. Run the move first, then the backfill. On dev the move copied 55 files and repointed 119 rows with no failures, a second run found nothing to do, and every page then loaded only from R2.
+
+**The print upscale stays private.** When print ordering is built, upscales go to a second bucket per environment (`cultremix-dev-private`, `cultremix-prod-private`) with no public address, and a token that can read and write it. The printer and the owner's spot check get short-lived signed links.
+
 ## Upscaling for print
 
 fal's Topaz Transparent (`topaz/upscale/image/transparent`, https://fal.ai/models/topaz/upscale/image/transparent) always enlarges 4× and keeps the alpha channel, with PNG output. It costs $0.08 per started 24 megapixels of output, so any grid design (about 3,200×3,600 after upscaling, roughly 12 MP) is 8¢, and a 1024×1536 single design (about 25 MP) is 16¢.
@@ -155,3 +176,6 @@ So every design needs the upscale for a full-front print, and after it a 15-inch
 | `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex, optional | `low`, `medium` (default), or `high` for designs and model photos |
 | `STYLE_NOTES_MODEL` | Convex, optional | Model for image notes; default `openai/gpt-6-luna` |
 | `FAL_KEY` | Convex (future), `~/.config/cultremix/fal.env` | fal key for upscaling; production needs its own key with a spend limit |
+| `R2_ENDPOINT`, `R2_BUCKET`, `R2_PUBLIC_URL` | Convex | The environment's public bucket and its address |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Convex, `~/.config/cultremix/r2.env` (`_DEV` and `_PROD` values) | R2 access for that bucket only; images go to R2 whenever these are set. (The Cloudflare token they come from, `R2_TOKEN_*` in the same file, isn't read by the app.) |
+| `IMAGE_STORE` | Convex, optional | `convex` keeps images in Convex storage while the R2 keys are missing |

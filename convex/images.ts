@@ -2,10 +2,11 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
-import { isDevDeployment, publicUrl } from "./lib/r2";
+import { imageUrlReader } from "./lib/imageUrls";
+import { isDevDeployment } from "./lib/r2";
 import { IMAGE_KEY, requireMember } from "./studio";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 // A member's images: uploads, their own designs used as images, and remix sources. Each one
 // gets a vision model's notes once (convex/imageNotes.ts), which the studio's prompts reuse.
@@ -18,18 +19,19 @@ export const imageView = v.object({
   imageId: v.id("userImages"),
   key: v.string(),
   url: v.optional(v.string()),
+  thumbUrl: v.optional(v.string()),
   analysis: analysisState,
   styleAt: v.optional(v.number()),
 });
 
-function toView(image: Doc<"userImages">) {
-  return {
-    imageId: image._id,
-    key: image.key,
-    url: publicUrl(image.key),
-    analysis: image.analysis,
-    styleAt: image.styleAt,
-  };
+async function toViews(ctx: QueryCtx, images: Array<Doc<"userImages">>) {
+  const urls = imageUrlReader(ctx);
+  const views = [];
+  for (const image of images) {
+    const { url, thumbUrl } = await urls(image.key);
+    views.push({ imageId: image._id, key: image.key, url, thumbUrl, analysis: image.analysis, styleAt: image.styleAt });
+  }
+  return views;
 }
 
 // Saves an image once per owner (by content hash, else by storage key), refreshes when it was
@@ -165,8 +167,8 @@ export const library = query({
       .order("desc")
       .take(48);
     return {
-      styles: styles.map(toView),
-      recent: recent.filter((image) => !styleIds.has(image._id)).map(toView),
+      styles: await toViews(ctx, styles),
+      recent: await toViews(ctx, recent.filter((image) => !styleIds.has(image._id))),
     };
   },
 });
@@ -178,12 +180,12 @@ export const status = query({
   handler: async (ctx, args) => {
     const user = await getViewerUser(ctx);
     if (!user) return [];
-    const views = [];
+    const owned = [];
     for (const imageId of args.imageIds.slice(0, 12)) {
       const image = await ctx.db.get("userImages", imageId);
-      if (image && image.ownerId === user._id) views.push(toView(image));
+      if (image && image.ownerId === user._id) owned.push(image);
     }
-    return views;
+    return await toViews(ctx, owned);
   },
 });
 

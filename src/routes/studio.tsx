@@ -34,7 +34,10 @@ type Tile = {
   generationId: Id<"generations">;
   batchId: Id<"batches">;
   status: string;
+  // The original (download, "Open full size") and the copies shown in the studio.
   url?: string;
+  mediumUrl?: string;
+  thumbUrl?: string;
   favorite: boolean;
   error?: string;
   blocked?: boolean;
@@ -204,16 +207,26 @@ function StudioPage() {
     if (last) {
       setInstruction(last.instruction);
       setColor(last.backgroundColor);
-      setImages(last.images.flatMap((image) => (image.url ? [{ id: newSlotId(), imageId: image.imageId, previewUrl: image.url, uploading: false }] : [])));
+      setImages(
+        last.images.flatMap((image) => {
+          const previewUrl = image.thumbUrl ?? image.url;
+          return previewUrl ? [{ id: newSlotId(), imageId: image.imageId, previewUrl, uploading: false }] : [];
+        }),
+      );
       setStyles(
-        last.styles.flatMap((style) =>
-          style.url ? [{ id: newSlotId(), imageId: style.imageId, previewUrl: style.url, uploading: false, weight: style.weight }] : [],
-        ),
+        last.styles.flatMap((style) => {
+          const previewUrl = style.thumbUrl ?? style.url;
+          return previewUrl ? [{ id: newSlotId(), imageId: style.imageId, previewUrl, uploading: false, weight: style.weight }] : [];
+        }),
       );
       if (last.legacyKey && last.legacyUrl) void addExisting(last.legacyKey, last.legacyUrl, false);
-    } else if (session.remix?.artKey && session.remix.artUrl) {
-      setColor(session.remix.backgroundColor);
-      void addExisting(session.remix.artKey, session.remix.artUrl, false);
+    } else if (session.remix) {
+      const { artKey, artThumbUrl, artUrl, backgroundColor } = session.remix;
+      const preview = artThumbUrl ?? artUrl;
+      if (artKey && preview) {
+        setColor(backgroundColor);
+        void addExisting(artKey, preview, false);
+      }
     }
   }, [s, session, addExisting]);
   // A session that isn't the member's (or no longer exists) falls back to a blank studio.
@@ -232,7 +245,8 @@ function StudioPage() {
         setStyles([]);
         setInstruction("");
         setColor(result.backgroundColor);
-        if (result.artKey && result.artUrl) void addExisting(result.artKey, result.artUrl, false);
+        const preview = result.artThumbUrl ?? result.artUrl;
+        if (result.artKey && preview) void addExisting(result.artKey, preview, false);
         void navigate({ to: "/studio", search: { s: result.sessionId }, replace: true });
       })
       .catch((err) => setError(errorMessage(err)));
@@ -244,14 +258,16 @@ function StudioPage() {
   };
 
   const useAsImage = (tile: Tile) => {
-    if (!tile.key || !tile.url) return;
+    const preview = tile.thumbUrl ?? tile.url;
+    if (!tile.key || !preview) return;
     if (imagesRef.current.length === 0) setColor(tile.backgroundColor);
-    void addExisting(tile.key, tile.url, false);
+    void addExisting(tile.key, preview, false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const useAsStyle = (tile: Tile) => {
-    if (!tile.key || !tile.url) return;
-    void addExisting(tile.key, tile.url, true);
+    const preview = tile.thumbUrl ?? tile.url;
+    if (!tile.key || !preview) return;
+    void addExisting(tile.key, preview, true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -260,10 +276,11 @@ function StudioPage() {
     if (stylesRef.current.some((style) => style.imageId === slot.imageId)) return;
     setStyles((list) => [...list, { id: newSlotId(), imageId: slot.imageId, previewUrl: slot.previewUrl, uploading: false, weight: 100 }]);
   };
-  const pickStyle = (image: { imageId: Id<"userImages">; url?: string }) => {
-    if (!image.url || stylesRef.current.length >= MAX_STYLES) return;
+  const pickStyle = (image: { imageId: Id<"userImages">; url?: string; thumbUrl?: string }) => {
+    const previewUrl = image.thumbUrl ?? image.url;
+    if (!previewUrl || stylesRef.current.length >= MAX_STYLES) return;
     if (stylesRef.current.some((style) => style.imageId === image.imageId)) return;
-    setStyles((list) => [...list, { id: newSlotId(), imageId: image.imageId, previewUrl: image.url!, uploading: false, weight: 100 }]);
+    setStyles((list) => [...list, { id: newSlotId(), imageId: image.imageId, previewUrl, uploading: false, weight: 100 }]);
     setMixerOpen(true);
     setLibraryOpen(false);
     void markStyle({ imageId: image.imageId }).catch(() => undefined);
@@ -350,7 +367,7 @@ function StudioPage() {
                       className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
                       style={{ background: remixInfo.backgroundColor }}
                     >
-                      <Art url={remixInfo.artUrl} alt={`CR ${remixInfo.cr}`} className="h-full w-auto max-w-full object-contain" />
+                      <Art url={remixInfo.artThumbUrl ?? remixInfo.artUrl} alt={`CR ${remixInfo.cr}`} className="h-full w-auto max-w-full object-contain" />
                     </div>
                     <div>
                       <p className="text-sm font-bold uppercase tracking-wider">Remixing</p>
@@ -485,7 +502,7 @@ function StudioPage() {
                     <span className="flex shrink-0 gap-1">
                       {batch.images.map((image, i) => (
                         <span key={i} className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
-                          {image.url && <Art url={image.url} alt={`Image ${i + 1}`} className="max-h-full max-w-full object-contain" />}
+                          <Art url={image.thumbUrl ?? image.url} alt={`Image ${i + 1}`} className="max-h-full max-w-full object-contain" />
                         </span>
                       ))}
                     </span>
@@ -497,7 +514,7 @@ function StudioPage() {
                   {batch.styles.length > 0 && (
                     <span className="flex shrink-0 items-center gap-2 text-sm text-neutral-500">
                       Style
-                      <StyleChips items={batch.styles} />
+                      <StyleChips items={batch.styles.map((style) => ({ url: style.thumbUrl ?? style.url, share: style.share }))} />
                     </span>
                   )}
                   {batch.tiles.some((t) => t.status === "queued" || t.status === "dispatched") && (
@@ -666,7 +683,7 @@ function TileCard({
     <div className="group relative aspect-square overflow-hidden rounded-2xl" style={{ background: tile.backgroundColor, color: ink }}>
       {ready ? (
         <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="View large">
-          <Art url={tile.url} alt="Design" className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]" />
+          <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]" />
         </button>
       ) : failed && tile.blocked ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center md:p-4">
@@ -862,7 +879,12 @@ function Viewer({
               else if (info.offset.x > 80) onIndex((index - 1 + list.length) % list.length);
             }}
           >
-            <Art url={tile.url} alt="Design, full size" className="pointer-events-none h-full max-h-[82vh] w-auto max-w-full select-none object-contain" />
+            <Art
+              url={tile.mediumUrl ?? tile.url}
+              fullUrl={tile.url}
+              alt="Design, full size"
+              className="pointer-events-none h-full max-h-[82vh] w-auto max-w-full select-none object-contain"
+            />
           </motion.div>
         </AnimatePresence>
         {list.length > 1 && (
@@ -957,7 +979,7 @@ function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
               className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
               style={{ background: tile.backgroundColor }}
             >
-              <Art url={tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
+              <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
             </div>
             <p className="max-w-xs text-sm text-neutral-300">
               The model photo is developing. It appears on the feed in a minute or two.
@@ -996,7 +1018,7 @@ function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
         transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
       >
         <div className="flex aspect-square items-center justify-center p-[8%]" style={{ background: tile.backgroundColor }}>
-          <Art url={tile.url} alt="Design on the shirt color" className="h-full w-auto max-w-full object-contain" />
+          <Art url={tile.mediumUrl ?? tile.url} alt="Design on the shirt color" className="h-full w-auto max-w-full object-contain" />
         </div>
         <form onSubmit={submit} className="flex flex-col justify-between gap-8 p-6 md:p-10">
           <div>

@@ -5,9 +5,10 @@ import { generateText } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import { fetchPublicImage, mimeOf } from "./imageGen";
+import { mimeOf } from "./imageGen";
 import { decodeRgba, encodeRgba } from "./lib/gridCut";
 import { STYLE_NOTES_PROMPT, parseStyleNotes } from "./lib/prompts";
+import { fetchPublicImage } from "./lib/storage";
 
 // Writes an image's notes once, when it first comes into the studio: what it shows (the people
 // and their likeness, the words) and how it looks (technique, color, line, lettering, signature

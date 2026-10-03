@@ -1,23 +1,39 @@
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 
-// Renders a stored image, or a drawn placeholder for the dev stand-in ("fake:" keys).
+// Renders a stored image, or a drawn placeholder for the dev stand-in ("fake:" keys). With
+// fullUrl, it shows url (a smaller copy) first and switches to fullUrl once that has loaded.
 export function Art({
   url,
+  fullUrl,
   alt,
   className,
 }: {
   url?: string;
+  fullUrl?: string;
   alt: string;
   className?: string;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [upgraded, setUpgraded] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fullUrl || fullUrl === url || fullUrl.startsWith("fake:")) return;
+    let live = true;
+    const full = new Image();
+    full.onload = () => {
+      if (live) setUpgraded(fullUrl);
+    };
+    full.src = fullUrl;
+    return () => {
+      live = false;
+    };
+  }, [url, fullUrl]);
   if (!url) return null;
   if (url.startsWith("fake:")) return <FakeArt seed={url} className={className} />;
   return (
     <motion.img
-      src={url}
+      src={upgraded && upgraded === fullUrl ? upgraded : url}
       alt={alt}
       draggable={false}
       className={className}
