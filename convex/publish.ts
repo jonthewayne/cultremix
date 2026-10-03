@@ -4,6 +4,7 @@ import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { requireMember } from "./studio";
 import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
+import { recordPublishActivity } from "./lib/social";
 import type { MutationCtx } from "./_generated/server";
 
 const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
@@ -137,6 +138,8 @@ export const markPublished = internalMutation({
       artKey: args.artKey,
       contentHash: args.contentHash,
     });
+    // The Following feed and profiles read this event (convex/lib/social.ts).
+    await recordPublishActivity(ctx, { ...work, status: "published", publishedAt: now });
     const look = pickLook(work._id, await recentLooks(ctx));
     const shootId = await ctx.db.insert("shoots", {
       workId: work._id,

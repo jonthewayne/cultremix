@@ -5,10 +5,19 @@ import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { FollowButton } from "~/components/social/FollowButton";
+import { HeartButton } from "~/components/social/HeartButton";
+import { LoadMore } from "~/components/social/LoadMore";
+import { WorkGrid } from "~/components/social/WorkGrid";
+import { usePagedQuery } from "~/hooks/use-paged-query";
 import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
 
 export const Route = createFileRoute("/cr/$cr")({
+  loader: async ({ context, params }) => {
+    if (!context.convexQueryClient.serverHttpClient) return;
+    await context.queryClient.fetchQuery(convexQuery(api.feed.byCr, { cr: params.cr })).catch(() => null);
+  },
   head: ({ params }) => ({ meta: [{ title: `CR ${params.cr} · CultRemix` }] }),
   component: ShopPage,
 });
@@ -39,7 +48,7 @@ function ShopPage() {
       </div>
     );
   }
-  const { item, contentHash, remixes } = data;
+  const { item, contentHash } = data;
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
@@ -56,9 +65,16 @@ function ShopPage() {
             <CrMark cr={item.cr} className="text-[20vw] md:text-[10vw]" />
             {item.title && <h1 className="mt-4 text-4xl font-black leading-none tracking-tight md:text-6xl">{item.title}</h1>}
             <p className="mt-4 text-xl">
-              by <span className="font-bold">@{item.creator.username}</span>
+              by{" "}
+              <Link to="/u/$username" params={{ username: item.creator.username }} className="font-bold hover:underline">
+                @{item.creator.username}
+              </Link>
               {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
             </p>
+            <div className="mt-4 flex items-center gap-2">
+              <HeartButton workId={item.workId} count={item.hearts} />
+              <FollowButton username={item.creator.username} />
+            </div>
             {item.parentCr && (
               <p className="mt-3 text-lg">
                 Remix of{" "}
@@ -111,23 +127,27 @@ function ShopPage() {
           </div>
         </section>
 
-        {remixes.length > 0 && (
-          <section className="mt-20">
-            <h2 className="border-t-2 border-black pt-4 text-sm font-bold uppercase tracking-wider">Remixes</h2>
-            <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-              {remixes.map((remix) => (
-                <Link key={remix.workId} to="/cr/$cr" params={{ cr: remix.cr }} className="group block">
-                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[8%]" style={{ background: remix.backgroundColor }}>
-                    <Art url={remix.artMediumUrl ?? remix.artUrl} alt={`CR ${remix.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
-                  </div>
-                  <CrMark cr={remix.cr} className="mt-2 text-3xl" />
-                  <p className="text-sm">@{remix.creator.username}</p>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
+        <Remixes cr={item.cr} />
       </main>
     </div>
+  );
+}
+
+function Remixes({ cr }: { cr: string }) {
+  const { items, status, loadMore } = usePagedQuery(api.feed.remixes, { cr }, 12);
+  if (items.length === 0) {
+    // Pages skip unpublished remixes, so an empty page may still have more behind it.
+    return status === "CanLoadMore" || status === "LoadingMore" ? (
+      <LoadMore status={status} loadMore={loadMore} className="mt-20" />
+    ) : null;
+  }
+  return (
+    <section className="mt-20">
+      <h2 className="border-t-2 border-black pt-4 text-sm font-bold uppercase tracking-wider">Remixes</h2>
+      <div className="mt-6">
+        <WorkGrid items={items} />
+      </div>
+      <LoadMore status={status} loadMore={loadMore} className="mt-12" />
+    </section>
   );
 }
