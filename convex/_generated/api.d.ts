@@ -8,6 +8,18 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
+import type * as crons from "../crons.js";
+import type * as deployment from "../deployment.js";
+import type * as judges from "../judges.js";
+import type * as metrics from "../metrics.js";
+import type * as seed from "../seed.js";
+import type * as lib_adminAccess from "../lib/adminAccess.js";
+import type * as lib_creators from "../lib/creators.js";
+import type * as lib_flags from "../lib/flags.js";
+import type * as lib_metricsDays from "../lib/metricsDays.js";
+import type * as lib_passwordAuth from "../lib/passwordAuth.js";
+import type * as schema_launch from "../schema/launch.js";
 import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
 import type * as bootstrap from "../bootstrap.js";
@@ -61,6 +73,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
+  crons: typeof crons;
+  deployment: typeof deployment;
+  judges: typeof judges;
+  metrics: typeof metrics;
+  seed: typeof seed;
+  "lib/adminAccess": typeof lib_adminAccess;
+  "lib/creators": typeof lib_creators;
+  "lib/flags": typeof lib_flags;
+  "lib/metricsDays": typeof lib_metricsDays;
+  "lib/passwordAuth": typeof lib_passwordAuth;
+  "schema/launch": typeof schema_launch;
   auth: typeof auth;
   authVerification: typeof authVerification;
   bootstrap: typeof bootstrap;
