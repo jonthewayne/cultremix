@@ -1,0 +1,364 @@
+import { describe, expect, it } from "vitest";
+import { api, internal } from "../../convex/_generated/api";
+import { newTest } from "./setup";
+import type { Id } from "../../convex/_generated/dataModel";
+
+type T = ReturnType<typeof newTest>;
+
+async function member(t: T, name: string, platformRole?: "super_admin_owner" | "super_admin_ops") {
+  const userId = await t.run((ctx) =>
+    ctx.db.insert("users", { authId: `test|${name}`, username: name, usernameLower: name, platformRole }),
+  );
+  return { userId, as: t.withIdentity({ subject: `test|${name}`, issuer: "test" }) };
+}
+
+// A finished studio tile, optionally made while remixing a work.
+async function tile(t: T, ownerId: Id<"users">, remixOfWorkId?: Id<"works">) {
+  return await t.run(async (ctx) => {
+    const sessionId = await ctx.db.insert("creativeSessions", {
+      ownerId,
+      updatedAt: Date.now(),
+      phrase: "",
+      styleDirection: "",
+      presets: [],
+      remixOfWorkId,
+      remixMode: remixOfWorkId ? "variation" : undefined,
+    });
+    const batchId = await ctx.db.insert("batches", {
+      sessionId,
+      ownerId,
+      instruction: "x",
+      presets: [],
+      backgroundColor: "#ffffff",
+      operation: remixOfWorkId ? "remix" : "create",
+      model: "test",
+      count: 1,
+    });
+    return await ctx.db.insert("generations", {
+      sessionId,
+      batchId,
+      ownerId,
+      index: 0,
+      kind: remixOfWorkId ? "remix" : "concept",
+      status: "succeeded",
+      provider: "test",
+      model: "test",
+      charged: true,
+      favorite: false,
+      fullKey: `fake:${Math.random()}`,
+    });
+  });
+}
+
+let requestCounter = 0;
+
+// Publishes a tile and marks it published (the asset copy can't run here).
+async function publish(
+  t: T,
+  who: Awaited<ReturnType<typeof member>>,
+  remixOf?: Id<"works">,
+  remixKind?: "variation" | "fork",
+) {
+  const generationId = await tile(t, who.userId, remixOf);
+  const result = await who.as.mutation(api.publish.quick, {
+    requestId: `req-${(requestCounter += 1)}`,
+    generationId,
+    remixKind,
+  });
+  await t.run((ctx) => ctx.db.patch("works", result.workId, { status: "published", publishedAt: Date.now() }));
+  return result;
+}
+
+const getWork = (t: T, id: Id<"works">) => t.run((ctx) => ctx.db.get("works", id));
+
+describe("publishing a remix as a variation or a fork", () => {
+  it("numbers a variation in the parent's family and a fork as a new family", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const root = await publish(t, alice);
+    expect(root.cr).toBe("101-001");
+    const variation = await publish(t, bob, root.workId);
+    expect(variation.cr).toBe("101-002");
+    const fork = await publish(t, bob, root.workId, "fork");
+    expect(fork.cr).toBe("102-001");
+    const again = await publish(t, alice, root.workId, "variation");
+    expect(again.cr).toBe("101-003");
+
+    const forkDoc = (await getWork(t, fork.workId))!;
+    expect(forkDoc).toMatchObject({
+      kind: "fork",
+      parentWorkId: root.workId,
+      effectiveParentWorkId: root.workId,
+      familyRootId: fork.workId,
+      crFamily: 102,
+      crExpression: 1,
+    });
+    expect((await getWork(t, variation.workId))!).toMatchObject({
+      kind: "variation",
+      familyRootId: root.workId,
+      effectiveParentWorkId: root.workId,
+    });
+    // A variation of the fork joins family 102.
+    const inFork = await publish(t, alice, fork.workId);
+    expect(inFork.cr).toBe("102-002");
+  });
+
+  it("refuses to publish a remix whose parent is gone", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const root = await publish(t, alice);
+    const generationId = await tile(t, alice.userId, root.workId);
+    await t.run((ctx) => ctx.db.patch("works", root.workId, { status: "asset_failed" }));
+    await expect(
+      alice.as.mutation(api.publish.quick, { requestId: "late", generationId }),
+    ).rejects.toThrow(/isn't published anymore/);
+  });
+
+  it("offers the choice only for the member's own remix tile", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const root = await publish(t, alice);
+    const remixTile = await tile(t, bob.userId, root.workId);
+    expect(await bob.as.query(api.lineage.publishOptions, { generationId: remixTile })).toEqual({
+      parentCr: "101-001",
+      parentTitle: undefined,
+      family: 101,
+    });
+    expect(await alice.as.query(api.lineage.publishOptions, { generationId: remixTile })).toBeNull();
+    expect(await t.query(api.lineage.publishOptions, { generationId: remixTile })).toBeNull();
+    expect(await bob.as.query(api.lineage.publishOptions, { generationId: await tile(t, bob.userId) })).toBeNull();
+  });
+});
+
+describe("work page lineage", () => {
+  it("shows the trail across a fork, direct remixes, the family, and shares", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const cara = await member(t, "cara");
+    const root = await publish(t, alice);
+    const variation = await publish(t, bob, root.workId);
+    const fork = await publish(t, cara, variation.workId, "fork");
+    const deep = await publish(t, alice, fork.workId);
+
+    const trail = await t.query(api.lineage.trail, { cr: deep.cr });
+    expect(trail?.steps.map((step) => [step.cr, step.via, step.username])).toEqual([
+      ["102-001", "variation", "cara"],
+      ["101-002", "fork", "bob"],
+      ["101-001", "variation", "alice"],
+    ]);
+    expect(trail).toMatchObject({ kind: "variation", amended: false, pending: false, broken: false });
+
+    const remixes = await t.query(api.lineage.directRemixes, {
+      cr: variation.cr,
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    expect(remixes.page.map((card) => [card.cr, card.kind])).toEqual([["102-001", "fork"]]);
+
+    const family = await t.query(api.lineage.family, { cr: root.cr });
+    expect(family?.works.map((card) => card.cr)).toEqual(["101-001", "101-002"]);
+
+    const panel = await t.query(api.workEconomics.panel, { cr: deep.cr });
+    expect(panel?.shares).toEqual([
+      { username: "alice", roles: ["creator"], bps: 5000 },
+      { username: "cara", roles: ["family_root"], bps: 3000 },
+      { username: "bob", roles: ["upstream"], bps: 2000 },
+    ]);
+    expect(panel).toMatchObject({ configVersion: 1, configPath: "/economics/v1.json", provenance: "pending" });
+    expect(panel?.configSha256).toMatch(/^[0-9a-f]{64}$/u);
+    expect(panel!.shares.reduce((sum, share) => sum + share.bps, 0)).toBe(10000);
+  });
+
+  it("returns nothing for unpublished or unknown works", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const root = await publish(t, alice);
+    await t.run((ctx) => ctx.db.patch("works", root.workId, { status: "preparing" }));
+    expect(await t.query(api.lineage.trail, { cr: root.cr })).toBeNull();
+    expect(await t.query(api.workEconomics.panel, { cr: "999-001" })).toBeNull();
+    expect(await t.query(api.lineage.family, { cr: "nonsense" })).toBeNull();
+  });
+});
+
+describe("lineage amendments", () => {
+  async function setup() {
+    const t = newTest();
+    const owner = await member(t, "owner", "super_admin_owner");
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const a = await publish(t, alice); // 101-001
+    const g = await publish(t, bob); // 102-001
+    const fork = await publish(t, bob, a.workId, "fork"); // 103-001
+    const child = await publish(t, alice, fork.workId); // 103-002
+    return { t, owner, alice, bob, a, g, fork, child };
+  }
+
+  it("refuses non-admins", async () => {
+    const { alice, fork } = await setup();
+    await expect(
+      alice.as.mutation(api.lineage.requestAmendment, { cr: fork.cr, newKind: "original", reason: "mine" }),
+    ).rejects.toThrow(/Only admins/);
+    await expect(alice.as.query(api.lineage.adminHistory, {})).rejects.toThrow(/Only admins/);
+  });
+
+  it("validates like the registry", async () => {
+    const { owner, a, fork, child } = await setup();
+    const request = (cr: string, newKind: "original" | "variation" | "fork", newParentCr?: string) =>
+      owner.as.mutation(api.lineage.requestAmendment, { cr, newKind, newParentCr, reason: "fix" });
+    await expect(request(child.cr, "fork", a.cr)).rejects.toThrow(/keeps its kind/);
+    await expect(request(fork.cr, "fork", child.cr)).rejects.toThrow(/another family/);
+    await expect(request(a.cr, "fork", child.cr)).rejects.toThrow(/would loop/);
+    await expect(request(fork.cr, "fork", a.cr)).rejects.toThrow(/already its lineage/);
+    await expect(
+      owner.as.mutation(api.lineage.requestAmendment, { cr: fork.cr, newKind: "original", reason: "  " }),
+    ).rejects.toThrow(/why/);
+  });
+
+  it("moves requested -> confirmed offchain, changes the effective parent, and leaves descendants alone", async () => {
+    const { t, owner, a, g, fork, child } = await setup();
+    const id = await owner.as.mutation(api.lineage.requestAmendment, {
+      cr: fork.cr,
+      newKind: "fork",
+      newParentCr: g.cr,
+      reason: "It was forked from 102-001",
+    });
+    // Requested is not effective, but the page says a correction is pending.
+    let trail = await t.query(api.lineage.trail, { cr: fork.cr });
+    expect(trail?.steps.map((step) => step.cr)).toEqual([a.cr]);
+    expect(trail).toMatchObject({ pending: true, amended: false });
+    await expect(
+      owner.as.mutation(api.lineage.requestAmendment, { cr: fork.cr, newKind: "original", reason: "again" }),
+    ).rejects.toThrow(/already has a correction/);
+
+    await owner.as.mutation(api.lineage.confirmOffchain, { amendmentId: id });
+    const doc = (await getWork(t, fork.workId))!;
+    expect(doc).toMatchObject({ parentWorkId: a.workId, kind: "fork", effectiveParentWorkId: g.workId, effectiveKind: "fork" });
+    trail = await t.query(api.lineage.trail, { cr: fork.cr });
+    expect(trail?.steps.map((step) => step.cr)).toEqual([g.cr]);
+    expect(trail).toMatchObject({ pending: false, amended: true });
+    expect(trail?.history[0]).toMatchObject({
+      status: "confirmed",
+      fromParentCr: a.cr,
+      newParentCr: g.cr,
+      offchainOnly: true,
+    });
+
+    // The descendant keeps its parent; its trail now runs through the new upstream.
+    expect((await getWork(t, child.workId))!.effectiveParentWorkId).toBe(fork.workId);
+    const childTrail = await t.query(api.lineage.trail, { cr: child.cr });
+    expect(childTrail?.steps.map((step) => step.cr)).toEqual([fork.cr, g.cr]);
+
+    // Direct remixes follow the effective parent.
+    const page = { numItems: 10, cursor: null };
+    expect((await t.query(api.lineage.directRemixes, { cr: a.cr, paginationOpts: page })).page).toEqual([]);
+    expect(
+      (await t.query(api.lineage.directRemixes, { cr: g.cr, paginationOpts: page })).page.map((card) => card.cr),
+    ).toEqual([fork.cr]);
+
+    // Shares follow too: upstream is now bob (g's creator), not alice.
+    const panel = await t.query(api.workEconomics.panel, { cr: child.cr });
+    expect(panel?.shares.find((share) => share.roles.includes("upstream"))?.username).toBe("bob");
+  });
+
+  it("makes a fork an original", async () => {
+    const { t, owner, fork } = await setup();
+    const id = await owner.as.mutation(api.lineage.requestAmendment, { cr: fork.cr, newKind: "original", reason: "New design" });
+    await owner.as.mutation(api.lineage.confirmOffchain, { amendmentId: id });
+    const doc = (await getWork(t, fork.workId))!;
+    expect(doc.effectiveKind).toBe("original");
+    expect(doc.effectiveParentWorkId).toBeUndefined();
+    const panel = await t.query(api.workEconomics.panel, { cr: fork.cr });
+    expect(panel?.shares).toEqual([{ username: "bob", roles: ["creator"], bps: 10000 }]);
+  });
+
+  it("refuses offchain confirmation while chain writes are on, and runs the chain path", async () => {
+    const { t, owner, fork, g } = await setup();
+    await t.run((ctx) => ctx.db.insert("featureFlags", { key: "chain.writes", enabled: true }));
+    const id = await owner.as.mutation(api.lineage.requestAmendment, {
+      cr: fork.cr,
+      newKind: "fork",
+      newParentCr: g.cr,
+      reason: "fix",
+    });
+    await expect(owner.as.mutation(api.lineage.confirmOffchain, { amendmentId: id })).rejects.toThrow(/on Monad/);
+
+    const queued = await t.query(internal.lineage.requestedForChain, {});
+    expect(queued).toEqual([expect.objectContaining({ amendmentId: id, chainSequence: 1, newKind: "fork", newParentId: g.workId })]);
+    // Can't confirm before submitting.
+    expect(await t.mutation(internal.lineage.markConfirmed, { amendmentId: id })).toBe(false);
+    expect(await t.mutation(internal.lineage.markSubmitted, { amendmentId: id, chainWriteId: "w1" })).toBe(true);
+    expect(await t.mutation(internal.lineage.markSubmitted, { amendmentId: id, chainWriteId: "w1" })).toBe(true);
+    expect((await getWork(t, fork.workId))!.effectiveKind).toBeUndefined();
+    expect(await t.mutation(internal.lineage.markConfirmed, { amendmentId: id, confirmedAt: 1234 })).toBe(true);
+    expect(await t.mutation(internal.lineage.markConfirmed, { amendmentId: id })).toBe(true);
+    expect((await getWork(t, fork.workId))!).toMatchObject({ effectiveParentWorkId: g.workId, lineageAmendedAt: 1234 });
+
+    // The next onchain amendment gets sequence 2.
+    const second = await owner.as.mutation(api.lineage.requestAmendment, { cr: fork.cr, newKind: "original", reason: "again" });
+    const row = await t.run((ctx) => ctx.db.get("lineageAmendments", second));
+    expect(row).toMatchObject({ sequence: 2, chainSequence: 2 });
+  });
+
+  it("keeps a rejected amendment out of the lineage and off the public page", async () => {
+    const { t, owner, fork, g, a } = await setup();
+    await t.run((ctx) => ctx.db.insert("featureFlags", { key: "chain.writes", enabled: true }));
+    const id = await owner.as.mutation(api.lineage.requestAmendment, {
+      cr: fork.cr,
+      newKind: "fork",
+      newParentCr: g.cr,
+      reason: "fix",
+    });
+    await t.mutation(internal.lineage.markSubmitted, { amendmentId: id, chainWriteId: "w1" });
+    expect(await t.mutation(internal.lineage.markRejected, { amendmentId: id, reason: "reverted" })).toBe(true);
+    expect(await t.mutation(internal.lineage.markConfirmed, { amendmentId: id })).toBe(false);
+    expect((await getWork(t, fork.workId))!.effectiveParentWorkId).toBe(a.workId);
+    const trail = await t.query(api.lineage.trail, { cr: fork.cr });
+    expect(trail).toMatchObject({ pending: false, amended: false, history: [] });
+    const history = await owner.as.query(api.lineage.adminHistory, {});
+    expect(history.amendments[0]).toMatchObject({ status: "rejected", rejectReason: "reverted", admin: "owner" });
+    // A rejected sequence doesn't consume the chain sequence.
+    const next = await owner.as.mutation(api.lineage.requestAmendment, { cr: fork.cr, newKind: "original", reason: "x" });
+    expect(await t.run((ctx) => ctx.db.get("lineageAmendments", next))).toMatchObject({ sequence: 2, chainSequence: 1 });
+  });
+
+  it("refuses a stale offchain confirmation and lets an admin cancel", async () => {
+    const { t, owner, fork, g } = await setup();
+    const id = await owner.as.mutation(api.lineage.requestAmendment, {
+      cr: fork.cr,
+      newKind: "fork",
+      newParentCr: g.cr,
+      reason: "fix",
+    });
+    await t.run((ctx) => ctx.db.patch("works", fork.workId, { effectiveKind: "original", effectiveParentWorkId: undefined }));
+    await expect(owner.as.mutation(api.lineage.confirmOffchain, { amendmentId: id })).rejects.toThrow(/changed since/);
+    await owner.as.mutation(api.lineage.cancelAmendment, { amendmentId: id });
+    expect(await t.run((ctx) => ctx.db.get("lineageAmendments", id))).toMatchObject({ status: "rejected", rejectReason: "cancelled" });
+  });
+
+  it("shows an admin the work's lineage before correcting", async () => {
+    const { owner, fork, a } = await setup();
+    expect(await owner.as.query(api.lineage.adminWork, { cr: fork.cr })).toMatchObject({
+      kind: "fork",
+      parentCr: a.cr,
+      effectiveKind: "fork",
+      effectiveParentCr: a.cr,
+      allowedKinds: ["original", "fork"],
+      open: false,
+    });
+  });
+});
+
+describe("backfillEffectiveParents", () => {
+  it("fills old remixes' effective parent once", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const root = await publish(t, alice);
+    const child = await publish(t, alice, root.workId);
+    await t.run((ctx) => ctx.db.patch("works", child.workId, { effectiveParentWorkId: undefined }));
+    expect(await t.mutation(internal.lineage.backfillEffectiveParents, {})).toEqual({ updated: 1, cursor: null });
+    expect((await getWork(t, child.workId))!.effectiveParentWorkId).toBe(root.workId);
+    expect(await t.mutation(internal.lineage.backfillEffectiveParents, {})).toEqual({ updated: 0, cursor: null });
+  });
+});
