@@ -180,6 +180,14 @@ export const cultremixTables = {
     kind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
     parentWorkId: v.optional(v.id("works")),
     familyRootId: v.optional(v.id("works")),
+    // Effective lineage (convex/lib/lineage.ts). effectiveParentWorkId is set at publish and when a
+    // lineage amendment confirms; effectiveKind only when an amendment confirms (so a set value
+    // means "amended", and an amended original has no effective parent).
+    effectiveParentWorkId: v.optional(v.id("works")),
+    effectiveKind: v.optional(
+      v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
+    ),
+    lineageAmendedAt: v.optional(v.number()),
     generationId: v.id("generations"),
     requestId: v.string(),
     title: v.optional(v.string()),
@@ -204,6 +212,7 @@ export const cultremixTables = {
     .index("by_status_publishedAt", ["status", "publishedAt"])
     .index("by_family_expression", ["crFamily", "crExpression"])
     .index("by_parent", ["parentWorkId"])
+    .index("by_effectiveParent_status", ["effectiveParentWorkId", "status", "publishedAt"])
     .index("by_requestId", ["requestId"])
     .index("by_creator", ["creatorId"])
     .index("by_artKey", ["artKey"]),
