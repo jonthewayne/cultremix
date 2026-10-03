@@ -1,7 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
@@ -12,6 +12,7 @@ import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
+import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
 import type { MenuItem } from "~/components/studio/StudioSessions";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
@@ -55,6 +56,10 @@ function StudioPage() {
   const navigate = useNavigate();
   const sessionQuery = useQuery(convexQuery(api.studio.session, s ? { sessionId: s } : "skip"));
   const session = s ? sessionQuery.data : undefined;
+  // The session's batches, newest first; older ones page in as the list scrolls.
+  const batchPages = usePaginatedQuery(api.studio.sessionBatches, s ? { sessionId: s } : "skip", {
+    initialNumItems: PAGE.batches,
+  });
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
   const generate = useMutation(api.studio.generate);
   const startRemix = useMutation(api.studio.startRemix);
@@ -329,7 +334,7 @@ function StudioPage() {
     }
   };
 
-  const batches = session?.batches ?? [];
+  const batches = session ? batchPages.results : [];
   const allTiles: Array<Tile> = useMemo(() => batches.flatMap((b) => b.tiles), [batches]);
   const favorites = allTiles.filter((t) => t.favorite && t.status === "succeeded");
   const tileById = useMemo(() => new Map(allTiles.map((t) => [t.generationId, t])), [allTiles]);
@@ -361,7 +366,7 @@ function StudioPage() {
             <h1 className="text-[18vw] font-black leading-[0.8] tracking-[-0.06em] md:text-[9.5vw]">Studio</h1>
             {session ? (
               <div className="flex flex-col gap-4">
-                <SessionTitle key={session.sessionId} sessionId={session.sessionId} name={session.name} batches={session.batches.length} />
+                <SessionTitle key={session.sessionId} sessionId={session.sessionId} name={session.name} batches={session.batchCount} />
                 {remixInfo && (
                   <div className="flex items-center gap-4">
                     <div
@@ -487,7 +492,7 @@ function StudioPage() {
 
         <section className="mt-16 flex flex-col gap-14">
           {!s && <SessionList onOpen={openSession} />}
-          {loadingSession && <p className="text-neutral-500">Opening the session…</p>}
+          {s && session !== null && batchPages.status === "LoadingFirstPage" && <BatchSkeleton />}
           <AnimatePresence initial={false}>
             {batches.map((batch) => (
               <motion.div
@@ -543,7 +548,9 @@ function StudioPage() {
               </motion.div>
             ))}
           </AnimatePresence>
-          {session && batches.length === 0 && (
+          {session && batchPages.status === "LoadingMore" && <BatchSkeleton />}
+          {session && <LoadMore status={batchPages.status} onMore={() => batchPages.loadMore(PAGE.batches)} label="Show older batches" />}
+          {session && batchPages.status === "Exhausted" && batches.length === 0 && (
             <p className="max-w-lg text-lg text-neutral-500">
               Designs in this session show up here, four at a time, newest on top. Heart the ones you like, then publish one to get its CR number.
             </p>
@@ -665,6 +672,23 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+// A batch still loading: its line and four grey squares, laid out like the real thing.
+function BatchSkeleton() {
+  return (
+    <div aria-hidden="true">
+      <div className="mb-3 flex items-center gap-3 border-t-2 border-neutral-200 pt-3">
+        <Skeleton className="h-4 w-4 rounded-none" />
+        <Skeleton className="h-5 w-1/2 max-w-sm rounded-md" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="aspect-square" />
+        ))}
+      </div>
+    </div>
   );
 }
 
