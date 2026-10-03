@@ -8,6 +8,8 @@ bun run test
 
 The default suite is pure unit tests and does not require Resend, Telnyx, Cloudflare, or production credentials.
 
+`bun run test` runs two suites: the unit tests in `tests/unit` (Node), then the in-memory Convex tests in `tests/convex-local` (`convex-test` in the edge runtime; `bun run test:convex:local` runs only these). The in-memory tests call real queries, mutations, and internal functions against the real schema with no deployment, so domain rules (credits, CR numbers, lineage, follows, orders) are tested there. Start a test with `newTest()` from `tests/convex-local/setup.ts` and use `t.withIdentity({ subject, issuer })` for signed-in calls. Node actions (`"use node"` files) don't run in this harness; keep their logic in pure helpers and test those in `tests/unit`.
+
 Covered helpers:
 
 - role and capability catalogs
