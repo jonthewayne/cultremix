@@ -64,17 +64,25 @@ async function saveImage(
     if (retry) await ctx.scheduler.runAfter(0, internal.imageNotes.analyze, { imageId: existing._id });
     return existing._id;
   }
+  // A published design (usually a remix source) brings the notes written when it was published.
+  const work = await ctx.db
+    .query("works")
+    .withIndex("by_artKey", (q) => q.eq("artKey", args.key))
+    .first();
+  const published = work?.notes
+    ? { analysis: "ready" as const, notes: work.notes, summary: work.notesSummary, kind: work.notesKind, analysisModel: work.notesModel }
+    : { analysis: "pending" as const };
   const imageId = await ctx.db.insert("userImages", {
     ownerId,
     key: args.key,
     sha256: args.sha256,
     width: args.width,
     height: args.height,
-    analysis: "pending",
+    ...published,
     usedAt: now,
     styleAt: args.asStyle ? now : undefined,
   });
-  await ctx.scheduler.runAfter(0, internal.imageNotes.analyze, { imageId });
+  if (published.analysis === "pending") await ctx.scheduler.runAfter(0, internal.imageNotes.analyze, { imageId });
   return imageId;
 }
 
@@ -211,6 +219,64 @@ export const analysisJob = internalQuery({
   handler: async (ctx, args) => {
     const image = await ctx.db.get("userImages", args.imageId);
     return image ? { key: image.key, analysis: image.analysis } : null;
+  },
+});
+
+// ---- Notes on published works (imageNotes.analyzeWork) ----
+
+const notesKind = v.optional(v.union(v.literal("photo"), v.literal("art")));
+
+export const workNotesJob = internalQuery({
+  args: { workId: v.id("works") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      artKey: v.string(),
+      hasNotes: v.boolean(),
+      // The creator's own notes for the same file, when they already wrote them in the studio.
+      copy: v.optional(v.object({ model: v.string(), summary: v.optional(v.string()), kind: notesKind, notes: v.string() })),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const work = await ctx.db.get("works", args.workId);
+    if (!work?.artKey || work.status !== "published") return null;
+    const artKey = work.artKey;
+    const own = await ctx.db
+      .query("userImages")
+      .withIndex("by_owner_key", (q) => q.eq("ownerId", work.creatorId).eq("key", artKey))
+      .first();
+    const copy = own?.analysis === "ready" && own.notes
+      ? { model: own.analysisModel ?? "unknown", summary: own.summary, kind: own.kind, notes: own.notes }
+      : undefined;
+    return { artKey, hasNotes: Boolean(work.notes), copy };
+  },
+});
+
+export const saveWorkNotes = internalMutation({
+  args: { workId: v.id("works"), model: v.string(), summary: v.optional(v.string()), kind: notesKind, notes: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const work = await ctx.db.get("works", args.workId);
+    if (!work || work.notes) return null;
+    await ctx.db.patch("works", work._id, {
+      notes: args.notes,
+      notesSummary: args.summary,
+      notesKind: args.kind,
+      notesModel: args.model,
+    });
+    return null;
+  },
+});
+
+export const worksWithoutNotes = internalQuery({
+  args: {},
+  returns: v.array(v.id("works")),
+  handler: async (ctx) => {
+    const ids = [];
+    for await (const work of ctx.db.query("works").withIndex("by_status_publishedAt", (q) => q.eq("status", "published"))) {
+      if (!work.notes && work.artKey) ids.push(work._id);
+    }
+    return ids;
   },
 });
 

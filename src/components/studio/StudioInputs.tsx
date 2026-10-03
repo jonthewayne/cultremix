@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { MAX_IMAGES, MAX_STYLES } from "../../../convex/lib/studioRules";
 import { Art } from "~/components/cr/Art";
 import { cn } from "~/lib/utils";
 
@@ -11,8 +12,7 @@ import { cn } from "~/lib/utils";
 // Nothing becomes a style unless the member adds it. What the server knows about an image stays
 // there; docs/image-generation/README.md covers both.
 
-export const MAX_IMAGES = 4;
-export const MAX_STYLES = 3;
+export { MAX_IMAGES, MAX_STYLES };
 
 export type Slot = {
   id: string;

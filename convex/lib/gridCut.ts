@@ -261,6 +261,26 @@ export function cutGrid(image: Rgba, options: CutOptions = {}): Array<GridCell> 
     return f >= 0 ? f : f === -1 ? quarterOf(x, y) : -2;
   };
 
+  // One pass: each artwork pixel's cell, and each cell's bounds and area. (Four passes, one per
+  // cell, took most of the cutting time on Convex's small servers.)
+  const cellMap = new Int8Array(width * height).fill(-1);
+  const boundsOf = [0, 1, 2, 3].map(() => ({ minX: width, minY: height, maxX: -1, maxY: -1, area: 0 }));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!mask[i]) continue;
+      const c = cellOf(i, x, y);
+      cellMap[i] = c;
+      if (c < 0) continue;
+      const b = boundsOf[c];
+      b.area++;
+      if (x < b.minX) b.minX = x;
+      if (x > b.maxX) b.maxX = x;
+      if (y < b.minY) b.minY = y;
+      if (y > b.maxY) b.maxY = y;
+    }
+  }
+
   const minArea = Math.round((width * height) / 4 * 0.002);
   const cells: Array<GridCell> = [];
   for (let cell = 0; cell < 4; cell++) {
@@ -268,23 +288,7 @@ export function cutGrid(image: Rgba, options: CutOptions = {}): Array<GridCell> 
       cells.push({ index: cell, tile: null, reason: "merged" });
       continue;
     }
-    let minX = width;
-    let minY = height;
-    let maxX = -1;
-    let maxY = -1;
-    let area = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = y * width + x;
-        if (mask[i] && cellOf(i, x, y) === cell) {
-          area++;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
+    const { minX, minY, maxX, maxY, area } = boundsOf[cell];
     if (area < minArea) {
       cells.push({ index: cell, tile: null, reason: "empty" });
       continue;
@@ -302,7 +306,7 @@ export function cutGrid(image: Rgba, options: CutOptions = {}): Array<GridCell> 
     for (let y = ry0; y <= ry1; y++) {
       for (let x = rx0; x <= rx1; x++) {
         const i = y * width + x;
-        if (mask[i] && cellOf(i, x, y) === cell) ours[(y - ry0) * rw + (x - rx0)] = 1;
+        if (cellMap[i] === cell) ours[(y - ry0) * rw + (x - rx0)] = 1;
       }
     }
     let near = ours;
@@ -341,7 +345,7 @@ export function cutGrid(image: Rgba, options: CutOptions = {}): Array<GridCell> 
         const r = (y - ry0) * rw + (x - rx0);
         if (!near[r]) continue;
         const i = y * width + x;
-        const owner = mask[i] ? cellOf(i, x, y) : cell;
+        const owner = mask[i] ? cellMap[i] : cell;
         if (owner !== cell) continue;
         const s = i * 4;
         const d = ((y - minY + margin) * tw + (x - minX + margin)) * 4;
@@ -359,4 +363,3 @@ export function cutGrid(image: Rgba, options: CutOptions = {}): Array<GridCell> 
   }
   return cells;
 }
-

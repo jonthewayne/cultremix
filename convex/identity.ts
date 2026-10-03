@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { validateUsername } from "./lib/username";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -139,3 +139,23 @@ export const completeOnboarding = mutation({
     return await toViewer(ctx, { ...user, ...patch });
   },
 });
+
+// Gives a member credits by email: bunx convex run identity:grantCredits '{"email":"…","amount":10}'
+// (production: --prod). Internal, so only someone with deploy access can run it.
+export const grantCredits = internalMutation({
+  args: { email: v.string(), amount: v.number(), note: v.optional(v.string()) },
+  returns: v.object({ username: v.optional(v.string()), credits: v.number() }),
+  handler: async (ctx, args) => {
+    if (!Number.isInteger(args.amount) || args.amount <= 0 || args.amount > 1000) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Grant 1 to 1000 credits." });
+    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
+      .first();
+    if (!user) throw new ConvexError({ code: "NOT_FOUND", message: "No member with that email." });
+    await ctx.db.insert("creditLedger", { userId: user._id, kind: "grant", amount: args.amount, reason: "admin", note: args.note });
+    return { username: user.username, credits: await creditBalance(ctx, user._id) };
+  },
+});
+

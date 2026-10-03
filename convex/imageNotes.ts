@@ -4,6 +4,7 @@ import { gateway } from "@ai-sdk/gateway";
 import { generateText } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { mimeOf } from "./imageGen";
 import { decodeRgba, encodeRgba } from "./lib/gridCut";
@@ -45,6 +46,40 @@ function onGray(bytes: Uint8Array) {
   }
 }
 
+// One image's notes from the vision model (STYLE_NOTES_PROMPT), tried twice.
+async function writeNotes(original: Uint8Array, model: string) {
+  let lastError = "Style capture failed.";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { bytes, transparent } = onGray(original);
+      const ask = transparent
+        ? "Write the notes for this image. The flat gray around the design is a transparent background, not part of the design."
+        : "Write the notes for this image.";
+      const result = await generateText({
+        model: gateway(model),
+        system: STYLE_NOTES_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "file", data: bytes, mediaType: mimeOf(bytes) },
+              { type: "text", text: ask },
+            ],
+          },
+        ],
+        providerOptions: { openai: { reasoningEffort: "low" } },
+        maxRetries: 0,
+        abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      return { ok: true as const, ...parseStyleNotes(result.text) };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      console.error("imageNotes attempt failed", attempt, lastError);
+    }
+  }
+  return { ok: false as const, error: lastError };
+}
+
 export const analyze = internalAction({
   args: { imageId: v.id("userImages") },
   returns: v.null(),
@@ -56,40 +91,70 @@ export const analyze = internalAction({
       await ctx.runMutation(internal.images.saveAnalysis, { imageId, model, error: "Style capture is not configured." });
       return null;
     }
-    let lastError = "Style capture failed.";
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const { bytes, transparent } = onGray(await fetchPublicImage(job.key, ctx));
-        const ask = transparent
-          ? "Write the notes for this image. The flat gray around the design is a transparent background, not part of the design."
-          : "Write the notes for this image.";
-        const started = Date.now();
-        const result = await generateText({
-          model: gateway(model),
-          system: STYLE_NOTES_PROMPT,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "file", data: bytes, mediaType: mimeOf(bytes) },
-                { type: "text", text: ask },
-              ],
-            },
-          ],
-          providerOptions: { openai: { reasoningEffort: "low" } },
-          maxRetries: 0,
-          abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-        const parsed = parseStyleNotes(result.text);
-        console.log("imageNotes ok", imageId, Date.now() - started, "ms", parsed.kind, parsed.summary);
-        await ctx.runMutation(internal.images.saveAnalysis, { imageId, model, ...parsed });
-        return null;
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
-        console.error("imageNotes failed", imageId, attempt, lastError);
-      }
+    const started = Date.now();
+    let bytes: Uint8Array;
+    try {
+      bytes = await fetchPublicImage(job.key, ctx);
+    } catch (error) {
+      await ctx.runMutation(internal.images.saveAnalysis, { imageId, model, error: error instanceof Error ? error.message : "Image unavailable." });
+      return null;
     }
-    await ctx.runMutation(internal.images.saveAnalysis, { imageId, model, error: lastError });
+    const result = await writeNotes(bytes, model);
+    if (!result.ok) {
+      await ctx.runMutation(internal.images.saveAnalysis, { imageId, model, error: result.error });
+      return null;
+    }
+    const { ok: _ok, ...parsed } = result;
+    console.log("imageNotes ok", imageId, Date.now() - started, "ms", parsed.kind, parsed.summary);
+    await ctx.runMutation(internal.images.saveAnalysis, { imageId, model, ...parsed });
     return null;
+  },
+});
+
+// Notes for a published design, written once and kept on the work, so everyone who remixes it
+// starts from them: what it shows, every piece of its text, and how it looks. The creator's own
+// notes for the same file are reused when they exist.
+export const analyzeWork = internalAction({
+  args: { workId: v.id("works") },
+  returns: v.null(),
+  handler: async (ctx, { workId }) => {
+    const job = await ctx.runQuery(internal.images.workNotesJob, { workId });
+    if (!job || job.hasNotes) return null;
+    if (job.copy) {
+      await ctx.runMutation(internal.images.saveWorkNotes, { workId, ...job.copy });
+      return null;
+    }
+    const model = process.env.STYLE_NOTES_MODEL ?? DEFAULT_MODEL;
+    if (!process.env.AI_GATEWAY_API_KEY || job.artKey.startsWith("fake:")) return null;
+    const result = await writeNotes(await fetchPublicImage(job.artKey, ctx), model);
+    if (!result.ok) {
+      console.error("analyzeWork failed", workId, result.error);
+      return null;
+    }
+    const { ok: _ok, ...parsed } = result;
+    if (!parsed.notes) return null;
+    await ctx.runMutation(internal.images.saveWorkNotes, { workId, model, ...parsed, notes: parsed.notes });
+    return null;
+  },
+});
+
+// Writes notes for published works that don't have them: bunx convex run imageNotes:backfillWorks
+// (production: --prod). Safe to run again.
+export const backfillWorks = internalAction({
+  args: {},
+  returns: v.object({ checked: v.number(), written: v.number() }),
+  handler: async (ctx): Promise<{ checked: number; written: number }> => {
+    const workIds: Array<Id<"works">> = await ctx.runQuery(internal.images.worksWithoutNotes, {});
+    let written = 0;
+    for (let i = 0; i < workIds.length; i += 4) {
+      await Promise.all(
+        workIds.slice(i, i + 4).map(async (workId) => {
+          await ctx.runAction(internal.imageNotes.analyzeWork, { workId });
+          written++;
+        }),
+      );
+    }
+    console.log("imageNotes.backfillWorks done", { checked: workIds.length, written });
+    return { checked: workIds.length, written };
   },
 });

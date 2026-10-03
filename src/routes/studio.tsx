@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { BATCH_CREDITS } from "../../convex/lib/studioRules";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
@@ -348,7 +349,7 @@ function StudioPage() {
   const remixInfo = session?.remix;
   const count = images.length;
   const ink = inkOn(color);
-  const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < 4);
+  const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < BATCH_CREDITS);
   const loadingSession = Boolean(s && session === undefined);
 
   return (
@@ -473,7 +474,7 @@ function StudioPage() {
                 {outOfCredits ? "Out of credits" : busy ? "Starting…" : uploading ? "Uploading…" : "Generate 4"}
               </button>
               <span className="text-sm text-neutral-600">
-                {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · 4 per batch`}
+                {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · ${BATCH_CREDITS} per batch`}
               </span>
             </div>
             {error && (
@@ -520,12 +521,18 @@ function StudioPage() {
                   {batch.tiles.some((t) => t.status === "queued" || t.status === "dispatched") && (
                     <Elapsed since={batch.createdAt} />
                   )}
+                  {batch.refunded ? (
+                    <span className="shrink-0 text-sm font-semibold text-neutral-500">
+                      {batch.refunded} {batch.refunded === 1 ? "credit" : "credits"} back
+                    </span>
+                  ) : null}
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
                   {batch.tiles.map((tile) => (
                     <TileCard
                       key={tile.generationId}
                       tile={tile}
+                      grid={batch.grid}
                       onOpen={() => openViewer(tile, batch.tiles)}
                       onPublish={() => setPublishing(tile)}
                       onInspire={() => useAsImage(tile)}
@@ -663,12 +670,15 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
 
 function TileCard({
   tile,
+  grid,
   onOpen,
   onPublish,
   onInspire,
   onStyle,
 }: {
   tile: Tile;
+  // Grid batches give credits back per batch (shown on the batch line), not per design.
+  grid: boolean;
   onOpen: () => void;
   onPublish: () => void;
   onInspire: () => void;
@@ -689,13 +699,17 @@ function TileCard({
         <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center md:p-4">
           <span className="text-lg font-black leading-tight">Blocked by filter</span>
           <span className="mt-1 max-w-[16rem] text-xs opacity-70">
-            Shittles, this got flagged for some reason. Please try again if you think we got this wrong. Credit’s back.
+            Shittles, this got flagged for some reason. Please try again if you think we got this wrong.
+            {grid ? "" : " Credit’s back."}
           </span>
         </div>
       ) : failed ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
           <span className="text-lg font-black">Didn’t work</span>
-          <span className="mt-1 line-clamp-3 text-xs opacity-70">{tile.error ?? "Try again."} Credit refunded.</span>
+          <span className="mt-1 line-clamp-3 text-xs opacity-70">
+            {tile.error ?? "Try again."}
+            {grid ? "" : " Credit refunded."}
+          </span>
         </div>
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">

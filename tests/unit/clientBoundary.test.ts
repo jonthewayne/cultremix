@@ -10,6 +10,7 @@ const BROWSER_SAFE = new Set([
   "convex/_generated/api.js",
   "convex/lib/authz.ts",
   "convex/lib/colors.ts",
+  "convex/lib/studioRules.ts",
   "convex/lib/username.ts",
 ]);
 

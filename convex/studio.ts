@@ -6,19 +6,17 @@ import { creditBalance, getViewerUser, isOwner } from "./identity";
 import { isBlockedError, publicTileError } from "./lib/imageErrors";
 import { imageUrlReader } from "./lib/imageUrls";
 import { styleShares } from "./lib/prompts";
+import type { ImageRole } from "./lib/prompts";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
+import { BATCH_CREDITS, DESIGNS_PER_BATCH, MAX_IMAGES, MAX_STYLES, creditsBack } from "./lib/studioRules";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 type Ctx = QueryCtx | MutationCtx;
 
-export const TILES_PER_BATCH = 4;
 export const MODEL_TEXT = "openai/gpt-image-2.5-flare";
 export const MODEL_EDIT = "openai/gpt-image-2.5-sunburst";
-// The studio's limits: numbered images to work on, and styles in the mixer.
-export const MAX_IMAGES = 4;
-export const MAX_STYLES = 3;
 const HEX = /^#[0-9a-f]{6}$/iu;
 // An image a member can bring into the studio: a design or upload in its folder (convex/lib/sizes.ts),
 // an older key from before folders, or a Convex storage key.
@@ -64,6 +62,9 @@ const batchView = v.object({
   images: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()) })),
   // The style mix as thumbnails and shares; what the styles were read as stays on the server.
   styles: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), share: v.number() })),
+  // A grid batch is charged as a whole; refunded is the credits it gave back for missing designs.
+  grid: v.boolean(),
+  refunded: v.optional(v.number()),
   tiles: v.array(tileView),
 });
 
@@ -163,9 +164,18 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
       .collect();
     generations.sort((a, b) => a.index - b.index);
-    const shares = styleShares((batch.styles ?? []).map((s) => s.weight));
+    // The mixer's styles plus images the request named for their look (as studioPrompt reads them).
+    const mix = (batch.styles ?? []).map((s) => ({ imageId: s.imageId, key: s.key, weight: s.weight }));
+    for (const [i, role] of (batch.roles ?? []).entries()) {
+      const image = batch.images?.[i];
+      if (!image || role === "content") continue;
+      const at = mix.findIndex((s) => s.imageId === image.imageId);
+      if (at < 0) mix.push({ imageId: image.imageId, key: image.key, weight: 100 });
+      else if (mix[at].weight <= 0) mix[at] = { ...mix[at], weight: 100 };
+    }
+    const shares = styleShares(mix.map((s) => s.weight));
     const styles = [];
-    for (const [i, style] of (batch.styles ?? []).entries()) {
+    for (const [i, style] of mix.entries()) {
       if (shares[i] <= 0) continue;
       const { url, thumbUrl } = await urls(style.key);
       styles.push({ url, thumbUrl, share: shares[i] });
@@ -203,6 +213,8 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       inspirationUrl: publicUrl(batch.inspirationKey),
       images,
       styles,
+      grid: batch.layout === "grid",
+      refunded: batch.refunded,
       tiles,
     });
   }
@@ -526,7 +538,14 @@ export const generate = mutation({
     }
     if (!(await flagEnabled(ctx, "gen.vercel"))) return { refused: "GENERATION_OFF" as const };
     const owner = isOwner(user);
-    if (!owner && (await creditBalance(ctx, user._id)) < TILES_PER_BATCH) {
+    const chatgpt = Boolean(process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID);
+    const forced = process.env.IMAGE_PROVIDER;
+    const provider = forced === "gateway" || forced === "chatgpt" ? forced : chatgpt ? "chatgpt" : "gateway";
+    // A grid (one call cut into four) on the gateway; the ChatGPT path and STUDIO_LAYOUT=single
+    // make four separate designs, charged one credit each.
+    const layout = provider === "gateway" && process.env.STUDIO_LAYOUT !== "single" ? "grid" : "single";
+    const price = layout === "grid" ? BATCH_CREDITS : DESIGNS_PER_BATCH;
+    if (!owner && (await creditBalance(ctx, user._id)) < price) {
       return { refused: "NO_CREDITS" as const };
     }
 
@@ -552,9 +571,6 @@ export const generate = mutation({
     }
     const inspirationKey = images[0]?.key ?? legacyKey;
     const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
-    const chatgpt = Boolean(process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID);
-    const forced = process.env.IMAGE_PROVIDER;
-    const provider = forced === "gateway" || forced === "chatgpt" ? forced : chatgpt ? "chatgpt" : "gateway";
     const model = provider === "chatgpt"
       ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
       : attached > 0
@@ -571,9 +587,14 @@ export const generate = mutation({
       backgroundColor: args.backgroundColor.toLowerCase(),
       operation,
       model,
-      count: TILES_PER_BATCH,
+      count: DESIGNS_PER_BATCH,
+      layout,
+      charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
     });
-    for (let index = 0; index < TILES_PER_BATCH; index++) {
+    if (layout === "grid" && !owner) {
+      await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
+    }
+    for (let index = 0; index < DESIGNS_PER_BATCH; index++) {
       const generationId = await ctx.db.insert("generations", {
         sessionId: session._id,
         batchId,
@@ -583,19 +604,16 @@ export const generate = mutation({
         status: "queued",
         provider,
         model,
-        charged: !owner,
+        // Grid designs are charged with their batch.
+        charged: layout === "single" && !owner,
         favorite: false,
       });
-      if (!owner) {
-        await ctx.db.insert("creditLedger", {
-          userId: user._id,
-          kind: "settle",
-          amount: -1,
-          generationId,
-        });
+      if (layout === "single") {
+        if (!owner) await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -1, generationId });
+        await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
       }
-      await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
     }
+    if (layout === "grid") await ctx.scheduler.runAfter(0, internal.imageGen.runBatch, { batchId });
     for (const image of images) await ctx.db.patch("userImages", image.imageId, { usedAt: now });
     for (const style of styles) {
       await ctx.db.patch("userImages", style.imageId, { usedAt: now, styleAt: now });
@@ -629,7 +647,7 @@ export const toggleFavorite = mutation({
   },
 });
 
-// ---- Internal steps used by imageGen.runTile ----
+// ---- Internal steps used by imageGen.runTile and imageGen.runBatch ----
 
 const attachmentView = v.object({
   key: v.string(),
@@ -640,75 +658,187 @@ const attachmentView = v.object({
   notes: v.optional(v.string()),
 });
 
+const jobInputs = {
+  instruction: v.string(),
+  presets: v.array(v.string()),
+  model: v.string(),
+  provider: v.string(),
+  remixOfParent: v.boolean(),
+  // Every image sent with the call: the numbered images, then images added only as styles.
+  attachments: v.array(attachmentView),
+  // Each style's 1-based attachment number and slider value.
+  styles: v.array(v.object({ attachment: v.number(), weight: v.number() })),
+};
+
+// What a batch's prompt is built from.
+async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
+  // A remix keeps the parent's look only while the parent is still the reference image.
+  let remixOfParent = false;
+  if (batch.operation === "remix" && batch.inspirationKey) {
+    const session = await ctx.db.get("creativeSessions", batch.sessionId);
+    const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
+    remixOfParent = parent?.artKey === batch.inspirationKey;
+  }
+  const describe = async (imageId: Id<"userImages">, key: string, styleOnly: boolean) => {
+    const image = await ctx.db.get("userImages", imageId);
+    return {
+      key,
+      styleOnly,
+      analysis: image?.analysis,
+      summary: image?.summary,
+      kind: image?.kind,
+      notes: image?.notes,
+    };
+  };
+  const attachments: Array<Infer<typeof attachmentView>> = [];
+  const styles: Array<{ attachment: number; weight: number }> = [];
+  if (batch.images || batch.styles) {
+    const workIds = (batch.images ?? []).map((image) => image.imageId);
+    for (const image of batch.images ?? []) attachments.push(await describe(image.imageId, image.key, false));
+    for (const style of batch.styles ?? []) {
+      if (style.weight <= 0) continue;
+      let index = workIds.indexOf(style.imageId);
+      if (index < 0) {
+        attachments.push(await describe(style.imageId, style.key, true));
+        index = attachments.length - 1;
+      }
+      styles.push({ attachment: index + 1, weight: style.weight });
+    }
+  } else if (batch.inspirationKey) {
+    attachments.push({ key: batch.inspirationKey, styleOnly: false });
+  }
+  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, attachments, styles };
+}
+
 export const tileJob = internalQuery({
   args: { generationId: v.id("generations") },
-  returns: v.union(
-    v.null(),
-    v.object({
-      status: tileStatus,
-      instruction: v.string(),
-      presets: v.array(v.string()),
-      model: v.string(),
-      provider: v.string(),
-      remixOfParent: v.boolean(),
-      // Every image sent with the call: the numbered images, then images added only as styles.
-      attachments: v.array(attachmentView),
-      // Each style's 1-based attachment number and slider value.
-      styles: v.array(v.object({ attachment: v.number(), weight: v.number() })),
-    }),
-  ),
+  returns: v.union(v.null(), v.object({ status: tileStatus, ...jobInputs })),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation) return null;
     const batch = await ctx.db.get("batches", generation.batchId);
     if (!batch) return null;
-    // A remix keeps the parent's look only while the parent is still the reference image.
-    let remixOfParent = false;
-    if (batch.operation === "remix" && batch.inspirationKey) {
-      const session = await ctx.db.get("creativeSessions", batch.sessionId);
-      const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
-      remixOfParent = parent?.artKey === batch.inspirationKey;
-    }
-    const describe = async (imageId: Id<"userImages">, key: string, styleOnly: boolean) => {
-      const image = await ctx.db.get("userImages", imageId);
-      return {
-        key,
-        styleOnly,
-        analysis: image?.analysis,
-        summary: image?.summary,
-        kind: image?.kind,
-        notes: image?.notes,
-      };
-    };
-    const attachments: Array<Infer<typeof attachmentView>> = [];
-    const styles: Array<{ attachment: number; weight: number }> = [];
-    if (batch.images || batch.styles) {
-      const workIds = (batch.images ?? []).map((image) => image.imageId);
-      for (const image of batch.images ?? []) attachments.push(await describe(image.imageId, image.key, false));
-      for (const style of batch.styles ?? []) {
-        if (style.weight <= 0) continue;
-        let index = workIds.indexOf(style.imageId);
-        if (index < 0) {
-          attachments.push(await describe(style.imageId, style.key, true));
-          index = attachments.length - 1;
-        }
-        styles.push({ attachment: index + 1, weight: style.weight });
-      }
-    } else if (batch.inspirationKey) {
-      attachments.push({ key: batch.inspirationKey, styleOnly: false });
-    }
     return {
       status: generation.status,
-      instruction: batch.instruction,
-      presets: batch.presets,
       model: generation.model,
       provider: generation.provider,
-      remixOfParent,
-      attachments,
-      styles,
+      ...(await batchInputs(ctx, batch)),
     };
   },
 });
+
+export const batchJob = internalQuery({
+  args: { batchId: v.id("batches") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      ...jobInputs,
+      // The batch's four designs, in grid order (top left, top right, bottom left, bottom right).
+      tiles: v.array(v.object({ generationId: v.id("generations"), index: v.number(), status: tileStatus })),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const batch = await ctx.db.get("batches", args.batchId);
+    if (!batch) return null;
+    const generations = await ctx.db
+      .query("generations")
+      .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
+      .collect();
+    if (generations.length === 0) return null;
+    generations.sort((a, b) => a.index - b.index);
+    return {
+      model: generations[0].model,
+      provider: generations[0].provider,
+      ...(await batchInputs(ctx, batch)),
+      tiles: generations.map((g) => ({ generationId: g._id, index: g.index, status: g.status })),
+    };
+  },
+});
+
+// Claims a grid batch's designs for one runBatch; false if they're already claimed or generation
+// is paused (then the batch fails and its credits come back).
+export const markBatchDispatched = internalMutation({
+  args: { batchId: v.id("batches") },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const generations = await ctx.db
+      .query("generations")
+      .withIndex("by_batch", (q) => q.eq("batchId", args.batchId))
+      .collect();
+    if (generations.length === 0 || generations.some((g) => g.status !== "queued")) return false;
+    if (!(await flagEnabled(ctx, "gen.vercel"))) {
+      await settleBatch(ctx, args.batchId, generations.map((g) => ({ index: g.index, error: "Generation is paused." })));
+      return false;
+    }
+    const now = Date.now();
+    for (const g of generations) await ctx.db.patch("generations", g._id, { status: "dispatched", dispatchedAt: now });
+    return true;
+  },
+});
+
+const designResult = v.object({
+  index: v.number(),
+  design: v.optional(
+    v.object({ fullKey: v.string(), sha256: v.optional(v.string()), width: v.number(), height: v.number(), hasAlpha: v.boolean() }),
+  ),
+  error: v.optional(v.string()),
+});
+
+// Records a grid batch's four results and gives back credits for missing designs
+// (convex/lib/studioRules.ts).
+async function settleBatch(
+  ctx: MutationCtx,
+  batchId: Id<"batches">,
+  results: Array<Infer<typeof designResult>>,
+  extra: { gridKey?: string; roles?: Array<ImageRole> } = {},
+) {
+  const batch = await ctx.db.get("batches", batchId);
+  if (!batch) return;
+  const generations = await ctx.db
+    .query("generations")
+    .withIndex("by_batch", (q) => q.eq("batchId", batchId))
+    .collect();
+  const now = Date.now();
+  let missing = 0;
+  for (const g of generations) {
+    if (g.status !== "dispatched" && g.status !== "queued") continue;
+    const result = results.find((r) => r.index === g.index);
+    if (result?.design) {
+      await ctx.db.patch("generations", g._id, { status: "succeeded", finishedAt: now, ...result.design });
+    } else {
+      missing++;
+      await ctx.db.patch("generations", g._id, {
+        status: "failed",
+        finishedAt: now,
+        error: (result?.error ?? "No design came back.").slice(0, 300),
+      });
+    }
+  }
+  const refund = batch.charged ? Math.min(creditsBack(missing), batch.charged - (batch.refunded ?? 0)) : 0;
+  if (refund > 0) {
+    await ctx.db.insert("creditLedger", { userId: batch.ownerId, kind: "refund_credit", amount: refund, batchId });
+  }
+  await ctx.db.patch("batches", batchId, {
+    ...(refund > 0 ? { refunded: (batch.refunded ?? 0) + refund } : {}),
+    ...(extra.gridKey ? { gridKey: extra.gridKey } : {}),
+    ...(extra.roles ? { roles: extra.roles } : {}),
+  });
+}
+
+export const finishBatch = internalMutation({
+  args: {
+    batchId: v.id("batches"),
+    results: v.array(designResult),
+    gridKey: v.optional(v.string()),
+    roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await settleBatch(ctx, args.batchId, args.results, { gridKey: args.gridKey, roles: args.roles });
+    return null;
+  },
+});
+
 
 export const markDispatched = internalMutation({
   args: { generationId: v.id("generations") },

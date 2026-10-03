@@ -34,6 +34,11 @@ export function photoKey(designSha256: string, sha256: string) {
   return `designs/${designSha256}/photos/${sha256}/original.png`;
 }
 
+// The whole 2x2 grid a batch's four designs were cut from, kept for checking the cuts.
+export function gridImageKey(sha256: string) {
+  return `grids/${sha256}/original.png`;
+}
+
 // The folder of an original stored in this layout, or undefined.
 export function folderOf(key: string) {
   return ORIGINAL.exec(key)?.[1];

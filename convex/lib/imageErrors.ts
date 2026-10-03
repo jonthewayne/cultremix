@@ -8,6 +8,10 @@ const REFUSAL = /\b(?:can['’]?t|cannot|won['’]?t|unable to|not able to) (?:h
 // Prefix of the error thrown when the model replies in words without an image.
 export const NO_IMAGE_REPLY = "The image service answered without an image:";
 
+// A grid quarter the cutter couldn't use (convex/lib/gridCut.ts).
+export const GRID_MERGED = "Grid: two designs ran together.";
+export const GRID_EMPTY = "Grid: this quarter came back empty.";
+
 export function isBlockedError(error: string | undefined) {
   if (!error) return false;
   if (FILTER_PATTERNS.some((pattern) => pattern.test(error))) return true;
@@ -19,6 +23,9 @@ export function isBlockedError(error: string | undefined) {
 export function publicTileError(error: string | undefined) {
   if (!error) return undefined;
   if (error === "Timed out.") return "It took too long.";
+  if (error === GRID_MERGED) return "This one ran into the design next to it.";
+  if (error === GRID_EMPTY) return "This one came out empty.";
+  if (error === "Generation is paused.") return "Generation is paused right now.";
   if (error.startsWith("Image unavailable") || error.startsWith("Image fetch failed")) {
     return "One of the images couldn't be loaded.";
   }

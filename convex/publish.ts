@@ -154,6 +154,8 @@ export const markPublished = internalMutation({
       index: 1,
       state: "pending",
     });
+    // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
+    await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
     return { shootId, look };
   },
 });

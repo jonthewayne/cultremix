@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
+import { BATCH_CREDITS } from "../../convex/lib/studioRules";
 import { validateUsername } from "../../convex/lib/username";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { sanitizeRedirect } from "~/lib/sanitize-redirect";
@@ -68,7 +69,7 @@ function OnboardingPage() {
         </h1>
         <p className="mt-8 max-w-md text-lg leading-snug">
           It goes on every design you publish.
-          {startingCredits ? ` You start with ${startingCredits} credits, one per design.` : ""}
+          {startingCredits ? ` You start with ${startingCredits} credits; each batch of four designs uses ${BATCH_CREDITS}.` : ""}
         </p>
         <form onSubmit={submit} className="mt-14 flex flex-col gap-6 md:flex-row md:items-end">
           <label className="flex-1">

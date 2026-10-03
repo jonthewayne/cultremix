@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { BATCH_CREDITS, creditsBack } from "../../convex/lib/studioRules";
 import {
   namedStyles,
   noteSections,
   parseStyleNotes,
   pickSections,
   requestedWords,
+  rolesFromWords,
   signatureTraits,
   styleShares,
   studioPrompt,
@@ -271,5 +273,72 @@ describe("styles named in the request", () => {
 
   it("never turns the design being remixed into a style only", () => {
     expect(namedStyles("Remix it in the style of image 1", 1, true)).toEqual([{ n: 1, only: false }]);
+  });
+});
+
+describe("roles read from the request", () => {
+  const photo = { summary: "a photo of a girl on a beach", kind: "photo" as const, notes: PHOTO };
+  const poster = { summary: "a 70s “TRASH ROYALTY” poster", kind: "art" as const, notes: POSTER };
+
+  it("uses the reader's roles where the phrases find nothing", () => {
+    const instruction = "draw the girl the way the poster draws people";
+    // The phrases alone miss this request.
+    expect(rolesFromWords(instruction, 2)).toEqual(["content", "content"]);
+    const read = studioPrompt({
+      layout: "grid",
+      instruction,
+      attachments: [{ ...photo, styleOnly: false }, { ...poster, styleOnly: false }],
+      styles: [],
+      roles: ["content", "style"],
+    });
+    const mixer = studioPrompt({
+      layout: "grid",
+      instruction,
+      attachments: [{ ...photo, styleOnly: false }, { ...poster, styleOnly: true }],
+      styles: [{ attachment: 2, weight: 100 }],
+    });
+    expect(read).toBe(mixer);
+    expect(read).toContain("- Image 2: a 70s poster (style only: use its look, never its subjects or words).");
+  });
+
+  it("makes a single image a style when the request only wants its look", () => {
+    const prompt = studioPrompt({
+      layout: "grid",
+      instruction: "a dragon in this style that says FIRE BREATHER",
+      attachments: [{ ...poster, styleOnly: false }],
+      styles: [],
+      roles: ["style"],
+    });
+    expect(prompt).toContain("- Image 1: a 70s poster (style only: use its look, never its subjects or words).");
+    expect(prompt).toContain("Style: image 1 sets the whole look.");
+    expect(prompt).not.toContain("Keep: study");
+    expect(prompt).not.toContain("TRASH ROYALTY");
+  });
+
+  it("keeps a remix's image 1 as something to work on", () => {
+    const prompt = studioPrompt({
+      layout: "grid",
+      instruction: "in the colors of image 2",
+      attachments: [{ ...poster, styleOnly: false }, { ...photo, styleOnly: false }],
+      styles: [],
+      remix: true,
+      roles: ["style", "style"],
+    });
+    expect(prompt).toContain("Make four versions of the attached t-shirt graphic (image 1)");
+    // Image 1 stays content (its words included); image 2 joins as a style.
+    expect(prompt).toContain("- Image 1: a 70s “TRASH ROYALTY” poster.\n");
+    expect(prompt).toContain("- Image 2: a photo of a girl on a beach (style only");
+  });
+
+  it("finds images past 4 and ordinals past fourth", () => {
+    expect(namedStyles("put images 1 and 2 in the style of image 7", 8)).toEqual([{ n: 7, only: true }]);
+    expect(namedStyles("use the look of the sixth image", 8)).toEqual([{ n: 6, only: true }]);
+  });
+});
+
+describe("batch credits", () => {
+  it("charges two credits for four designs and gives credits back for missing ones", () => {
+    expect(BATCH_CREDITS).toBe(2);
+    expect([0, 1, 2, 3, 4].map(creditsBack)).toEqual([0, 1, 1, 2, 2]);
   });
 });

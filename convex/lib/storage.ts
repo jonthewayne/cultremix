@@ -7,6 +7,7 @@ import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import { publicUrl, r2, storageMode } from "./r2";
 import { uprightSize, webpCopy } from "./resize";
+import type { ImageInput } from "./resize";
 import { sizeKey } from "./sizes";
 
 // Storing and reading images, for Node actions only (resizing uses sharp, a native package listed
@@ -72,18 +73,20 @@ export async function deleteKeys(keys: Array<string>) {
 }
 
 // Stores a new image and makes its thumbnail and medium at the same time, so all three are ready
-// when it first shows. keyFor names the original from its SHA-256 (convex/lib/sizes.ts).
+// when it first shows. keyFor names the original from its SHA-256 (convex/lib/sizes.ts). pixels:
+// the same image as RGBA, when the caller has it (a grid cut), so the copies skip a decode.
 export async function storeNew(
   ctx: ActionCtx,
   bytes: Uint8Array,
   type: string,
   keyFor: (sha256: string) => string,
+  pixels?: ImageInput,
 ): Promise<{ key: string; sha256: string }> {
   const sha256 = sha256Hex(bytes);
   const planned = keyFor(sha256);
   const [key, sizes]: [string, Sizes | null] = await Promise.all([
     storeObject(ctx, planned, bytes, type),
-    makeCopies(ctx, planned, sha256, bytes).catch((error: unknown) => {
+    makeCopies(ctx, planned, sha256, pixels ?? bytes).catch((error: unknown) => {
       console.error("sizes failed", planned, error);
       return null;
     }),
@@ -106,11 +109,11 @@ export async function fetchPublicImage(key: string, ctx?: ActionCtx) {
 }
 
 // An original's thumbnail and medium (convex/lib/sizes.ts), made and stored beside it side by side.
-async function makeCopies(ctx: ActionCtx, originalKey: string, sha256: string, bytes: Uint8Array): Promise<Sizes> {
+async function makeCopies(ctx: ActionCtx, originalKey: string, sha256: string, input: ImageInput): Promise<Sizes> {
   const [thumbKey, mediumKey, size] = await Promise.all([
-    webpCopy(bytes, "thumb").then((webp) => storeObject(ctx, sizeKey(originalKey, sha256, "thumb"), webp, "image/webp")),
-    webpCopy(bytes, "medium").then((webp) => storeObject(ctx, sizeKey(originalKey, sha256, "medium"), webp, "image/webp")),
-    uprightSize(bytes),
+    webpCopy(input, "thumb").then((webp) => storeObject(ctx, sizeKey(originalKey, sha256, "thumb"), webp, "image/webp")),
+    webpCopy(input, "medium").then((webp) => storeObject(ctx, sizeKey(originalKey, sha256, "medium"), webp, "image/webp")),
+    uprightSize(input),
   ]);
   return { thumbKey, mediumKey, ...size };
 }

@@ -257,11 +257,14 @@ export function figureDrawing(notes: string | undefined) {
 // don't turn an image into a style.
 const REF_NOUN = "(?:images?|imgs?|pics?|pictures?|photos?)";
 const IMAGE_REF = new RegExp(
-  String.raw`\b${REF_NOUN}\s*(?:#\s*|no\.?\s*|number\s+)?([1-4])\b((?:\s*(?:,\s*(?:and\s+|&\s*)?|and\s+|&\s*|\+\s*|or\s+)(?:${REF_NOUN}\s*)?(?:#\s*)?[1-4]\b)*)` +
-    String.raw`|\b(?:the\s+)?(first|second|third|fourth|1st|2nd|3rd|4th)\s+(?:image|picture|photo|pic)s?\b`,
+  String.raw`\b${REF_NOUN}\s*(?:#\s*|no\.?\s*|number\s+)?([1-9])\b((?:\s*(?:,\s*(?:and\s+|&\s*)?|and\s+|&\s*|\+\s*|or\s+)(?:${REF_NOUN}\s*)?(?:#\s*)?[1-9]\b)*)` +
+    String.raw`|\b(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|1st|2nd|3rd|[4-9]th)\s+(?:image|picture|photo|pic)s?\b`,
   "giu",
 );
-const ORDINAL: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4, "1st": 1, "2nd": 2, "3rd": 3, "4th": 4 };
+const ORDINAL: Record<string, number> = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9,
+  "1st": 1, "2nd": 2, "3rd": 3, "4th": 4, "5th": 5, "6th": 6, "7th": 7, "8th": 8, "9th": 9,
+};
 const STYLE_KIND = String.raw`(?:(?:art|drawing|illustration|visual|graphic|painting|design)\s+)?`;
 const STYLE_WORD = "(?:style|styles|look|looks|aesthetic|vibe|feel|technique)";
 // Right before the reference: "in the style of", "the look from", "same style as", "drawn like".
@@ -288,7 +291,7 @@ export function namedStyles(instruction: string, count: number, remix = false) {
   const alsoContent = new Set<number>();
   for (const match of instruction.matchAll(IMAGE_REF)) {
     const numbers = match[1]
-      ? [match[1], ...[...(match[2] ?? "").matchAll(/[1-4]/gu)].map((m) => m[0])].map(Number)
+      ? [match[1], ...[...(match[2] ?? "").matchAll(/[1-9]/gu)].map((m) => m[0])].map(Number)
       : [ORDINAL[match[3].toLowerCase()]];
     const before = instruction.slice(0, match.index);
     const after = instruction.slice(match.index + match[0].length);
@@ -311,6 +314,19 @@ export function namedStyles(instruction: string, count: number, remix = false) {
     .map((n) => ({ n, only: !alsoContent.has(n) && !(remix && n === 1) }));
 }
 
+// What the request wants from each numbered image: what's in it (content), only its look (style),
+// or both. GPT-6 Luna reads this from the request (convex/lib/roleReader.ts); namedStyles' phrases
+// are the fallback when it can't.
+export type ImageRole = "content" | "style" | "both";
+
+export function rolesFromWords(instruction: string, count: number, remix = false): Array<ImageRole> {
+  const named = namedStyles(instruction, count, remix);
+  return Array.from({ length: count }, (_, i) => {
+    const style = named.find((s) => s.n === i + 1);
+    return !style ? "content" : style.only ? "style" : "both";
+  });
+}
+
 // One design (layout "single") or four in a grid. attachments are every image sent with the
 // call, in order: the studio's numbered images first, then images added only in the style mixer.
 export function studioPrompt(args: {
@@ -320,6 +336,9 @@ export function studioPrompt(args: {
   styles: Array<PromptStyle>;
   // Image 1 is the published design being remixed.
   remix?: boolean;
+  // What the request wants from each numbered image, when the role reader decided; otherwise the
+  // request's phrases decide (namedStyles).
+  roles?: Array<ImageRole>;
 }) {
   const grid = args.layout === "grid";
   const ask = sentence(args.instruction);
@@ -327,7 +346,11 @@ export function studioPrompt(args: {
   // slider's value when the mixer already has it on.
   let numbered = 0;
   while (numbered < args.attachments.length && !args.attachments[numbered].styleOnly) numbered++;
-  const named = namedStyles(args.instruction, numbered, args.remix);
+  const named = args.roles
+    ? args.roles
+        .slice(0, numbered)
+        .flatMap((role, i) => (role === "content" ? [] : [{ n: i + 1, only: role === "style" && !(args.remix && i === 0) }]))
+    : namedStyles(args.instruction, numbered, args.remix);
   const images = args.attachments.map((image, i) => ({
     ...image,
     styleOnly: image.styleOnly || named.some((s) => s.n === i + 1 && s.only),

@@ -5,11 +5,14 @@ import { generateImage } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
-import { NO_IMAGE_REPLY } from "./lib/imageErrors";
-import { photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
+import { cutGrid } from "./lib/gridCut";
+import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY } from "./lib/imageErrors";
+import { photoPrompt, pickLook, rolesFromWords, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
-import { designKey, photoKey, uploadKey } from "./lib/sizes";
+import { readRoles } from "./lib/roleReader";
+import { decodeToRgba, encodePng } from "./lib/resize";
+import { designKey, gridImageKey, photoKey, uploadKey } from "./lib/sizes";
 import { fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -185,6 +188,28 @@ async function designImage(text: string, images: Array<Uint8Array>, provider: Pr
   return { bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata };
 }
 
+// Four transparent designs in one 2x2 grid, which convex/lib/gridCut.ts cuts apart. 1920x1920 is
+// the largest square GPT Image 2.5 makes without experimental sizes. GRID_QUALITY defaults to high,
+// which looks clearly better on illustrations (docs/image-generation/README.md).
+async function gridImage(text: string, images: Array<Uint8Array>) {
+  const model = images.length > 0 ? "openai/gpt-image-2.5-sunburst" : "openai/gpt-image-2.5-flare";
+  const result = await generateImage({
+    model: gateway.image(model),
+    prompt: images.length > 0 ? { images, text } : text,
+    size: "1920x1920",
+    providerOptions: {
+      openai: {
+        background: "transparent",
+        output_format: "png",
+        quality: process.env.GRID_QUALITY ?? "high",
+      },
+    },
+    maxRetries: 0,
+    abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
+  });
+  return { bytes: result.image.uint8Array };
+}
+
 // The model photo: one opaque 1024x1024 edit with the design as input.
 async function photoImage(
   art: Uint8Array,
@@ -283,6 +308,114 @@ export const runTile = internalAction({
         generationId,
         error: readableError(error),
       });
+    }
+    return null;
+  },
+});
+
+type DesignResult = {
+  index: number;
+  design?: { fullKey: string; sha256?: string; width: number; height: number; hasAlpha: boolean };
+  error?: string;
+};
+
+// One batch: four designs from one 2x2 grid call, cut apart and each stored in its own folder with
+// its copies. Charged and refunded as a whole (convex/lib/studioRules.ts).
+export const runBatch = internalAction({
+  args: { batchId: v.id("batches") },
+  returns: v.null(),
+  handler: async (ctx, { batchId }): Promise<null> => {
+    let job = await ctx.runQuery(internal.studio.batchJob, { batchId });
+    if (!job || job.tiles.some((tile) => tile.status !== "queued")) return null;
+    const claimed = await ctx.runMutation(internal.studio.markBatchDispatched, { batchId });
+    if (!claimed) return null;
+    const indexes = job.tiles.map((tile) => tile.index);
+    try {
+      if (!liveGeneration()) {
+        if (!isDevDeployment()) throw new Error("Image generation is not configured.");
+        // Dev stand-in until the gateway and R2 keys exist.
+        await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 3500));
+        await ctx.runMutation(internal.studio.finishBatch, {
+          batchId,
+          results: job.tiles.map((tile) => ({
+            index: tile.index,
+            design: { fullKey: `fake:${tile.generationId}`, width: 1024, height: 1536, hasAlpha: true },
+          })),
+        });
+        return null;
+      }
+
+      // Notes still being written: wait a little, then go without them.
+      for (let waited = 0; job && job.attachments.some((a) => a.analysis === "pending") && waited < NOTES_WAIT_MS; waited += 2500) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        job = await ctx.runQuery(internal.studio.batchJob, { batchId });
+      }
+      if (!job) throw new Error("The batch was removed.");
+      const instruction = job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction;
+      // What the request wants from each numbered image, read by GPT-6 Luna (about 1 s); its
+      // phrases decide when the reader can't.
+      const numbered = job.attachments.filter((a) => !a.styleOnly);
+      const read = await readRoles({
+        instruction: job.instruction,
+        images: numbered.map((a) => ({ summary: a.analysis === "ready" ? a.summary : undefined, kind: a.kind })),
+        remix: job.remixOfParent,
+      });
+      const roles = read ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);
+      const text = studioPrompt({
+        layout: "grid",
+        instruction,
+        attachments: job.attachments.map((a) => ({
+          summary: a.analysis === "ready" ? a.summary : undefined,
+          kind: a.kind,
+          notes: a.analysis === "ready" ? a.notes : undefined,
+          styleOnly: a.styleOnly,
+        })),
+        styles: job.styles,
+        remix: job.remixOfParent,
+        roles,
+      });
+      const keys = job.attachments.map((a) => a.key);
+      const started = Date.now();
+      // The inputs are only needed for the call; letting them go keeps memory for the cut.
+      const { bytes } = await gridImage(text, await Promise.all(keys.map((key) => fetchPublicImage(key, ctx))));
+      const made = Date.now();
+      const cpu0 = process.cpuUsage();
+      const gridStored = storeObject(ctx, gridImageKey(sha256Hex(bytes)), bytes, "image/png");
+      const cells = cutGrid(await decodeToRgba(bytes));
+      const cut = Date.now();
+      const cpu1 = process.cpuUsage(cpu0);
+      // Two designs at a time: four at once ran Convex's 512 MB Node runtime short of memory.
+      const results: Array<DesignResult> = [];
+      for (let i = 0; i < cells.length; i += 2) {
+        results.push(
+          ...(await Promise.all(
+            cells.slice(i, i + 2).map(async (cell): Promise<DesignResult> => {
+              if (!cell.tile) return { index: cell.index, error: cell.reason === "merged" ? GRID_MERGED : GRID_EMPTY };
+              const { key, sha256 } = await storeNew(ctx, await encodePng(cell.tile), "image/png", designKey, cell.tile);
+              return { index: cell.index, design: { fullKey: key, sha256, width: cell.tile.width, height: cell.tile.height, hasAlpha: true } };
+            }),
+          )),
+        );
+      }
+      const gridKey = await gridStored;
+      const cpu2 = process.cpuUsage(cpu0);
+      console.log(
+        "runBatch ok", keys.length, "images", text.length, "chars", made - started, "ms; cut in", cut - made, "ms; stored in", Date.now() - cut, "ms;",
+        read ? "roles read" : "roles from words", roles.join("/"),
+        cells.map((cell) => (cell.tile ? `${cell.tile.width}x${cell.tile.height}` : cell.reason)).join(" "),
+        "rss", Math.round(process.memoryUsage().rss / 1048576), "MB",
+        "cpu cut", Math.round((cpu1.user + cpu1.system) / 1000), "ms, cpu total", Math.round((cpu2.user + cpu2.system) / 1000), "ms",
+      );
+      await ctx.runMutation(internal.studio.finishBatch, {
+        batchId,
+        results,
+        gridKey,
+        roles: roles.length > 0 ? roles : undefined,
+      });
+    } catch (error) {
+      console.error("runBatch failed", batchId, error);
+      const message = readableError(error);
+      await ctx.runMutation(internal.studio.finishBatch, { batchId, results: indexes.map((index) => ({ index, error: message })) });
     }
     return null;
   },

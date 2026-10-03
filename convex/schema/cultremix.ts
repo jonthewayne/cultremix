@@ -27,6 +27,8 @@ export const cultremixTables = {
     ),
     note: v.optional(v.string()),
     generationId: v.optional(v.id("generations")),
+    // A grid batch is charged and refunded as a whole (convex/lib/studioRules.ts).
+    batchId: v.optional(v.id("batches")),
   }).index("by_user", ["userId"]),
 
   featureFlags: defineTable({
@@ -75,6 +77,15 @@ export const cultremixTables = {
     operation: v.union(v.literal("create"), v.literal("edit"), v.literal("remix")),
     model: v.string(),
     count: v.number(),
+    // "grid": one 2x2 call cut into four designs, charged per batch; older batches made four
+    // separate calls, charged per design.
+    layout: v.optional(v.union(v.literal("single"), v.literal("grid"))),
+    charged: v.optional(v.number()),
+    refunded: v.optional(v.number()),
+    // The whole grid image the designs were cut from.
+    gridKey: v.optional(v.string()),
+    // What the request wanted from each numbered image (convex/lib/roleReader.ts).
+    roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
   }).index("by_session", ["sessionId"]),
 
   // Every image a member brings into the studio: uploads, their own designs, and remix sources.
@@ -183,12 +194,19 @@ export const cultremixTables = {
     publishedAt: v.optional(v.number()),
     contentHash: v.optional(v.string()),
     artKey: v.optional(v.string()),
+    // Notes on the art, written once when it's published (convex/imageNotes.ts), so a remix
+    // starts from them: what it shows, every piece of text, and how it looks.
+    notes: v.optional(v.string()),
+    notesSummary: v.optional(v.string()),
+    notesKind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
+    notesModel: v.optional(v.string()),
   })
     .index("by_status_publishedAt", ["status", "publishedAt"])
     .index("by_family_expression", ["crFamily", "crExpression"])
     .index("by_parent", ["parentWorkId"])
     .index("by_requestId", ["requestId"])
-    .index("by_creator", ["creatorId"]),
+    .index("by_creator", ["creatorId"])
+    .index("by_artKey", ["artKey"]),
 
   shoots: defineTable({
     workId: v.id("works"),
