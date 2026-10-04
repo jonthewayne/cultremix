@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { query } from "./_generated/server";
 import { getViewerUser } from "./identity";
@@ -48,6 +48,9 @@ export const feedItem = v.object({
   parentCr: v.optional(v.string()),
   publishedAt: v.number(),
   hearts: v.number(),
+  // A Back this item is about: in Following, a followed member's; on a profile, the member's own.
+  // ordinal is their place among the work's backers.
+  backedBy: v.optional(v.object({ username: v.string(), ordinal: v.number() })),
 });
 
 export const feedPage = paginationResultValidator(feedItem);
@@ -108,6 +111,31 @@ export async function publishedItems(ctx: QueryCtx, workIds: Array<Id<"works">>)
   return items.filter((item) => item !== null);
 }
 
+// Feed items for activity events, in order: a work's publication, or a confirmed Back of it.
+// Works no longer published, and Backs no longer confirmed, drop out.
+export async function activityItems(
+  ctx: QueryCtx,
+  events: Array<Doc<"activityEvents">>,
+): Promise<Array<Infer<typeof feedItem>>> {
+  const urls = imageUrlReader(ctx);
+  const items = await Promise.all(
+    events.map(async (event) => {
+      const work = await ctx.db.get("works", event.workId);
+      if (!work || work.status !== "published") return null;
+      if (event.verb !== "back") return await toFeedItem(ctx, work, urls);
+      const back = await ctx.db
+        .query("backs")
+        .withIndex("by_work_and_backer", (q) => q.eq("workId", work._id).eq("backerId", event.actorId))
+        .unique();
+      const backer = await ctx.db.get("users", event.actorId);
+      if (back?.status !== "confirmed" || back.ordinal === undefined || !backer?.username) return null;
+      const item = await toFeedItem(ctx, work, urls);
+      return { ...item, backedBy: { username: backer.username, ordinal: back.ordinal } };
+    }),
+  );
+  return items.filter((item) => item !== null);
+}
+
 function boundedOpts(opts: PaginationOptions): PaginationOptions {
   return { ...opts, numItems: clampPageSize(opts.numItems) };
 }
@@ -150,8 +178,8 @@ export const trending = query({
   },
 });
 
-// Following: works by the people the viewer follows, newest first (KTD-13: fan-out on read over
-// the latest 200 followed accounts). Signed out, it's empty.
+// Following: works by the people the viewer follows, and the works they Back, newest first
+// (KTD-13: fan-out on read over the latest 200 followed accounts). Signed out, it's empty.
 export const following = query({
   args: { paginationOpts: paginationOptsValidator },
   returns: feedPage,
@@ -169,7 +197,7 @@ export const following = query({
       args.paginationOpts,
     );
     return {
-      page: await publishedItems(ctx, window.events.map((event) => event.workId)),
+      page: await activityItems(ctx, window.events),
       isDone: window.isDone,
       continueCursor: window.continueCursor,
     };

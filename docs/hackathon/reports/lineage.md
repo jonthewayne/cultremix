@@ -320,3 +320,79 @@ Every family can now be seen as a tree. The original sits at the top, and each v
 - **No changes needed** to the schema, environment variables, `api.d.ts` (`lineage` is already listed) or `cr.$cr.tsx`.
 - **`lineage.family`** (the old grid query) is no longer used by the page. It is kept because its tests still use it, and it can be removed later.
 - **Remix counts** are read live and capped at 50 per work. If CultRemix ever wants exact counts for very popular works, a `remixes` counter next to `hearts` in `workSocialStats`, updated at publish and when lineage is corrected, would make it one read.
+
+## Round 3: the graph's onchain half
+
+Branch `codex/lineage`. Commits: `a8cf17b` (chain marks, onchain corrections, `/onchain`), `79c4790` (tests), `ca76865` (phone fix), a merge of `dev`, and this report. Nothing was deployed, run against a deployment, or pushed. The testnet registry isn't deployed, so everything here was built and checked against tests and fixtures.
+
+### What's built
+
+- **Marks on the family tree** (full page and compact):
+  - A design registered on Monad gets a small black check badge in the top-right corner of its thumbnail.
+  - One that's pending or submitted gets a quieter dashed hourglass ("being recorded").
+  - Designs that aren't queued, failed registrations, and withdrawn designs get nothing.
+  - On the full page, the badge links to the registration transaction on the explorer. It uses `explorerTxLink`, the same helper behind ChainStatus's "View transaction". The compact tree shows the badge without a link, because the card itself is already a link.
+  - Every badge has a tooltip and screen-reader text, such as "CR 101-002 is recorded on Monad".
+  - Forks out and the design a fork came from carry marks too.
+- **The family page header:** once any design in the family is recorded, it shows "N of M designs recorded on Monad", linking to the original's (`-001`) registration. A legend item ("recorded on Monad") appears alongside it. Nothing shows while none are recorded.
+- **The lineage trail:**
+  - Each correction in the work page's Lineage section says "Recorded on Monad." or "Recording on Monad…".
+  - A "View transaction" link appears when the correction's chain write has a hash.
+  - The "Lineage amended" pill under the title adds "· recorded on Monad" when the latest confirmed correction is.
+  - Corrections confirmed while chain writes were off keep the existing "Not yet recorded on Monad."
+- **`/onchain`:** a short public page, rendered on the server and readable signed out. It covers:
+  - what CultRemix records: each design's ID, CR number, parent, kind, fingerprint and creator wallet; lineage corrections; Backs in order; and the economics rules' fingerprint, linking to `/economics/v1.json`;
+  - what it doesn't: no money, no personal details, and not the art itself;
+  - this environment's network, registry address and explorer, or "Not deployed yet. New designs wait in line and are recorded once it is.";
+  - four steps to check a design yourself: Fingerprint → Read Contract → `workIdAt(family, expression)` → `getWork`, comparing `contentHash`, `creator` and `parentId`.
+- **The work page's link to `/onchain`:** ChainStatus, under the fingerprint, now ends with "What's on Monad, and how to check it →". `cr.$cr.tsx` is untouched.
+- **New public query `provenance.registry`:**
+  - It returns `{ networkName, testnet, address, addressUrl, explorerUrl }` for this deployment, from `shared/config/chains.ts`.
+  - It honors `CHAIN_REGISTRY_ADDRESS` only on dev, as the chain writer does. Staging and prod always show the committed address, which is currently none.
+
+### Decisions
+
+- **Bounded reads.** Tree marks come only from `works.provenanceStatus` and `works.chainTxHash`, which the query already loads. `lineage.familyTree` reads no `chainWrites`. The trail reads one chain write per correction, and corrections per work are few.
+- **Failed shows nothing**, the same as not queued. A failed write is an operator problem; "recording" would promise something that isn't happening. The work page's ChainStatus still shows the detail.
+- **One explorer helper.** `explorerTxLink(chainId, txHash)` in `convex/provenance.ts` is shared by `forWork`, the tree and the trail. A dev deployment on a local RPC gets marks but no links, because there's no explorer to send anyone to.
+- **The header counts what the page loaded.** It counts live designs only (not withdrawn designs, forks out, or the origin). For families bigger than one page it reads "N of M+", matching the design count above it.
+- **The `/onchain` link always shows** in ChainStatus, even before a work is registered, because the page also explains what will happen.
+
+### Tests
+
+- **`tests/unit/familyTree.test.ts`**, 4 new tests (22 in the file):
+  - chain state survives the tree build, including forks and origins;
+  - `chainSummary` is null when nothing is recorded;
+  - it counts live family designs only and links to the original;
+  - there's no link when the original has no transaction URL.
+- **`tests/convex-local/familyTree.test.ts`**, 5 new tests (11 in the file), all signed out:
+  - Tree nodes for unqueued, pending, submitted, confirmed, failed and withdrawn-but-confirmed designs, plus a fork out and an origin, carry the right `chain` and `chainTxUrl`.
+  - Exact key lists confirm only public fields come back: no hashes, write IDs or raw statuses.
+  - The header counts come from `chainSummary` on the query's real output.
+  - Nothing is recorded while a work is only pending. A local RPC gives a mark but no link.
+  - Trail history: confirmed with a hash gives "recorded" and a link; submitted without a hash gives "recording" and no link; a correction confirmed off the chain gives nothing. Exact public keys are checked here too.
+  - `provenance.registry`:
+    - dev default: testnet, "not deployed", explorer link;
+    - dev override: address and address link;
+    - prod ignores the override: mainnet, no address;
+    - a local RPC gives no explorer.
+- **Totals:** `bun run typecheck`, `bun run build` and `bun run test` pass, with 478 unit and 286 local Convex tests. ESLint is clean on every changed file. While the shared box was heavily loaded (load average around 50 to 100), a few unrelated local Convex tests (notifications, trending, and others) hit the 5-second timeout. They pass on rerun and with a longer timeout.
+- **Visual check:** I statically rendered the family page (1280 px and 390 px), the compact tree (390 px), `/onchain` (both widths), and the trail with ChainStatus (390 px), using fixture data and the built CSS, and screenshotted them with agent-browser. The check caught the registry line on `/onchain` breaking mid-word on phones (fixed in `ca76865`). The temporary files are deleted.
+
+### Notes for merging
+
+- **New:** `src/routes/onchain.tsx`. `src/routeTree.gen.ts` was rebuilt and committed.
+- **Changed:**
+  - `convex/provenance.ts`: `registry`, `explorerTxLink`, and an exported `deploymentChainId`. `forWork` behaves as before.
+  - `convex/lineage.ts`: optional `chain` and `chainTxUrl` on tree and history rows.
+  - `src/lib/familyTree.ts`, `FamilyTree.tsx`, `family.$family.tsx` and `LineageTrail.tsx`.
+  - `ChainStatus.tsx`: the old body is renamed `RegistrationStatus`, and the link is added under it.
+- **Lint fixes:** two fixes in existing lines, both behavior-neutral: import order in `provenance.ts`, and `.at()` in `LineageTrail.tsx`.
+- **No changes** to the schema, environment variables, `api.d.ts` (`provenance` and `lineage` are already listed), `cr.$cr.tsx`, `convex/chain.ts` or `convex/publish.ts`.
+- **Merged** the three newest `dev` commits cleanly. The new e2e smoke check of the public pages still matches ("Family N").
+
+### Follow-ups
+
+- **After the testnet registry is deployed:** set its address in `shared/config/chains.ts`. `/onchain` then shows the address and explorer link with no code change, and the tree and trail marks appear as writes confirm.
+- **`/onchain` in the e2e smoke check:** worth adding to `tests/e2e/run-e2e.sh` (a one-line `assert_text "On Monad"`). I left that file to its owner.
+- **A per-work explorer link:** an "open this design's record" link would need the workId-to-explorer route the chain builder may add. Today the link goes to the registration transaction, which shows the same fields.

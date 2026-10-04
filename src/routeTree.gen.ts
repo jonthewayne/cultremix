@@ -15,6 +15,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as OnchainRouteImport } from './routes/onchain'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TeamRouteImport } from './routes/team'
@@ -69,6 +70,11 @@ const NotificationsRoute = NotificationsRouteImport.update({
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnchainRoute = OnchainRouteImport.update({
+  id: '/onchain',
+  path: '/onchain',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -204,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/onboarding': typeof OnboardingRoute
+  '/onchain': typeof OnchainRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/team': typeof TeamRoute
@@ -236,6 +243,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/onboarding': typeof OnboardingRoute
+  '/onchain': typeof OnchainRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/team': typeof TeamRoute
@@ -270,6 +278,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/onboarding': typeof OnboardingRoute
+  '/onchain': typeof OnchainRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/team': typeof TeamRoute
@@ -305,6 +314,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/notifications'
     | '/onboarding'
+    | '/onchain'
     | '/settings'
     | '/studio'
     | '/team'
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/notifications'
     | '/onboarding'
+    | '/onchain'
     | '/settings'
     | '/studio'
     | '/team'
@@ -370,6 +381,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/notifications'
     | '/onboarding'
+    | '/onchain'
     | '/settings'
     | '/studio'
     | '/team'
@@ -404,6 +416,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
   OnboardingRoute: typeof OnboardingRoute
+  OnchainRoute: typeof OnchainRoute
   SettingsRoute: typeof SettingsRoute
   StudioRoute: typeof StudioRoute
   TeamRoute: typeof TeamRoute
@@ -467,6 +480,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onchain': {
+      id: '/onchain'
+      path: '/onchain'
+      fullPath: '/onchain'
+      preLoaderRoute: typeof OnchainRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -674,6 +694,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
   OnboardingRoute: OnboardingRoute,
+  OnchainRoute: OnchainRoute,
   SettingsRoute: SettingsRoute,
   StudioRoute: StudioRoute,
   TeamRoute: TeamRoute,

@@ -1,7 +1,7 @@
 // How a Convex work maps to its registry record.
 //
 //   workId       keccak256("cultremix:work:" + the Convex work ID)
-//   contentHash  the work's print file SHA-256 (works.contentHash), as bytes32
+//   contentHash  the SHA-256 of the work's published art PNG (works.contentHash, plan amendment A3), as bytes32
 //   uriHash      keccak256 of the work page URL, `${SITE_URL}/cr/101-002`
 //   parentId     the parent work's workId, or zero for an original
 import { keccak256, sha256, toHex, type Address, type Hex } from "viem";

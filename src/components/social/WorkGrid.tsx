@@ -4,9 +4,11 @@ import type { api } from "../../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 
-export type FeedItem = FunctionReturnType<typeof api.feed.latest>["page"][number];
+// Following's items carry everything the other feeds do, plus the Back an item may be about.
+export type FeedItem = FunctionReturnType<typeof api.feed.following>["page"][number];
 
-// A grid of designs: art on its color, the CR number, and the creator.
+// A grid of designs: art on its color, the CR number, and the creator (with the backer number
+// when the item is a Back).
 export function WorkGrid({ items, showCreator = true }: { items: Array<FeedItem>; showCreator?: boolean }) {
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4 md:gap-x-4 md:gap-y-10">
@@ -26,13 +28,20 @@ export function WorkGrid({ items, showCreator = true }: { items: Array<FeedItem>
             <CrMark cr={item.cr} className="mt-2 text-2xl md:text-3xl" />
           </Link>
           {showCreator ? (
-            <Link
-              to="/u/$username"
-              params={{ username: item.creator.username }}
-              className="mt-0.5 block truncate text-sm hover:underline"
-            >
-              @{item.creator.username}
-            </Link>
+            <p className="mt-0.5 flex items-baseline justify-between gap-2 text-sm">
+              <Link
+                to="/u/$username"
+                params={{ username: item.creator.username }}
+                className="min-w-0 truncate hover:underline"
+              >
+                @{item.creator.username}
+              </Link>
+              {item.backedBy && (
+                <span className="shrink-0 font-cr tabular-nums" title={`Backer #${item.backedBy.ordinal}`}>
+                  #{item.backedBy.ordinal}
+                </span>
+              )}
+            </p>
           ) : item.parentCr ? (
             <p className="mt-0.5 truncate text-sm text-neutral-500">Remix of CR {item.parentCr}</p>
           ) : (

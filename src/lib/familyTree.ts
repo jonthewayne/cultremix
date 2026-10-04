@@ -17,6 +17,9 @@ export type TreeWork = {
   remixes?: number;
   remixesMore?: boolean;
   hearts?: number;
+  // Registered on Monad ("recorded"), or queued and on its way ("recording"); absent otherwise.
+  chain?: "recorded" | "recording";
+  chainTxUrl?: string;
 };
 
 export type FamilyTreeData = {
@@ -221,4 +224,14 @@ export function layoutTree(
 // How many designs a built tree shows (works, forks and origins; not the "+N" nodes).
 export function shownCount(roots: Array<TreeNode>): number {
   return roots.reduce((sum, node) => sum + (node.type === "more" ? 0 : 1) + shownCount(node.children), 0);
+}
+
+// The family page's onchain line: how many of the loaded designs (not withdrawn) are recorded on
+// Monad, and the original's explorer entry. Null until at least one is.
+export function chainSummary(data: FamilyTreeData): { recorded: number; total: number; rootTxUrl?: string } | null {
+  const live = data.works.filter((work) => !work.withdrawn);
+  const recorded = live.filter((work) => work.chain === "recorded").length;
+  if (recorded === 0) return null;
+  const root = live.find((work) => work.expression === 1 && work.chain === "recorded");
+  return { recorded, total: live.length, ...(root?.chainTxUrl && { rootTxUrl: root.chainTxUrl }) };
 }

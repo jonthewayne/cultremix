@@ -152,8 +152,8 @@ describe("trending", () => {
     });
     await addWork(t, bob.userId, { title: "a remix", kind: "fork", parentWorkId: remixed, publishedAt: now - 3 * DAY });
 
-    expect(await t.mutation(internal.trending.rebuild, {})).toEqual({ hearts: 2, remixes: 1 });
-    expect(await t.mutation(internal.trending.rebuild, {})).toEqual({ hearts: 2, remixes: 1 });
+    expect(await t.mutation(internal.trending.rebuild, {})).toEqual({ hearts: 2, remixes: 1, backs: 0 });
+    expect(await t.mutation(internal.trending.rebuild, {})).toEqual({ hearts: 2, remixes: 1, backs: 0 });
     expect(await trendingTitles(t)).toEqual(["remixed", "hearted"]);
     const scores = await t.run((ctx) => ctx.db.query("trendingWorks").collect());
     expect(scores.map((row) => row.score).sort()).toEqual([2, 3]);

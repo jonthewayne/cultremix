@@ -3,7 +3,7 @@ import { paginationOptsValidator, paginationResultValidator } from "convex/serve
 import { mutation, query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { feedPage, publishedItems } from "./feed";
+import { activityItems, feedPage, publishedItems } from "./feed";
 import { getViewerUser } from "./identity";
 import { requireMember } from "./studio";
 import { shelfValidator } from "./schema/social";
@@ -33,6 +33,8 @@ export const profile = query({
       bio: v.optional(v.string()),
       followers: v.number(),
       following: v.number(),
+      // Works they've Backed (confirmed Backs).
+      backed: v.number(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -46,6 +48,7 @@ export const profile = query({
       bio: user.bio || undefined,
       followers: stats?.followers ?? 0,
       following: stats?.following ?? 0,
+      backed: stats?.backed ?? 0,
     };
   },
 });
@@ -66,6 +69,27 @@ export const works = query({
       .paginate({ ...args.paginationOpts, numItems: clampPageSize(args.paginationOpts.numItems) });
     return {
       page: await publishedItems(ctx, result.page.map((event) => event.workId)),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// The works a member has Backed, newest Back first, each with their place among its backers.
+// Confirmed Backs only: the events are written when the chain confirms a Back.
+export const backed = query({
+  args: { username: v.string(), paginationOpts: paginationOptsValidator },
+  returns: feedPage,
+  handler: async (ctx, args) => {
+    const user = await getUserByUsername(ctx, args.username);
+    if (!user?.username) return { page: [], isDone: true, continueCursor: "" };
+    const result = await ctx.db
+      .query("activityEvents")
+      .withIndex("by_actor_shelf_created", (q) => q.eq("actorId", user._id).eq("shelf", "backed"))
+      .order("desc")
+      .paginate({ ...args.paginationOpts, numItems: clampPageSize(args.paginationOpts.numItems) });
+    return {
+      page: await activityItems(ctx, result.page),
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };

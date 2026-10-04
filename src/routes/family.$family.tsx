@@ -1,11 +1,12 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Check } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { FamilyTree } from "~/components/cr/FamilyTree";
 import { SiteHeader } from "~/components/cr/SiteHeader";
-import { familyOfCr } from "~/lib/familyTree";
+import { chainSummary, familyOfCr } from "~/lib/familyTree";
 
 // Works per load; "Show more" adds another page (the query caps the total).
 const PAGE = 60;
@@ -40,6 +41,7 @@ function FamilyPage() {
   const root = data?.works.find((work) => work.expression === 1);
   const origin = root?.parentCr ? data?.origins.find((work) => work.cr === root.parentCr) : undefined;
   const count = data?.works.filter((work) => !work.withdrawn).length ?? 0;
+  const chain = data ? chainSummary(data) : null;
 
   return (
     <div className="min-h-svh bg-white text-black">
@@ -75,7 +77,18 @@ function FamilyPage() {
               )}
               .
             </p>
-            <Legend />
+            {chain && (
+              <p className="mt-2 flex items-center gap-2 text-lg font-semibold">
+                <span aria-hidden className="grid size-5 place-items-center rounded-full bg-black text-white">
+                  <Check strokeWidth={3} className="size-3" />
+                </span>
+                <ChainLine href={chain.rootTxUrl}>
+                  {chain.recorded} of {chain.total}
+                  {data.more ? "+" : ""} {chain.total === 1 ? "design" : "designs"} recorded on Monad
+                </ChainLine>
+              </p>
+            )}
+            <Legend chain={data.works.some((work) => work.chain)} />
             <div className="mt-8">
               <FamilyTree data={data} currentCr={cr} />
             </div>
@@ -99,7 +112,17 @@ function FamilyPage() {
   );
 }
 
-function Legend() {
+// Links to the original's registration on the explorer, when there's one to link to.
+function ChainLine({ href, children }: { href?: string; children: React.ReactNode }) {
+  if (!href) return <span>{children}</span>;
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:no-underline">
+      {children}
+    </a>
+  );
+}
+
+function Legend({ chain }: { chain: boolean }) {
   return (
     <p className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-600">
       <span className="inline-flex items-center gap-2">
@@ -110,6 +133,14 @@ function Legend() {
         <svg aria-hidden width="28" height="4"><line x1="0" y1="2" x2="28" y2="2" stroke="#a3a3a3" strokeWidth="2" strokeDasharray="6 5" /></svg>
         a fork, which starts a new family
       </span>
+      {chain && (
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden className="grid size-4 place-items-center rounded-full bg-black text-white">
+            <Check strokeWidth={3} className="size-2.5" />
+          </span>
+          recorded on Monad
+        </span>
+      )}
     </p>
   );
 }

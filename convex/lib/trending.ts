@@ -2,9 +2,10 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 
 // Trending ranks published works by the attention they got over the last 7 UTC days: each heart
-// counts 1 and each remix counts REMIX_WEIGHT. Hearts and remixes add to a per-day row and to the
-// work's score in the same transaction; the hourly expire cron (convex/trending.ts) takes days
+// counts 1, each confirmed Back BACK_WEIGHT, and each remix REMIX_WEIGHT. Each adds to a per-day
+// row and to the work's score in the same transaction; the hourly expire cron (convex/trending.ts) takes days
 // that leave the window back off. A request reads one page of an index, never a table scan.
+export const BACK_WEIGHT = 2;
 export const REMIX_WEIGHT = 3;
 export const TRENDING_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -18,8 +19,8 @@ export function windowStartDay(now: number) {
   return dayOf(now) - (TRENDING_DAYS - 1);
 }
 
-export function attentionScore(hearts: number, remixes: number) {
-  return hearts + REMIX_WEIGHT * remixes;
+export function attentionScore(hearts: number, remixes: number, backs = 0) {
+  return hearts + BACK_WEIGHT * backs + REMIX_WEIGHT * remixes;
 }
 
 // Adds (or, with negative counts, takes back) attention a work got at `at`. Attention from a day
@@ -28,7 +29,7 @@ export async function addAttention(
   ctx: MutationCtx,
   workId: Id<"works">,
   at: number,
-  change: { hearts?: number; remixes?: number },
+  change: { hearts?: number; remixes?: number; backs?: number },
 ) {
   const day = dayOf(at);
   if (day < windowStartDay(Date.now())) return;
@@ -36,17 +37,19 @@ export async function addAttention(
     .query("workAttentionDays")
     .withIndex("by_work_day", (q) => q.eq("workId", workId).eq("day", day))
     .unique();
-  const before = { hearts: bucket?.hearts ?? 0, remixes: bucket?.remixes ?? 0 };
+  const before = { hearts: bucket?.hearts ?? 0, remixes: bucket?.remixes ?? 0, backs: bucket?.backs ?? 0 };
   const hearts = Math.max(0, before.hearts + (change.hearts ?? 0));
   const remixes = Math.max(0, before.remixes + (change.remixes ?? 0));
-  if (bucket && hearts === 0 && remixes === 0) {
+  const backs = Math.max(0, before.backs + (change.backs ?? 0));
+  if (bucket && hearts === 0 && remixes === 0 && backs === 0) {
     await ctx.db.delete("workAttentionDays", bucket._id);
   } else if (bucket) {
-    await ctx.db.patch("workAttentionDays", bucket._id, { hearts, remixes });
-  } else if (hearts > 0 || remixes > 0) {
-    await ctx.db.insert("workAttentionDays", { workId, day, hearts, remixes });
+    await ctx.db.patch("workAttentionDays", bucket._id, { hearts, remixes, backs });
+  } else if (hearts > 0 || remixes > 0 || backs > 0) {
+    await ctx.db.insert("workAttentionDays", { workId, day, hearts, remixes, backs });
   }
-  const delta = attentionScore(hearts, remixes) - attentionScore(before.hearts, before.remixes);
+  const delta =
+    attentionScore(hearts, remixes, backs) - attentionScore(before.hearts, before.remixes, before.backs);
   await bumpTrendingScore(ctx, workId, delta, delta > 0 ? at : undefined);
 }
 

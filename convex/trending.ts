@@ -17,7 +17,7 @@ export const expire = internalMutation({
       .withIndex("by_day", (q) => q.lt("day", cutoff))
       .take(EXPIRE_BATCH);
     for (const bucket of buckets) {
-      await bumpTrendingScore(ctx, bucket.workId, -attentionScore(bucket.hearts, bucket.remixes));
+      await bumpTrendingScore(ctx, bucket.workId, -attentionScore(bucket.hearts, bucket.remixes, bucket.backs));
       await ctx.db.delete("workAttentionDays", bucket._id);
     }
     if (buckets.length === EXPIRE_BATCH) {
@@ -27,11 +27,11 @@ export const expire = internalMutation({
   },
 });
 
-// Rebuilds Trending from the last week of hearts and remixes, for a deployment whose hearts
-// predate it. Reads one week, in one transaction. Safe to rerun: bunx convex run trending:rebuild
+// Rebuilds Trending from the last week of hearts, remixes, and confirmed Backs, for a deployment
+// whose hearts predate it. Reads one week, in one transaction. Safe to rerun: bunx convex run trending:rebuild
 export const rebuild = internalMutation({
   args: {},
-  returns: v.object({ hearts: v.number(), remixes: v.number() }),
+  returns: v.object({ hearts: v.number(), remixes: v.number(), backs: v.number() }),
   handler: async (ctx) => {
     for (const bucket of await ctx.db.query("workAttentionDays").collect()) {
       await ctx.db.delete("workAttentionDays", bucket._id);
@@ -63,6 +63,24 @@ export const rebuild = internalMutation({
       await addAttention(ctx, parent._id, work.publishedAt, { remixes: 1 });
       remixes += 1;
     }
-    return { hearts, remixes };
+    // Confirmed Backs, from their activity events (written at confirmation, so createdAt is when).
+    let backs = 0;
+    const recentEvents = await ctx.db
+      .query("activityEvents")
+      .withIndex("by_created", (q) => q.gte("createdAt", since))
+      .collect();
+    for (const event of recentEvents) {
+      if (event.verb !== "back") continue;
+      const back = await ctx.db
+        .query("backs")
+        .withIndex("by_work_and_backer", (q) => q.eq("workId", event.workId).eq("backerId", event.actorId))
+        .unique();
+      if (back?.status !== "confirmed") continue;
+      const work = await ctx.db.get("works", event.workId);
+      if (!work || work.status !== "published" || work.creatorId === event.actorId) continue;
+      await addAttention(ctx, work._id, event.createdAt, { backs: 1 });
+      backs += 1;
+    }
+    return { hearts, remixes, backs };
   },
 });

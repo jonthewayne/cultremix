@@ -14,12 +14,17 @@ import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
 import { profileShareCard, shareMeta } from "~/lib/share";
 import { cn } from "~/lib/utils";
 
-type Shelf = "works" | "remixes";
+type Shelf = "works" | "remixes" | "backed";
 const PAGE_SIZE = 12;
+const SHELVES: Array<{ id: Shelf; label: string }> = [
+  { id: "works", label: "Works" },
+  { id: "remixes", label: "Remixes" },
+  { id: "backed", label: "Backed" },
+];
 
 export const Route = createFileRoute("/u/$username")({
-  validateSearch: (search: Record<string, unknown>): { shelf?: "remixes" } =>
-    search.shelf === "remixes" ? { shelf: "remixes" } : {},
+  validateSearch: (search: Record<string, unknown>): { shelf?: "remixes" | "backed" } =>
+    search.shelf === "remixes" || search.shelf === "backed" ? { shelf: search.shelf } : {},
   loaderDeps: ({ search }): { shelf: Shelf } => ({ shelf: search.shelf ?? "works" }),
   loader: async ({ context, params, deps }) => {
     const username = params.username;
@@ -27,7 +32,9 @@ export const Route = createFileRoute("/u/$username")({
     if (context.convexQueryClient.serverHttpClient) {
       await Promise.all([
         context.queryClient.fetchQuery(options).catch(() => null),
-        prefetchFirstPage(context, api.social.works, { username, shelf: deps.shelf }, PAGE_SIZE),
+        deps.shelf === "backed"
+          ? prefetchFirstPage(context, api.social.backed, { username }, PAGE_SIZE)
+          : prefetchFirstPage(context, api.social.works, { username, shelf: deps.shelf }, PAGE_SIZE),
       ]);
     }
     const profile = context.queryClient.getQueryData(options.queryKey) as
@@ -108,7 +115,7 @@ function ProfilePage() {
         </section>
 
         {data.bio && <p className="mt-6 max-w-2xl md:mt-8 text-lg leading-snug md:text-xl">{data.bio}</p>}
-        <p className="mt-4 flex gap-5 text-base">
+        <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-base">
           <Link to="/u/$username/followers" params={{ username: data.username }} className="hover:underline">
             <strong className="font-black tabular-nums">{data.followers}</strong>{" "}
             {data.followers === 1 ? "follower" : "followers"}
@@ -116,15 +123,24 @@ function ProfilePage() {
           <Link to="/u/$username/following" params={{ username: data.username }} className="hover:underline">
             <strong className="font-black tabular-nums">{data.following}</strong> following
           </Link>
+          <Link
+            to="/u/$username"
+            params={{ username: data.username }}
+            search={{ shelf: "backed" }}
+            resetScroll={false}
+            className="hover:underline"
+          >
+            <strong className="font-black tabular-nums">{data.backed}</strong> backed
+          </Link>
         </p>
 
         <nav aria-label="Designs" className="mt-12 flex gap-6 border-b-2 border-black md:mt-16">
-          {(["works", "remixes"] as const).map((id) => (
+          {SHELVES.map(({ id, label }) => (
             <Link
               key={id}
               to="/u/$username"
               params={{ username }}
-              search={id === "remixes" ? { shelf: "remixes" } : {}}
+              search={id === "works" ? {} : { shelf: id }}
               resetScroll={false}
               aria-current={shelf === id ? "page" : undefined}
               className={cn(
@@ -132,17 +148,21 @@ function ProfilePage() {
                 shelf === id ? "border-black" : "border-transparent text-neutral-500 hover:text-black",
               )}
             >
-              {id === "works" ? "Works" : "Remixes"}
+              {label}
             </Link>
           ))}
         </nav>
-        <ShelfGrid key={`${username}:${shelf}`} username={username} shelf={shelf} isSelf={isSelf} />
+        {shelf === "backed" ? (
+          <BackedGrid key={`${username}:backed`} username={username} isSelf={isSelf} />
+        ) : (
+          <ShelfGrid key={`${username}:${shelf}`} username={username} shelf={shelf} isSelf={isSelf} />
+        )}
       </main>
     </div>
   );
 }
 
-function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: Shelf; isSelf: boolean }) {
+function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: "works" | "remixes"; isSelf: boolean }) {
   const { items, status, loadMore } = usePagedQuery(api.social.works, { username, shelf }, PAGE_SIZE);
   if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
   if (items.length === 0 && status === "Exhausted") {
@@ -162,6 +182,26 @@ function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: Shelf
   return (
     <div className="mt-8">
       <WorkGrid items={items} showCreator={false} />
+      <LoadMore status={status} loadMore={loadMore} className="mt-12" />
+    </div>
+  );
+}
+
+// The works this member has Backed, newest first, each with their backer number.
+function BackedGrid({ username, isSelf }: { username: string; isSelf: boolean }) {
+  const { items, status, loadMore } = usePagedQuery(api.social.backed, { username }, PAGE_SIZE);
+  if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
+  if (items.length === 0 && status === "Exhausted") {
+    return (
+      <div className="mt-8">
+        <p className="text-xl font-semibold text-neutral-400">Nothing Backed yet.</p>
+        {isSelf && <p className="mt-2 text-neutral-600">Back a work you love from its page. You get 3 Backs a week.</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-8">
+      <WorkGrid items={items} />
       <LoadMore status={status} loadMore={loadMore} className="mt-12" />
     </div>
   );
