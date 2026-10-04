@@ -12,7 +12,7 @@ export function FamilyView({ cr }: { cr: string }) {
       <h2 className="border-t-2 border-black pt-4 text-sm font-bold uppercase tracking-wider">
         Family {family.family} <span className="text-neutral-500">· {family.works.length}{family.more ? "+" : ""} designs</span>
       </h2>
-      <div className="mt-6 grid grid-cols-4 gap-3 sm:grid-cols-6 md:grid-cols-8">
+      <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-6 md:grid-cols-8">
         {family.works.map((work) => (
           <WorkCard key={work.cr} work={work} current={work.cr === cr} small />
         ))}
