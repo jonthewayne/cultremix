@@ -117,7 +117,7 @@ function PrintPage() {
         <SiteHeader />
         <main className="px-4 pt-16 md:px-10">
           <CrMark cr={cr} className="text-6xl text-muted-foreground" />
-          <p className="mt-6 text-xl">Only the creator can prepare this work for print.</p>
+          <p className="mt-6 text-xl">Only the creator of a published work can prepare it for print.</p>
           <Link to="/cr/$cr" params={{ cr }} className="mt-6 inline-block font-bold underline underline-offset-4">
             Back to the work
           </Link>

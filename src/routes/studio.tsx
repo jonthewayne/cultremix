@@ -32,6 +32,7 @@ import { prefetchImage } from "~/lib/saveImage";
 import { COMPARE_MAX, canCompare, compareParam, parseCompare, togglePick } from "~/lib/compare";
 import { cn } from "~/lib/utils";
 import { parseScope } from "~/lib/viewerNav";
+import { useReturnFocus } from "~/hooks/use-return-focus";
 
 // /studio is always a blank design with the member's sessions below it; /studio?s=<id> opens a
 // session (every batch made in it, newest first); /studio?remix=<CR> starts a new remix session.
@@ -726,6 +727,7 @@ function StudioPage() {
 }
 
 function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClose: () => void }) {
+  useReturnFocus();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();

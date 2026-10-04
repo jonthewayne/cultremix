@@ -47,7 +47,9 @@ export function SiteHeader() {
         <Link
           to="/"
           activeOptions={{ exact: true }}
-          className="inline-flex h-10 items-center"
+          // Signed in, a phone can't fit Feed beside the bell and the account button; the
+          // wordmark already goes to the feed.
+          className={viewer ? "hidden h-10 items-center sm:inline-flex" : "inline-flex h-10 items-center"}
           activeProps={{ className: "underline decoration-2 underline-offset-8" }}
         >
           Feed

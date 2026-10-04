@@ -32,6 +32,7 @@ import {
   switchTarget,
   viewerShortcut,
 } from "~/lib/viewerNav";
+import { useReturnFocus } from "~/hooks/use-return-focus";
 
 // The large viewer: one design at a time over its own background color, paging through the
 // session's favorites, its batch, or the whole session. Arrows, keys, and swipes move; the
@@ -231,6 +232,7 @@ export function Viewer({
 
   // The page underneath stays put while the viewer is open.
   const dialog = useRef<HTMLDivElement>(null);
+  useReturnFocus();
   useEffect(() => {
     const before = document.body.style.overflow;
     document.body.style.overflow = "hidden";
