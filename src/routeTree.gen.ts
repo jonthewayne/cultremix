@@ -23,6 +23,7 @@ import { Route as VerifyPhoneRouteImport } from './routes/verify-phone'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
+import { Route as PrintCrRouteImport } from './routes/print.$cr'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -95,6 +96,11 @@ const InviteAcceptRoute = InviteAcceptRouteImport.update({
   path: '/invite/accept',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrintCrRoute = PrintCrRouteImport.update({
+  id: '/print/$cr',
+  path: '/print/$cr',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/print/$cr': typeof PrintCrRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/print/$cr': typeof PrintCrRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/print/$cr': typeof PrintCrRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
+    | '/print/$cr'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
+    | '/print/$cr'
     | '/api/auth/$'
   id:
     | '__root__'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
+    | '/print/$cr'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
+  PrintCrRoute: typeof PrintCrRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -325,6 +338,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteAcceptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/print/$cr': {
+      id: '/print/$cr'
+      path: '/print/$cr'
+      fullPath: '/print/$cr'
+      preLoaderRoute: typeof PrintCrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -350,6 +370,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   InviteAcceptRoute: InviteAcceptRoute,
+  PrintCrRoute: PrintCrRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

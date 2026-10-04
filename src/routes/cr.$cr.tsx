@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { PrintEntry } from "~/components/print/PrintEntry";
 import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
 
@@ -108,6 +109,7 @@ function ShopPage() {
                 <p className="mt-2 font-semibold">Verified on Monad — coming soon</p>
               </div>
             )}
+            <PrintEntry cr={item.cr} />
           </div>
         </section>
 
