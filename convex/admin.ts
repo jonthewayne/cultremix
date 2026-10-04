@@ -14,6 +14,8 @@ const flagRow = v.object({
   key: v.string(),
   label: v.string(),
   description: v.string(),
+  // Present while nothing reads the switch yet.
+  notWiredYet: v.optional(v.string()),
   enabled: v.boolean(),
   // False when the flag has no row yet and its default applies.
   isSet: v.boolean(),
@@ -51,6 +53,7 @@ async function readFlags(ctx: QueryCtx | MutationCtx) {
       key: flag.key,
       label: flag.label,
       description: flag.description,
+      notWiredYet: flag.notWiredYet,
       enabled: row ? row.enabled : flag.defaultOn,
       isSet: row !== null,
     });

@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
 import { authorizeDispatch, closeReservation, hasRoom, openReservation, spendValidator } from "./lib/budget";
+import { flagDefault } from "./lib/flags";
 import { isBlockedError, publicTileError } from "./lib/imageErrors";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EMPTY_PAGE, cappedPage } from "./lib/paging";
@@ -139,7 +140,8 @@ export async function flagEnabled(ctx: Ctx, key: string) {
     .query("featureFlags")
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
-  return row ? row.enabled : true;
+  // No row yet: the switch's default, as the admin page shows it (convex/lib/flags.ts).
+  return row ? row.enabled : flagDefault(key);
 }
 
 async function latestSession(ctx: Ctx, ownerId: Id<"users">) {

@@ -687,9 +687,10 @@ export const selfTest = internalAction({
 
 // Gives a published work a new model photo with a different model, pose, and
 // setting; the current photo stays up until the new one is recorded.
+// It counts against the creator's photo shoots for today unless skipLimit is set.
 // bunx convex run imageGen:reshoot '{"cr":"101-001"}'
 export const reshoot = internalAction({
-  args: { cr: v.string() },
+  args: { cr: v.string(), skipLimit: v.optional(v.boolean()) },
   returns: v.union(
     v.null(),
     v.object({ cr: v.string(), look: v.object({ casting: v.string(), pose: v.string(), world: v.string() }) }),
@@ -705,30 +706,37 @@ export const reshoot = internalAction({
       crExpression: number;
       photoKey?: string;
       attemptId?: string;
-    } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr });
+    } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr, skipLimit: args.skipLimit });
     if (!job) return null;
     let sent: Spend | null = null;
     try {
+      let key: string;
       if (!liveGeneration() || job.artKey.startsWith("fake:")) {
-        throw new Error("Image generation is not configured.");
+        if (!isDevDeployment()) throw new Error("Image generation is not configured.");
+        key = `fake:photo-${job.shootId}-${Date.now()}`;
+      } else {
+        const art = await fetchPublicImage(job.artKey, ctx);
+        const paid = await paidCall(() => photoImage(art, job.backgroundColor, job.look));
+        sent = paid.spend;
+        // The next photo number, so the photo a page has cached never changes under its link.
+        const n = (photoNumberOf(job.photoKey) ?? 0) + 1;
+        key = (await storeNew(ctx, paid.out.bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, n))).key;
       }
-      const art = await fetchPublicImage(job.artKey, ctx);
-      const paid = await paidCall(() => photoImage(art, job.backgroundColor, job.look));
-      sent = paid.spend;
-      // The next photo number, so the photo a page has cached never changes under its link.
-      const n = (photoNumberOf(job.photoKey) ?? 0) + 1;
-      const { key } = await storeNew(ctx, paid.out.bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, n));
       await ctx.runMutation(internal.publish.recordPhoto, {
         shootId: job.shootId,
         publicKey: key,
         attemptId: job.attemptId,
-        spend: sent,
+        // The dev stand-in never made a paid call.
+        spend: sent ?? { kind: "release", reason: "stand-in" },
       });
     } catch (error) {
-      // The current photo stays up; only the reservation needs closing.
-      if (job.attemptId) {
-        await ctx.runMutation(internal.budget.closeAttempt, { attemptId: job.attemptId, spend: spendAfter(error, sent).spend });
-      }
+      // The photo that's up stays up and the reservation closes (publish.recordPhotoFailed).
+      await ctx.runMutation(internal.publish.recordPhotoFailed, {
+        shootId: job.shootId,
+        reason: readableError(error),
+        attemptId: job.attemptId,
+        spend: spendAfter(error, sent).spend,
+      });
       throw error;
     }
     return { cr: args.cr, look: job.look };

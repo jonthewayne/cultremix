@@ -26,6 +26,19 @@
         "VITE_CONVEX_SITE_URL": "https://savory-tiger-504.convex.site"
       }
     },
+    // Hackathon staging (Monad testnet). Replace the two Convex URLs with the staging
+    // deployment's before the first deploy; docs/launch-checklist.md has the steps.
+    "staging": {
+      "name": "cultremix-staging",
+      "workers_dev": true,
+      "routes": [{ "pattern": "staging.cultremix.com", "custom_domain": true }],
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "SITE_URL": "https://staging.cultremix.com",
+        "VITE_CONVEX_URL": "https://REPLACE_WITH_STAGING_DEPLOYMENT.convex.cloud",
+        "VITE_CONVEX_SITE_URL": "https://REPLACE_WITH_STAGING_DEPLOYMENT.convex.site"
+      }
+    },
     "development": {
       "name": "cultremix-dev",
       "workers_dev": true,

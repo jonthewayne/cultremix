@@ -5,6 +5,7 @@ import { getViewerUser } from "./identity";
 import { colorName } from "./lib/colors";
 import { garmentColor } from "./lib/garments";
 import { imageUrlReader } from "./lib/imageUrls";
+import { DAILY_LIMIT } from "./lib/photoShoots";
 import { formatCr, parseCr } from "./lib/r2";
 import {
   FOLLOWING_FANOUT_LIMIT,
@@ -25,6 +26,8 @@ const photoState = v.union(
   v.literal("pending"),
   v.literal("succeeded"),
   v.literal("failed"),
+  // Waiting for its creator's photo shoots tomorrow (convex/lib/photoShoots.ts).
+  v.literal("waiting"),
 );
 
 // Everything a feed row, work page, or profile card shows. Public fields only (INV-24).
@@ -81,7 +84,11 @@ export async function toFeedItem(ctx: QueryCtx, work: Doc<"works">, urls: Urls =
     artThumbUrl: art.thumbUrl,
     photoUrl: shot.url,
     photoMediumUrl: shot.mediumUrl,
-    photoState: photo ? photo.state : ("none" as const),
+    photoState: !photo
+      ? ("none" as const)
+      : photo.state === "failed" && photo.reason === DAILY_LIMIT
+        ? ("waiting" as const)
+        : photo.state,
     parentCr: parent ? formatCr(parent.crFamily, parent.crExpression) : undefined,
     publishedAt: work.publishedAt ?? work._creationTime,
     hearts: await workHeartCount(ctx, work._id),

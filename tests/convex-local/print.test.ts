@@ -75,6 +75,8 @@ async function setup() {
       artKey: "fake:art.png",
     });
     await ctx.db.insert("creditLedger", { userId: alice, kind: "grant", amount: 10, reason: "admin" });
+    // Upscaling is off until an admin turns it on (convex/lib/flags.ts).
+    await ctx.db.insert("featureFlags", { key: "gen.upscale", enabled: true });
     return { alice, bob, owner, workId };
   });
   return { t, ...ids };

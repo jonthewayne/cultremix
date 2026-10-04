@@ -4,7 +4,7 @@ Run `bun run setup`, apply the printed Convex env commands, then run `bun run do
 
 ## Sources
 
-`VITE_*` values are Vite build-time values. They are read by browser/server bundle code and must exist in `.env.development` and `.env.production` before build.
+`VITE_*` values are Vite build-time values. They are read by browser/server bundle code and must exist in `.env.development` and `.env.production` (and `.env.staging` for `bun run deploy:staging`) before build.
 
 Convex backend env vars are separate. Set them with `bunx convex env set`. Convex production env vars use `bunx convex env set --prod`. Cloudflare Worker runtime vars and secrets are separate again. GitHub Actions variables/secrets are separate again.
 
@@ -15,8 +15,8 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | Variable | Where | Committed | Sensitive | Set By | Read By |
 | --- | --- | --- | --- | --- | --- |
 | `CONVEX_DEPLOYMENT` | `.env.local` | no | no | wizard/Convex CLI | Convex dev CLI |
-| `VITE_CONVEX_URL` | `.env.local`, `.env.development`, `.env.production`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | router, auth server |
-| `VITE_CONVEX_SITE_URL` | `.env.local`, `.env.development`, `.env.production`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | auth server |
+| `VITE_CONVEX_URL` | `.env.local`, `.env.development`, `.env.production`, `.env.staging`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | router, auth server |
+| `VITE_CONVEX_SITE_URL` | `.env.local`, `.env.development`, `.env.production`, `.env.staging`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | auth server |
 | `SITE_URL` | `.env.local`, Convex env, Worker vars | local no, wrangler yes | no | wizard | Better Auth base URL, SMS links |
 | `CONVEX_SITE_URL` | Convex system env | no | no | Convex | invite magic-link trigger |
 | `AUTH_SECRET` | `.env.local`, Convex env | no | yes | wizard | Better Auth |

@@ -41,6 +41,8 @@ CLOUDFLARE_ENV=production bun run build
 CLOUDFLARE_ENV=development bun run build
 ```
 
+Staging (`env.staging`, Worker `cultremix-staging` at `staging.cultremix.com`) builds in Vite's `staging` mode so the browser bundle reads `.env.staging` instead of `.env.production`: `bun run deploy:staging`. The steps are in `docs/launch-checklist.md`.
+
 Preview builds use development mode, then the workflow patches `dist/server/wrangler.json` with the preview Worker name and route before deploy.
 
 The deploy workflow runs unit tests and TypeScript checks first. It builds before deploying Convex functions or the Worker, so a failed test or build does not update either deployment.

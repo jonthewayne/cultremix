@@ -14,6 +14,14 @@ export const launchTables = {
     note: v.optional(v.string()),
   }).index("by_user_active", ["userId", "active"]),
 
+  // One row per model photo started for a member (at publish or a reshoot), so the daily
+  // limit counts today's through an index (convex/lib/photoShoots.ts).
+  photoShootStarts: defineTable({
+    userId: v.id("users"),
+    workId: v.id("works"),
+    startedAt: v.number(),
+  }).index("by_user_started", ["userId", "startedAt"]),
+
   // One row per UTC day, counted by convex/metrics.ts from that day's rows in pages,
   // so the metrics page reads these and never the tables themselves.
   metricsDays: defineTable({
