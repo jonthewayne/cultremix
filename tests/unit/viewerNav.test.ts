@@ -11,8 +11,8 @@ import {
   sessionDesigns,
   switchTarget,
   viewerShortcut,
-  type NavDesign,
 } from "../../src/lib/viewerNav";
+import type { NavDesign } from "../../src/lib/viewerNav";
 
 const d = (id: string, batchId: string, flags: Partial<NavDesign> = {}): NavDesign => ({
   id,
