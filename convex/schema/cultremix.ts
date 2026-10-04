@@ -197,6 +197,11 @@ export const cultremixTables = {
     generationId: v.id("generations"),
     requestId: v.string(),
     title: v.optional(v.string()),
+    // A short note from the creator for the shop page.
+    description: v.optional(v.string()),
+    // Shirt color keys (convex/lib/garments.ts), lead color first. Absent on works published
+    // before colors were chosen; their one color is backgroundColor.
+    offeredColors: v.optional(v.array(v.string())),
     backgroundColor: v.string(),
     status: v.union(
       v.literal("preparing"),

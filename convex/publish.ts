@@ -1,12 +1,17 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { getViewerUser } from "./identity";
 import { requireMember } from "./studio";
+import { MAX_DESCRIPTION_LENGTH, defaultOfferedColors, garmentColor, validateOfferedColors } from "./lib/garments";
+import { isFlagOn } from "./lib/flagState";
 import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
 import { publishPlacement } from "./lib/lineage";
 import { recordPublishActivity } from "./lib/social";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
+const PUBLISHING_OFF = "Publishing is paused for now. Your designs are safe here; try again soon.";
 
 const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
 
@@ -17,6 +22,14 @@ async function recentLooks(ctx: MutationCtx) {
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 10)
     .map((shoot) => ({ casting: shoot.castingNote, world: shoot.world }));
+}
+
+async function peekFamily(ctx: QueryCtx | MutationCtx) {
+  const counter = await ctx.db
+    .query("counters")
+    .withIndex("by_name", (q) => q.eq("name", "crFamily"))
+    .unique();
+  return counter ? counter.next : 101;
 }
 
 async function nextFamily(ctx: MutationCtx) {
@@ -42,6 +55,11 @@ export const quick = mutation({
     title: v.optional(v.string()),
     // For a remix: a variation joins the family (the default); a fork starts a new one.
     remixKind: v.optional(v.union(v.literal("variation"), v.literal("fork"))),
+    // A short note for the shop page.
+    description: v.optional(v.string()),
+    // Shirt color keys (convex/lib/garments.ts), lead color first. Omitted: the design's own
+    // shade plus the default colors.
+    offeredColors: v.optional(v.array(v.string())),
   },
   returns: v.object({ workId: v.id("works"), cr: v.string() }),
   handler: async (ctx, args) => {
@@ -52,6 +70,10 @@ export const quick = mutation({
       .unique();
     if (byRequest) {
       return { workId: byRequest._id, cr: formatCr(byRequest.crFamily, byRequest.crExpression) };
+    }
+    // Off refuses new publishes; ones already started still get their art and photo.
+    if (!(await isFlagOn(ctx, "publishing"))) {
+      throw new ConvexError({ code: "PUBLISHING_OFF", message: PUBLISHING_OFF });
     }
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation || generation.ownerId !== user._id || generation.kind === "shoot") {
@@ -72,6 +94,11 @@ export const quick = mutation({
     const session = await ctx.db.get("creativeSessions", generation.sessionId);
     if (!batch || !session) throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
     const title = args.title?.trim().slice(0, 80) || undefined;
+    const description = args.description?.trim().slice(0, MAX_DESCRIPTION_LENGTH) || undefined;
+    const colors = validateOfferedColors(args.offeredColors ?? defaultOfferedColors(batch.backgroundColor));
+    if (!colors.ok) throw new ConvexError({ code: "INVALID_COLORS", message: colors.message });
+    // The lead color is the work's background: the feed, the model photo and remixes all use it.
+    const backgroundColor = garmentColor(colors.keys[0])!.hex;
 
     // A remix is a variation (the parent's family, next expression) or a fork (a new family,
     // expression 1, crediting the parent). The parent must still have its public record.
@@ -116,7 +143,9 @@ export const quick = mutation({
       generationId: generation._id,
       requestId: args.requestId,
       title,
-      backgroundColor: batch.backgroundColor,
+      description,
+      offeredColors: colors.keys,
+      backgroundColor,
       status: "preparing",
     });
     if (startsFamily) {
@@ -125,6 +154,68 @@ export const quick = mutation({
     }
     await ctx.scheduler.runAfter(0, internal.imageGen.publishAssets, { workId });
     return { workId, cr: formatCr(crFamily, crExpression) };
+  },
+});
+
+// Whether the studio shows its Publish buttons.
+export const availability = query({
+  args: {},
+  returns: v.object({ publishing: v.boolean() }),
+  handler: async (ctx) => ({ publishing: await isFlagOn(ctx, "publishing") }),
+});
+
+// What the publish dialog shows before confirming: the CR number the design would get (a new
+// family, or the parent family's next number for a variation), a one-line lineage summary for a
+// remix, and the colors it starts with. Numbers are a preview; publishing allocates them.
+export const preview = query({
+  args: { generationId: v.id("generations") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      publishing: v.boolean(),
+      newFamilyCr: v.string(),
+      remix: v.optional(
+        v.object({
+          parentCr: v.string(),
+          variationCr: v.string(),
+          summary: v.string(),
+        }),
+      ),
+      defaultColors: v.array(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const user = await getViewerUser(ctx);
+    if (!user) return null;
+    const generation = await ctx.db.get("generations", args.generationId);
+    if (!generation || generation.ownerId !== user._id) return null;
+    const batch = await ctx.db.get("batches", generation.batchId);
+    const session = await ctx.db.get("creativeSessions", generation.sessionId);
+    if (!batch || !session) return null;
+    const newFamilyCr = formatCr(await peekFamily(ctx), 1);
+    let remix;
+    const parent = session.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
+    if (parent && (parent.status === "published" || parent.status === "withdrawn")) {
+      const family = await ctx.db
+        .query("crFamilies")
+        .withIndex("by_family", (q) => q.eq("family", parent.crFamily))
+        .unique();
+      const parentCr = formatCr(parent.crFamily, parent.crExpression);
+      const creator = await ctx.db.get("users", parent.creatorId);
+      const name = parent.title ? ` “${parent.title}”` : "";
+      const by = creator?.username && creator._id !== user._id ? ` by @${creator.username}` : "";
+      remix = {
+        parentCr,
+        variationCr: formatCr(parent.crFamily, family ? family.nextExpression : parent.crExpression + 1),
+        summary: `A remix of CR ${parentCr}${name}${by}.`,
+      };
+    }
+    return {
+      publishing: await isFlagOn(ctx, "publishing"),
+      newFamilyCr,
+      remix,
+      defaultColors: defaultOfferedColors(batch.backgroundColor),
+    };
   },
 });
 

@@ -36,6 +36,18 @@ export const RATE_LIMITS = {
     windowMs: 15 * 60 * 1000,
     blockMs: 15 * 60 * 1000,
   },
+  // The early-access list (convex/waitlist.ts), per email and per signed-in member.
+  "waitlist:join": {
+    maxAttempts: 8,
+    windowMs: 15 * 60 * 1000,
+    blockMs: 15 * 60 * 1000,
+  },
+  // Signed-out joins per work, so one page can't be flooded with made-up addresses.
+  "waitlist:visitor_work": {
+    maxAttempts: 60,
+    windowMs: 15 * 60 * 1000,
+    blockMs: 15 * 60 * 1000,
+  },
 } as const satisfies Record<
   string,
   { maxAttempts: number; windowMs: number; blockMs: number }
