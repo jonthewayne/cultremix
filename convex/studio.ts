@@ -50,6 +50,8 @@ const tileView = v.object({
   thumbUrl: v.optional(v.string()),
   key: v.optional(v.string()),
   favorite: v.boolean(),
+  // Dismissed from the studio (hidden unless the member shows dismissed designs); never deleted.
+  rejected: v.boolean(),
   // A fixed message (publicTileError); the provider's own error text stays on the server.
   error: v.optional(v.string()),
   // The provider's content filter refused it; the studio shows a friendly stamp instead of the error.
@@ -148,6 +150,39 @@ async function remixCrOf(ctx: Ctx, session: Doc<"creativeSessions">) {
   return work ? formatCr(work.crFamily, work.crExpression) : undefined;
 }
 
+// One design as the studio shows it.
+async function tileOf(
+  ctx: Ctx,
+  urls: ReturnType<typeof imageUrlReader>,
+  g: Doc<"generations">,
+  backgroundColor: string,
+): Promise<Infer<typeof tileView>> {
+  const blocked = g.status === "failed" && isBlockedError(g.error);
+  const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
+  const work =
+    g.status === "succeeded"
+      ? await ctx.db
+          .query("works")
+          .withIndex("by_generation", (q) => q.eq("generationId", g._id))
+          .first()
+      : null;
+  return {
+    generationId: g._id,
+    batchId: g.batchId,
+    status: g.status,
+    url,
+    mediumUrl,
+    thumbUrl,
+    key: g.fullKey,
+    favorite: g.favorite,
+    rejected: g.rejected === true,
+    error: blocked ? undefined : publicTileError(g.error),
+    blocked,
+    backgroundColor,
+    publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
+  };
+}
+
 // A batch as the studio shows it: its line (request, images, style mix) and its four designs.
 async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, batch: Doc<"batches">) {
   const generations = await ctx.db
@@ -177,31 +212,7 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
     images.push({ url, thumbUrl });
   }
   const tiles = [];
-  for (const g of generations) {
-    const blocked = g.status === "failed" && isBlockedError(g.error);
-    const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
-    const work =
-      g.status === "succeeded"
-        ? await ctx.db
-            .query("works")
-            .withIndex("by_generation", (q) => q.eq("generationId", g._id))
-            .first()
-        : null;
-    tiles.push({
-      generationId: g._id,
-      batchId: g.batchId,
-      status: g.status,
-      url,
-      mediumUrl,
-      thumbUrl,
-      key: g.fullKey,
-      favorite: g.favorite,
-      error: blocked ? undefined : publicTileError(g.error),
-      blocked,
-      backgroundColor: batch.backgroundColor,
-      publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
-    });
-  }
+  for (const g of generations) tiles.push(await tileOf(ctx, urls, g, batch.backgroundColor));
   return {
     batchId: batch._id,
     createdAt: batch._creationTime,
@@ -334,6 +345,52 @@ export const sessionBatches = query({
   },
 });
 
+// A session's favorites in the order they were favorited, a page at a time, for the favorites tray
+// and the viewer's favorites scope. Empty if the session isn't the member's.
+export const sessionFavorites = query({
+  args: { sessionId: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(tileView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return EMPTY_PAGE;
+    const result = await ctx.db
+      .query("generations")
+      .withIndex("by_session_favorite", (q) => q.eq("sessionId", found._id).eq("favorite", true))
+      .order("asc")
+      .paginate(cappedPage(args.paginationOpts, 100));
+    const urls = imageUrlReader(ctx);
+    const colors = new Map<Id<"batches">, string>();
+    const page = [];
+    for (const g of result.page) {
+      // Rejecting a design unfavorites it; this only guards rows written some other way.
+      if (g.status !== "succeeded" || g.rejected) continue;
+      let color = colors.get(g.batchId);
+      if (color === undefined) {
+        color = (await ctx.db.get("batches", g.batchId))?.backgroundColor ?? "#ffffff";
+        colors.set(g.batchId, color);
+      }
+      page.push(await tileOf(ctx, urls, g, color));
+    }
+    return { ...result, page };
+  },
+});
+
+// The batch holding one design, for a viewer opened from a link before that batch has paged in.
+// Null unless the design is in this session and the session is the member's.
+export const designBatch = query({
+  args: { sessionId: v.string(), generationId: v.string() },
+  returns: v.union(v.null(), batchView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return null;
+    const id = ctx.db.normalizeId("generations", args.generationId);
+    const generation = id ? await ctx.db.get("generations", id) : null;
+    if (!generation || generation.sessionId !== found._id) return null;
+    const batch = await ctx.db.get("batches", generation.batchId);
+    return batch ? await batchViewOf(ctx, imageUrlReader(ctx), batch) : null;
+  },
+});
+
 const sessionCard = v.object({
   sessionId: v.id("creativeSessions"),
   name: v.string(),
@@ -360,7 +417,7 @@ async function sessionCardOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, 
       .take(DESIGNS_PER_BATCH * 2);
     generations.sort((a, b) => a.index - b.index);
     for (const g of generations) {
-      if (g.status === "succeeded" && g.fullKey && thumbs.length < 4) {
+      if (g.status === "succeeded" && !g.rejected && g.fullKey && thumbs.length < 4) {
         const { url, thumbUrl } = await urls(g.fullKey);
         thumbs.push({ url, thumbUrl, backgroundColor: batch.backgroundColor });
       }
@@ -668,24 +725,54 @@ async function countBatches(ctx: QueryCtx, sessionId: Id<"creativeSessions">) {
   return batches.length;
 }
 
+// The member's own design, or an error.
+async function ownDesign(ctx: MutationCtx, generationId: Id<"generations">) {
+  const user = await requireMember(ctx);
+  const generation = await ctx.db.get("generations", generationId);
+  if (!generation || generation.ownerId !== user._id) {
+    throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
+  }
+  return generation;
+}
+
+// Hearts a design or takes the heart away. With favorite, sets it (so a quick double tap can't
+// flip it back); without, toggles. Favoriting brings a dismissed design back, and a design that's
+// already a favorite keeps its place in the tray.
 export const toggleFavorite = mutation({
-  args: { generationId: v.id("generations") },
+  args: { generationId: v.id("generations"), favorite: v.optional(v.boolean()) },
   returns: v.object({ favorite: v.boolean() }),
   handler: async (ctx, args) => {
-    const user = await requireMember(ctx);
-    const generation = await ctx.db.get("generations", args.generationId);
-    if (!generation || generation.ownerId !== user._id) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
-    }
+    const generation = await ownDesign(ctx, args.generationId);
     if (generation.status !== "succeeded") {
       throw new ConvexError({ code: "NOT_READY", message: "That tile is not ready." });
     }
-    const favorite = !generation.favorite;
+    const favorite = args.favorite ?? !generation.favorite;
+    if (favorite === generation.favorite && !(favorite && generation.rejected)) return { favorite };
     await ctx.db.patch("generations", generation._id, {
       favorite,
-      favoritedAt: favorite ? Date.now() : undefined,
+      favoritedAt: favorite ? (generation.favorite ? generation.favoritedAt : Date.now()) : undefined,
+      ...(favorite ? { rejected: undefined } : {}),
     });
     return { favorite };
+  },
+});
+
+// Dismisses a design (or brings it back). Dismissed designs stay in the session, hidden unless the
+// member shows them, and leave the favorites. Nothing is deleted.
+export const setRejected = mutation({
+  args: { generationId: v.id("generations"), rejected: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const generation = await ownDesign(ctx, args.generationId);
+    if (generation.status === "queued" || generation.status === "dispatched") {
+      throw new ConvexError({ code: "NOT_READY", message: "That tile is still being made." });
+    }
+    if (args.rejected) {
+      await ctx.db.patch("generations", generation._id, { rejected: true, favorite: false, favoritedAt: undefined });
+    } else if (generation.rejected) {
+      await ctx.db.patch("generations", generation._id, { rejected: undefined });
+    }
+    return null;
   },
 });
 
