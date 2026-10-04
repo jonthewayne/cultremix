@@ -236,7 +236,9 @@ describe("studio.sessionBatches", () => {
     ]) {
       expect(result).toMatchObject({ page: [], isDone: true });
     }
-    expect(await bob.as.query(api.studio.session, { sessionId })).toBeNull();
+    expect(await bob.as.query(api.studio.session, { sessionId })).toEqual({ missing: true });
+    // Signed out (or before the page's sign-in token arrives) is null, so the page waits.
+    expect(await t.query(api.studio.session, { sessionId })).toBeNull();
   });
 
   it("caps the page size the browser asks for", async () => {
@@ -271,9 +273,10 @@ describe("studio.session", () => {
       }
     });
     const view = await alice.as.query(api.studio.session, { sessionId });
-    expect(view?.batchCount).toBe(BATCH_COUNT_CAP);
-    expect(view?.lastInputs?.instruction).toBe(`request ${BATCH_COUNT_CAP}`);
-    expect(view?.name).toBe("request 0");
+    if (!view || "missing" in view) throw new Error("Alice's own session should load.");
+    expect(view.batchCount).toBe(BATCH_COUNT_CAP);
+    expect(view.lastInputs?.instruction).toBe(`request ${BATCH_COUNT_CAP}`);
+    expect(view.name).toBe("request 0");
   });
 });
 

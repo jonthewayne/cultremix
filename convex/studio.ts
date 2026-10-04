@@ -318,10 +318,14 @@ export const current = query({
 // One session, by the id in the studio's address (?s=…). Null if it isn't the member's.
 export const session = query({
   args: { sessionId: v.string() },
-  returns: v.union(v.null(), sessionView),
+  // null while the caller isn't signed in (the page is still waiting for its sign-in token);
+  // { missing: true } when the session isn't the member's or no longer exists, so the page falls
+  // back to a blank studio only then.
+  returns: v.union(v.null(), v.object({ missing: v.literal(true) }), sessionView),
   handler: async (ctx, args) => {
+    if (!(await ctx.auth.getUserIdentity())) return null;
     const found = await ownSession(ctx, args.sessionId);
-    return found ? await buildSessionView(ctx, found) : null;
+    return found ? await buildSessionView(ctx, found) : { missing: true as const };
   },
 });
 

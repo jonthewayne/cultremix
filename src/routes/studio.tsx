@@ -54,7 +54,8 @@ function StudioPage() {
   const { remix, s } = search;
   const navigate = useNavigate();
   const sessionQuery = useQuery(convexQuery(api.studio.session, s ? { sessionId: s } : "skip"));
-  const session = s ? sessionQuery.data : undefined;
+  const sessionData = s ? sessionQuery.data : undefined;
+  const session = sessionData && !("missing" in sessionData) ? sessionData : undefined;
   // The session's batches, newest first; older ones page in as the list scrolls.
   const batchPages = usePaginatedQuery(api.studio.sessionBatches, s ? { sessionId: s } : "skip", {
     initialNumItems: PAGE.batches,
@@ -242,9 +243,10 @@ function StudioPage() {
       }
     }
   }, [s, session, addExisting]);
-  // A session that isn't the member's (or no longer exists) falls back to a blank studio.
+  // A session that isn't the member's (or no longer exists) falls back to a blank studio. The query
+  // answers null until the page's sign-in token reaches Convex, so only "missing" counts.
   useEffect(() => {
-    if (s && sessionQuery.data === null) void navigate({ to: "/studio", search: {}, replace: true });
+    if (s && sessionQuery.data && "missing" in sessionQuery.data) void navigate({ to: "/studio", search: {}, replace: true });
   }, [s, sessionQuery.data, navigate]);
 
   // Remix: a new session with the published design as image 1.
