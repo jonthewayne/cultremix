@@ -16,7 +16,7 @@ const spotOf = (view: string | undefined, scope: string | undefined): Spot | nul
   view ? { view, scope: parseScope(scope) ?? "session" } : null;
 
 // Router search values are plain strings, or JSON-quoted when they'd otherwise read as JSON.
-function searchValue(params: URLSearchParams, name: string): string | undefined {
+export function searchValue(params: URLSearchParams, name: string): string | undefined {
   const raw = params.get(name);
   if (raw === null) return undefined;
   if (raw.startsWith('"')) {
@@ -100,5 +100,13 @@ export function useViewerRoute(search: { s?: string; view?: string; scope?: stri
     }
   }, [router, write]);
 
-  return { spot, open, move, close };
+  // Put the viewer away without touching the address: the next navigation (Compare opening)
+  // writes it, and Back returns to this design.
+  const hide = useCallback(() => {
+    window.clearTimeout(timer.current);
+    pushed.current = false;
+    setSpot(null);
+  }, []);
+
+  return { spot, open, move, close, hide };
 }

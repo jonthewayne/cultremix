@@ -17,6 +17,7 @@ import { isImageKey } from "./lib/sizes";
 import {
   BATCH_COUNT_CAP,
   BATCH_CREDITS,
+  COMPARE_MAX,
   DESIGNS_PER_BATCH,
   MAX_IMAGES,
   MAX_STYLES,
@@ -60,6 +61,9 @@ const tileView = v.object({
   blocked: v.boolean(),
   backgroundColor: v.string(),
   publishedCr: v.optional(v.string()),
+  // The original's size in pixels, when known (Compare draws every design at the same scale).
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
 });
 
 const batchView = v.object({
@@ -69,7 +73,17 @@ const batchView = v.object({
   presets: v.array(v.string()),
   backgroundColor: v.string(),
   inspirationUrl: v.optional(v.string()),
-  images: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()) })),
+  // An image that is one of the member's own designs ("Use as image") names it, so the batch line
+  // can link back to the design it started from.
+  images: v.array(
+    v.object({
+      url: v.optional(v.string()),
+      thumbUrl: v.optional(v.string()),
+      design: v.optional(
+        v.object({ generationId: v.id("generations"), sessionId: v.id("creativeSessions"), backgroundColor: v.string() }),
+      ),
+    }),
+  ),
   // The style mix as thumbnails and shares; what the styles were read as stays on the server.
   styles: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), share: v.number() })),
   // A grid batch is charged as a whole; refunded is the credits it gave back for missing designs.
@@ -182,7 +196,23 @@ async function tileOf(
     blocked,
     backgroundColor,
     publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
+    width: g.width,
+    height: g.height,
   };
+}
+
+// The member's own finished design that a batch image is (its parent, for a batch made with
+// "Use as image"), or undefined for an upload. Another member's design never matches.
+async function designFor(ctx: Ctx, batch: Doc<"batches">, key: string) {
+  const found = await ctx.db
+    .query("generations")
+    .withIndex("by_owner_fullKey", (q) => q.eq("ownerId", batch.ownerId).eq("fullKey", key))
+    .take(4);
+  const design = found.find((g) => g.status === "succeeded" && g.batchId !== batch._id);
+  if (!design) return undefined;
+  const from = await ctx.db.get("batches", design.batchId);
+  if (!from) return undefined;
+  return { generationId: design._id, sessionId: design.sessionId, backgroundColor: from.backgroundColor };
 }
 
 // A batch as the studio shows it: its line (request, images, style mix) and its four designs.
@@ -211,7 +241,7 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
   const images = [];
   for (const image of batch.images ?? []) {
     const { url, thumbUrl } = await urls(image.key);
-    images.push({ url, thumbUrl });
+    images.push({ url, thumbUrl, design: await designFor(ctx, batch, image.key) });
   }
   const tiles = [];
   for (const g of generations) tiles.push(await tileOf(ctx, urls, g, batch.backgroundColor));
@@ -394,6 +424,32 @@ export const designBatch = query({
     if (!generation || generation.sessionId !== found._id) return null;
     const batch = await ctx.db.get("batches", generation.batchId);
     return batch ? await batchViewOf(ctx, imageUrlReader(ctx), batch) : null;
+  },
+});
+
+// Up to four of a session's finished designs, in the order asked, for Compare (a link can name
+// designs whose batches haven't paged in). Designs that aren't in this session of the member's,
+// aren't finished, or repeat are left out.
+export const compareDesigns = query({
+  args: { sessionId: v.string(), generationIds: v.array(v.string()) },
+  returns: v.array(tileView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return [];
+    const urls = imageUrlReader(ctx);
+    const seen = new Set<string>();
+    const tiles = [];
+    for (const raw of args.generationIds.slice(0, COMPARE_MAX * 2)) {
+      const id = ctx.db.normalizeId("generations", raw);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const g = await ctx.db.get("generations", id);
+      if (!g || g.sessionId !== found._id || g.status !== "succeeded") continue;
+      const batch = await ctx.db.get("batches", g.batchId);
+      tiles.push(await tileOf(ctx, urls, g, batch?.backgroundColor ?? "#ffffff"));
+      if (tiles.length === COMPARE_MAX) break;
+    }
+    return tiles;
   },
 });
 

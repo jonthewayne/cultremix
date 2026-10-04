@@ -99,7 +99,16 @@ export function switchTarget(ids: ReadonlyArray<string>, current: string): strin
   return ids.includes(current) ? current : (ids[0] ?? null);
 }
 
-export type ViewerAction = "next" | "previous" | "close" | "favorite" | "reject" | "branch" | "publish" | "transparency";
+export type ViewerAction =
+  | "next"
+  | "previous"
+  | "close"
+  | "favorite"
+  | "reject"
+  | "branch"
+  | "publish"
+  | "transparency"
+  | "compare";
 
 const KEYS: Record<string, ViewerAction> = {
   arrowright: "next",
@@ -110,6 +119,7 @@ const KEYS: Record<string, ViewerAction> = {
   b: "branch",
   p: "publish",
   t: "transparency",
+  c: "compare",
 };
 
 type KeyTarget = { tagName?: string; isContentEditable?: boolean } | null;

@@ -19,6 +19,9 @@ export type Tile = {
   backgroundColor: string;
   publishedCr?: string;
   key?: string;
+  // The original's size in pixels, when known.
+  width?: number;
+  height?: number;
 };
 
 export const isFinished = (tile: Tile) => tile.status === "succeeded";

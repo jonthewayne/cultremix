@@ -11,6 +11,7 @@ import type { Spot } from "~/components/studio/useViewerRoute";
 import type { NavDesign, Scope } from "~/lib/viewerNav";
 import type { Tile } from "~/components/studio/design";
 import { Art } from "~/components/cr/Art";
+import { COMPARE_MIN } from "~/lib/compare";
 import { designItems } from "~/components/studio/design";
 import { DesignMenu } from "~/components/studio/StudioSessions";
 import { inkOn } from "~/lib/imagePrep";
@@ -64,6 +65,9 @@ export function Viewer({
   onBranch,
   onStyle,
   onPublish,
+  picks,
+  onPick,
+  onCompare,
 }: {
   sessionId: string;
   spot: Spot;
@@ -83,6 +87,10 @@ export function Viewer({
   onStyle: (tile: Tile) => void;
   // Missing while publishing is switched off.
   onPublish?: (tile: Tile) => void;
+  // Designs picked for Compare; C or "+ Compare" picks this one.
+  picks: Array<string>;
+  onPick: (tile: Tile) => void;
+  onCompare: () => void;
 }) {
   const id = spot.view;
   const loadedBatch = batches.find((batch) => batch.tiles.some((tile) => tile.generationId === id));
@@ -184,7 +192,18 @@ export function Viewer({
   };
 
   // Keys: arrows, Escape, and F X B P T. The latest handlers are read through a ref.
-  const handlers = useRef({ next: () => {}, previous: () => {}, close: onClose, favorite, reject, branch: () => {}, publish: () => {}, transparency: () => {} });
+  const pick = () => tile && finished(tile) && onPick(tile);
+  const handlers = useRef({
+    next: () => {},
+    previous: () => {},
+    close: onClose,
+    favorite,
+    reject,
+    branch: () => {},
+    publish: () => {},
+    transparency: () => {},
+    compare: () => {},
+  });
   handlers.current = {
     next: () => go(next),
     previous: () => go(previous),
@@ -194,6 +213,7 @@ export function Viewer({
     branch: () => tile?.key && onBranch(tile),
     publish: () => tile && !tile.publishedCr && onPublish?.(tile),
     transparency: () => setChecker((on) => !on),
+    compare: pick,
   };
   const menuOpenRef = useRef(menuOpen);
   menuOpenRef.current = menuOpen;
@@ -267,6 +287,19 @@ export function Viewer({
       </button>
     ) : null);
   const more_ = tile && <DesignMenu items={menu} onOpenChange={setMenuOpen} />;
+  const picked = picks.includes(id);
+  const compare = tile && finished(tile) && (
+    <div className="flex items-center gap-2">
+      <button type="button" onClick={pick} aria-pressed={picked} className={cn(outlined, "h-9 md:h-11")}>
+        {picked ? "✓ Compare" : "+ Compare"}
+      </button>
+      {picks.length >= COMPARE_MIN && (
+        <button type="button" onClick={onCompare} className={cn(button, "h-9 md:h-11")} style={filled}>
+          Compare {picks.length}
+        </button>
+      )}
+    </div>
+  );
   const scopes = (
     <div role="tablist" aria-label="Page through" className="flex rounded-xl border-2 border-current p-0.5 text-sm font-bold">
       {SCOPES.map((scope) => {
@@ -311,7 +344,9 @@ export function Viewer({
         </span>
         {tile?.rejected && <span className="rounded-lg border-2 border-current px-2 py-0.5 text-xs font-bold uppercase tracking-wider">Dismissed</span>}
         <div className="hidden md:block">{scopes}</div>
+        <div className="ml-auto md:hidden">{compare}</div>
         <div className="ml-auto hidden items-center gap-2 md:flex">
+          {compare}
           {heart}
           {dismiss}
           {tile?.key && (
@@ -396,7 +431,7 @@ export function Viewer({
       </div>
 
       <p className="hidden pb-4 pt-2 text-center text-xs font-semibold opacity-60 md:block [@media(pointer:coarse)]:hidden">
-        ← → move · F favorite · X dismiss · B use as image · P publish · T transparency · Esc close
+        ← → move · F favorite · X dismiss · C compare · B use as image · P publish · T transparency · Esc close
       </p>
 
       {/* Phones: everything at the bottom, in reach of a thumb. Swipe sideways to move, down to close. */}

@@ -154,6 +154,7 @@ describe("shortcuts", () => {
     expect(viewerShortcut({ key: "b", target: body })).toBe("branch");
     expect(viewerShortcut({ key: "p", target: body })).toBe("publish");
     expect(viewerShortcut({ key: "t", target: body })).toBe("transparency");
+    expect(viewerShortcut({ key: "c", target: body })).toBe("compare");
     expect(viewerShortcut({ key: "q", target: body })).toBeNull();
     expect(viewerShortcut({ key: "ArrowUp", target: body })).toBeNull();
   });
