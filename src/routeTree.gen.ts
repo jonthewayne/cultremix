@@ -31,6 +31,7 @@ import { Route as AdminOrdersRouteImport } from './routes/admin_.orders'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as EconomicsFileRouteImport } from './routes/economics.$file'
+import { Route as FamilyFamilyRouteImport } from './routes/family.$family'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
 import { Route as MeEarningsRouteImport } from './routes/me.earnings'
 import { Route as PrintCrRouteImport } from './routes/print.$cr'
@@ -149,6 +150,11 @@ const EconomicsFileRoute = EconomicsFileRouteImport.update({
   path: '/economics/$file',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FamilyFamilyRoute = FamilyFamilyRouteImport.update({
+  id: '/family/$family',
+  path: '/family/$family',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InviteAcceptRoute = InviteAcceptRouteImport.update({
   id: '/invite/accept',
   path: '/invite/accept',
@@ -207,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
+  '/family/$family': typeof FamilyFamilyRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/me/earnings': typeof MeEarningsRoute
   '/print/$cr': typeof PrintCrRoute
@@ -237,6 +244,7 @@ export interface FileRoutesByTo {
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
+  '/family/$family': typeof FamilyFamilyRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/me/earnings': typeof MeEarningsRoute
   '/print/$cr': typeof PrintCrRoute
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
+  '/family/$family': typeof FamilyFamilyRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/me/earnings': typeof MeEarningsRoute
   '/print/$cr': typeof PrintCrRoute
@@ -302,6 +311,7 @@ export interface FileRouteTypes {
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
+    | '/family/$family'
     | '/invite/accept'
     | '/me/earnings'
     | '/print/$cr'
@@ -332,6 +342,7 @@ export interface FileRouteTypes {
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
+    | '/family/$family'
     | '/invite/accept'
     | '/me/earnings'
     | '/print/$cr'
@@ -363,6 +374,7 @@ export interface FileRouteTypes {
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
+    | '/family/$family'
     | '/invite/accept'
     | '/me/earnings'
     | '/print/$cr'
@@ -390,6 +402,7 @@ export interface RootRouteChildren {
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   EconomicsFileRoute: typeof EconomicsFileRoute
+  FamilyFamilyRoute: typeof FamilyFamilyRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
   MeEarningsRoute: typeof MeEarningsRoute
   PrintCrRoute: typeof PrintCrRoute
@@ -555,6 +568,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EconomicsFileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/family/$family': {
+      id: '/family/$family'
+      path: '/family/$family'
+      fullPath: '/family/$family'
+      preLoaderRoute: typeof FamilyFamilyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invite/accept': {
       id: '/invite/accept'
       path: '/invite/accept'
@@ -644,6 +664,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   EconomicsFileRoute: EconomicsFileRoute,
+  FamilyFamilyRoute: FamilyFamilyRoute,
   InviteAcceptRoute: InviteAcceptRoute,
   MeEarningsRoute: MeEarningsRoute,
   PrintCrRoute: PrintCrRoute,
