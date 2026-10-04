@@ -91,5 +91,10 @@ if ! curl -fsS "$BASE_URL/economics/v1.json" | grep -q '"creatorPoolBps"'; then
   exit 1
 fi
 
+agent-browser open "$BASE_URL/onchain"
+agent-browser wait 1500
+assert_text "On Monad"
+agent-browser screenshot body .tmp/screenshots/onchain.png
+
 
 echo "E2E smoke complete for $BASE_URL"

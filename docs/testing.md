@@ -76,7 +76,7 @@ BASE_URL=http://localhost:3000 bun run test:e2e
 
 The smoke opens the public sign-in pages (login, email verification, phone verification, invite, and unauthorized), checks each page's heading text, and saves screenshots to `.tmp/screenshots/`. CultRemix's sign-in pages have one black-and-white look, so the smoke no longer looks for the starter's theme toggle.
 
-It then checks the signed-out public pages: the home feed with its Latest and Trending tabs, the first work the feed links to (its CR number and SHA-256 fingerprint), that work's family tree, its creator's profile, and `/economics/v1.json`, failing on any broken image. Because it finds the work from the feed, the same command works as a read-only check of production after a deploy: `BASE_URL=https://cultremix.com bun run test:e2e`.
+It then checks the signed-out public pages: the home feed with its Latest and Trending tabs, the first work the feed links to (its CR number and SHA-256 fingerprint), that work's family tree, its creator's profile, `/economics/v1.json`, and `/onchain`, failing on any broken image. Because it finds the work from the feed, the same command works as a read-only check of production after a deploy: `BASE_URL=https://cultremix.com bun run test:e2e`.
 
 ## Fresh Project Acceptance Test
 
