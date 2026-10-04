@@ -8,7 +8,8 @@ import { crNumber, productHandle, syncProduct } from "./lib/shopify/productSync"
 import { commerceOpen } from "./lib/shopFlags";
 import { publicUrl } from "./lib/r2";
 import { getViewerUser, isOwner } from "./identity";
-import { PRINT_COLORS, PRINT_SIZES } from "../shared/config/print-products";
+import { PRINT_SIZES } from "../shared/config/print-products";
+import { sellableColors } from "./lib/shopColors";
 
 // Shopify products for published works (V1 U9). A work goes on sale after publish when
 // commerce.checkout is on: one productSet by handle, then workVariants rows for reverse lookup.
@@ -109,7 +110,12 @@ export const workForSync = internalQuery({
   args: { workId: v.id("works") },
   returns: v.union(
     v.null(),
-    v.object({ cr: v.string(), title: v.optional(v.string()), imageUrls: v.array(v.string()) }),
+    v.object({
+      cr: v.string(),
+      title: v.optional(v.string()),
+      imageUrls: v.array(v.string()),
+      offeredColors: v.optional(v.array(v.string())),
+    }),
   ),
   handler: async (ctx, args) => {
     const work = await ctx.db.get("works", args.workId);
@@ -124,7 +130,12 @@ export const workForSync = internalQuery({
     const imageUrls = keys
       .map((key) => publicUrl(key))
       .filter((url): url is string => typeof url === "string" && /^https:\/\//u.test(url));
-    return { cr: crNumber(work.crFamily, work.crExpression), title: work.title, imageUrls };
+    return {
+      cr: crNumber(work.crFamily, work.crExpression),
+      title: work.title,
+      imageUrls,
+      offeredColors: work.offeredColors,
+    };
   },
 });
 
@@ -206,6 +217,17 @@ export const syncWork = internalAction({
   handler: async (ctx, args) => {
     const work = await ctx.runQuery(internal.shopify.workForSync, args);
     if (!work) return "skipped";
+    const { offeredColors, ...product } = work;
+    // Only the colors the creator offered (or the launch colors for works that predate the choice).
+    const colors = sellableColors(offeredColors);
+    if (colors.length === 0) {
+      await ctx.runMutation(internal.shopify.syncFailed, {
+        workId: args.workId,
+        error: "None of this design's colors can be printed yet.",
+        countAttempt: true,
+      });
+      return "failed";
+    }
     const admin = shopifyAdminForAction(ctx);
     if (!admin) {
       await ctx.runMutation(internal.shopify.syncFailed, {
@@ -216,7 +238,7 @@ export const syncWork = internalAction({
       return "skipped";
     }
     try {
-      const result = await syncProduct(admin, { workId: args.workId, ...work });
+      const result = await syncProduct(admin, { workId: args.workId, ...product, colors });
       await ctx.runMutation(internal.shopify.saveSynced, {
         workId: args.workId,
         productId: result.productId,
@@ -289,7 +311,9 @@ export const syncAllPublished = mutation({
 const offerValidator = v.object({
   workId: v.id("works"),
   cr: v.string(),
-  colors: v.array(v.object({ code: v.string(), name: v.string(), hex: v.string() })),
+  // key is the garment color key (works.offeredColors), so the page's swatches and the buy box
+  // share one selection; code is the SKU code the cart sends.
+  colors: v.array(v.object({ key: v.string(), code: v.string(), name: v.string(), hex: v.string() })),
   sizes: v.array(v.string()),
   variants: v.array(
     v.object({ color: v.string(), size: v.string(), merchandiseId: v.string(), priceCents: v.number() }),
@@ -320,17 +344,17 @@ export const offer = query({
       .query("workVariants")
       .withIndex("by_work", (q) => q.eq("workId", work._id))
       .take(100);
-    if (rows.length === 0) return null;
+    // Only the colors the work is offered in: rows for any other color (kept so old orders still
+    // resolve) are never sold, so the cart refuses them.
+    const colors = sellableColors(work.offeredColors).filter((c) => rows.some((r) => r.color === c.code));
+    const sold = rows.filter((r) => colors.some((c) => c.code === r.color));
+    if (sold.length === 0) return null;
     return {
       workId: work._id,
       cr: crNumber(work.crFamily, work.crExpression),
-      colors: PRINT_COLORS.filter((c) => rows.some((r) => r.color === c.code)).map((c) => ({
-        code: c.code,
-        name: c.name,
-        hex: c.hex,
-      })),
-      sizes: PRINT_SIZES.filter((s) => rows.some((r) => r.size === s)),
-      variants: rows.map((r) => ({
+      colors: colors.map((c) => ({ key: c.key, code: c.code, name: c.name, hex: c.hex })),
+      sizes: PRINT_SIZES.filter((s) => sold.some((r) => r.size === s)),
+      variants: sold.map((r) => ({
         color: r.color,
         size: r.size,
         merchandiseId: r.shopifyVariantId,
