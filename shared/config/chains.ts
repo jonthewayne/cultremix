@@ -214,10 +214,12 @@ export function assertDeploymentConsistency(env: Env): ChainDeployment {
 
 /**
  * The relayer key must belong to this environment: the committed relayer address when there is
- * one, and never another environment's relayer.
+ * one, and never another environment's relayer. A dev deployment pointed at a localhost node
+ * (anvil) may use that node's own funded account.
  */
 export function assertRelayerAddress(deployment: ChainDeployment, relayerAddress: string) {
-  if (deployment.relayerAddress && !sameAddress(deployment.relayerAddress, relayerAddress)) {
+  const localDev = deployment.env === "dev" && LOCAL_RPC.test(deployment.rpcUrl);
+  if (deployment.relayerAddress && !localDev && !sameAddress(deployment.relayerAddress, relayerAddress)) {
     throw new DeploymentConfigError(`MONAD_RELAYER_PRIVATE_KEY is not the ${deployment.env} relayer.`);
   }
   for (const [otherName, other] of Object.entries(CHAIN_ENVIRONMENTS)) {

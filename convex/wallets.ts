@@ -6,6 +6,7 @@ import { getViewerUser } from "./identity";
 import { DeploymentConfigError, assertDeploymentConsistency } from "../shared/config/chains";
 import { createMemberWallet } from "./lib/chain/custody";
 import { chainDeps } from "./lib/chain/deps";
+import { promoteForWallet } from "./lib/chain/queue";
 import { walletStatusValidator } from "./schema";
 
 // Member wallets: pending → provisioning → ready | failed. Provisioning starts when the user is
@@ -83,6 +84,8 @@ export const recordWallet = internalMutation({
       walletNextAttemptAt: undefined,
       walletError: undefined,
     });
+    // Registrations and Backs that were waiting on this wallet can go now.
+    await promoteForWallet(ctx, user._id);
     return null;
   },
 });

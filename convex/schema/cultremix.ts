@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { provenanceStatusValidator } from "./chain";
 
 // CultRemix tables for the 2026-09-29 sprint. Names follow the Checkpoint 0
 // plan's "Settled validators"; fields not needed today are optional, and
@@ -200,6 +201,11 @@ export const cultremixTables = {
     notesSummary: v.optional(v.string()),
     notesKind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
     notesModel: v.optional(v.string()),
+    // Onchain provenance (convex/chain.ts): the registerWork write and its confirmed transaction.
+    provenanceStatus: v.optional(provenanceStatusValidator),
+    chainWriteId: v.optional(v.id("chainWrites")),
+    chainTxHash: v.optional(v.string()),
+    provenanceConfirmedAt: v.optional(v.number()),
   })
     .index("by_status_publishedAt", ["status", "publishedAt"])
     .index("by_family_expression", ["crFamily", "crExpression"])

@@ -106,6 +106,19 @@ describe("assertDeploymentConsistency (KTD-14)", () => {
     expect(() => assertRelayerAddress(prod, devRelayer)).toThrow(/belongs to the dev relayer/);
   });
 
+  it("lets dev on a localhost node use that node's account, but never another environment's relayer", () => {
+    const anvil = assertDeploymentConsistency({ DEPLOYMENT_ENV: "dev", MONAD_RPC_URL: "http://127.0.0.1:8545" });
+    expect(() => assertRelayerAddress(anvil, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")).not.toThrow();
+    const otherEnvironments = { ...CHAIN_ENVIRONMENTS.prod, relayerAddress: "0x0000000000000000000000000000000000000002" as const };
+    const original = CHAIN_ENVIRONMENTS.prod;
+    CHAIN_ENVIRONMENTS.prod = otherEnvironments;
+    try {
+      expect(() => assertRelayerAddress(anvil, "0x0000000000000000000000000000000000000002")).toThrow(/belongs to the prod relayer/);
+    } finally {
+      CHAIN_ENVIRONMENTS.prod = original;
+    }
+  });
+
   it("checks the chain ID the RPC reports", () => {
     const prod = assertDeploymentConsistency({ DEPLOYMENT_ENV: "prod" });
     expect(() => assertRpcChainId(prod, 143)).not.toThrow();
