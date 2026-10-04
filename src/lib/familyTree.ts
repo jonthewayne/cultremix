@@ -128,7 +128,7 @@ export function buildFamilyTree(data: FamilyTreeData, options: TreeOptions): Arr
     } else if (!open && all.length > maxChildren) {
       shown = all.slice(0, maxChildren);
       const onPath = all.findIndex((child) => path.has(child.cr));
-      if (onPath >= maxChildren) shown = [...all.slice(0, maxChildren - 1), all[onPath]!];
+      if (onPath >= maxChildren) shown = [...all.slice(0, maxChildren - 1), all[onPath]];
       const kept = new Set(shown.map((child) => child.cr));
       tail = more(all.filter((child) => !kept.has(child.cr)), "wide");
     }
@@ -192,7 +192,7 @@ export function layoutTree(
   const place = (node: TreeNode, depth: number): PlacedNode => {
     depthMax = Math.max(depthMax, depth);
     const children = node.children.map((child) => place(child, depth + 1));
-    const x = children.length ? (children[0]!.x + children.at(-1)!.x) / 2 : column++ * columnWidth;
+    const x = children.length ? (children[0].x + children.at(-1)!.x) / 2 : column++ * columnWidth;
     const placed = { node, x, y: depth * rowHeight };
     nodes.push(placed);
     for (const child of children) {

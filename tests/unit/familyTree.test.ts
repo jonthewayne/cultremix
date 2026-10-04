@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  
+  
+  
   buildFamilyTree,
   familyOfCr,
   layoutTree,
-  shownCount,
-  type FamilyTreeData,
-  type TreeNode,
-  type TreeWork,
+  shownCount
 } from "../../src/lib/familyTree";
+import type {FamilyTreeData, TreeNode, TreeWork} from "../../src/lib/familyTree";
 
 const cr = (family: number, expression: number) => `${family}-${String(expression).padStart(3, "0")}`;
 
@@ -96,7 +97,7 @@ describe("buildFamilyTree forks across families", () => {
     const forks = [work(140, 1, cr(101, 1)), work(120, 1, cr(101, 1)), work(150, 1, cr(101, 2))];
     const tree = buildFamilyTree(data(works, { forks }), loose);
     expect(shape(tree)).toBe("101-001(101-002(fork:150-001),fork:120-001,fork:140-001)");
-    const fork = tree[0]!.children[1]!;
+    const fork = tree[0].children[1];
     expect(fork.type).toBe("fork");
     expect(fork.via).toBe("fork");
     expect(fork.children).toEqual([]);
@@ -107,7 +108,7 @@ describe("buildFamilyTree forks across families", () => {
     const works = [work(140, 1, origin.cr), work(140, 2, cr(140, 1))];
     const tree = buildFamilyTree(data(works, { origins: [origin] }), loose);
     expect(shape(tree)).toBe("origin:101-002(140-001(140-002))");
-    expect(tree[0]!.children[0]!.via).toBe("fork");
+    expect(tree[0].children[0].via).toBe("fork");
     const layout = layoutTree(tree, { nodeWidth: 10, nodeHeight: 10, gapX: 0, gapY: 0 });
     expect(Object.fromEntries(layout.edges.map((edge) => [edge.key, edge.dashed]))).toEqual({
       "origin:101-002>140-001": true,
@@ -128,7 +129,7 @@ describe("buildFamilyTree collapse", () => {
     const tree = buildFamilyTree(data(wide), { maxDepth: 99, maxChildren: 3 });
     // 101-005 and 101-006 hidden directly, 101-007 with its child 101-008: 3 siblings, 4 designs.
     expect(shape(tree)).toBe("101-001(101-002,101-003,101-004,+3/4)");
-    const more = tree[0]!.children[3]!;
+    const more = tree[0].children[3];
     expect(more).toMatchObject({ type: "more", parentCr: "101-001", reason: "wide" });
   });
 
@@ -148,7 +149,7 @@ describe("buildFamilyTree collapse", () => {
     const chain = [work(101, 1), work(101, 2, cr(101, 1)), work(101, 3, cr(101, 2)), work(101, 4, cr(101, 3))];
     const tree = buildFamilyTree(data(chain, { forks: [work(150, 1, cr(101, 3))] }), { maxDepth: 1, maxChildren: 9 });
     expect(shape(tree)).toBe("101-001(101-002(+1/3))");
-    expect(tree[0]!.children[0]!.children[0]).toMatchObject({ type: "more", reason: "deep" });
+    expect(tree[0].children[0].children[0]).toMatchObject({ type: "more", reason: "deep" });
   });
 
   it("opens a deep branch on the path to the current work", () => {
@@ -166,7 +167,7 @@ describe("buildFamilyTree collapse", () => {
     const forks = [130, 140, 150].map((family) => work(family, 1, cr(101, 1)));
     const tree = buildFamilyTree(data([work(101, 1)], { forks }), { maxDepth: 99, maxChildren: 1 });
     expect(shape(tree)).toBe("101-001(fork:130-001,+2/2)");
-    expect(tree[0]!.children[1]!.via).toBe("fork");
+    expect(tree[0].children[1].via).toBe("fork");
   });
 });
 

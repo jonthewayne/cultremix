@@ -1,4 +1,4 @@
-import { ConvexError, v, type Infer } from "convex/values";
+import { ConvexError,  v } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
@@ -7,6 +7,7 @@ import { workHeartCount } from "./lib/social";
 import { formatCr, parseCr } from "./lib/r2";
 import { LineageError, MAX_TRAIL, effectiveAncestors, effectiveOf, validateAmendment } from "./lib/lineage";
 import { amendmentStatusValidator, workKindValidator } from "./schema/lineage";
+import type {Infer} from "convex/values";
 import type { LineageWork, WorkKind } from "./lib/lineage";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";

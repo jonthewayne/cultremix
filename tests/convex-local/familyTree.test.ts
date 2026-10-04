@@ -124,7 +124,7 @@ describe("lineage.familyTree", () => {
       remixesMore: false,
       hearts: 7,
     });
-    expect(tree.works[0]!.kind).toBe("fork");
+    expect(tree.works[0].kind).toBe("fork");
     expect(tree.forks.map((w) => [w.cr, w.parentCr, w.kind]).sort()).toEqual([
       ["102-001", "101-002", "fork"],
       ["103-001", "101-001", "fork"],
@@ -140,8 +140,8 @@ describe("lineage.familyTree", () => {
     await t.run((ctx) => ctx.db.patch("works", b, { effectiveParentWorkId: a, effectiveKind: "variation" }));
     const tree = (await t.query(api.lineage.familyTree, { family: 101 }))!;
     expect(tree.works.map((w) => w.parentCr)).toEqual([undefined, "101-001", "101-002"]);
-    expect(tree.works[1]!.remixes).toBe(1);
-    expect(tree.works[0]!.remixes).toBe(1);
+    expect(tree.works[1].remixes).toBe(1);
+    expect(tree.works[0].remixes).toBe(1);
   });
 
   it("keeps a withdrawn work as a bare CR number and leaves out designs still being prepared", async () => {
@@ -160,9 +160,9 @@ describe("lineage.familyTree", () => {
       parentCr: "101-001",
       withdrawn: true,
     });
-    expect(tree.works[2]!.parentCr).toBe("101-002");
+    expect(tree.works[2].parentCr).toBe("101-002");
     // Only published remixes count.
-    expect(tree.works[0]!.remixes).toBe(0);
+    expect(tree.works[0].remixes).toBe(0);
   });
 
   it("returns null for a family with nothing published", async () => {
@@ -180,7 +180,7 @@ describe("lineage.familyTree", () => {
     expect(first.works.map((w) => w.expression)).toEqual([1, 2, 3, 4, 5]);
     expect(first.more).toBe(true);
     // The root still counts all its remixes, loaded or not.
-    expect(first.works[0]!.remixes).toBe(7);
+    expect(first.works[0].remixes).toBe(7);
     const all = (await t.query(api.lineage.familyTree, { family: 101, limit: 8 }))!;
     expect(all.works).toHaveLength(8);
     expect(all.more).toBe(false);
