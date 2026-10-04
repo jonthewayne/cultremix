@@ -141,6 +141,13 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
   const [tool, setTool] = useState<"knockout" | null>(null);
   const locked = Boolean(studio.printFile);
 
+  // When the print file is made, show it.
+  const hadFile = useRef(locked);
+  useEffect(() => {
+    if (locked && !hadFile.current) setView("printer");
+    hadFile.current = locked;
+  }, [locked]);
+
   const byNumber = useMemo(() => new Map(studio.versions.map((version) => [version.number, version])), [studio.versions]);
   const byId = useMemo(() => new Map(studio.versions.map((version) => [version.id, version])), [studio.versions]);
 
