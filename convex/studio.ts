@@ -4,11 +4,13 @@ import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
+import { authorizeDispatch, closeReservation, hasRoom, openReservation, spendValidator } from "./lib/budget";
 import { isBlockedError, publicTileError } from "./lib/imageErrors";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { styleShares } from "./lib/prompts";
 import type { ImageRole } from "./lib/prompts";
+import { gridWorstCaseCents, qualityOf, singleWorstCaseCents } from "./lib/pricing";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
 import { isImageKey } from "./lib/sizes";
@@ -569,7 +571,7 @@ export const generate = mutation({
   returns: v.union(
     v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
     v.object({
-      refused: v.union(v.literal("NO_CREDITS"), v.literal("GENERATION_OFF")),
+      refused: v.union(v.literal("NO_CREDITS"), v.literal("GENERATION_OFF"), v.literal("BUDGET")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -638,8 +640,18 @@ export const generate = mutation({
     if (!owner && (await creditBalance(ctx, user._id)) < price) {
       return { refused: "NO_CREDITS" as const };
     }
-
+    // The daily budget (convex/lib/budget.ts): the batch's worst case must fit in what's left of
+    // the gateway's UTC day, all four designs or none. The owner counts too.
     const now = Date.now();
+    const designCents = provider === "gateway"
+      ? layout === "grid"
+        ? gridWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high"))
+        : singleWorstCaseCents(attached, qualityOf(process.env.IMAGE_QUALITY, "medium"))
+      : 0;
+    const batchCents = layout === "grid" ? designCents : designCents * DESIGNS_PER_BATCH;
+    if (batchCents > 0 && !(await hasRoom(ctx, "gateway", batchCents, now))) {
+      return { refused: "BUDGET" as const };
+    }
     let session: Doc<"creativeSessions"> | null = null;
     if (args.sessionId) {
       session = await ctx.db.get("creativeSessions", args.sessionId);
@@ -687,6 +699,17 @@ export const generate = mutation({
     if (layout === "grid" && !owner) {
       await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
     }
+    if (layout === "grid" && designCents > 0) {
+      await openReservation(ctx, {
+        attemptKind: "batch",
+        attemptId: batchId,
+        batchId,
+        provider: "gateway",
+        userId: user._id,
+        credits: owner ? 0 : BATCH_CREDITS,
+        worstCaseCents: designCents,
+      }, now);
+    }
     for (let index = 0; index < DESIGNS_PER_BATCH; index++) {
       const generationId = await ctx.db.insert("generations", {
         sessionId: session._id,
@@ -703,6 +726,17 @@ export const generate = mutation({
       });
       if (layout === "single") {
         if (!owner) await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -1, generationId });
+        if (designCents > 0) {
+          await openReservation(ctx, {
+            attemptKind: "tile",
+            attemptId: generationId,
+            generationId,
+            provider: "gateway",
+            userId: user._id,
+            credits: owner ? 0 : 1,
+            worstCaseCents: designCents,
+          }, now);
+        }
         await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
       }
     }
@@ -924,9 +958,12 @@ export const markBatchDispatched = internalMutation({
     if (generations.length === 0 || generations.some((g) => g.status !== "queued")) return false;
     if (!(await flagEnabled(ctx, "gen.vercel"))) {
       await settleBatch(ctx, args.batchId, generations.map((g) => ({ index: g.index, error: "Generation is paused." })));
+      await closeReservation(ctx, args.batchId, { kind: "release", reason: "paused" });
       return false;
     }
     const now = Date.now();
+    // Its reservation must still be open (the sweeper may have released it).
+    if (!(await authorizeDispatch(ctx, args.batchId, now))) return false;
     for (const g of generations) await ctx.db.patch("generations", g._id, { status: "dispatched", dispatchedAt: now });
     return true;
   },
@@ -942,11 +979,17 @@ const designResult = v.object({
 
 // Records a grid batch's four results and gives back credits for missing designs
 // (convex/lib/studioRules.ts).
-async function settleBatch(
+export async function settleBatch(
   ctx: MutationCtx,
   batchId: Id<"batches">,
   results: Array<Infer<typeof designResult>>,
-  extra: { gridKey?: string; roles?: Array<ImageRole> } = {},
+  extra: {
+    gridKey?: string;
+    roles?: Array<ImageRole>;
+    // What a missing design becomes: failed, or (when the call may have run) unknown_outcome, or
+    // (when it never started) expired. Credits come back the same way for all three.
+    missingStatus?: "failed" | "unknown_outcome" | "expired";
+  } = {},
 ) {
   const batch = await ctx.db.get("batches", batchId);
   if (!batch) return;
@@ -964,7 +1007,7 @@ async function settleBatch(
     } else {
       missing++;
       await ctx.db.patch("generations", g._id, {
-        status: "failed",
+        status: extra.missingStatus ?? "failed",
         finishedAt: now,
         error: (result?.error ?? "No design came back.").slice(0, 300),
       });
@@ -987,10 +1030,19 @@ export const finishBatch = internalMutation({
     results: v.array(designResult),
     gridKey: v.optional(v.string()),
     roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
+    // What the grid call cost (convex/lib/paidAttempts.ts); without it, the batch's reservation
+    // settles at its worst case. unknown: the call may have run, so missing designs are unknown_outcome.
+    spend: v.optional(spendValidator),
+    unknown: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await settleBatch(ctx, args.batchId, args.results, { gridKey: args.gridKey, roles: args.roles });
+    await settleBatch(ctx, args.batchId, args.results, {
+      gridKey: args.gridKey,
+      roles: args.roles,
+      missingStatus: args.unknown ? "unknown_outcome" : undefined,
+    });
+    await closeReservation(ctx, args.batchId, args.spend ?? { kind: "settle" });
     return null;
   },
 });
@@ -1004,11 +1056,14 @@ export const markDispatched = internalMutation({
     if (!generation || generation.status !== "queued") return false;
     if (!(await flagEnabled(ctx, "gen.vercel"))) {
       await failAndRefund(ctx, generation, "Generation is paused.");
+      await closeReservation(ctx, generation._id, { kind: "release", reason: "paused" });
       return false;
     }
+    const now = Date.now();
+    if (!(await authorizeDispatch(ctx, generation._id, now))) return false;
     await ctx.db.patch("generations", generation._id, {
       status: "dispatched",
-      dispatchedAt: Date.now(),
+      dispatchedAt: now,
     });
     return true;
   },
@@ -1022,11 +1077,13 @@ export const markSucceeded = internalMutation({
     width: v.number(),
     height: v.number(),
     hasAlpha: v.boolean(),
+    spend: v.optional(spendValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation || generation.status !== "dispatched") return null;
+    await closeReservation(ctx, generation._id, args.spend ?? { kind: "settle" });
     await ctx.db.patch("generations", generation._id, {
       status: "succeeded",
       finishedAt: Date.now(),
@@ -1040,9 +1097,14 @@ export const markSucceeded = internalMutation({
   },
 });
 
-async function failAndRefund(ctx: MutationCtx, generation: Doc<"generations">, error: string) {
+export async function failAndRefund(
+  ctx: MutationCtx,
+  generation: Doc<"generations">,
+  error: string,
+  status: "failed" | "unknown_outcome" | "expired" = "failed",
+) {
   await ctx.db.patch("generations", generation._id, {
-    status: "failed",
+    status,
     finishedAt: Date.now(),
     error,
   });
@@ -1057,14 +1119,21 @@ async function failAndRefund(ctx: MutationCtx, generation: Doc<"generations">, e
 }
 
 export const markFailed = internalMutation({
-  args: { generationId: v.id("generations"), error: v.string() },
+  args: {
+    generationId: v.id("generations"),
+    error: v.string(),
+    // As in finishBatch.
+    spend: v.optional(spendValidator),
+    unknown: v.optional(v.boolean()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation || (generation.status !== "dispatched" && generation.status !== "queued")) {
       return null;
     }
-    await failAndRefund(ctx, generation, args.error.slice(0, 300));
+    await failAndRefund(ctx, generation, args.error.slice(0, 300), args.unknown ? "unknown_outcome" : "failed");
+    await closeReservation(ctx, generation._id, args.spend ?? { kind: "settle" });
     return null;
   },
 });

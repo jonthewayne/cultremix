@@ -44,10 +44,10 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `DEV_URL`, `PROD_URL`, `PREVIEW_BASE_DOMAIN` | GitHub variables | no | no | wizard/manual | deploy workflow |
 | `DEPLOYMENT_ENV` | Convex env (dev, staging, prod) | no | no | manual | which environment this is: `dev`, `staging`, or `prod`. Staging and dev (and an unset value) show the Testnet badge, so production must say `prod`; prod shows Early access until checkout opens (`api.deployment.get`, the only way the browser learns it); dev allows the stand-in image generator; it also decides dev-only resets, whether test orders create (simulated) earnings, and Printful auto-confirm (production only) |
 | `AI_GATEWAY_API_KEY` | Convex env | no | yes | manual | image designs, model photos, image notes |
-| `IMAGE_PROVIDER` | Convex env (optional) | no | no | manual | `gateway` or `chatgpt` forces the image provider |
-| `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex env (optional) | no | no | manual | design and model-photo quality (default `medium`) |
+| `IMAGE_PROVIDER` | Convex env (optional) | no | no | manual | `gateway` or `chatgpt` forces the image provider; only gateway calls hold daily-budget reservations |
+| `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex env (optional) | no | no | manual | design and model-photo quality (default `medium`); also sets each call's worst-case budget reservation (`convex/lib/pricing.ts`) |
 | `STYLE_NOTES_MODEL` | Convex env (optional) | no | no | manual | model for image notes (default `openai/gpt-6-luna`) |
-| `GRID_QUALITY` | Convex env (optional) | no | no | manual | quality of the studio's grid call (default `high`) |
+| `GRID_QUALITY` | Convex env (optional) | no | no | manual | quality of the studio's grid call (default `high`); also sets each batch's worst-case budget reservation |
 | `STUDIO_LAYOUT` | Convex env (optional) | no | no | manual | `single` makes four separate designs per batch instead of one grid |
 | `IMAGE_STORE` | Convex env (optional) | no | no | manual | `convex` stores images in Convex when R2 keys are missing |
 | `R2_ENDPOINT`, `R2_BUCKET`, `R2_PUBLIC_URL` | Convex env | no | no | manual | image storage: the environment's public R2 bucket and its address |

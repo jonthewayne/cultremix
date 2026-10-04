@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { creditBalance, getAppSettings } from "./identity";
 import { adminAllows, requireAdmin } from "./lib/adminAccess";
+import { memberSpendToday } from "./lib/budget";
 import { isCreator, setCreatorAccess } from "./lib/creators";
 import { FEATURE_FLAGS, flagDefinition } from "./lib/flags";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -35,6 +36,8 @@ const memberRow = v.object({
   credits: v.number(),
   isCreator: v.boolean(),
   joinedAt: v.number(),
+  // What the member's image calls hold or cost today (UTC), in cents (convex/lib/budget.ts).
+  spentTodayCents: v.optional(v.number()),
 });
 
 async function readFlags(ctx: QueryCtx | MutationCtx) {
@@ -65,6 +68,7 @@ async function toMemberRow(ctx: QueryCtx | MutationCtx, user: Doc<"users">) {
     credits: await creditBalance(ctx, user._id),
     isCreator: await isCreator(ctx, user),
     joinedAt: user._creationTime,
+    spentTodayCents: await memberSpendToday(ctx, user._id, Date.now()),
   };
 }
 
