@@ -5,56 +5,53 @@ import { useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { BATCH_CREDITS } from "../../convex/lib/studioRules";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
+import type { Tile } from "~/components/studio/design";
+import type { Scope } from "~/lib/viewerNav";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { RemixKindChoice } from "~/components/cr/RemixKindChoice";
 import type { RemixKind } from "~/components/cr/RemixKindChoice";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
-import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
-import type { MenuItem } from "~/components/studio/StudioSessions";
+import { FavoritesTray } from "~/components/studio/FavoritesTray";
+import { Viewer } from "~/components/studio/Viewer";
+import { designItems, isFailed } from "~/components/studio/design";
+import { useDesignActions } from "~/components/studio/designActions";
+import { useViewerRoute } from "~/components/studio/useViewerRoute";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
 import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
-import { designFilename, isTouchDevice, prefetchImage, saveImage } from "~/lib/saveImage";
+import { prefetchImage } from "~/lib/saveImage";
 import { cn } from "~/lib/utils";
+import { parseScope } from "~/lib/viewerNav";
 
 // /studio is always a blank design with the member's sessions below it; /studio?s=<id> opens a
 // session (every batch made in it, newest first); /studio?remix=<CR> starts a new remix session.
+// &view=<design>&scope=<favorites|batch|session> opens the large viewer on a design.
 export const Route = createFileRoute("/studio")({
-  validateSearch: (search: Record<string, unknown>): { remix?: string; s?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { remix?: string; s?: string; view?: string; scope?: Scope } => ({
     remix: typeof search.remix === "string" ? search.remix : undefined,
     s: typeof search.s === "string" ? search.s : undefined,
+    view: typeof search.view === "string" ? search.view : undefined,
+    scope: parseScope(search.scope),
   }),
   beforeLoad: requireAuthenticatedRoute,
   component: StudioPage,
 });
 
-type Tile = {
-  generationId: Id<"generations">;
-  batchId: Id<"batches">;
-  status: string;
-  // The original (download, "Open full size") and the copies shown in the studio.
-  url?: string;
-  mediumUrl?: string;
-  thumbUrl?: string;
-  favorite: boolean;
-  error?: string;
-  blocked?: boolean;
-  backgroundColor: string;
-  publishedCr?: string;
-  key?: string;
-};
-
 let slotCounter = 0;
 const newSlotId = () => `slot-${Date.now()}-${slotCounter++}`;
 
 function StudioPage() {
-  const { remix, s } = Route.useSearch();
+  const search = Route.useSearch();
+  const { remix, s } = search;
   const navigate = useNavigate();
   const sessionQuery = useQuery(convexQuery(api.studio.session, s ? { sessionId: s } : "skip"));
   const session = s ? sessionQuery.data : undefined;
@@ -62,6 +59,15 @@ function StudioPage() {
   const batchPages = usePaginatedQuery(api.studio.sessionBatches, s ? { sessionId: s } : "skip", {
     initialNumItems: PAGE.batches,
   });
+  // Its favorites, in the order they were hearted: the tray, and the viewer's Favorites.
+  const favoritePages = usePaginatedQuery(api.studio.sessionFavorites, s ? { sessionId: s } : "skip", {
+    initialNumItems: PAGE.favorites,
+  });
+  const viewerRoute = useViewerRoute(search);
+  const designActions = useDesignActions(s);
+  // Dismissed designs stay hidden unless the member shows them.
+  const [showDismissed, setShowDismissed] = useState(false);
+  const instructionRef = useRef<HTMLTextAreaElement>(null);
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
   const generate = useMutation(api.studio.generate);
   const startRemix = useMutation(api.studio.startRemix);
@@ -78,7 +84,6 @@ function StudioPage() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [viewer_, setViewer] = useState<{ list: Array<Tile>; index: number } | null>(null);
   const [publishing, setPublishing] = useState<Tile | null>(null);
   const remixStarted = useRef<string | null>(null);
   const imagesRef = useRef(images);
@@ -194,7 +199,7 @@ function StudioPage() {
   const adopted = useRef<string | undefined>(undefined);
   const seeded = useRef<string | undefined>(undefined);
   useEffect(() => {
-    setViewer(null);
+    setShowDismissed(false);
     if (s && s === adopted.current) {
       seeded.current = s;
       return;
@@ -337,21 +342,15 @@ function StudioPage() {
   };
 
   const batches = session ? batchPages.results : [];
-  const allTiles: Array<Tile> = useMemo(() => batches.flatMap((b) => b.tiles), [batches]);
-  const favorites = allTiles.filter((t) => t.favorite && t.status === "succeeded");
-  const tileById = useMemo(() => new Map(allTiles.map((t) => [t.generationId, t])), [allTiles]);
+  const favorites = s ? favoritePages.results : [];
 
-  const openViewer = (tile: Tile, batchTiles: Array<Tile>) => {
-    const list = favorites.length
-      ? favorites
-      : batchTiles.filter((t) => t.status === "succeeded");
-    const index = Math.max(0, list.findIndex((t) => t.generationId === tile.generationId));
-    if (!list.some((t) => t.generationId === tile.generationId)) {
-      setViewer({ list: [tile, ...list], index: 0 });
-    } else {
-      setViewer({ list, index });
-    }
+  // B in the viewer: the design becomes an image to work on, ready for what should change.
+  const branch = (tile: Tile) => {
+    viewerRoute.close();
+    useAsImage(tile);
+    window.requestAnimationFrame(() => instructionRef.current?.focus({ preventScroll: true }));
   };
+  const reject = (tile: Tile, rejected: boolean) => designActions.setRejected(tile.generationId, rejected, tile.favorite);
 
   const remixInfo = session?.remix;
   const count = images.length;
@@ -362,7 +361,7 @@ function StudioPage() {
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
-      <main className="px-4 pb-24 md:px-10">
+      <main className={cn("px-4 md:px-10", favorites.length > 0 ? "pb-40" : "pb-24")}>
         <section className="grid grid-cols-1 gap-8 pt-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12 md:pt-10">
           <div className="flex min-w-0 flex-col gap-6">
             <h1 className="text-[18vw] font-black leading-[0.8] tracking-[-0.06em] md:text-[9.5vw]">Studio</h1>
@@ -413,6 +412,7 @@ function StudioPage() {
                 {count === 0 ? "What do you want to make?" : "What should change?"}
               </span>
               <textarea
+                ref={instructionRef}
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
                 onKeyDown={(e) => {
@@ -533,19 +533,28 @@ function StudioPage() {
                       {batch.refunded} {batch.refunded === 1 ? "credit" : "credits"} back
                     </span>
                   ) : null}
+                  <DismissedToggle
+                    count={batch.tiles.filter((tile) => tile.rejected).length}
+                    shown={showDismissed}
+                    onToggle={() => setShowDismissed(!showDismissed)}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-                  {batch.tiles.map((tile) => (
-                    <TileCard
-                      key={tile.generationId}
-                      tile={tile}
-                      grid={batch.grid}
-                      onOpen={() => openViewer(tile, batch.tiles)}
-                      onPublish={() => setPublishing(tile)}
-                      onInspire={() => useAsImage(tile)}
-                      onStyle={() => useAsStyle(tile)}
-                    />
-                  ))}
+                  {batch.tiles
+                    .filter((tile) => showDismissed || !tile.rejected)
+                    .map((tile) => (
+                      <TileCard
+                        key={tile.generationId}
+                        tile={tile}
+                        grid={batch.grid}
+                        onOpen={() => viewerRoute.open({ view: tile.generationId, scope: "batch" })}
+                        onPublish={() => setPublishing(tile)}
+                        onInspire={() => useAsImage(tile)}
+                        onStyle={() => useAsStyle(tile)}
+                        onFavorite={(on) => designActions.setFavorite(tile.generationId, on)}
+                        onReject={(rejected) => reject(tile, rejected)}
+                      />
+                    ))}
                 </div>
               </motion.div>
             ))}
@@ -561,23 +570,40 @@ function StudioPage() {
       </main>
 
       <AnimatePresence>
-        {viewer_ && (
+        {s && favorites.length > 0 && (
+          <FavoritesTray
+            favorites={favorites}
+            status={favoritePages.status}
+            onMore={() => favoritePages.loadMore(PAGE.favorites)}
+            onOpen={(tile) => viewerRoute.open({ view: tile.generationId, scope: "favorites" })}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {s && viewerRoute.spot && (
           <Viewer
-            list={viewer_.list.map((t) => tileById.get(t.generationId) ?? t)}
-            index={viewer_.index}
-            onIndex={(index) => setViewer({ ...viewer_, index })}
-            onClose={() => setViewer(null)}
-            onPublish={(tile) => {
-              setViewer(null);
-              setPublishing(tile);
-            }}
-            onInspire={(tile) => {
-              setViewer(null);
-              useAsImage(tile);
-            }}
+            sessionId={s}
+            spot={viewerRoute.spot}
+            batches={batches}
+            batchesStatus={batchPages.status}
+            onMoreBatches={() => batchPages.loadMore(PAGE.batches)}
+            favorites={favorites}
+            favoritesStatus={favoritePages.status}
+            onMoreFavorites={() => favoritePages.loadMore(PAGE.favorites)}
+            showRejected={showDismissed}
+            onShowRejected={setShowDismissed}
+            onMove={viewerRoute.move}
+            onClose={viewerRoute.close}
+            onFavorite={(tile, on) => designActions.setFavorite(tile.generationId, on)}
+            onReject={reject}
+            onBranch={branch}
             onStyle={(tile) => {
-              setViewer(null);
+              viewerRoute.close();
               useAsStyle(tile);
+            }}
+            onPublish={(tile) => {
+              viewerRoute.close();
+              setPublishing(tile);
             }}
           />
         )}
@@ -600,25 +626,6 @@ function StudioPage() {
       </AnimatePresence>
     </div>
   );
-}
-
-// The ⋯ menu's choices for a finished design.
-function designItems(
-  tile: Tile,
-  actions: { onOpen: () => void; onPublish: () => void; onInspire: () => void; onStyle: () => void },
-): Array<MenuItem> {
-  const filename = designFilename(tile);
-  const items: Array<MenuItem> = [
-    { label: "View large", onSelect: actions.onOpen },
-    { label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, filename) },
-  ];
-  if (tile.url && !tile.url.startsWith("fake:")) items.push({ label: "Open full size", href: tile.url });
-  if (tile.key) {
-    items.push({ label: "Use as image", onSelect: actions.onInspire });
-    items.push({ label: "Use as style", onSelect: actions.onStyle });
-  }
-  if (!tile.publishedCr) items.push({ label: "Publish", onSelect: actions.onPublish });
-  return items;
 }
 
 function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClose: () => void }) {
@@ -694,6 +701,16 @@ function BatchSkeleton() {
   );
 }
 
+// "Show 2 dismissed" on a batch's line, when it has any.
+function DismissedToggle({ count, shown, onToggle }: { count: number; shown: boolean; onToggle: () => void }) {
+  if (count === 0) return null;
+  return (
+    <button type="button" onClick={onToggle} className="shrink-0 text-sm font-semibold text-neutral-500 underline underline-offset-4 hover:text-black">
+      {shown ? "Hide dismissed" : `Show ${count} dismissed`}
+    </button>
+  );
+}
+
 function TileCard({
   tile,
   grid,
@@ -701,6 +718,8 @@ function TileCard({
   onPublish,
   onInspire,
   onStyle,
+  onFavorite,
+  onReject,
 }: {
   tile: Tile;
   // Grid batches give credits back per batch (shown on the batch line), not per design.
@@ -709,17 +728,26 @@ function TileCard({
   onPublish: () => void;
   onInspire: () => void;
   onStyle: () => void;
+  onFavorite: (favorite: boolean) => void;
+  onReject: (rejected: boolean) => void;
 }) {
-  const toggle = useMutation(api.studio.toggleFavorite);
   const [menuOpen, setMenuOpen] = useState(false);
   const ready = tile.status === "succeeded";
-  const failed = tile.status === "failed" || tile.status === "unknown_outcome" || tile.status === "expired";
+  const failed = isFailed(tile);
   const ink = inkOn(tile.backgroundColor);
+  const corner = "absolute bottom-2 right-2 rounded-lg px-2.5 py-1.5 text-xs font-black";
   return (
     <div className="group relative aspect-square overflow-hidden rounded-2xl" style={{ background: tile.backgroundColor, color: ink }}>
       {ready ? (
         <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="View large">
-          <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]" />
+          <Art
+            url={tile.mediumUrl ?? tile.url}
+            alt="Design"
+            className={cn(
+              "h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]",
+              tile.rejected && "opacity-40",
+            )}
+          />
         </button>
       ) : failed && tile.blocked ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center md:p-4">
@@ -750,7 +778,7 @@ function TileCard({
       {ready && (
         <>
           <DesignMenu
-            items={designItems(tile, { onOpen, onPublish, onInspire, onStyle })}
+            items={designItems(tile, { onOpen, onPublish, onInspire, onStyle, onReject: () => onReject(!tile.rejected) })}
             onOpenChange={(open) => {
               setMenuOpen(open);
               if (open) prefetchImage(tile.url);
@@ -762,7 +790,7 @@ function TileCard({
           />
           <button
             type="button"
-            onClick={() => void toggle({ generationId: tile.generationId })}
+            onClick={() => onFavorite(!tile.favorite)}
             className={cn(
               "absolute right-2 top-2 flex h-10 w-10 items-center justify-center text-2xl transition-transform hover:scale-110",
               tile.favorite ? "opacity-100" : "opacity-70 md:opacity-0 md:group-hover:opacity-100",
@@ -781,15 +809,37 @@ function TileCard({
               CR {tile.publishedCr}
             </Link>
           ) : (
-            <button
-              type="button"
-              onClick={onPublish}
-              className="absolute bottom-2 left-2 rounded-lg bg-black px-3 py-1.5 text-xs font-black text-white opacity-100 transition-opacity hover:bg-neutral-800 md:opacity-0 md:group-hover:opacity-100"
-            >
-              Publish
-            </button>
+            !tile.rejected && (
+              <button
+                type="button"
+                onClick={onPublish}
+                className="absolute bottom-2 left-2 rounded-lg bg-black px-3 py-1.5 text-xs font-black text-white opacity-100 transition-opacity hover:bg-neutral-800 md:opacity-0 md:group-hover:opacity-100"
+              >
+                Publish
+              </button>
+            )
           )}
         </>
+      )}
+      {tile.rejected ? (
+        <button type="button" onClick={() => onReject(false)} className={cn(corner, "bg-white text-black ring-1 ring-black/20")}>
+          Bring back
+        </button>
+      ) : (
+        (ready || failed) && (
+          <button
+            type="button"
+            onClick={() => onReject(true)}
+            className={cn(
+              corner,
+              "border-2 border-current transition-opacity",
+              failed ? "opacity-70 hover:opacity-100" : "hidden opacity-0 md:block md:group-hover:opacity-100 md:focus-visible:opacity-100",
+            )}
+            aria-label="Dismiss this design"
+          >
+            Dismiss
+          </button>
+        )
       )}
     </div>
   );
@@ -806,149 +856,6 @@ function Elapsed({ since }: { since: number }) {
     <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-neutral-500">
       Designing · {seconds} s
     </span>
-  );
-}
-
-function Viewer({
-  list,
-  index,
-  onIndex,
-  onClose,
-  onPublish,
-  onInspire,
-  onStyle,
-}: {
-  list: Array<Tile>;
-  index: number;
-  onIndex: (index: number) => void;
-  onClose: () => void;
-  onPublish: (tile: Tile) => void;
-  onInspire: (tile: Tile) => void;
-  onStyle: (tile: Tile) => void;
-}) {
-  const toggle = useMutation(api.studio.toggleFavorite);
-  const [checker, setChecker] = useState(false);
-  const tile = list[Math.min(index, list.length - 1)];
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      if (event.key === "ArrowRight") onIndex((index + 1) % list.length);
-      if (event.key === "ArrowLeft") onIndex((index - 1 + list.length) % list.length);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [index, list.length, onClose, onIndex]);
-  // Ready to save the moment it's tapped (phones only share files during the tap).
-  useEffect(() => prefetchImage(tile?.url), [tile?.url]);
-  if (!tile) return null;
-  const ink = checker ? "#000000" : inkOn(tile.backgroundColor);
-  const button = "h-11 rounded-xl px-4 text-sm font-bold";
-  const items: Array<MenuItem> = [
-    { label: checker ? "Show the background color" : "Show transparency", onSelect: () => setChecker(!checker) },
-    ...designItems(tile, {
-      onOpen: () => undefined,
-      onPublish: () => onPublish(tile),
-      onInspire: () => onInspire(tile),
-      onStyle: () => onStyle(tile),
-    }).filter((item) => item.label !== "View large" && item.label !== "Download" && item.label !== "Save image" && item.label !== "Publish"),
-  ];
-  return (
-    <motion.div
-      className={cn("fixed inset-0 z-50 flex flex-col", checker && "checker")}
-      style={checker ? { color: ink } : { background: tile.backgroundColor, color: ink }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Design viewer"
-    >
-      <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
-        <span className="font-cr text-3xl md:text-5xl">
-          {index + 1} / {list.length}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void toggle({ generationId: tile.generationId })}
-            className="h-11 px-2 text-3xl leading-none"
-            aria-label={tile.favorite ? "Remove from favorites" : "Add to favorites"}
-            aria-pressed={tile.favorite}
-          >
-            {tile.favorite ? "♥" : "♡"}
-          </button>
-          <button
-            type="button"
-            onClick={() => saveImage(tile.url, designFilename(tile))}
-            className={cn(button, "hidden border-2 border-current sm:block")}
-          >
-            {isTouchDevice() ? "Save image" : "Download"}
-          </button>
-          {tile.publishedCr ? (
-            <Link to="/cr/$cr" params={{ cr: tile.publishedCr }} className={cn(button, "flex items-center bg-black text-white")}>
-              CR {tile.publishedCr}
-            </Link>
-          ) : (
-            <button type="button" onClick={() => onPublish(tile)} className={cn(button, "bg-black text-white")}>
-              Publish
-            </button>
-          )}
-          <DesignMenu
-            items={[{ label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, designFilename(tile)) }, ...items]}
-          />
-          <button type="button" onClick={onClose} className="h-11 px-2 text-sm font-bold underline underline-offset-4">
-            Close
-          </button>
-        </div>
-      </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 pb-6 md:px-14">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tile.generationId}
-            className="flex h-full w-full items-center justify-center"
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.18 }}
-            drag={list.length > 1 ? "x" : false}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.6}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -80) onIndex((index + 1) % list.length);
-              else if (info.offset.x > 80) onIndex((index - 1 + list.length) % list.length);
-            }}
-          >
-            <Art
-              url={tile.mediumUrl ?? tile.url}
-              fullUrl={tile.url}
-              alt="Design, full size"
-              className="pointer-events-none h-full max-h-[82vh] w-auto max-w-full select-none object-contain"
-            />
-          </motion.div>
-        </AnimatePresence>
-        {list.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => onIndex((index - 1 + list.length) % list.length)}
-              className="absolute left-1 top-1/2 hidden -translate-y-1/2 p-3 text-5xl font-black sm:block md:left-6"
-              aria-label="Previous"
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              onClick={() => onIndex((index + 1) % list.length)}
-              className="absolute right-1 top-1/2 hidden -translate-y-1/2 p-3 text-5xl font-black sm:block md:right-6"
-              aria-label="Next"
-            >
-              →
-            </button>
-          </>
-        )}
-      </div>
-    </motion.div>
   );
 }
 

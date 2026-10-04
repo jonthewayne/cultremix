@@ -5,7 +5,7 @@ import { cn } from "~/lib/utils";
 // Every list in the studio pages the same way: Convex's usePaginatedQuery, the next page loading
 // as the end of the list scrolls near, and a Load more button for when that doesn't fire.
 
-export const PAGE = { sessions: 12, batches: 6, images: 24 } as const;
+export const PAGE = { sessions: 12, batches: 6, images: 24, favorites: 48 } as const;
 
 export function LoadMore({
   status,
