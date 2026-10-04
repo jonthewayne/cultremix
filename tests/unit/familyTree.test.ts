@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  
-  
-  
   buildFamilyTree,
+  chainSummary,
   familyOfCr,
   layoutTree,
   shownCount
@@ -203,5 +201,58 @@ describe("layoutTree", () => {
     const layout = layoutTree(buildFamilyTree(data([work(101, 1), work(101, 3, cr(101, 9))]), loose), size);
     expect(layout.nodes.map((placed) => placed.x)).toEqual([0, 120]);
     expect(layoutTree([], size)).toEqual({ nodes: [], edges: [], width: 0, height: 0 });
+  });
+});
+
+describe("onchain state", () => {
+  const recorded = (w: TreeWork, hash = w.cr): TreeWork => ({ ...w, chain: "recorded", chainTxUrl: `https://x.test/tx/${hash}` });
+  const recording = (w: TreeWork): TreeWork => ({ ...w, chain: "recording" });
+
+  it("keeps each work's chain state on its node, forks and origins included", () => {
+    const origin = recorded(work(100, 1));
+    const works = [recorded(work(101, 1, origin.cr)), recording(work(101, 2, cr(101, 1))), work(101, 3, cr(101, 1))];
+    const forks = [recorded(work(140, 1, cr(101, 2)))];
+    const tree = buildFamilyTree(data(works, { forks, origins: [origin] }), loose);
+    const states: Record<string, string | undefined> = {};
+    const walk = (nodes: Array<TreeNode>) => {
+      for (const node of nodes) {
+        if (node.type !== "more") states[node.key] = node.work.chain;
+        walk(node.children);
+      }
+    };
+    walk(tree);
+    expect(states).toEqual({
+      "origin:100-001": "recorded",
+      "101-001": "recorded",
+      "101-002": "recording",
+      "fork:140-001": "recorded",
+      "101-003": undefined,
+    });
+  });
+
+  it("says nothing until a design in the family is recorded", () => {
+    expect(chainSummary(data([work(101, 1), recording(work(101, 2, cr(101, 1)))]))).toBeNull();
+    expect(chainSummary(data([]))).toBeNull();
+  });
+
+  it("counts recorded designs out of the family's live designs, linking to the original", () => {
+    const works = [
+      recorded(work(101, 1)),
+      recorded(work(101, 2, cr(101, 1))),
+      recording(work(101, 3, cr(101, 1))),
+      work(101, 4, cr(101, 1)),
+      // Withdrawn designs aren't counted either way.
+      { ...recorded(work(101, 5, cr(101, 1))), withdrawn: true },
+    ];
+    // Forks out and origins belong to other families.
+    const extra = { forks: [recorded(work(140, 1, cr(101, 2)))], origins: [recorded(work(100, 1))] };
+    expect(chainSummary(data(works, extra))).toEqual({ recorded: 2, total: 4, rootTxUrl: "https://x.test/tx/101-001" });
+  });
+
+  it("leaves out the link when the original has no explorer entry", () => {
+    const works = [work(101, 1), recorded(work(101, 2, cr(101, 1)))];
+    expect(chainSummary(data(works))).toEqual({ recorded: 1, total: 2 });
+    const noUrl = [{ ...work(101, 1), chain: "recorded" as const }];
+    expect(chainSummary(data(noUrl))).toEqual({ recorded: 1, total: 1 });
   });
 });
