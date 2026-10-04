@@ -13,8 +13,9 @@ import type { ShootLook } from "./lib/prompts";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
 import { readRoles } from "./lib/roleReader";
 import { decodeToRgba, encodePng } from "./lib/resize";
-import { designKey, gridImageKey, photoKey, uploadKey } from "./lib/sizes";
-import { fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
+import { randomCode } from "./lib/codes";
+import { designKey, gridKey as gridFileKey, photoNumberOf, testImageKey, uploadKey, workArtKey, workPhotoKey } from "./lib/sizes";
+import { copyImage, fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -300,7 +301,9 @@ export const runTile = internalAction({
       const made = Date.now();
       const info = pngInfo(bytes);
       // Stores the design with its thumbnail and medium, so pages never load the PNG first.
-      const { key, sha256 } = await storeNew(ctx, bytes, "image/png", designKey);
+      const place = job.place;
+      const designNumber = job.index + 1;
+      const { key, sha256 } = await storeNew(ctx, bytes, "image/png", () => designKey(place, designNumber, randomCode()));
       console.log("runTile ok", provider, images.length, "images", text.length, "chars", made - started, "ms, stored and sized in", Date.now() - made, "ms", info);
       await ctx.runMutation(internal.studio.markSucceeded, {
         generationId,
@@ -388,7 +391,8 @@ export const runBatch = internalAction({
       const { bytes } = await gridImage(text, await Promise.all(keys.map((key) => fetchPublicImage(key, ctx))));
       const made = Date.now();
       const cpu0 = process.cpuUsage();
-      const gridStored = storeObject(ctx, gridImageKey(sha256Hex(bytes)), bytes, "image/png");
+      const place = job.place;
+      const gridStored = storeObject(ctx, gridFileKey(place, randomCode()), bytes, "image/png");
       const cells = cutGrid(await decodeToRgba(bytes));
       const cut = Date.now();
       const cpu1 = process.cpuUsage(cpu0);
@@ -399,7 +403,13 @@ export const runBatch = internalAction({
           ...(await Promise.all(
             cells.slice(i, i + 2).map(async (cell): Promise<DesignResult> => {
               if (!cell.tile) return { index: cell.index, error: cell.reason === "merged" ? GRID_MERGED : GRID_EMPTY };
-              const { key, sha256 } = await storeNew(ctx, await encodePng(cell.tile), "image/png", designKey, cell.tile);
+              const { key, sha256 } = await storeNew(
+                ctx,
+                await encodePng(cell.tile),
+                "image/png",
+                () => designKey(place, cell.index + 1, randomCode()),
+                cell.tile,
+              );
               return { index: cell.index, design: { fullKey: key, sha256, width: cell.tile.width, height: cell.tile.height, hasAlpha: true } };
             }),
           )),
@@ -458,10 +468,12 @@ export const uploadInspiration = action({
       key = `fake:inspo-${sha256.slice(0, 12)}`;
     } else {
       const existing = await ctx.runQuery(internal.images.findUpload, { authId: identity.subject, sha256 });
-      if (existing) {
+      if (!existing) throw new ConvexError({ code: "SIGNED_OUT", message: "Sign in first." });
+      if (existing.key) {
         key = existing.key;
       } else {
-        key = await storeObject(ctx, uploadKey(sha256, ext), bytes, args.contentType);
+        // The member's own uploads folder, under a code nobody can guess (convex/lib/sizes.ts).
+        key = await storeObject(ctx, uploadKey(existing.userId, Date.now(), randomCode(), ext), bytes, args.contentType);
         // The studio shows its own preview meanwhile; pickers and chips use the thumbnail later.
         await ctx.scheduler.runAfter(0, internal.sizing.ensure, { key });
       }
@@ -494,11 +506,12 @@ export const publishAssets = internalAction({
         artKey = job.fullKey;
         contentHash = sha256Hex(new TextEncoder().encode(job.fullKey));
       } else {
-        artKey = job.fullKey;
         art = await fetchPublicImage(job.fullKey, ctx);
         contentHash = sha256Hex(art);
         // Designs get their copies when they're made; this covers older ones.
-        await makeSizes(ctx, artKey, art);
+        await makeSizes(ctx, job.fullKey, art);
+        // The work's own public folder, works/<family>/<expression>/, with the design's copies.
+        artKey = await copyImage(ctx, job.fullKey, workArtKey(job.crFamily, job.crExpression), art);
       }
     } catch (error) {
       console.error("publishAssets failed", workId, error);
@@ -525,7 +538,8 @@ export const publishAssets = internalAction({
       } else {
         const source = art ?? (await fetchPublicImage(artKey, ctx));
         const { bytes } = await photoImage(source, job.backgroundColor, look);
-        publicKey = (await storeNew(ctx, bytes, "image/png", (sha256) => photoKey(contentHash, sha256))).key;
+        // The work's first model photo: works/<family>/<expression>/photos/1/.
+        publicKey = (await storeNew(ctx, bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, 1))).key;
       }
       await ctx.runMutation(internal.publish.recordPhoto, { shootId, publicKey });
     } catch (error) {
@@ -597,7 +611,7 @@ export const selfTest = internalAction({
           stored: false,
         };
       }
-      const { key } = await storeNew(ctx, out.bytes, "image/png", designKey);
+      const { key } = await storeNew(ctx, out.bytes, "image/png", () => testImageKey(Date.now(), randomCode()));
       return {
         provider: args.provider ?? imageProvider(),
         ms: Date.now() - started,
@@ -630,6 +644,9 @@ export const reshoot = internalAction({
       artKey: string;
       backgroundColor: string;
       look: ShootLook;
+      crFamily: number;
+      crExpression: number;
+      photoKey?: string;
     } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr });
     if (!job) return null;
     if (!liveGeneration() || job.artKey.startsWith("fake:")) {
@@ -637,8 +654,9 @@ export const reshoot = internalAction({
     }
     const art = await fetchPublicImage(job.artKey, ctx);
     const { bytes } = await photoImage(art, job.backgroundColor, job.look);
-    const designSha = sha256Hex(art);
-    const { key } = await storeNew(ctx, bytes, "image/png", (sha256) => photoKey(designSha, sha256));
+    // The next photo number, so the photo a page has cached never changes under its link.
+    const n = (photoNumberOf(job.photoKey) ?? 0) + 1;
+    const { key } = await storeNew(ctx, bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, n));
     await ctx.runMutation(internal.publish.recordPhoto, { shootId: job.shootId, publicKey: key });
     return { cr: args.cr, look: job.look };
   },

@@ -8,7 +8,7 @@ import type { ActionCtx } from "../_generated/server";
 import { publicUrl, r2, storageMode } from "./r2";
 import { uprightSize, webpCopy } from "./resize";
 import type { ImageInput } from "./resize";
-import { sizeKey } from "./sizes";
+import { folderOf, sizeKey } from "./sizes";
 
 // Storing and reading images, for Node actions only (resizing uses sharp, a native package listed
 // in convex.json). Images go to the environment's public R2 bucket in one folder per image
@@ -45,6 +45,30 @@ export async function copyObject(from: string, to: string) {
   await r2.client.send(
     new CopyObjectCommand({ Bucket: r2.config.bucket, CopySource: r2.config.bucket + "/" + from, Key: to, MetadataDirective: "COPY" }),
   );
+}
+
+// Copies a stored original to a new key with its thumbnail and medium (a design becoming a published
+// work's art). bytes: the original, when the caller already has it. Returns the new key, which is a
+// "cvx:" key when images are kept in Convex storage.
+export async function copyImage(ctx: ActionCtx, from: string, to: string, bytes?: Uint8Array): Promise<string> {
+  if (storageMode() === "convex" || from.startsWith("cvx:")) {
+    const data = bytes ?? (await fetchPublicImage(from, ctx));
+    const key = await storeObject(ctx, to, data, "image/png");
+    await makeSizes(ctx, key, data);
+    return key;
+  }
+  await copyObject(from, to);
+  const copies: Sizes | null = await ctx.runQuery(internal.imageSizes.find, { key: from });
+  if (!copies || !folderOf(to)) {
+    await makeSizes(ctx, to, bytes);
+    return to;
+  }
+  const sha256 = sha256Hex(bytes ?? (await fetchPublicImage(from, ctx)));
+  const thumbKey = sizeKey(to, sha256, "thumb");
+  const mediumKey = sizeKey(to, sha256, "medium");
+  await Promise.all([copyObject(copies.thumbKey, thumbKey), copyObject(copies.mediumKey, mediumKey)]);
+  await ctx.runMutation(internal.imageSizes.record, { key: to, sha256, width: copies.width, height: copies.height, thumbKey, mediumKey });
+  return to;
 }
 
 // Every key under a prefix.

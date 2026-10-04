@@ -114,13 +114,21 @@ export const quick = mutation({
 
 export const assetJob = internalQuery({
   args: { workId: v.id("works") },
-  returns: v.union(v.null(), v.object({ fullKey: v.string(), backgroundColor: v.string() })),
+  returns: v.union(
+    v.null(),
+    v.object({ fullKey: v.string(), backgroundColor: v.string(), crFamily: v.number(), crExpression: v.number() }),
+  ),
   handler: async (ctx, args) => {
     const work = await ctx.db.get("works", args.workId);
     if (!work || work.status !== "preparing") return null;
     const generation = await ctx.db.get("generations", work.generationId);
     if (!generation?.fullKey) return null;
-    return { fullKey: generation.fullKey, backgroundColor: work.backgroundColor };
+    return {
+      fullKey: generation.fullKey,
+      backgroundColor: work.backgroundColor,
+      crFamily: work.crFamily,
+      crExpression: work.crExpression,
+    };
   },
 });
 
@@ -171,6 +179,10 @@ export const beginReshoot = internalMutation({
       artKey: v.string(),
       backgroundColor: v.string(),
       look: lookValidator,
+      crFamily: v.number(),
+      crExpression: v.number(),
+      // The photo shown now; the new one takes the next photo number.
+      photoKey: v.optional(v.string()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -213,7 +225,15 @@ export const beginReshoot = internalMutation({
     if (!photo) {
       await ctx.db.insert("shootPhotos", { shootId, workId: work._id, index: 1, state: "pending" });
     }
-    return { shootId, artKey: work.artKey, backgroundColor: work.backgroundColor, look };
+    return {
+      shootId,
+      artKey: work.artKey,
+      backgroundColor: work.backgroundColor,
+      look,
+      crFamily: work.crFamily,
+      crExpression: work.crExpression,
+      photoKey: photo?.publicKey,
+    };
   },
 });
 

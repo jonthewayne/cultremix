@@ -58,6 +58,8 @@ export const cultremixTables = {
     purpose: v.optional(v.union(v.literal("studio"), v.literal("shoot"))),
     // A name the member gave the session; without one the studio uses its first request.
     title: v.optional(v.string()),
+    // How many batches the session has; the next batch takes the next number (batch-01, ...).
+    batchCount: v.optional(v.number()),
   }).index("by_owner_updated", ["ownerId", "updatedAt"]),
 
   // Today's additions: instruction, inspirationKey, backgroundColor, operation, model.
@@ -86,6 +88,8 @@ export const cultremixTables = {
     gridKey: v.optional(v.string()),
     // What the request wanted from each numbered image (convex/lib/roleReader.ts).
     roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
+    // The batch's number within its session, starting at 1; its files live in batch-01/ and so on.
+    number: v.optional(v.number()),
   }).index("by_session", ["sessionId"]),
 
   // Every image a member brings into the studio: uploads, their own designs, and remix sources.
@@ -130,6 +134,8 @@ export const cultremixTables = {
   storageMoves: defineTable({
     from: v.string(),
     to: v.string(),
+    // The moved file's SHA-256 when moving changed its bytes (the image model's metadata removed).
+    sha256: v.optional(v.string()),
   }).index("by_from", ["from"]),
 
   generations: defineTable({

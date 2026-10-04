@@ -9,6 +9,7 @@ import { styleShares } from "./lib/prompts";
 import type { ImageRole } from "./lib/prompts";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
+import { isImageKey } from "./lib/sizes";
 import { BATCH_CREDITS, DESIGNS_PER_BATCH, MAX_IMAGES, MAX_STYLES, creditsBack } from "./lib/studioRules";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -18,10 +19,6 @@ type Ctx = QueryCtx | MutationCtx;
 export const MODEL_TEXT = "openai/gpt-image-2.5-flare";
 export const MODEL_EDIT = "openai/gpt-image-2.5-sunburst";
 const HEX = /^#[0-9a-f]{6}$/iu;
-// An image a member can bring into the studio: a design or upload in its folder (convex/lib/sizes.ts),
-// an older key from before folders, or a Convex storage key.
-export const IMAGE_KEY =
-  /^((designs|uploads)\/[0-9a-f]{64}\/original\.(png|jpg|webp)|(inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)|cvx:[A-Za-z0-9_-]{8,64})$/u;
 
 export const tileStatus = v.union(
   v.literal("queued"),
@@ -522,7 +519,7 @@ export const generate = mutation({
     const styleOnly = styles.filter((s) => s.weight > 0 && !imageIds.includes(s.imageId));
     // The previous studio's one image, used as it was: no notes and no style mix.
     const legacyKey = images.length === 0 && styles.length === 0 ? args.inspirationKey : undefined;
-    if (legacyKey && !IMAGE_KEY.test(legacyKey) && !(isDevDeployment() && legacyKey.startsWith("fake:"))) {
+    if (legacyKey && !isImageKey(legacyKey) && !(isDevDeployment() && legacyKey.startsWith("fake:"))) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "That image did not upload." });
     }
     const presets = (args.presets ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 6);
@@ -570,6 +567,8 @@ export const generate = mutation({
       session = (await ctx.db.get("creativeSessions", sessionId))!;
     }
     const inspirationKey = images[0]?.key ?? legacyKey;
+    // The batch's number in its session, which names its folder (batch-01, batch-02, ...).
+    const batchNumber = (session.batchCount ?? (await countBatches(ctx, session._id))) + 1;
     const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
     const model = provider === "chatgpt"
       ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
@@ -590,6 +589,7 @@ export const generate = mutation({
       count: DESIGNS_PER_BATCH,
       layout,
       charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
+      number: batchNumber,
     });
     if (layout === "grid" && !owner) {
       await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
@@ -621,10 +621,20 @@ export const generate = mutation({
     await ctx.db.patch("creativeSessions", session._id, {
       updatedAt: now,
       phrase: instruction,
+      batchCount: batchNumber,
     });
     return { batchId, sessionId: session._id };
   },
 });
+
+// How many batches a session has (sessions from before batch numbers are counted once).
+async function countBatches(ctx: QueryCtx, sessionId: Id<"creativeSessions">) {
+  const batches = await ctx.db
+    .query("batches")
+    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+    .collect();
+  return batches.length;
+}
 
 export const toggleFavorite = mutation({
   args: { generationId: v.id("generations") },
@@ -668,14 +678,20 @@ const jobInputs = {
   attachments: v.array(attachmentView),
   // Each style's 1-based attachment number and slider value.
   styles: v.array(v.object({ attachment: v.number(), weight: v.number() })),
+  place: v.object({
+    memberId: v.id("users"),
+    sessionId: v.id("creativeSessions"),
+    sessionStartedAt: v.number(),
+    batchNumber: v.number(),
+  }),
 };
 
 // What a batch's prompt is built from.
 async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
+  const session = await ctx.db.get("creativeSessions", batch.sessionId);
   // A remix keeps the parent's look only while the parent is still the reference image.
   let remixOfParent = false;
   if (batch.operation === "remix" && batch.inspirationKey) {
-    const session = await ctx.db.get("creativeSessions", batch.sessionId);
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     remixOfParent = parent?.artKey === batch.inspirationKey;
   }
@@ -707,12 +723,28 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
   } else if (batch.inspirationKey) {
     attachments.push({ key: batch.inspirationKey, styleOnly: false });
   }
-  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, attachments, styles };
+  // Where the batch's files go (convex/lib/sizes.ts batchFolder).
+  const place = {
+    memberId: batch.ownerId,
+    sessionId: batch.sessionId,
+    sessionStartedAt: session?._creationTime ?? batch._creationTime,
+    batchNumber: batch.number ?? (await batchNumberOf(ctx, batch)),
+  };
+  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, attachments, styles, place };
+}
+
+// A batch's number from its position in its session (for batches made before batches had numbers).
+export async function batchNumberOf(ctx: QueryCtx, batch: Doc<"batches">) {
+  const earlier = await ctx.db
+    .query("batches")
+    .withIndex("by_session", (q) => q.eq("sessionId", batch.sessionId).lte("_creationTime", batch._creationTime))
+    .collect();
+  return earlier.length;
 }
 
 export const tileJob = internalQuery({
   args: { generationId: v.id("generations") },
-  returns: v.union(v.null(), v.object({ status: tileStatus, ...jobInputs })),
+  returns: v.union(v.null(), v.object({ status: tileStatus, index: v.number(), ...jobInputs })),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation) return null;
@@ -720,6 +752,7 @@ export const tileJob = internalQuery({
     if (!batch) return null;
     return {
       status: generation.status,
+      index: generation.index,
       model: generation.model,
       provider: generation.provider,
       ...(await batchInputs(ctx, batch)),

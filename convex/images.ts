@@ -4,7 +4,8 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { getViewerUser } from "./identity";
 import { imageUrlReader } from "./lib/imageUrls";
 import { isDevDeployment } from "./lib/r2";
-import { IMAGE_KEY, requireMember } from "./studio";
+import { requireMember } from "./studio";
+import { isImageKey } from "./lib/sizes";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -109,10 +110,11 @@ export const recordUpload = internalMutation({
   },
 });
 
-// An upload this member already has, so the same file isn't stored twice.
+// The member (whose folder a new upload goes in) and the key of an upload they already have with
+// the same SHA-256, so the same file isn't stored twice.
 export const findUpload = internalQuery({
   args: { authId: v.string(), sha256: v.string() },
-  returns: v.union(v.null(), v.object({ key: v.string() })),
+  returns: v.union(v.null(), v.object({ userId: v.id("users"), key: v.optional(v.string()) })),
   handler: async (ctx, args) => {
     const user = await ctx.db
       .query("users")
@@ -123,7 +125,7 @@ export const findUpload = internalQuery({
       .query("userImages")
       .withIndex("by_owner_sha", (q) => q.eq("ownerId", user._id).eq("sha256", args.sha256))
       .first();
-    return image ? { key: image.key } : null;
+    return { userId: user._id, key: image?.key };
   },
 });
 
@@ -133,7 +135,7 @@ export const adopt = mutation({
   returns: v.id("userImages"),
   handler: async (ctx, args) => {
     const user = await requireMember(ctx);
-    if (!IMAGE_KEY.test(args.key) && !(isDevDeployment() && args.key.startsWith("fake:"))) {
+    if (!isImageKey(args.key) && !(isDevDeployment() && args.key.startsWith("fake:"))) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "That image is not available." });
     }
     return await saveImage(ctx, user._id, { key: args.key, asStyle: args.asStyle });
