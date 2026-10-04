@@ -10,14 +10,25 @@ Built for the Monad hackathon (Social, Attention & Culture track). Live at [cult
 
 | Piece | What it does |
 | --- | --- |
-| **TanStack Start on Cloudflare Workers** | The site: feed, studio, shop pages (`/cr/<number>`), sign-in, settings, and `/admin`. Routes live in `src/routes/`. |
-| **Convex** | The database and every server function: studio batches, publishing, the feed, credits, flags, metrics (`convex/`). Tables are in `convex/schema.ts` and `convex/schema/`. |
+| **TanStack Start on Cloudflare Workers** | The site: feed, studio, shop pages (`/cr/<number>`), profiles (`/u/<username>`), the Print Studio (`/print/<number>`), sign-in, settings, and `/admin`. Routes live in `src/routes/`. |
+| **Convex** | The database and every server function: studio batches, publishing, lineage, the feed and follows, print files, credits, flags, metrics (`convex/`). Tables are in `convex/schema.ts` and `convex/schema/`. |
 | **Better Auth** (on Convex) | Email code sign-in for everyone; email and password only for accounts an admin made (judges). Public password sign-up is refused. |
 | **CultRemix Gateway** | Image generation (GPT Image 2.5) and the notes we read from style images. Prompts and style notes stay on the server and never reach the browser. |
-| **Cloudflare R2** | One public bucket per environment. Each image lives in its own folder with a thumbnail and a medium copy; anything not published sits under an unguessable 128-bit code. |
-| **Monad** | Provenance for published designs: each work's fingerprint (SHA-256) and remix lineage, recorded on chain. See below. |
+| **fal** | "Upscale for print" in the Print Studio (Topaz, keeps transparency). |
+| **Cloudflare R2** | One public bucket per environment. Each image lives in its own folder with a thumbnail and a medium copy; a published work's files sit under `works/<family>/<expression>/`, and anything not published sits under an unguessable 128-bit code. The full layout is in [Image generation → Storage and sizes](docs/image-generation/README.md#storage-and-sizes). |
+| **Monad** | Provenance for published designs: each work's fingerprint (SHA-256), its lineage, and the economics rules it follows. The registry is being built; see below. |
 
 More detail: [Architecture](docs/architecture.md), [Image generation](docs/image-generation/README.md), [Onchain provenance ADR](docs/adr/0001-onchain-provenance.md).
+
+## What's in it today
+
+- **Studio.** Add up to 8 images, mix up to 4 styles, say what you want, and Generate makes four designs at once. Favorite the ones you like, page through them full screen, and dismiss the rest.
+- **Publishing and CR numbers.** A published design gets its CR number, a shop page, and a photo of someone wearing it. Each member gets a few photo shoots a day (set in `/admin`; the owner has no limit). A photo past the limit waits, and its creator can take it the next day.
+- **Lineage with forks and corrections.** A remix is published as a *variation* (the next number in its family, CR 101-002) or a *fork* (a new family that says where it came from). Each work page shows the trail back to the original, the remixes of it, and its family. When a lineage is wrong, an admin can correct it at `/admin/lineage`; the work page shows the correction and the original record stays as published.
+- **Economics panel.** Every work page shows who shares in a sale: 15% of each sale goes to the people behind the design, split between the work's creator, the family's founder, and, for a fork, the creator of the design it came from. The rules are a public file, [`/economics/v1.json`](https://cultremix.com/economics/v1.json), served byte for byte as the SHA-256 the panel shows, so anyone can check the split.
+- **Social.** Profiles at `/u/<username>` with a bio, followers, and Works and Remixes shelves. The home feed has Latest and, for members, Following. Hearts and follows work everywhere a design or a creator appears.
+- **Print Studio.** At `/print/<number>`, a work's creator (or the owner) trims the art, knocks out a background, upscales it for print (when the **Print-size art** switch is on), places it on the shirt, and makes the print file: a 300 DPI PNG with its own SHA-256. A slider shows the art beside what goes to the printer.
+- **Shop pages.** Sizes and $36 are shown; buying isn't open yet.
 
 ## Running it
 
@@ -55,15 +66,16 @@ bun run seed:environment                        # set up a fresh environment (sa
 bun run judges:provision -- --file judges.txt   # make judge accounts with passwords
 ```
 
-Both target your dev deployment by default, staging when `CONVEX_DEPLOY_KEY` is set for the command, and production with `--prod` (they ask first). Neither ever copies data between environments. See [Judges](docs/judges.md) and the [Launch checklist](docs/launch-checklist.md).
+Both target your dev deployment by default, staging when `CONVEX_DEPLOY_KEY` is set for the command, and production with `--prod` (they ask first). Neither ever copies data between environments. See [Judges](docs/judges.md) and the [Launch checklist](docs/launch-checklist.md), which has the full staging setup (`bun run deploy:staging` builds with `.env.staging` and deploys the `staging` Worker).
 
 ## Admin
 
 `/admin` is for the owner and staff:
 
-- **Overview**: switches for each part of the product (studio, publishing, checkout, chain writes, backs, upscale) and app settings (signup credits, the daily image budget, photo shoots per member).
+- **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day). A switch whose feature isn't built yet says so under its name, and so does the daily budget, which nothing enforces yet.
 - **Members**: search by username, email, or creator number; give credits; turn creator access on or off.
 - **Metrics**: counts by day and in total (members, members who generated, batches, designs, published works, remixes, families, credits used, model photos).
+- **Lineage**: look up a work by CR number and correct its lineage (owner and ops staff).
 - **Judges**: make a judge account with a password (owner only).
 
 Support staff can look but not change anything.
@@ -78,7 +90,7 @@ What it does **not** prove: because CultRemix holds the wallet keys for members,
 
 Only finalized blocks count. Staging uses Monad testnet (and shows a **Testnet** badge on CR numbers); production uses Monad mainnet. The full reasoning is in [ADR 0001](docs/adr/0001-onchain-provenance.md).
 
-> The registry contract and the chain writer aren't in this repository yet; the `chain.writes` switch stays off until they land.
+> The registry contract and the chain writer are being built and aren't in this repository yet, so nothing is written to Monad today and the **Monad records** switch stays off. What's already here is everything the registry will record: each work's SHA-256 fingerprint on its page, its lineage (corrections are confirmed offchain until then, and the work page says so), and the economics rules file with its hash.
 
 ## More docs
 
