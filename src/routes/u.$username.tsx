@@ -68,11 +68,11 @@ function ProfilePage() {
           <div className="flex min-w-0 items-center gap-4 md:gap-7">
             <Avatar username={data.username} image={data.image} className="size-20 md:size-32" />
             <div className="min-w-0">
-              <h1 className="truncate text-[11vw] font-black leading-[0.85] tracking-[-0.05em] md:text-[6vw]">
+              <h1 className="truncate pt-[0.06em] pb-[0.04em] text-[11vw] font-black leading-[0.95] tracking-[-0.05em] md:text-[6vw]">
                 @{data.username}
               </h1>
               {data.creatorNumber !== undefined && (
-                <p className="mt-2 flex items-baseline gap-2">
+                <p className="mt-2 flex items-baseline gap-2 md:mt-3">
                   <span className="text-xs font-bold uppercase tracking-[0.2em]">Creator</span>
                   <span className="font-cr text-2xl leading-none tabular-nums md:text-3xl">
                     № {data.creatorNumber}
@@ -95,7 +95,7 @@ function ProfilePage() {
           </div>
         </section>
 
-        {data.bio && <p className="mt-6 max-w-2xl text-lg leading-snug md:text-xl">{data.bio}</p>}
+        {data.bio && <p className="mt-6 max-w-2xl md:mt-8 text-lg leading-snug md:text-xl">{data.bio}</p>}
         <p className="mt-4 flex gap-5 text-base">
           <span>
             <strong className="font-black tabular-nums">{data.followers}</strong>{" "}
