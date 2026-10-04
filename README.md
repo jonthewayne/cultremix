@@ -16,19 +16,22 @@ Built for the Monad hackathon (Social, Attention & Culture track). Live at [cult
 | **CultRemix Gateway** | Image generation (GPT Image 2.5) and the notes we read from style images. Prompts and style notes stay on the server and never reach the browser. |
 | **fal** | "Upscale for print" in the Print Studio (Topaz, keeps transparency). |
 | **Cloudflare R2** | One public bucket per environment. Each image lives in its own folder with a thumbnail and a medium copy; a published work's files sit under `works/<family>/<expression>/`, and anything not published sits under an unguessable 128-bit code. The full layout is in [Image generation → Storage and sizes](docs/image-generation/README.md#storage-and-sizes). |
-| **Monad** | Provenance for published designs: each work's fingerprint (SHA-256), its lineage, and the economics rules it follows. The registry is being built; see below. |
+| **Monad** | Provenance for published designs: each work's fingerprint (SHA-256), its lineage, its Backs, and the economics rules it follows. The registry contract (`contracts/`) and the chain writer (`convex/chain.ts`) are built; the testnet registry deploys once its relayer has testnet MON. See below. |
 
 More detail: [Architecture](docs/architecture.md), [Image generation](docs/image-generation/README.md), [Onchain provenance ADR](docs/adr/0001-onchain-provenance.md).
 
 ## What's in it today
 
-- **Studio.** Add up to 8 images, mix up to 4 styles, say what you want, and Generate makes four designs at once. Favorite the ones you like, page through them full screen, and dismiss the rest.
+- **Studio.** Add up to 8 images, mix up to 4 styles, say what you want (or start from an idea), and Generate makes four designs at once. Favorite the ones you like, page through them full screen, compare 2 to 4 side by side, and dismiss the rest. Sessions keep every batch, so you can come back to a design later.
 - **Publishing and CR numbers.** A published design gets its CR number, a shop page, and a photo of someone wearing it. Each member gets a few photo shoots a day (set in `/admin`; the owner has no limit). A photo past the limit waits, and its creator can take it the next day.
-- **Lineage with forks and corrections.** A remix is published as a *variation* (the next number in its family, CR 101-002) or a *fork* (a new family that says where it came from). Each work page shows the trail back to the original, the remixes of it, and its family. When a lineage is wrong, an admin can correct it at `/admin/lineage`; the work page shows the correction and the original record stays as published.
+- **Remix by changing the words.** CultRemix reads the words on each published design and offers them as fields; its creator chooses which ones remixers can change, on the publish reveal or the work page. **Remix this** shows those words as inputs: change one and Generate makes four versions with only those words changed, spelled letter for letter, keeping the art, lettering, and colors. The batch and the published remix say what changed.
+- **Lineage with forks and corrections.** A remix is published as a *variation* (the next number in its family, CR 101-002) or a *fork* (a new family that says where it came from). Each work page shows the trail back to the original, the remixes of it, and its family as a tree; `/family/<n>` shows the whole tree, with forks branching off. When a lineage is wrong, an admin can correct it at `/admin/lineage`; the work page shows the correction and the original record stays as published.
 - **Economics panel.** Every work page shows who shares in a sale: 15% of each sale goes to the people behind the design, split between the work's creator, the family's founder, and, for a fork, the creator of the design it came from. The rules are a public file, [`/economics/v1.json`](https://cultremix.com/economics/v1.json), served byte for byte as the SHA-256 the panel shows, so anyone can check the split.
-- **Social.** Profiles at `/u/<username>` with a bio, followers, and Works and Remixes shelves. The home feed has Latest and, for members, Following. Hearts and follows work everywhere a design or a creator appears.
+- **Social.** Profiles at `/u/<username>` with a bio, follower and following lists, and Works, Remixes, and Backed shelves. The home feed has Latest, Trending (hearts, Backs, and remixes from other members over the last week), and, for members, Following. Hearts and follows work everywhere a design or a creator appears, a bell tells you when someone follows you or hearts, remixes, or Backs your work, and work pages and profiles share with a rich preview.
+- **Backs.** A member can Back up to 3 works a week, one Back per work and never their own. Each Back is recorded on Monad with its place in line, and the work page lists the earliest backers. Backs stay hidden until the registry is live and the **Backs** and **Monad records** switches are on.
+- **Monad registry.** Publishing queues each work's registration, signed by the creator's wallet and sent by a relayer that pays the gas, so nobody needs MON or a wallet app. Lineage corrections and the economics rules' hash go through the same registry. `/admin/chain` shows the queue, and the public `/onchain` page explains what's recorded and how to check a design from its fingerprint. Once registrations confirm, work pages link their transactions and family trees mark recorded designs.
 - **Print Studio.** At `/print/<number>`, a work's creator (or the owner) trims the art, knocks out a background, upscales it for print (when the **Print-size art** switch is on), places it on the shirt, and makes the print file: a 300 DPI PNG with its own SHA-256. A slider shows the art beside what goes to the printer.
-- **Shop pages.** Sizes and $36 are shown; buying isn't open yet.
+- **Shop pages.** The colors the creator offered, sizes, and $36. Shopify checkout, Printful fulfillment, and creator earnings are built against stand-ins and switch on with the **Checkout** switch once those accounts exist; until then "Buying opens soon" collects emails.
 
 ## Running it
 
@@ -57,6 +60,7 @@ bun run typecheck    # TypeScript (and Convex, when a deployment is configured)
 bun run test         # unit tests and Convex tests on an in-memory backend
 bun run build        # production build
 bun run test:e2e     # browser smoke test
+bun run test:chain:anvil  # the chain writer against a local Monad node (needs Foundry)
 ```
 
 ### Launch scripts

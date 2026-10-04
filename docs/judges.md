@@ -25,12 +25,13 @@ The full list, with how to check each claim, is under **Judging evidence** in th
 
 1. **Make designs.** In the studio, add a few images, mix their styles, say what you want, and press Generate: four designs for 2 credits. Heart the good ones and open any of them full screen.
 2. **Publish one.** It gets a CR number and a work page, and a photo of someone wearing it arrives a moment later. Each member gets a few photo shoots a day (judges included); past that, the work still publishes and its photo can be taken the next day from the work page.
-3. **Remix someone's work.** On any work page, **Remix this**. When publishing, choose a variation (the next number in the family) or a fork (a new family).
-4. **Follow the lineage and the money.** On a remix's page: the **Lineage** trail, **Remixes of this**, the family grid, and the Economics panel with the rules file `/economics/v1.json` and its SHA-256.
+3. **Remix someone's work.** On any work page, **Remix this**. The design's words appear as fields (the ones its creator made remixable): change one and Generate, and the four designs keep the art while the words change. The batch says what changed. When publishing, choose a variation (the next number in the family) or a fork (a new family).
+4. **Follow the lineage and the money.** On a remix's page: the **Lineage** trail, **Remixes of this**, the family tree (**See the whole tree** opens `/family/<n>`), and the Economics panel with the rules file `/economics/v1.json` and its SHA-256.
 5. **Prepare a print file.** On your own work's page, **Prepare for print** opens the Print Studio: trim, knock out the background, place it on the shirt, and make the print file.
-6. **Be social.** Hearts and follows on any work, profiles at `/u/<username>`, and the **Following** tab on the home page.
+6. **Be social.** Hearts and follows on any work, profiles at `/u/<username>` with follower and following lists, and the **Trending** and **Following** tabs on the home page. Judges can follow each other: the bell in the header shows new follows, hearts, and remixes.
+7. **Check the provenance.** `/onchain` explains what CultRemix records on Monad and how to check a design yourself, starting from the fingerprint on its page.
 
-Buying isn't open, and nothing is written to Monad until the registry lands (the work page says “coming soon”). On staging, every CR number carries a **Testnet** badge.
+Buying isn't open yet; "Buying opens soon" takes an email. The Monad registry deploys to testnet once its relayer has testnet MON; until then work pages show each design's fingerprint, Backs stay hidden, and `/onchain` says "Not deployed yet". On staging, every CR number carries a **Testnet** badge.
 
 ## Making judge accounts
 
