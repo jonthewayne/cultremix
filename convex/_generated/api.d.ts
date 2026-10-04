@@ -72,6 +72,7 @@ import type * as lib_redirect from "../lib/redirect.js";
 import type * as lib_resize from "../lib/resize.js";
 import type * as lib_roleReader from "../lib/roleReader.js";
 import type * as lib_sessions from "../lib/sessions.js";
+import type * as lib_shopColors from "../lib/shopColors.js";
 import type * as lib_shopFlags from "../lib/shopFlags.js";
 import type * as lib_shopLineage from "../lib/shopLineage.js";
 import type * as lib_shopify_adminClient from "../lib/shopify/adminClient.js";
@@ -187,6 +188,7 @@ declare const fullApi: ApiFromModules<{
   "lib/resize": typeof lib_resize;
   "lib/roleReader": typeof lib_roleReader;
   "lib/sessions": typeof lib_sessions;
+  "lib/shopColors": typeof lib_shopColors;
   "lib/shopFlags": typeof lib_shopFlags;
   "lib/shopLineage": typeof lib_shopLineage;
   "lib/shopify/adminClient": typeof lib_shopify_adminClient;

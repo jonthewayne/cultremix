@@ -4,6 +4,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import type { RawOrder } from "../../convex/lib/shopify/orderQuery";
 import type { newTest } from "./setup";
 import { variantList } from "../../convex/lib/shopify/productSync";
+import { sellableColors } from "../../convex/lib/shopColors";
 
 type T = ReturnType<typeof newTest>;
 
@@ -44,6 +45,7 @@ export async function makeWork(
     kind?: "original" | "variation" | "fork";
     title?: string;
     printKey?: string;
+    offeredColors?: Array<string>;
   },
 ) {
   return t.run(async (ctx) => {
@@ -92,16 +94,19 @@ export async function makeWork(
       publishedAt: now,
       artKey: `works/${args.family}/${String(args.expression).padStart(3, "0")}/art.png`,
       printKey: args.printKey,
+      offeredColors: args.offeredColors,
     });
     if (!args.parent) await ctx.db.patch("works", workId, { familyRootId: workId });
     return workId;
   });
 }
 
-// Puts a work on sale without Shopify: a live product and the 20 variants, numbered from base.
+// Puts a work on sale without Shopify: a live product and a variant per sellable color and size
+// (20 for the launch colors), numbered from base.
 export async function makeOnSale(t: T, workId: Id<"works">, cr: string, base = 1000, printfulBase: number | null = 5000) {
   await t.run(async (ctx) => {
     const now = Date.now();
+    const work = await ctx.db.get("works", workId);
     await ctx.db.insert("shopProducts", {
       workId,
       handle: `cr-${cr}`,
@@ -111,7 +116,7 @@ export async function makeOnSale(t: T, workId: Id<"works">, cr: string, base = 1
       syncedAt: now,
       updatedAt: now,
     });
-    for (const [i, variant] of variantList(cr).entries()) {
+    for (const [i, variant] of variantList(cr, sellableColors(work?.offeredColors)).entries()) {
       await ctx.db.insert("workVariants", {
         workId,
         shopifyVariantId: `gid://shopify/ProductVariant/${base + i}`,

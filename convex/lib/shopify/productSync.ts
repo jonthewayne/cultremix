@@ -1,5 +1,4 @@
 import {
-  PRINT_COLORS,
   PRINT_PRODUCT,
   PRINT_SIZES,
   priceCentsFor,
@@ -7,9 +6,11 @@ import {
 } from "../../../shared/config/print-products";
 import { METAFIELD_NAMESPACE } from "../../../shared/config/shopify";
 import type { ShopifyAdmin } from "./adminClient";
+import type { SellableColor } from "../shopColors";
 
-// Builds the productSet input for a published work: handle cr-FFF-EEE, the full 4 x 5 variant
-// list on every call (productSet replaces what it is given), inventory untracked with CONTINUE as
+// Builds the productSet input for a published work: handle cr-FFF-EEE, every color it is sold in
+// (sellableColors, convex/lib/shopColors.ts) times every size on every call (productSet replaces
+// what it is given, so a color no longer sold leaves the store), inventory untracked with CONTINUE as
 // a backstop (KTD-17), and metafields that point back to the work.
 
 export function crNumber(family: number, expression: number): string {
@@ -38,9 +39,9 @@ export type PlannedVariant = {
   printfulVariantId: number | null;
 };
 
-export function variantList(cr: string): Array<PlannedVariant> {
+export function variantList(cr: string, colors: ReadonlyArray<SellableColor>): Array<PlannedVariant> {
   const out: Array<PlannedVariant> = [];
-  for (const color of PRINT_COLORS) {
+  for (const color of colors) {
     for (const size of PRINT_SIZES) {
       out.push({
         color: color.code,
@@ -64,8 +65,9 @@ export function buildProductSetInput(args: {
   cr: string;
   title?: string;
   imageUrls?: Array<string>;
+  colors: ReadonlyArray<SellableColor>;
 }) {
-  const variants = variantList(args.cr);
+  const variants = variantList(args.cr, args.colors);
   return {
     handle: productHandle(args.cr),
     title: productTitle(args.cr, args.title),
@@ -73,7 +75,7 @@ export function buildProductSetInput(args: {
     productType: PRINT_PRODUCT.productType,
     status: "ACTIVE",
     productOptions: [
-      { name: "Color", values: PRINT_COLORS.map((c) => ({ name: c.name })) },
+      { name: "Color", values: args.colors.map((c) => ({ name: c.name })) },
       { name: "Size", values: PRINT_SIZES.map((s) => ({ name: s })) },
     ],
     variants: variants.map((variant) => ({
@@ -132,8 +134,12 @@ type ProductSetResult = {
 export type SyncedVariant = PlannedVariant & { shopifyVariantId: string };
 
 // Matches Shopify's variants back to the planned list by SKU, falling back to the options.
-export function matchVariants(cr: string, nodes: Array<VariantNode>): Array<SyncedVariant> {
-  const planned = variantList(cr);
+export function matchVariants(
+  cr: string,
+  nodes: Array<VariantNode>,
+  colors: ReadonlyArray<SellableColor>,
+): Array<SyncedVariant> {
+  const planned = variantList(cr, colors);
   const out: Array<SyncedVariant> = [];
   for (const variant of planned) {
     const node =
@@ -153,7 +159,7 @@ export function matchVariants(cr: string, nodes: Array<VariantNode>): Array<Sync
 // reads from. Returns the product and every variant's GID.
 export async function syncProduct(
   admin: ShopifyAdmin,
-  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string> },
+  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string>; colors: ReadonlyArray<SellableColor> },
 ): Promise<{ productId: string; variants: Array<SyncedVariant> }> {
   const input = buildProductSetInput(args);
   const data = await admin.graphql<ProductSetResult>(PRODUCT_SET_MUTATION, {
@@ -164,7 +170,7 @@ export async function syncProduct(
   if (userErrors.length || !product) {
     throw new Error(`productSet refused: ${userErrors.map((e) => e.message).join("; ") || "no product"}`);
   }
-  const variants = matchVariants(args.cr, product.variants.nodes);
+  const variants = matchVariants(args.cr, product.variants.nodes, args.colors);
   const publications = await admin.graphql<{ publications: { nodes: Array<{ id: string; name: string }> } }>(
     PUBLICATIONS_QUERY,
   );

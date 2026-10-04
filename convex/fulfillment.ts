@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { PRINT_COLORS, type PrintSize } from "../shared/config/print-products";
+import type { PrintSize } from "../shared/config/print-products";
 import { shipmentUnits } from "./lib/creatorPool";
 import {
   PrintfulError,
@@ -21,6 +21,7 @@ import {
 } from "./lib/printful/client";
 import { publicUrl } from "./lib/r2";
 import { autoConfirmAllowedByEnv, autoConfirmFlagAllows } from "./lib/shopFlags";
+import { catalogColorByCode } from "./lib/shopColors";
 import { crNumber } from "./lib/shopify/productSync";
 import { syncOrderEarnings } from "./earnings";
 import { PAYLOAD_TTL_MS } from "./orders";
@@ -75,7 +76,7 @@ function openQuantities(items: Array<Doc<"orderItems">>, refunds: Array<Doc<"ref
 function printfulVariantFor(variant: Doc<"workVariants">): number | null {
   if (variant.printfulVariantId !== undefined) return variant.printfulVariantId;
   // Products synced before U0 filled in the catalog IDs pick them up from the config.
-  return PRINT_COLORS.find((c) => c.code === variant.color)?.printfulVariantIds[variant.size as PrintSize] ?? null;
+  return catalogColorByCode(variant.color)?.printfulVariantIds[variant.size as PrintSize] ?? null;
 }
 
 type CreatePlan =
