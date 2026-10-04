@@ -6,6 +6,7 @@ import {
   buildFamilyTree,
   familyOfCr,
   layoutTree,
+  remixOfLabel,
   shownCount
 } from "../../src/lib/familyTree";
 import type {FamilyTreeData, TreeNode, TreeWork} from "../../src/lib/familyTree";
@@ -203,5 +204,12 @@ describe("layoutTree", () => {
     const layout = layoutTree(buildFamilyTree(data([work(101, 1), work(101, 3, cr(101, 9))]), loose), size);
     expect(layout.nodes.map((placed) => placed.x)).toEqual([0, 120]);
     expect(layoutTree([], size)).toEqual({ nodes: [], edges: [], width: 0, height: 0 });
+  });
+});
+
+describe("remixOfLabel", () => {
+  it("calls a remix in its parent's family a variation and one in a new family a fork", () => {
+    expect(remixOfLabel("101-002", "101-001")).toBe("Variation of");
+    expect(remixOfLabel("105-001", "101-002")).toBe("Forked from");
   });
 });

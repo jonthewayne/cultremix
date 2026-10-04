@@ -39,7 +39,7 @@ export function ShareButton({
       onClick={() => void onClick()}
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-black font-black transition-colors hover:bg-neutral-100",
-        size === "sm" ? "h-8 px-3 text-sm" : "h-11 px-4 text-base",
+        size === "sm" ? "h-10 px-3.5 text-sm" : "h-11 px-4 text-base",
         className,
       )}
     >

@@ -3,6 +3,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
+import { remixOfLabel } from "~/lib/familyTree";
 
 export type FeedItem = FunctionReturnType<typeof api.feed.latest>["page"][number];
 
@@ -34,7 +35,9 @@ export function WorkGrid({ items, showCreator = true }: { items: Array<FeedItem>
               @{item.creator.username}
             </Link>
           ) : item.parentCr ? (
-            <p className="mt-0.5 truncate text-sm text-neutral-500">Remix of CR {item.parentCr}</p>
+            <p className="mt-0.5 truncate text-sm text-neutral-500">
+              {remixOfLabel(item.cr, item.parentCr)} <span className="font-cr">CR {item.parentCr}</span>
+            </p>
           ) : (
             item.title && <p className="mt-0.5 truncate text-sm">{item.title}</p>
           )}
