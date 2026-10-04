@@ -5,6 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { PRINT_PRODUCT, shirtColor } from "../shared/config/print-products";
 import { printCheck } from "../src/lib/print/check";
+import { offeredPrintColors } from "../src/lib/print/colors";
 import { clampTolerance, parseHex } from "../src/lib/print/knockout";
 import { aspectOf, clampPlacement } from "../src/lib/print/placement";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
@@ -137,6 +138,9 @@ export const studio = query({
       cr: v.string(),
       title: v.optional(v.string()),
       backgroundColor: v.string(),
+      // The shirt colors the work was published in, as print product color names, lead first.
+      // Empty for works published before colors were chosen.
+      offeredColors: v.array(v.string()),
       isOwner: v.boolean(),
       credits: v.number(),
       upscaleCredits: v.number(),
@@ -178,6 +182,7 @@ export const studio = query({
       cr: formatCr(work.crFamily, work.crExpression),
       title: work.title,
       backgroundColor: work.backgroundColor,
+      offeredColors: offeredPrintColors(work.offeredColors),
       isOwner: owner,
       credits: await creditBalance(ctx, user._id),
       upscaleCredits: owner ? 0 : UPSCALE_CREDITS,

@@ -177,10 +177,11 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
     if (draft || !isReady(selected)) return;
     const aspect = aspectOf(selected.width, selected.height);
     const saved = studio.printFile?.placement ?? studio.placement;
-    const color = studio.printFile?.color ?? studio.placement?.color ?? closestColor(studio.backgroundColor);
+    // A new placement starts on the work's lead shirt color, else the one nearest its background.
+    const color = studio.printFile?.color ?? studio.placement?.color ?? studio.offeredColors.at(0) ?? closestColor(studio.backgroundColor);
     const base = saved ? { xIn: saved.xIn, yIn: saved.yIn, widthIn: saved.widthIn } : defaultPlacement(aspect, product);
     setDraft({ ...clampPlacement(base, aspect, product), color, versionId: selected.id });
-  }, [draft, selected, studio.placement, studio.printFile, studio.backgroundColor]);
+  }, [draft, selected, studio.placement, studio.printFile, studio.offeredColors, studio.backgroundColor]);
 
   // A different version keeps the width but re-fits its own shape.
   useEffect(() => {
@@ -226,6 +227,13 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
   const shirt = shirtColor(draft?.color);
   const rendering = studio.placement?.rendering ?? false;
   const upscaling = studio.versions.some((version) => version.upscaling);
+
+  // The swatches: the colors the work is offered in (plus the one in use), else every color the
+  // shirt comes in. "More colors" shows the rest.
+  const [allColors, setAllColors] = useState(false);
+  const offered = studio.offeredColors.flatMap((name) => product.colors.filter((color) => color.name === name));
+  const inUse = draft && !studio.offeredColors.includes(draft.color) ? product.colors.filter((color) => color.name === draft.color) : [];
+  const swatches = allColors || offered.length === 0 ? product.colors : [...offered, ...inUse];
 
   const makeFile = () =>
     run(async () => {
@@ -409,8 +417,8 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
             {draft && isReady(selected) && (
               <Panel title="Placement">
                 <p className="text-sm font-bold">Shirt color · {shirt.name}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {product.colors.map((color) => (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {swatches.map((color) => (
                     <button
                       key={color.name}
                       type="button"
@@ -426,6 +434,11 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                       style={{ background: color.hex }}
                     />
                   ))}
+                  {!locked && swatches.length < product.colors.length && (
+                    <button type="button" onClick={() => setAllColors(true)} className="px-1 text-sm font-semibold underline underline-offset-4">
+                      More colors
+                    </button>
+                  )}
                 </div>
 
                 <label className="mt-6 flex flex-col gap-2 text-sm font-bold">

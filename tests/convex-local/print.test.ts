@@ -144,6 +144,13 @@ describe("versions", () => {
     expect(studio?.versions[0]).toMatchObject({ number: 1, op: "published", status: "pending", url: "fake:art.png" });
   });
 
+  it("offers the work's published colors first, as the print product's names", async () => {
+    const { t, workId } = await setup();
+    expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.offeredColors).toEqual([]);
+    await t.run(async (ctx) => ctx.db.patch("works", workId, { offeredColors: ["true-navy", "moss", "black"] }));
+    expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.offeredColors).toEqual(["True Navy", "Sage", "Black"]);
+  });
+
   it("trim and knockout start from a ready version and number on", async () => {
     const { t } = await setup();
     const v1 = await openAndMeasure(t);
