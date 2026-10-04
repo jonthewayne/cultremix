@@ -12,6 +12,7 @@ import {
   explorerNetwork,
   type ChainDeployment,
 } from "../shared/config/chains";
+import { sendRequestedCorrections } from "./amendments";
 import { decodeRegistryRevert, revertHandling, type RegistryErrorName } from "./lib/chain/calldata";
 import { signForMember } from "./lib/chain/custody";
 import { chainDeps } from "./lib/chain/deps";
@@ -275,7 +276,7 @@ const BACK_REJECTIONS: Partial<Record<string, string>> = {
   SelfBack: "You can't Back your own work.",
 };
 
-/** Mirrors a write's progress onto its work (provenance) or Back. */
+/** Mirrors a write's progress onto its work (provenance), Back, or lineage correction. */
 async function reflect(
   ctx: MutationCtx,
   write: WriteDoc,
@@ -319,6 +320,14 @@ async function reflect(
       // Rejected and failed Backs no longer count toward the weekly limit.
       const error = (update.revertReason && BACK_REJECTIONS[update.revertReason]) ?? update.error;
       await ctx.db.patch("backs", back._id, { status: update.status, error });
+    }
+  }
+  // A correction confirmed onchain takes effect offchain from the same moment (convex/lineage.ts).
+  if (write.kind === "amendLineage" && write.amendmentId) {
+    if (update.status === "confirmed") {
+      await ctx.runMutation(internal.lineage.markConfirmed, { amendmentId: write.amendmentId, confirmedAt: now });
+    } else if (update.status === "rejected" || update.status === "failed") {
+      await ctx.runMutation(internal.lineage.markRejected, { amendmentId: write.amendmentId, reason: update.error });
     }
   }
 }
@@ -638,13 +647,15 @@ export const promoteWaiting = internalMutation({
 });
 
 /**
- * Safety net, every minute (convex/crons.ts): promotes writes whose gate opened, then starts a
- * tick when something is in flight, or queued while chain.writes is on.
+ * Safety net, every minute (convex/crons.ts): sends requested lineage corrections, promotes writes
+ * whose gate opened, then starts a tick when something is in flight, or queued while chain.writes
+ * is on.
  */
 export const kick = internalMutation({
   args: {},
   returns: v.boolean(),
   handler: async (ctx) => {
+    await sendRequestedCorrections(ctx);
     await promoteWaitingWrites(ctx);
     const inFlight =
       (await ctx.db.query("chainWrites").withIndex("by_status_and_createdAt", (q) => q.eq("status", "submitted")).first()) !== null ||

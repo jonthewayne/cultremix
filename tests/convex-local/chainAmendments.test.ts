@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { internal } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { MutationCtx } from "../../convex/_generated/server";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { reasonHashFor, workIdFor, ZERO_BYTES32 } from "../../convex/lib/chain/ids";
-import { enqueueRegisterWork } from "../../convex/lib/chain/queue";
-import { RELAYER, insertMember, insertWork, setChainWrites, useChainEnv } from "./chainFixtures";
+import { enqueueRegisterWork, writeBySubject } from "../../convex/lib/chain/queue";
+import { formatCr } from "../../convex/lib/r2";
+import { RELAYER, insertMember, insertOwner, insertWork, setChainWrites, useChainEnv } from "./chainFixtures";
 import { FakeChain } from "./fakeChain";
 import { newTest } from "./setup";
 
@@ -31,7 +32,7 @@ async function settle(t: T, chain: FakeChain, rounds = 3) {
   await t.action(internal.chain.tick, {});
 }
 
-async function registered(t: T, chain: FakeChain, options: { kind?: Kind; parentWorkId?: Id<"works"> } = {}) {
+async function registered(t: T, chain: FakeChain, options: Parameters<typeof insertWork>[2] = {}) {
   const creator = await insertMember(t);
   const workId = await insertWork(t, creator.userId, options);
   await t.run((ctx) => enqueueRegisterWork(asCtx(ctx), workId));
@@ -142,5 +143,166 @@ describe("lineage amendments", () => {
     await settle(t, chain);
     expect((await writeOf(t, writeId)).status).toBe("confirmed");
     expect(chain.work(workIdFor(work))).toMatchObject({ kind: 2, parentId: workIdFor(other) });
+  });
+});
+
+// Lineage corrections requested on the admin page (convex/lineage.ts) go through
+// queueLineageAmendment from the chain kick, and the write's outcome decides the correction.
+describe("lineage corrections from the admin page", () => {
+  // Families the admin page can address by CR number (three digits or more).
+  let family = 800;
+  const addressable = (options: Parameters<typeof insertWork>[2] = {}) => ({ ...options, fields: { crFamily: (family += 1), ...options.fields } });
+  const crOf = async (t: T, workId: Id<"works">) => {
+    const work = (await t.run((ctx) => ctx.db.get("works", workId)))!;
+    return formatCr(work.crFamily, work.crExpression);
+  };
+  const correction = (t: T, amendmentId: Id<"lineageAmendments">) => t.run(async (ctx) => (await ctx.db.get("lineageAmendments", amendmentId))!);
+  const amendWrite = (t: T, workId: Id<"works">, sequence: number) => t.run((ctx) => writeBySubject(asCtx(ctx), `amend:${workId}:${sequence}`));
+  const REASON_TEXT = "It was remixed from the harbor piece.";
+
+  async function request(t: T, owner: ReturnType<T["withIdentity"]>, workId: Id<"works">, newKind: Kind, newParentWorkId?: Id<"works">) {
+    return await owner.mutation(api.lineage.requestAmendment, {
+      cr: await crOf(t, workId),
+      newKind,
+      newParentCr: newParentWorkId ? await crOf(t, newParentWorkId) : undefined,
+      reason: REASON_TEXT,
+    });
+  }
+
+  it("sends a requested correction and confirms it offchain when the registry records it", async () => {
+    const { t, chain } = setup();
+    await setChainWrites(t, true);
+    const owner = await insertOwner(t);
+    const harbor = await registered(t, chain, addressable());
+    const work = await registered(t, chain, addressable());
+    const amendmentId = await request(t, owner, work, "fork", harbor);
+
+    expect(await t.mutation(internal.chain.kick, {})).toBe(true);
+    const write = (await amendWrite(t, work, 1))!;
+    expect(write).toMatchObject({ kind: "amendLineage", status: "pending", amendmentId, newParentWorkId: harbor });
+    expect(write.payload).toContain(REASON);
+    expect(await correction(t, amendmentId)).toMatchObject({ status: "submitted", chainWriteId: write._id });
+    // Kicking again sends nothing new.
+    await t.mutation(internal.chain.kick, {});
+    expect(await t.run((ctx) => ctx.db.query("chainWrites").collect())).toHaveLength(3);
+
+    await settle(t, chain);
+    expect((await writeOf(t, write._id)).status).toBe("confirmed");
+    expect(chain.work(workIdFor(work))).toMatchObject({ kind: 2, parentId: workIdFor(harbor) });
+    const confirmed = await correction(t, amendmentId);
+    expect(confirmed).toMatchObject({ status: "confirmed" });
+    expect(confirmed.offchainOnly).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get("works", work)))!).toMatchObject({
+      kind: "original",
+      effectiveKind: "fork",
+      effectiveParentWorkId: harbor,
+      lineageAmendedAt: confirmed.effectiveFrom,
+    });
+  });
+
+  it("waits while chain writes are off or the work is still registering", async () => {
+    const { t, chain } = setup();
+    await setChainWrites(t, true);
+    const owner = await insertOwner(t);
+    const harbor = await registered(t, chain, addressable());
+    const creator = await insertMember(t);
+    const work = await insertWork(t, creator.userId, addressable());
+    const amendmentId = await request(t, owner, work, "fork", harbor);
+
+    await setChainWrites(t, false);
+    await t.mutation(internal.chain.kick, {});
+    expect((await correction(t, amendmentId)).status).toBe("requested");
+
+    await setChainWrites(t, true);
+    await t.mutation(internal.chain.kick, {});
+    expect((await correction(t, amendmentId)).status).toBe("requested");
+    expect(await amendWrite(t, work, 1)).toBeNull();
+
+    await t.run((ctx) => enqueueRegisterWork(asCtx(ctx), work));
+    await settle(t, chain, 2);
+    await t.mutation(internal.chain.kick, {});
+    expect((await correction(t, amendmentId)).status).toBe("submitted");
+    await settle(t, chain);
+    expect((await correction(t, amendmentId)).status).toBe("confirmed");
+  });
+
+  it("rejects a correction the registry's lineage can't take", async () => {
+    const { t, chain } = setup();
+    await setChainWrites(t, true);
+    const harbor = await registered(t, chain, addressable());
+    const work = await registered(t, chain, addressable());
+    // An original can't become a variation onchain. The admin page refuses this too; the row is
+    // written directly to stand for any correction the registry's lineage disagrees with.
+    const adminId = (await insertMember(t)).userId;
+    const amendmentId = await t.run((ctx) =>
+      ctx.db.insert("lineageAmendments", {
+        workId: work,
+        sequence: 1,
+        chainSequence: 1,
+        fromKind: "original",
+        newKind: "variation",
+        newParentId: harbor,
+        reason: REASON_TEXT,
+        adminId,
+        status: "requested",
+        requestedAt: Date.now(),
+      }),
+    );
+
+    await t.mutation(internal.chain.kick, {});
+    expect(await correction(t, amendmentId)).toMatchObject({ status: "rejected", rejectReason: "A work's kind changes only between original and fork." });
+    expect(await amendWrite(t, work, 1)).toBeNull();
+  });
+
+  it("rejects the correction when the registry refuses the write, and sends it again when requested again", async () => {
+    const { t, chain } = setup();
+    await setChainWrites(t, true);
+    const owner = await insertOwner(t);
+    const harbor = await registered(t, chain, addressable());
+    const work = await registered(t, chain, addressable());
+    const first = await request(t, owner, work, "fork", harbor);
+    await t.mutation(internal.chain.kick, {});
+    const writeId = (await amendWrite(t, work, 1))!._id;
+
+    // Onchain, the harbor piece moved into the work's family since: a fork's parent can't be there.
+    const onchainHarbor = chain.work(workIdFor(harbor))!;
+    const harborFamily = onchainHarbor.family;
+    onchainHarbor.family = chain.work(workIdFor(work))!.family;
+    // The engine acts on a revert only once finalized state gives the same reason.
+    await chain.mine(chain.finalityLag + 1);
+    await settle(t, chain);
+    const refused = await writeOf(t, writeId);
+    expect(refused).toMatchObject({ status: "rejected", revertReason: "FamilyMismatch" });
+    expect(await correction(t, first)).toMatchObject({ status: "rejected", rejectReason: refused.error });
+    expect((await t.run((ctx) => ctx.db.get("works", work)))!.effectiveKind).toBeUndefined();
+
+    // Not from /admin/chain: the correction is already rejected.
+    await t.run((ctx) => ctx.db.patch("chainWrites", writeId, { status: "failed" }));
+    const row = (await owner.query(api.chainAdmin.overview, {})).recent.find((write) => write._id === writeId);
+    expect(row).toMatchObject({ retryable: false });
+    await expect(owner.mutation(api.chainAdmin.retryWrite, { writeId })).rejects.toMatchObject({ data: { code: "CORRECTION" } });
+
+    chain.work(workIdFor(harbor))!.family = harborFamily;
+    await chain.mine(chain.finalityLag + 1);
+    const second = await request(t, owner, work, "fork", harbor);
+    await t.mutation(internal.chain.kick, {});
+    expect(await writeOf(t, writeId)).toMatchObject({ status: "pending", amendmentId: second });
+    expect(await correction(t, second)).toMatchObject({ status: "submitted", chainWriteId: writeId });
+    await settle(t, chain);
+    expect(await correction(t, second)).toMatchObject({ status: "confirmed" });
+    expect(await correction(t, first)).toMatchObject({ status: "rejected" });
+    expect((await t.run((ctx) => ctx.db.get("works", work)))!).toMatchObject({ effectiveKind: "fork", effectiveParentWorkId: harbor });
+  });
+
+  it("shows the Economics panel's shares as recorded once the work is registered", async () => {
+    const { t, chain } = setup();
+    await setChainWrites(t, true);
+    const creator = await insertMember(t);
+    const work = await insertWork(t, creator.userId, addressable());
+    const cr = await crOf(t, work);
+    expect((await t.query(api.workEconomics.panel, { cr }))!.provenance).toBe("pending");
+    await t.run((ctx) => enqueueRegisterWork(asCtx(ctx), work));
+    await settle(t, chain, 2);
+    expect((await t.query(api.workEconomics.panel, { cr }))!.provenance).toBe("confirmed");
   });
 });

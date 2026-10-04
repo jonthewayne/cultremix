@@ -71,6 +71,8 @@ export const chainTables = {
     dependsOnWriteId: v.optional(v.id("chainWrites")),
     // amendLineage: the new parent work (none for an original), for walking effective lineage.
     newParentWorkId: v.optional(v.id("works")),
+    // amendLineage: the correction it records (convex/lineage.ts), which follows its outcome.
+    amendmentId: v.optional(v.id("lineageAmendments")),
     // The record being written, JSON with bigints as decimal strings. Amendments and configs
     // carry it from the start; registerWork and back fill it in when first signed and keep it
     // for every re-sign (only the deadline changes).

@@ -45,6 +45,8 @@ const writeRowValidator = v.object({
   txUrl: v.union(v.null(), v.string()),
   problem: v.union(v.null(), v.string()),
   result: v.union(v.null(), v.object({ ordinal: v.number(), week: v.number() })),
+  // Whether retryWrite takes it when it fails (not Backs or lineage corrections; see retryWrite).
+  retryable: v.boolean(),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -129,6 +131,7 @@ export const overview = query({
         txUrl: explorer && txHash ? explorerTxUrl(explorer, txHash) : null,
         problem: write.revertReason ?? write.error ?? write.lastBroadcastError ?? null,
         result: write.result ?? null,
+        retryable: retryable(write),
         createdAt: write.createdAt,
         updatedAt: write.updatedAt,
       });
@@ -191,9 +194,16 @@ export const registerEconomicConfig = mutation({
   },
 });
 
+/** A failed Back or lineage correction goes again from where it started, not from here. */
+function retryable(write: Doc<"chainWrites">) {
+  return write.kind !== "back" && !(write.kind === "amendLineage" && write.amendmentId);
+}
+
 /**
  * Puts a failed write back in the queue from its first gate, for a fresh signature and nonce.
- * A failed Back isn't retried here: the member Backs again, which checks their weekly limit.
+ * A failed Back isn't retried here: the member Backs again, which checks their weekly limit. Nor
+ * is a lineage correction: its failure rejected the correction (convex/lineage.ts), so an admin
+ * requests it again there and the new request reuses this write.
  */
 export const retryWrite = mutation({
   args: { writeId: v.id("chainWrites") },
@@ -204,6 +214,9 @@ export const retryWrite = mutation({
     if (!write) throw new ConvexError({ code: "NOT_FOUND", message: "That write doesn't exist." });
     if (write.status !== "failed") throw new ConvexError({ code: "NOT_FAILED", message: "Only a failed write can be retried." });
     if (write.kind === "back") throw new ConvexError({ code: "BACK", message: "A failed Back goes again when the member Backs again." });
+    if (!retryable(write)) {
+      throw new ConvexError({ code: "CORRECTION", message: "A failed lineage correction goes again when it's requested again on the lineage page." });
+    }
     await resetWrite(ctx, write);
     return null;
   },

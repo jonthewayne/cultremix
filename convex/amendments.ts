@@ -1,16 +1,19 @@
 import { ConvexError, v } from "convex/values";
 import type { Hex } from "viem";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
-import { KIND_CODES, type WorkKind } from "./lib/chain/ids";
-import { amendmentPayload, enqueueAmendment, writeBySubject } from "./lib/chain/queue";
+import { KIND_CODES, reasonHashFor, type WorkKind } from "./lib/chain/ids";
+import { amendmentPayload, chainWritesEnabled, enqueueAmendment, writeBySubject } from "./lib/chain/queue";
 import { parsePayload } from "./lib/chain/writes";
 
 // Lineage corrections onchain (R19, the registry half). The registry admin appends amendment n to
 // a work's lineage; the original record stays. queueLineageAmendment checks a correction against
 // the lineage the registry holds now (the original record plus confirmed amendments) with the
-// contract's own rules, then queues it for the relayer. There is no UI here: the admin flow, the
-// lineageAmendments table, and works.effectiveParentWorkId belong to U11, which calls this.
+// contract's own rules, then queues it for the relayer. The admin flow and the lineageAmendments
+// table live in convex/lineage.ts: sendRequestedCorrections (run by the chain kick) sends its
+// requested rows through queueLineageAmendment, and the engine's outcome for the write confirms
+// or rejects the row (reflect in convex/chain.ts).
 
 // CultRemixRegistry.MAX_AMEND_HOPS.
 const MAX_AMEND_HOPS = 64;
@@ -106,3 +109,46 @@ export const queueLineageAmendment = internalMutation({
     return await enqueueAmendment(ctx, request);
   },
 });
+
+// Refusals that can clear on their own: the work or new parent is still registering, or the
+// work's previous amendment is still being recorded. The correction waits; anything else rejects it.
+const WAIT_CODES = new Set(["NOT_REGISTERED", "PARENT_NOT_REGISTERED", "IN_FLIGHT"]);
+
+/**
+ * Sends requested lineage corrections to the registry while chain.writes is on: each one goes
+ * through queueLineageAmendment (a sub-transaction, so a refusal leaves nothing behind), its write
+ * remembers the correction, and the correction becomes submitted. Returns how many were sent.
+ */
+export async function sendRequestedCorrections(ctx: MutationCtx): Promise<number> {
+  if (!(await chainWritesEnabled(ctx))) return 0;
+  const rows = await ctx.runQuery(internal.lineage.requestedForChain, { limit: 100 });
+  let sent = 0;
+  for (const row of rows) {
+    let writeId: Id<"chainWrites">;
+    try {
+      writeId = await ctx.runMutation(internal.amendments.queueLineageAmendment, {
+        workId: row.workId,
+        newParentWorkId: row.newParentId ?? null,
+        newKind: row.newKind,
+        reasonHash: reasonHashFor(row.reason),
+        sequence: row.chainSequence,
+      });
+    } catch (error) {
+      if (!(error instanceof ConvexError)) throw error;
+      const { code, message } = error.data as { code: string; message: string };
+      if (!WAIT_CODES.has(code)) await ctx.runMutation(internal.lineage.markRejected, { amendmentId: row.amendmentId, reason: message });
+      continue;
+    }
+    const write = await ctx.db.get("chainWrites", writeId);
+    if (!write) continue;
+    if (write.amendmentId && write.amendmentId !== row.amendmentId) {
+      // Already recording another open correction of the same change; this one waits its turn.
+      const other = await ctx.db.get("lineageAmendments", write.amendmentId);
+      if (other && (other.status === "requested" || other.status === "submitted")) continue;
+    }
+    await ctx.db.patch("chainWrites", writeId, { amendmentId: row.amendmentId });
+    await ctx.runMutation(internal.lineage.markSubmitted, { amendmentId: row.amendmentId, chainWriteId: writeId });
+    sent += 1;
+  }
+  return sent;
+}

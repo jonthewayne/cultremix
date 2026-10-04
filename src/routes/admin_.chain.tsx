@@ -290,7 +290,7 @@ function ChainAdminPage() {
                   )}
                   {write.problem && <div className="text-destructive">{write.problem}</div>}
                 </div>
-                {canManage && write.status === "failed" && write.kind !== "back" && (
+                {canManage && write.status === "failed" && write.retryable && (
                   <Button
                     variant="outline"
                     size="sm"
