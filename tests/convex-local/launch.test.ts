@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { PAGE_SIZE } from "../../convex/metrics";
+import { FEATURE_FLAGS } from "../../convex/lib/flags";
+import { flagEnabled } from "../../convex/studio";
 import { newTest } from "./setup";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -83,6 +85,25 @@ describe("admin access", () => {
     expect((await owner.as.query(api.admin.searchMembers, { search: "bob@example" }))[0].username).toBe("bobby");
     expect((await owner.as.query(api.admin.searchMembers, { search: "№ 7" }))[0].username).toBe("bobby");
     expect(await owner.as.query(api.admin.searchMembers, { search: "" })).toHaveLength(3);
+  });
+});
+
+describe("switches", () => {
+  it("say plainly which ones nothing reads yet", async () => {
+    const t = newTest();
+    const owner = await addUser(t, "jon", "super_admin_owner");
+    const overview = await owner.as.query(api.admin.overview, {});
+    const notWired = overview.flags.filter((flag) => flag.notWiredYet).map((flag) => flag.key);
+    expect(notWired.sort()).toEqual(["chain.writes", "commerce.checkout", "publishing", "social.backs"]);
+  });
+
+  it("act on their default until an admin sets them, as the admin page shows", async () => {
+    const t = newTest();
+    for (const flag of FEATURE_FLAGS) {
+      expect(await t.run((ctx) => flagEnabled(ctx, flag.key))).toBe(flag.defaultOn);
+    }
+    await t.run((ctx) => ctx.db.insert("featureFlags", { key: "gen.upscale", enabled: true }));
+    expect(await t.run((ctx) => flagEnabled(ctx, "gen.upscale"))).toBe(true);
   });
 });
 

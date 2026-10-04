@@ -20,7 +20,7 @@ function AdminOverview() {
   );
 }
 
-type Flag = { key: string; label: string; description: string; enabled: boolean; isSet: boolean };
+type Flag = { key: string; label: string; description: string; notWiredYet?: string; enabled: boolean; isSet: boolean };
 
 function FlagsSection({ flags, canManage }: { flags: Array<Flag>; canManage: boolean }) {
   const setFlag = useMutation(api.admin.setFlag);
@@ -53,6 +53,7 @@ function FlagsSection({ flags, canManage }: { flags: Array<Flag>; canManage: boo
                 <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{flag.key}</span>
               </p>
               <p className="mt-1 text-sm text-muted-foreground">{flag.description}</p>
+              {flag.notWiredYet && <p className="mt-1 text-sm font-semibold">{flag.notWiredYet}</p>}
               {!flag.isSet && <p className="mt-1 text-xs text-muted-foreground">Not set yet, so it uses its default.</p>}
             </div>
             <Toggle
@@ -131,7 +132,7 @@ function SettingsSection({ settings, canManage }: { settings: Settings; canManag
           <NumberField label="Signup credits" value={grantCredits} onChange={setGrantCredits} disabled={!canManage} min={0} max={1000} />
           <NumberField
             label="Daily image budget ($)"
-            hint="The most CultRemix spends on images in a day."
+            hint="The most CultRemix spends on images in a day. Not enforced yet: nothing stops at this amount."
             value={budgetDollars}
             onChange={setBudgetDollars}
             disabled={!canManage}
@@ -141,6 +142,7 @@ function SettingsSection({ settings, canManage }: { settings: Settings; canManag
           />
           <NumberField
             label="Photo shoots per member a day"
+            hint="Model photos each member can start a day (UTC), at publish or a reshoot. The owner has no limit."
             value={shoots}
             onChange={setShoots}
             disabled={!canManage}
