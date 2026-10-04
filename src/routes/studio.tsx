@@ -9,6 +9,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { BATCH_CREDITS } from "../../convex/lib/studioRules";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
+import { RemixKindChoice } from "~/components/cr/RemixKindChoice";
+import type { RemixKind } from "~/components/cr/RemixKindChoice";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
@@ -929,6 +931,7 @@ function Viewer({
 function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
   const publish = useMutation(api.publish.quick);
   const [title, setTitle] = useState("");
+  const [remixKind, setRemixKind] = useState<RemixKind>("variation");
   const [requestId] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<{ cr: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -947,7 +950,7 @@ function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
     setSaving(true);
     setError(null);
     try {
-      const published = await publish({ requestId, generationId: tile.generationId, title: title || undefined });
+      const published = await publish({ requestId, generationId: tile.generationId, title: title || undefined, remixKind });
       setResult({ cr: published.cr });
     } catch (err) {
       setError(errorMessage(err));
@@ -1051,6 +1054,7 @@ function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
               <span className="inline-block h-3 w-3 rounded-sm border border-black align-middle" style={{ background: tile.backgroundColor }} />{" "}
               <span className="font-mono">{tile.backgroundColor}</span> shirt.
             </p>
+            <RemixKindChoice generationId={tile.generationId} value={remixKind} onChange={setRemixKind} disabled={saving} />
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button type="submit" disabled={saving} className="h-14 rounded-2xl bg-black px-8 text-lg font-black text-white disabled:opacity-50">

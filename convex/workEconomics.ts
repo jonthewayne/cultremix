@@ -40,7 +40,7 @@ export const panel = query({
       creatorPoolBps: config.creatorPoolBps,
       configPath: economicsConfigPath(config.version),
       configSha256: await sha256Hex(canonicalConfigJson(config)),
-      provenance: "pending" as const,
+      provenance: "pending" as "pending" | "confirmed",
     };
     let lineage;
     try {

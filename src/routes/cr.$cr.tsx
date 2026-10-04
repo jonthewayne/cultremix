@@ -4,6 +4,10 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
+import { DirectRemixes } from "~/components/cr/DirectRemixes";
+import { EconomicsPanel } from "~/components/cr/EconomicsPanel";
+import { FamilyView } from "~/components/cr/FamilyView";
+import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
@@ -39,7 +43,7 @@ function ShopPage() {
       </div>
     );
   }
-  const { item, contentHash, remixes } = data;
+  const { item, contentHash } = data;
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
@@ -59,14 +63,7 @@ function ShopPage() {
               by <span className="font-bold">@{item.creator.username}</span>
               {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
             </p>
-            {item.parentCr && (
-              <p className="mt-3 text-lg">
-                Remix of{" "}
-                <Link to="/cr/$cr" params={{ cr: item.parentCr }} className="font-bold underline underline-offset-4">
-                  CR {item.parentCr}
-                </Link>
-              </p>
-            )}
+            <LineageNote cr={item.cr} />
           </div>
 
           <div className="flex flex-col gap-6">
@@ -101,6 +98,7 @@ function ShopPage() {
             >
               Remix this
             </Link>
+            <EconomicsPanel cr={item.cr} />
             {contentHash && (
               <div className="border-t-2 border-black pt-4 text-sm">
                 <p className="font-bold uppercase tracking-wider">Fingerprint</p>
@@ -111,22 +109,9 @@ function ShopPage() {
           </div>
         </section>
 
-        {remixes.length > 0 && (
-          <section className="mt-20">
-            <h2 className="border-t-2 border-black pt-4 text-sm font-bold uppercase tracking-wider">Remixes</h2>
-            <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-              {remixes.map((remix) => (
-                <Link key={remix.workId} to="/cr/$cr" params={{ cr: remix.cr }} className="group block">
-                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[8%]" style={{ background: remix.backgroundColor }}>
-                    <Art url={remix.artMediumUrl ?? remix.artUrl} alt={`CR ${remix.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
-                  </div>
-                  <CrMark cr={remix.cr} className="mt-2 text-3xl" />
-                  <p className="text-sm">@{remix.creator.username}</p>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
+        <LineageSection cr={item.cr} />
+        <DirectRemixes cr={item.cr} />
+        <FamilyView cr={item.cr} />
       </main>
     </div>
   );

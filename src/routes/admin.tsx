@@ -54,6 +54,12 @@ function AdminPage() {
           title="Admin"
           description="Platform users and DB-authoritative roles."
         />
+        {(user.platformRole === "super_admin_owner" ||
+          user.platformRole === "super_admin_ops") && (
+          <Button asChild variant="outline">
+            <Link to="/admin/lineage">Lineage corrections</Link>
+          </Button>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>Users</CardTitle>
