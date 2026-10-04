@@ -78,7 +78,18 @@ async function enqueue(ctx: MutationCtx, workId: Id<"works">) {
     .query("shopProducts")
     .withIndex("by_work", (q) => q.eq("workId", workId))
     .unique();
-  if (existing?.status === "live") return false;
+  if (existing?.status === "live") {
+    // Live products synced before the work's offered colors were sold (the launch four) sync
+    // again, staying on sale meanwhile. Products that already carry every color stay put.
+    const rows = await ctx.db
+      .query("workVariants")
+      .withIndex("by_work", (q) => q.eq("workId", workId))
+      .take(200);
+    const missing = sellableColors(work.offeredColors).some((c) => !rows.some((r) => r.color === c.code));
+    if (!missing) return false;
+    await ctx.scheduler.runAfter(0, internal.shopify.syncWork, { workId });
+    return true;
+  }
   if (existing) {
     await ctx.db.patch("shopProducts", existing._id, { status: "pending", nextAttemptAt: now, updatedAt: now });
   } else {

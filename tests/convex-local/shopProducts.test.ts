@@ -210,6 +210,34 @@ describe("Shopify product sync", () => {
     expect(shopifyCalls).toHaveLength(1);
   });
 
+  it("syncs a live product again when it lacks a color the work is offered in", async () => {
+    const t = newTest();
+    vi.useFakeTimers();
+    for (const [key, value] of Object.entries(SHOP_ENV)) vi.stubEnv(key, value);
+    const { fetchFake, productSets } = fakeShopify();
+    vi.stubGlobal("fetch", fetchFake);
+    await setFlag(t, "commerce.checkout", true);
+    const creator = await makeUser(t);
+    // On sale in the launch colors, as products synced before offered colors were sold are.
+    const workId = await makeWork(t, { creatorId: creator, family: 101, expression: 1 });
+    await makeOnSale(t, workId, "101-001");
+    expect(await t.mutation(internal.shopify.onPublished, { workId })).toBe(false);
+    await t.run((ctx) => ctx.db.patch("works", workId, { offeredColors: ["ivory", "true-navy"] }));
+    // Until it syncs again, only the offered color it already has is sold.
+    expect((await t.query(api.shopify.offer, { cr: "101-001" }))?.colors.map((c) => c.key)).toEqual(["ivory"]);
+
+    expect(await t.mutation(internal.shopify.onPublished, { workId })).toBe(true);
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    vi.useRealTimers();
+
+    expect(productSets).toHaveLength(1);
+    expect(new Set(productSets[0].map((sku) => sku.split("-")[3]))).toEqual(new Set(["IVORY", "TRUENAVY"]));
+    const offer = await t.query(api.shopify.offer, { cr: "101-001" });
+    expect(offer?.colors.map((c) => c.key)).toEqual(["ivory", "true-navy"]);
+    expect(offer?.variants).toHaveLength(10);
+    expect(await t.mutation(internal.shopify.onPublished, { workId })).toBe(false);
+  });
+
   it("waits without counting attempts while Shopify is not configured", async () => {
     const t = newTest();
     await setFlag(t, "commerce.checkout", true);
