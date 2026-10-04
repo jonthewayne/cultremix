@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { query } from "./_generated/server";
 import { getViewerUser } from "./identity";
+import { colorName } from "./lib/colors";
+import { garmentColor } from "./lib/garments";
 import { imageUrlReader } from "./lib/imageUrls";
 import { formatCr, parseCr } from "./lib/r2";
 import {
@@ -214,6 +216,20 @@ export async function followingWindow(
   };
 }
 
+const shopColor = v.object({ key: v.string(), name: v.string(), hex: v.string() });
+
+// The shirt colors a work is offered in, lead first. Works published before colors were chosen
+// have one: their background.
+export function shopColors(work: Doc<"works">) {
+  const colors = (work.offeredColors ?? []).flatMap((key) => {
+    const color = garmentColor(key);
+    return color ? [color] : [];
+  });
+  if (colors.length > 0) return colors;
+  const name = colorName(work.backgroundColor);
+  return [{ key: "custom", name: name.charAt(0).toUpperCase() + name.slice(1), hex: work.backgroundColor }];
+}
+
 export const byCr = query({
   args: { cr: v.string() },
   returns: v.union(
@@ -221,6 +237,8 @@ export const byCr = query({
     v.object({
       item: feedItem,
       contentHash: v.optional(v.string()),
+      description: v.optional(v.string()),
+      colors: v.array(shopColor),
     }),
   ),
   handler: async (ctx, args) => {
@@ -229,6 +247,8 @@ export const byCr = query({
     return {
       item: await toFeedItem(ctx, work),
       contentHash: work.contentHash,
+      description: work.description,
+      colors: shopColors(work),
     };
   },
 });

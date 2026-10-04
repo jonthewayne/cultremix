@@ -81,7 +81,8 @@ export function Viewer({
   onReject: (tile: Tile, rejected: boolean) => void;
   onBranch: (tile: Tile) => void;
   onStyle: (tile: Tile) => void;
-  onPublish: (tile: Tile) => void;
+  // Missing while publishing is switched off.
+  onPublish?: (tile: Tile) => void;
 }) {
   const id = spot.view;
   const loadedBatch = batches.find((batch) => batch.tiles.some((tile) => tile.generationId === id));
@@ -191,7 +192,7 @@ export function Viewer({
     favorite,
     reject,
     branch: () => tile?.key && onBranch(tile),
-    publish: () => tile && !tile.publishedCr && onPublish(tile),
+    publish: () => tile && !tile.publishedCr && onPublish?.(tile),
     transparency: () => setChecker((on) => !on),
   };
   const menuOpenRef = useRef(menuOpen);
@@ -231,7 +232,7 @@ export function Viewer({
         { label: checker ? "Show the background color" : "Show transparency", onSelect: () => setChecker(!checker) },
         { label: showRejected ? "Hide dismissed" : "Show dismissed", onSelect: () => onShowRejected(!showRejected) },
         ...designItems(tile, {
-          onPublish: () => onPublish(tile),
+          onPublish: onPublish ? () => onPublish(tile) : undefined,
           onInspire: () => onBranch(tile),
           onStyle: () => onStyle(tile),
         }).filter((item) => item.label !== "Publish"),
@@ -260,11 +261,11 @@ export function Viewer({
       <Link to="/cr/$cr" params={{ cr: tile.publishedCr }} className={cn(button, "font-cr")} style={filled}>
         CR {tile.publishedCr}
       </Link>
-    ) : (
+    ) : onPublish ? (
       <button type="button" onClick={() => onPublish(tile)} className={button} style={filled}>
         Publish
       </button>
-    ));
+    ) : null);
   const more_ = tile && <DesignMenu items={menu} onOpenChange={setMenuOpen} />;
   const scopes = (
     <div role="tablist" aria-label="Page through" className="flex rounded-xl border-2 border-current p-0.5 text-sm font-bold">

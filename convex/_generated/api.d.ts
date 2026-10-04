@@ -36,10 +36,13 @@ import type * as lib_codes from "../lib/codes.js";
 import type * as lib_colors from "../lib/colors.js";
 import type * as lib_creatorPool from "../lib/creatorPool.js";
 import type * as lib_creators from "../lib/creators.js";
+import type * as lib_earlyAccess from "../lib/earlyAccess.js";
 import type * as lib_economics from "../lib/economics.js";
 import type * as lib_economicsConfigs from "../lib/economicsConfigs.js";
 import type * as lib_fal from "../lib/fal.js";
+import type * as lib_flagState from "../lib/flagState.js";
 import type * as lib_flags from "../lib/flags.js";
+import type * as lib_garments from "../lib/garments.js";
 import type * as lib_gridCut from "../lib/gridCut.js";
 import type * as lib_imageErrors from "../lib/imageErrors.js";
 import type * as lib_imageUrls from "../lib/imageUrls.js";
@@ -91,6 +94,7 @@ import type * as schema_cultremix from "../schema/cultremix.js";
 import type * as schema_launch from "../schema/launch.js";
 import type * as schema_lineage from "../schema/lineage.js";
 import type * as schema_print from "../schema/print.js";
+import type * as schema_publish from "../schema/publish.js";
 import type * as schema_shop from "../schema/shop.js";
 import type * as schema_social from "../schema/social.js";
 import type * as seed from "../seed.js";
@@ -102,6 +106,7 @@ import type * as storageMoves from "../storageMoves.js";
 import type * as studio from "../studio.js";
 import type * as testHelpers from "../testHelpers.js";
 import type * as upscale from "../upscale.js";
+import type * as waitlist from "../waitlist.js";
 import type * as workEconomics from "../workEconomics.js";
 
 import type {
@@ -139,10 +144,13 @@ declare const fullApi: ApiFromModules<{
   "lib/colors": typeof lib_colors;
   "lib/creatorPool": typeof lib_creatorPool;
   "lib/creators": typeof lib_creators;
+  "lib/earlyAccess": typeof lib_earlyAccess;
   "lib/economics": typeof lib_economics;
   "lib/economicsConfigs": typeof lib_economicsConfigs;
   "lib/fal": typeof lib_fal;
+  "lib/flagState": typeof lib_flagState;
   "lib/flags": typeof lib_flags;
+  "lib/garments": typeof lib_garments;
   "lib/gridCut": typeof lib_gridCut;
   "lib/imageErrors": typeof lib_imageErrors;
   "lib/imageUrls": typeof lib_imageUrls;
@@ -194,6 +202,7 @@ declare const fullApi: ApiFromModules<{
   "schema/launch": typeof schema_launch;
   "schema/lineage": typeof schema_lineage;
   "schema/print": typeof schema_print;
+  "schema/publish": typeof schema_publish;
   "schema/shop": typeof schema_shop;
   "schema/social": typeof schema_social;
   seed: typeof seed;
@@ -205,6 +214,7 @@ declare const fullApi: ApiFromModules<{
   studio: typeof studio;
   testHelpers: typeof testHelpers;
   upscale: typeof upscale;
+  waitlist: typeof waitlist;
   workEconomics: typeof workEconomics;
 }>;
 

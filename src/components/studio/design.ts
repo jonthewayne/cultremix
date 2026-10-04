@@ -30,7 +30,7 @@ export function designItems(
   tile: Tile,
   actions: {
     onOpen?: () => void;
-    onPublish: () => void;
+    onPublish?: () => void;
     onInspire: () => void;
     onStyle: () => void;
     onReject?: () => void;
@@ -45,7 +45,7 @@ export function designItems(
     items.push({ label: "Use as image", onSelect: actions.onInspire });
     items.push({ label: "Use as style", onSelect: actions.onStyle });
   }
-  if (!tile.publishedCr) items.push({ label: "Publish", onSelect: actions.onPublish });
+  if (!tile.publishedCr && actions.onPublish) items.push({ label: "Publish", onSelect: actions.onPublish });
   if (actions.onReject) items.push({ label: tile.rejected ? "Bring back" : "Dismiss", onSelect: actions.onReject });
   return items;
 }

@@ -13,6 +13,9 @@ const BROWSER_SAFE = new Set([
   // The published economics config (served at /economics/v1.json) and its pure share math.
   "convex/lib/economics.ts",
   "convex/lib/economicsConfigs.ts",
+  // Shirt colors and the contrast check; the early-access email rules.
+  "convex/lib/garments.ts",
+  "convex/lib/earlyAccess.ts",
   "convex/lib/studioRules.ts",
   "convex/lib/username.ts",
 ]);
@@ -76,7 +79,9 @@ describe("browser code boundary", () => {
 
   it("follows imports into convex/", () => {
     // Without this, a walker that stopped following imports would pass the check above.
-    expect(reached.get("convex/lib/colors.ts")).toBe("src/routes/cr.$cr.tsx");
+    expect(["src/components/publish/PublishDialog.tsx", "src/lib/designPixels.ts"]).toContain(
+      reached.get("convex/lib/garments.ts"),
+    );
     expect(reached.has("convex/_generated/api.js")).toBe(true);
   });
 });

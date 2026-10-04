@@ -12,8 +12,7 @@ import type { Tile } from "~/components/studio/design";
 import type { Scope } from "~/lib/viewerNav";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
-import { RemixKindChoice } from "~/components/cr/RemixKindChoice";
-import type { RemixKind } from "~/components/cr/RemixKindChoice";
+import { PublishDialog } from "~/components/publish/PublishDialog";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
@@ -86,6 +85,8 @@ function StudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [publishing, setPublishing] = useState<Tile | null>(null);
+  // Publish buttons hide while an admin has publishing turned off.
+  const canPublish = useQuery(convexQuery(api.publish.availability, {})).data?.publishing !== false;
   const remixStarted = useRef<string | null>(null);
   const imagesRef = useRef(images);
   const stylesRef = useRef(styles);
@@ -550,7 +551,7 @@ function StudioPage() {
                         tile={tile}
                         grid={batch.grid}
                         onOpen={() => viewerRoute.open({ view: tile.generationId, scope: "batch" })}
-                        onPublish={() => setPublishing(tile)}
+                        onPublish={canPublish ? () => setPublishing(tile) : undefined}
                         onInspire={() => useAsImage(tile)}
                         onStyle={() => useAsStyle(tile)}
                         onFavorite={(on) => designActions.setFavorite(tile.generationId, on)}
@@ -603,10 +604,14 @@ function StudioPage() {
               viewerRoute.close();
               useAsStyle(tile);
             }}
-            onPublish={(tile) => {
-              viewerRoute.close();
-              setPublishing(tile);
-            }}
+            onPublish={
+              canPublish
+                ? (tile) => {
+                    viewerRoute.close();
+                    setPublishing(tile);
+                  }
+                : undefined
+            }
           />
         )}
       </AnimatePresence>
@@ -727,7 +732,8 @@ function TileCard({
   // Grid batches give credits back per batch (shown on the batch line), not per design.
   grid: boolean;
   onOpen: () => void;
-  onPublish: () => void;
+  // Absent while publishing is turned off.
+  onPublish?: () => void;
   onInspire: () => void;
   onStyle: () => void;
   onFavorite: (favorite: boolean) => void;
@@ -810,17 +816,15 @@ function TileCard({
             >
               CR {tile.publishedCr}
             </Link>
-          ) : (
-            !tile.rejected && (
-              <button
-                type="button"
-                onClick={onPublish}
-                className="absolute bottom-2 left-2 rounded-lg bg-black px-3 py-1.5 text-xs font-black text-white opacity-100 transition-opacity hover:bg-neutral-800 md:opacity-0 md:group-hover:opacity-100"
-              >
-                Publish
-              </button>
-            )
-          )}
+          ) : onPublish && !tile.rejected ? (
+            <button
+              type="button"
+              onClick={onPublish}
+              className="absolute bottom-2 left-2 rounded-lg bg-black px-3 py-1.5 text-xs font-black text-white opacity-100 transition-opacity hover:bg-neutral-800 md:opacity-0 md:group-hover:opacity-100"
+            >
+              Publish
+            </button>
+          ) : null}
         </>
       )}
       {tile.rejected ? (
@@ -858,152 +862,5 @@ function Elapsed({ since }: { since: number }) {
     <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-neutral-500">
       Designing · {seconds} s
     </span>
-  );
-}
-
-function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
-  const publish = useMutation(api.publish.quick);
-  const [title, setTitle] = useState("");
-  const [remixKind, setRemixKind] = useState<RemixKind>("variation");
-  const [requestId] = useState(() => crypto.randomUUID());
-  const [result, setResult] = useState<{ cr: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, saving]);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const published = await publish({ requestId, generationId: tile.generationId, title: title || undefined, remixKind });
-      setResult({ cr: published.cr });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (result) {
-    return (
-      <motion.div
-        className="fixed inset-0 z-50 flex flex-col justify-between gap-8 overflow-y-auto bg-black p-6 text-white md:p-12"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Published"
-      >
-        <p className="text-sm font-bold uppercase tracking-[0.3em]">Published</p>
-        <div>
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 170, damping: 20 }}
-          >
-            <CrMark cr={result.cr} className="text-[18vw] md:text-[16vw]" />
-          </motion.div>
-          {title && (
-            <motion.p
-              className="mt-4 text-3xl font-bold md:text-5xl"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.35 }}
-            >
-              {title}
-            </motion.p>
-          )}
-        </div>
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div className="flex items-center gap-4">
-            <div
-              className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
-              style={{ background: tile.backgroundColor }}
-            >
-              <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
-            </div>
-            <p className="max-w-xs text-sm text-neutral-300">
-              The model photo is developing. It appears on the feed in a minute or two.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link to="/cr/$cr" params={{ cr: result.cr }} className="rounded-2xl bg-white px-7 py-4 text-base font-black text-black">
-              View shop page
-            </Link>
-            <button type="button" onClick={onClose} className="rounded-2xl border-2 border-white px-7 py-4 text-base font-black">
-              Keep creating
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !saving) onClose();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Publish"
-    >
-      <motion.div
-        className="grid w-full max-w-4xl overflow-hidden rounded-3xl bg-white text-black md:grid-cols-2"
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
-      >
-        <div className="flex aspect-square items-center justify-center p-[8%]" style={{ background: tile.backgroundColor }}>
-          <Art url={tile.mediumUrl ?? tile.url} alt="Design on the shirt color" className="h-full w-auto max-w-full object-contain" />
-        </div>
-        <form onSubmit={submit} className="flex flex-col justify-between gap-8 p-6 md:p-10">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wider">Publish</p>
-            <h2 className="mt-3 text-4xl font-black leading-none tracking-tight">Give it a title</h2>
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={80}
-              placeholder="Optional"
-              className="mt-6 w-full border-b-4 border-black bg-transparent py-2 text-2xl font-semibold outline-none placeholder:text-neutral-300"
-            />
-            <p className="mt-4 text-sm text-neutral-600">
-              It gets the next CR number and goes on the feed, printed on a{" "}
-              <span className="inline-block h-3 w-3 rounded-sm border border-black align-middle" style={{ background: tile.backgroundColor }} />{" "}
-              <span className="font-mono">{tile.backgroundColor}</span> shirt.
-            </p>
-            <RemixKindChoice generationId={tile.generationId} value={remixKind} onChange={setRemixKind} disabled={saving} />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" disabled={saving} className="h-14 rounded-2xl bg-black px-8 text-lg font-black text-white disabled:opacity-50">
-              {saving ? "Publishing…" : "Publish"}
-            </button>
-            <button type="button" onClick={onClose} disabled={saving} className="px-2 text-sm font-semibold underline underline-offset-4">
-              Cancel
-            </button>
-          </div>
-          {error && (
-            <p role="alert" className="font-semibold text-red-600">
-              {error}
-            </p>
-          )}
-        </form>
-      </motion.div>
-    </motion.div>
   );
 }

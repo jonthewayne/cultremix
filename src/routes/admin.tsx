@@ -14,6 +14,7 @@ const tabs = [
   { to: "/admin/metrics", label: "Metrics", exact: false },
   { to: "/admin/judges", label: "Judges", exact: false },
   { to: "/admin/lineage", label: "Lineage", exact: false },
+  { to: "/admin/waitlist", label: "Waitlist", exact: false },
 ] as const;
 
 function AdminLayout() {
