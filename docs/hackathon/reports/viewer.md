@@ -100,3 +100,100 @@ restore after reload, Back/Forward, the linked-batch fetch, and optimistic updat
 6. **Follow-ups:** skip the root `beforeLoad` server sign-in check for search-only navigations (then
    the 250 ms URL trail can go); show a branched batch's parent (R6); e2e F1/F1m once a deployment
    is available; tidy the pre-existing lint errors listed above.
+
+## Round 2: Compare, and a batch's parent design
+
+Merged `dev` first (lineage, social, launch, print, and the `studio.session` → `{ missing: true }`
+fix). Then built the plan's stretch S4 (Compare) and the missing half of R6 (a batch made from a
+design shows that design).
+
+### What was built
+
+| File | Change |
+| --- | --- |
+| `convex/schema/cultremix.ts` | New index `generations.by_owner_fullKey ["ownerId", "fullKey"]`. |
+| `convex/lib/studioRules.ts` | `COMPARE_MIN = 2`, `COMPARE_MAX = 4` (shared by server and browser). |
+| `convex/studio.ts` | Tiles carry the original's `width`/`height` when known. Each batch image carries `design?: { generationId, sessionId, backgroundColor }`: the member's own finished design whose original is that image (found by `by_owner_fullKey`, never another member's, never the batch itself). New query `compareDesigns({ sessionId, generationIds })`: the session's finished designs in the order asked, with their batch colors; no repeats, bad ids, unfinished designs, or other sessions; at most four; dismissed designs kept; `[]` for another member or when signed out. |
+| `src/lib/compare.ts` (new) | Pure: `parseCompare`/`compareParam` (the `?compare=<id>,<id>` address), `canCompare`, `togglePick` (cap of four), `phonePairs`/`clampPair`/`pairHolding` (phone pairs), `sharedScale` (one scale that fits every design). |
+| `src/lib/viewerNav.ts` | New action `compare` on the C key. |
+| `src/components/studio/useCompareRoute.ts` (new) | Compare in the URL. Opening pushes; removing replaces; Close steps back (or clears if the page was opened from a link); Back/Forward adopted. Opening Compare clears `view`/`scope`, so Back from Compare returns to the viewer it came from. |
+| `src/components/studio/useViewerRoute.ts` | `hide()` closes the viewer without touching history (used when Compare takes over). |
+| `src/components/studio/Compare.tsx` (new) | Full-screen: "Compare N", Transparency, Close. Each design on its own background color, all drawn at the same scale from the originals' pixel sizes (read from the image when an older design lacks them). Under each: number in the CR font, ♥, CR number if published, "Dismissed", Remove (when more than two), Open (viewer on top; Esc returns to Compare). Keys: T, Esc. Phones: two at a time, stacked, with swipe and ← "1+2 / 4" → between pairs. |
+| `src/components/studio/Viewer.tsx` | "+ Compare" / "✓ Compare" toggle on finished designs (C key) and a "Compare N" button once two are picked. Key hint gains "C compare". |
+| `src/components/studio/FavoritesTray.tsx` | "Compare" (with two or more favorites) switches the tray to picking: thumbnails numbered in pick order, "Compare N" (from two) and Cancel. |
+| `src/routes/studio.tsx` | Search param `compare`. Picks, Compare data (`compareDesigns` merged with tiles already loaded), "Compare holds up to 4 designs. Take one out first." toast. Batch line shows **From [thumbnail]** for an image that is one of the member's designs: a button into the viewer in the same session, a link to `/studio?s=…&view=…&scope=batch` in another. **`PublishDialog` untouched.** |
+| `tests/unit/compare.test.ts` (new) | 12 tests. |
+| `tests/unit/viewerNav.test.ts` | C → `compare`. |
+| `tests/convex-local/compare.test.ts` (new) | 8 tests. |
+
+### Mapping to the plan
+
+- **S4 Compare:** pick 2–4 from the tray or the viewer ("Compare" / C); side by side at one scale on
+  each design's background color; Transparency toggle; Remove and Open; phones two at a time with
+  swipe; state in `?compare=`, so a link reopens it. Done.
+- **R6 parent:** a batch made with "Use as image" from a design shows a small thumbnail of that
+  design, linking to it, on the batch line. Done; works for existing batches with no migration.
+
+### Tests and results
+
+- `tests/unit/compare.test.ts` (12): address read/write (order, blanks, repeats, cap); `canCompare`;
+  picking order, unpicking, the cap of four; phone pairs for 2/3/4 and the odd one out; `clampPair`,
+  `pairHolding`; `sharedScale` fits the largest, is limited by width for wide designs, skips unknown
+  sizes, and is 0 with none known.
+- `tests/convex-local/compare.test.ts` (8): `compareDesigns` order and colors; leaves out repeats,
+  unfinished designs, bad ids, other sessions, stops at four; keeps dismissed designs; carries the
+  original's size; another member and signed-out callers get `[]`. Parent design: named in the same
+  session and across sessions (through `sessionBatches` and `designBatch`); never another member's
+  design with the same key; none for uploads or failed designs.
+
+Results on the final tree: `bun run typecheck` passes; `bunx tsc --noEmit -p convex` passes;
+`bun run test` passes (unit 298/298 in 36 files, convex-local 94/94 in 10 files); `bun run build`
+passes; `src/routeTree.gen.ts` unchanged. ESLint is clean on the new files; the remaining errors in
+`convex/studio.ts` and `src/routes/studio.tsx` were there before (one, the `session !== null`
+check in `studio.tsx`, came with dev's `{ missing: true }` fix).
+
+Browser check (same throwaway harness approach as round 1, since deleted; the real `FavoritesTray`,
+`Compare`, and `Viewer` with five fake designs of different sizes), at 1280×800 and iPhone 16 Pro:
+- Tray "Compare" → picking, numbered badges; a fifth pick shows the toast; "Compare 4" opens Compare.
+- Desktop: four panels; drawn sizes 163×244, 163×163, 81×81, 244×163 for originals 1024×1536,
+  1024×1024, 512×512, 1536×1024 (one scale). Transparency on/off (T and button). Remove down to two,
+  then Remove disappears. Open puts the viewer on top; Esc returns to Compare; Esc again closes.
+- Viewer: C picks, → then C picks a second, "Compare 2" opens Compare and the viewer closes.
+- Phone: stacked pair "1+2 / 4", → shows "3+4 / 4" with the arrows' disabled ends right.
+- **Not checked:** the swipe itself (it only turns on for touch devices, and the emulated phone
+  doesn't report touch; it's the same motion drag as the viewer's swipe), and anything against a live
+  backend: `compareDesigns`, the parent thumbnail on a real batch, link reopen after reload,
+  Back/Forward between viewer and Compare.
+
+### Decisions
+
+- **The parent is found when the batch is read, not stored.** A batch image's key equals the
+  original's `fullKey` when it came from "Use as image", so a lookup on `by_owner_fullKey` finds it.
+  No new field and no migration; older batches show their parent too. Limited to the owner's own
+  designs and to designs outside the batch itself.
+- **Same scale from pixel sizes.** Tiles now carry `width`/`height`; when missing (older designs),
+  the browser reads the size from the image. The scale fits the largest design into a panel.
+- **Phones stack the pair** (one above the other) so each design is as wide as the screen. An odd
+  one out pairs with the one before it (three designs: 1+2, then 2+3), so every screen compares two.
+- **Remove is hidden at two;** Close is the way out. Removing keeps the neighbor's pair in view.
+- **Compare replaces the viewer in history** (opening it clears `view`/`scope`), so Back from
+  Compare goes to the viewer, and the viewer opened from Compare stacks above it.
+- **Picks reset when the session changes;** they aren't in the URL (only the open comparison is).
+- **Dismissed designs stay in a comparison** that names them, marked "Dismissed".
+
+### Stubbed or waiting
+
+- No env vars. Nothing waits on keys or accounts.
+- Live check on a deployment (see above) and e2e coverage: need a deployment.
+
+### Merging (Builder)
+
+1. **Schema:** new index `generations.by_owner_fullKey`; the next push builds it. No new fields, no
+   new Convex modules, no `api.d.ts` edits.
+2. **Convex API:** new `compareDesigns`. `tileView` gains optional `width`/`height`; `batchView.images[]`
+   gains optional `design`. Both additive.
+3. **URL:** `/studio` search gains `compare`. Link builders that set `search` wholesale should spread
+   the previous search.
+4. **Props:** `Viewer` gains `picks`, `onPick`, `onCompare`; `FavoritesTray` gains `picking`, `picks`,
+   `onStartPicking`, `onPick`, `onCompare`, `onStopPicking`.
+5. **Env vars:** none.
