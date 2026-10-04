@@ -79,7 +79,9 @@ describe("browser code boundary", () => {
 
   it("follows imports into convex/", () => {
     // Without this, a walker that stopped following imports would pass the check above.
-    expect(reached.get("convex/lib/colors.ts")).toBe("src/routes/cr.$cr.tsx");
+    expect(["src/components/publish/PublishDialog.tsx", "src/lib/designPixels.ts"]).toContain(
+      reached.get("convex/lib/garments.ts"),
+    );
     expect(reached.has("convex/_generated/api.js")).toBe(true);
   });
 });
