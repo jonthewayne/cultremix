@@ -4,6 +4,10 @@ import { PAGE_SIZE } from "../../convex/metrics";
 import { newTest } from "./setup";
 import type { Id } from "../../convex/_generated/dataModel";
 
+// The first call into convex/judges.ts loads Better Auth, which can pass the 5 s default on a
+// busy machine.
+vi.setConfig({ testTimeout: 30_000 });
+
 type Role = "user" | "super_admin_support" | "super_admin_ops" | "super_admin_owner";
 type T = ReturnType<typeof newTest>;
 

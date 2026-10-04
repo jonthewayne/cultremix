@@ -10,6 +10,7 @@ Branch `codex/launch` (worktree `CultRemix-wt/launch`), five commits on top of `
   - Unit tests: 26 files, 145 tests.
   - Convex tests on the in-memory backend: 2 files, 13 tests.
   - The Convex typecheck is skipped here because `CONVEX_DEPLOYMENT` is unset.
+  - One run on a heavily loaded machine (load average 145) failed two convex-local tests by timeout. The first call into `convex/judges.ts` loads Better Auth, which passed vitest's 5-second default. `launch.test.ts` now sets a 30-second timeout for itself, and the next two runs passed.
 
 ## What was built, by plan item
 
