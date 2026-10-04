@@ -72,14 +72,14 @@ function OnchainPage() {
                 {registry.testnet && <span className="text-neutral-500"> · a test network, so these records are practice runs</span>}
               </dd>
               <dt className="font-bold">Registry</dt>
-              <dd className="break-all">
+              <dd>
                 {registry.address ? (
                   registry.addressUrl ? (
-                    <a href={registry.addressUrl} target="_blank" rel="noreferrer" className="font-mono text-sm underline underline-offset-4">
+                    <a href={registry.addressUrl} target="_blank" rel="noreferrer" className="break-all font-mono text-sm underline underline-offset-4">
                       {registry.address}
                     </a>
                   ) : (
-                    <span className="font-mono text-sm">{registry.address}</span>
+                    <span className="break-all font-mono text-sm">{registry.address}</span>
                   )
                 ) : (
                   <span>Not deployed yet. New designs wait in line and are recorded once it is.</span>
