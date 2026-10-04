@@ -172,12 +172,22 @@ export const shopTables = {
       }),
     ),
     configVersion: v.optional(v.number()),
+    // Printful: the store the order was sent to, its ID there, and its status verbatim (with the
+    // time of the event or read that set it, so an older event can't overwrite a newer one).
+    printfulStoreId: v.optional(v.string()),
     printfulOrderId: v.optional(v.number()),
     printfulStatus: v.optional(v.string()),
+    printfulStatusAt: v.optional(v.number()),
     fulfillmentState: fulfillmentStateValidator,
     attentionReason: v.optional(v.string()),
+    // The last transient Printful problem (unreachable, not configured); cleared on success.
+    fulfillmentError: v.optional(v.string()),
+    // Production confirms no earlier than this (1 hour after payment).
     holdUntil: v.optional(v.number()),
-    createLeaseUntil: v.optional(v.number()),
+    // A Printful call in flight holds the order until this time.
+    leaseUntil: v.optional(v.number()),
+    // Set when a create may have reached Printful without an answer: from then on the order is
+    // only looked up by external_id, never created again.
     createAmbiguousSince: v.optional(v.number()),
     confirmedAt: v.optional(v.number()),
     createdAt: v.number(),

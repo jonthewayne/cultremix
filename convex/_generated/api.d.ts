@@ -70,6 +70,8 @@ import type * as orders from "../orders.js";
 import type * as crons from "../crons.js";
 import type * as fulfillment from "../fulfillment.js";
 import type * as lib_printful_webhookRoute from "../lib/printful/webhookRoute.js";
+import type * as lib_printful_client from "../lib/printful/client.js";
+import type * as lib_printful_webhookVerify from "../lib/printful/webhookVerify.js";
 import type {
   ApiFromModules,
   FilterApi,
@@ -138,6 +140,8 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   fulfillment: typeof fulfillment;
   "lib/printful/webhookRoute": typeof lib_printful_webhookRoute;
+  "lib/printful/client": typeof lib_printful_client;
+  "lib/printful/webhookVerify": typeof lib_printful_webhookVerify;
 }>;
 
 /**

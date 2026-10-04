@@ -2,68 +2,16 @@ import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import type { RawOrder } from "../../convex/lib/shopify/orderQuery";
 import { SHOPIFY_WEBHOOK_MAX_BYTES } from "../../shared/config/shopify";
 import { rawOrder, type FixtureLine } from "../fixtures/shopifyOrder";
 import { newTest } from "./setup";
-import { SHOP_ENV, makeOnSale, makeUser, makeWork } from "./shopFixtures";
+import { SHOP_ENV, deliver, fakeShopify, makeOnSale, makeUser, makeWork } from "./shopFixtures";
 
 type T = ReturnType<typeof newTest>;
 const DAY = 24 * 60 * 60 * 1000;
 
-// A fake Admin API: the order snapshot it returns can be changed between deliveries.
-function fakeShopify() {
-  const orders = new Map<string, RawOrder>();
-  const updated: Array<{ id: string; updatedAt: string }> = [];
-  let hydrations = 0;
-  const fetchFake = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (String(input).endsWith("/admin/oauth/access_token")) {
-      return Response.json({ access_token: "tok", expires_in: 86399 });
-    }
-    const { query, variables } = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, string> };
-    if (query.includes("HydrateOrder")) {
-      hydrations++;
-      return Response.json({ data: { order: orders.get(variables.id) ?? null } });
-    }
-    if (query.includes("OrdersUpdated")) {
-      return Response.json({ data: { orders: { nodes: updated, pageInfo: { hasNextPage: false, endCursor: null } } } });
-    }
-    throw new Error(`Unexpected Shopify call: ${query.slice(0, 40)}`);
-  });
-  return {
-    fetchFake,
-    set: (order: RawOrder) => orders.set(order.id, order),
-    updated,
-    hydrations: () => hydrations,
-  };
-}
-
-let webhookCount = 0;
-async function deliver(
-  t: T,
-  args: {
-    topic: string;
-    body: Record<string, unknown>;
-    webhookId?: string;
-    signature?: string | null;
-    shop?: string;
-    raw?: string;
-  },
-) {
-  const body = args.raw ?? JSON.stringify(args.body);
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-shopify-topic": args.topic,
-    "x-shopify-shop-domain": args.shop ?? SHOP_ENV.SHOPIFY_SHOP_DOMAIN,
-    "x-shopify-webhook-id": args.webhookId ?? `wh-${++webhookCount}`,
-  };
-  const signature =
-    args.signature === undefined ? createHmac("sha256", SHOP_ENV.SHOPIFY_CLIENT_SECRET).update(body).digest("base64") : args.signature;
-  if (signature !== null) headers["x-shopify-hmac-sha256"] = signature;
-  const response = await t.fetch("/webhooks/shopify", { method: "POST", headers, body });
-  await t.finishAllScheduledFunctions(vi.runAllTimers);
-  return response;
-}
+// The first webhook loads every Convex module; under a full parallel run that can pass 5 seconds.
+vi.setConfig({ testTimeout: 30_000 });
 
 const ORDER_ID = 5551234;
 const GID = `gid://shopify/Order/${ORDER_ID}`;

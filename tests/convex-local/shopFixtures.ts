@@ -1,4 +1,7 @@
+import { createHmac } from "node:crypto";
+import { vi } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel";
+import type { RawOrder } from "../../convex/lib/shopify/orderQuery";
 import type { newTest } from "./setup";
 import { variantList } from "../../convex/lib/shopify/productSync";
 
@@ -8,6 +11,7 @@ export const SHOP_ENV = {
   SHOPIFY_SHOP_DOMAIN: "cultremix-dev.myshopify.com",
   SHOPIFY_CLIENT_ID: "client-id",
   SHOPIFY_CLIENT_SECRET: "client-secret",
+  R2_PUBLIC_URL: "https://files.cultremix.test",
 } as const;
 
 export async function setFlag(t: T, key: string, enabled: boolean) {
@@ -119,4 +123,63 @@ export async function makeOnSale(t: T, workId: Id<"works">, cr: string, base = 1
       });
     }
   });
+}
+
+// A fake Admin API: the order snapshot it returns can be changed between deliveries.
+export function fakeShopify() {
+  const orders = new Map<string, RawOrder>();
+  const updated: Array<{ id: string; updatedAt: string }> = [];
+  let hydrations = 0;
+  const fetchFake = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("/admin/oauth/access_token")) {
+      return Response.json({ access_token: "tok", expires_in: 86399 });
+    }
+    const { query, variables } = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, string> };
+    if (query.includes("HydrateOrder")) {
+      hydrations++;
+      return Response.json({ data: { order: orders.get(variables.id) ?? null } });
+    }
+    if (query.includes("OrdersUpdated")) {
+      return Response.json({ data: { orders: { nodes: updated, pageInfo: { hasNextPage: false, endCursor: null } } } });
+    }
+    throw new Error(`Unexpected Shopify call: ${query.slice(0, 40)}`);
+  });
+  return {
+    fetchFake,
+    set: (order: RawOrder) => orders.set(order.id, order),
+    updated,
+    hydrations: () => hydrations,
+  };
+}
+
+type ShopifyDelivery = {
+  topic: string;
+  body: Record<string, unknown>;
+  webhookId?: string;
+  signature?: string | null;
+  shop?: string;
+  raw?: string;
+};
+
+let webhookCount = 0;
+// Posts a signed Shopify webhook without running what it schedules.
+export async function postShopifyWebhook(t: T, args: ShopifyDelivery) {
+  const body = args.raw ?? JSON.stringify(args.body);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-shopify-topic": args.topic,
+    "x-shopify-shop-domain": args.shop ?? SHOP_ENV.SHOPIFY_SHOP_DOMAIN,
+    "x-shopify-webhook-id": args.webhookId ?? `wh-${++webhookCount}`,
+  };
+  const signature =
+    args.signature === undefined ? createHmac("sha256", SHOP_ENV.SHOPIFY_CLIENT_SECRET).update(body).digest("base64") : args.signature;
+  if (signature !== null) headers["x-shopify-hmac-sha256"] = signature;
+  return t.fetch("/webhooks/shopify", { method: "POST", headers, body });
+}
+
+// Posts a Shopify webhook and runs everything it schedules, however far in the future.
+export async function deliver(t: T, args: ShopifyDelivery) {
+  const response = await postShopifyWebhook(t, args);
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return response;
 }
