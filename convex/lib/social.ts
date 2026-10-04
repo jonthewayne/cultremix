@@ -1,6 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { notify } from "./notifications";
+import { notify, notifyBacked } from "./notifications";
 import { addAttention } from "./trending";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -28,9 +28,11 @@ export async function recordPublishActivity(ctx: MutationCtx, work: Doc<"works">
   if (work.status !== "published") return;
   const createdAt = work.publishedAt ?? work._creationTime;
   await touchCreatorActivity(ctx, work.creatorId, createdAt);
+  // The work's own event, not someone's Back of it.
   const existing = await ctx.db
     .query("activityEvents")
     .withIndex("by_work", (q) => q.eq("workId", work._id))
+    .filter((q) => q.neq(q.field("verb"), "back"))
     .first();
   if (existing) return;
   await ctx.db.insert("activityEvents", {
@@ -52,6 +54,27 @@ export async function recordRemix(ctx: MutationCtx, work: Doc<"works">) {
   const at = work.publishedAt ?? Date.now();
   await notify(ctx, { recipientId: parent.creatorId, actorId: work.creatorId, kind: "remix", workId: work._id, at });
   if (parent.status === "published") await addAttention(ctx, parent._id, at, { remixes: 1 });
+}
+
+// A Back the chain has just confirmed (called from convex/chain.ts with the Back as it was before
+// the confirmation): the creator hears about it, the backer's followers see it in Following, it
+// joins the backer's Backed list and count, and the work gains trending attention. Once per Back:
+// nothing for one that was already confirmed, and nothing at all for a Back that is reserved,
+// still being recorded, or didn't go through.
+export async function recordBackConfirmed(ctx: MutationCtx, before: Doc<"backs">, at: number) {
+  if (before.status === "confirmed") return;
+  const work = await ctx.db.get("works", before.workId);
+  if (!work || work.creatorId === before.backerId) return;
+  await notifyBacked(ctx, { workId: work._id, backerId: before.backerId, at });
+  await ctx.db.insert("activityEvents", {
+    actorId: before.backerId,
+    verb: "back",
+    workId: work._id,
+    createdAt: at,
+    shelf: "backed",
+  });
+  await bumpUserStats(ctx, before.backerId, { backed: 1 });
+  if (work.status === "published") await addAttention(ctx, work._id, at, { backs: 1 });
 }
 
 // Moves a creator's last-active time forward, never back, so the backfill can run in any order.
@@ -130,15 +153,16 @@ export async function workHeartCount(ctx: Ctx, workId: Id<"works">) {
 export async function bumpUserStats(
   ctx: MutationCtx,
   userId: Id<"users">,
-  change: { followers?: number; following?: number },
+  change: { followers?: number; following?: number; backed?: number },
 ) {
   const stats = await userStats(ctx, userId);
   const followers = Math.max(0, (stats?.followers ?? 0) + (change.followers ?? 0));
   const following = Math.max(0, (stats?.following ?? 0) + (change.following ?? 0));
+  const backed = Math.max(0, (stats?.backed ?? 0) + (change.backed ?? 0));
   if (stats) {
-    await ctx.db.patch("userSocialStats", stats._id, { followers, following });
+    await ctx.db.patch("userSocialStats", stats._id, { followers, following, backed });
   } else {
-    await ctx.db.insert("userSocialStats", { userId, followers, following });
+    await ctx.db.insert("userSocialStats", { userId, followers, following, backed });
   }
   return { followers, following };
 }

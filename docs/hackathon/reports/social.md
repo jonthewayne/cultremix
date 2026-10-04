@@ -335,3 +335,146 @@ Built after merging dev, for Monad's "Social, Attention & Culture" track. Nothin
    - `src/components/cr/SiteHeader.tsx`: the bell.
    - `src/routes/index.tsx`: the tabs.
 8. **Env vars:** none added.
+
+## Round 4
+
+Built after merging dev, which brought in the chain builder's Backs (`convex/backs.ts`, the `backs` table, and the relayer in `convex/chain.ts`). Nothing was pushed or deployed. `src/routes/cr.$cr.tsx` and the Backs admission rules in `convex/backs.ts` were not touched.
+
+### What was built
+
+| Commit | What it does |
+| --- | --- |
+| `47e244a` | **Confirmed Backs, backend.** `convex/chain.ts` calls one new helper when a Back confirms. That helper notifies the creator, writes the Following event, counts the Back on the backer's profile, and adds Trending attention with weight 2. Includes `social.backed` and 7 Convex tests. |
+| `aaa038b` | **Backs on screen.** "@x backed CR 101-001 · Backer #2" rows in Following, a Backed shelf and an "N backed" count on profiles, and updated empty-state copy. |
+| (this commit) | This report. |
+
+**Where it hooks in.**
+- `convex/chain.ts` changed by 2 lines: one import, plus one call to `recordBackConfirmed(ctx, back, now)`.
+- The call sits in `reflect`, right after the Back is patched to `confirmed` with its ordinal.
+- It passes `back` as it was before the patch, so the helper can see whether the Back was already confirmed.
+
+**`recordBackConfirmed`** (`convex/lib/social.ts`) does nothing if the Back was already confirmed, or if the backer made the work. Otherwise, in the same transaction:
+1. **Notification:** `notifyBacked` tells the creator "@x backed CR 101-001." It's the Round 3 hook, now called from its real place.
+2. **Following:** writes an `activityEvents` row with verb `back`, shelf `backed`, and `createdAt` set to the confirmation time.
+3. **Profile count:** adds 1 to the backer's `userSocialStats.backed`.
+4. **Trending:** if the work is published, adds a Back to that day's bucket.
+
+**Following (plan R27).**
+- Back events reach followers through the same fan-out as publish events, so no feed plumbing changed.
+- `feed.following` builds rows with a new `activityItems` helper:
+  - A publish event gives the usual work row.
+  - A back event gives the same row plus `backedBy: { username, ordinal }`.
+  - The ordinal is read from the `backs` row, so it's always the chain's number.
+- It drops back events whose Back is no longer confirmed or whose work is no longer published.
+- On home, a Back row has a line above the art: "**@alice** backed **CR 101-001** · Backer #2". The name links to the profile, and the CR number uses `font-cr` and doesn't wrap.
+
+**Backs on profiles (plan R25).**
+- `social.backed({ username, paginationOpts })` is a public query. It works signed out.
+- It reads the member's `backed` activity events newest first and pages them like the other shelves, with the same page-size cap.
+- It returns the same public fields as the feed, plus the backer number.
+- An unknown username gets an empty page.
+- `/u/<username>` changes:
+  - a third tab, Works / Remixes / **Backed**, at `?shelf=backed`, prefetched on the server like the others
+  - cards show the creator and the backer number ("#3") in `font-cr`
+  - an "N backed" link next to followers and following, opening that tab
+- Empty states:
+  - Other members: "Nothing Backed yet."
+  - On your own profile: "Back a work you love from its page. You get 3 Backs a week."
+
+**Trending.**
+- Score: hearts + 2 × confirmed Backs + 3 × remixes.
+- `BACK_WEIGHT` sits next to `REMIX_WEIGHT` in `convex/lib/trending.ts`.
+- Day buckets gained an optional `backs` count, so the hourly expiry takes Backs off when their day leaves the window.
+- `trending.rebuild` now also replays the last week of back events, counting only Backs that are still confirmed on published works by someone else. It returns `{ hearts, remixes, backs }`.
+
+**Copy.**
+- Following, when empty: "New designs from the people you follow, and the work they Back, land here."
+- Notifications, when empty: "When someone follows you, or hearts, remixes, or Backs your work, you'll hear about it here."
+
+### Decisions
+
+- **The profile list reads activity events, not the `backs` table.**
+  - The chain builder's `backs` table has no index by backer and confirmation time.
+  - The `backed` activity shelf already has `by_actor_shelf_created`, so the list is one paged index read, and `convex/schema/chain.ts` stays untouched.
+- **Once per Back, guarded twice.**
+  - The relayer skips writes that are already final, so a Back confirms once.
+  - The helper also does nothing if the Back was already confirmed.
+  - Reserved, submitted, rejected, and failed Backs never reach it.
+  - A rejected or failed Back that's backed again reuses its row, and is recorded when that Back confirms.
+- **Weight 2.** A Back counts for more than a heart because it's limited to 3 a week and recorded onchain. It counts for less than a remix, which is new work.
+- **Self-Backs don't count.** The registry already refuses them; the helper skips them too, the same rule as hearts and remixes.
+- **A work in Following shows once.** If a followed member published a work and another Backed it, the newer row wins, the same dedup as before.
+- **Withdrawn works drop out** of Following and the Backed shelf, the same as every other list. The "N backed" count keeps them, because the Back is onchain for good.
+
+### Tests and results
+
+- `bun run typecheck`: passes. Its `convex typecheck` step is skipped because this worktree has no deployment.
+- `bun run test`:
+  - Unit tests: **474/474**.
+  - Convex-local tests: **288/288**, 7 of them new.
+  - Two existing tests changed only to expect the new fields: the profile's `backed: 0` and the rebuild's `backs: 0`.
+  - One full run right after a build had 7 Convex tests time out (backs, lineage, notifications, publish, socialBacks, trending). The same files passed alone. Two full reruns, and the final one before this commit, were all green.
+- **`tests/convex-local/socialBacks.test.ts`** (7 tests). Each test gets real confirmed Backs the way `backs.test.ts` does, through `backs.back`, the relayer, `FakeChain`, and `chainFixtures`.
+  - **Notification only on confirmation:**
+    - none while the Back is reserved or submitted
+    - exactly one after it confirms, to the creator and not the backer
+    - no duplicates on later relayer ticks
+  - **Rejected:**
+    - Setup: the registry refuses the Back because the backer used up the week onchain.
+    - It gives no notification, event, count, or Trending.
+    - Backing again the next week confirms with exactly one notification.
+  - **Failed:**
+    - Setup: a write bound to another chain fails closed.
+    - It gives no notification, event, count, or Trending.
+  - **Following:**
+    - A follower sees "alice, #1" on the Backed work.
+    - Signed out, or as a member who doesn't follow her, it's empty.
+    - Withdrawing the work removes the row.
+  - **Mixed Following:** Back and publish rows come newest first. The publish backfill still finds a work's own event when a Back event exists too.
+  - **Profile list:**
+    - Five confirmed Backs page by twos, newest first, with the right backer numbers.
+    - The count is right, and Backs stay off the Works shelf.
+    - It returns only public fields, signed out.
+    - An unknown username gets an empty page.
+    - A reserved Back isn't listed until it confirms.
+  - **Trending:**
+    - A hearted work scores 1, a Backed one 2, and a remixed one 3, in that order.
+    - The rebuild returns `{ hearts: 1, remixes: 1, backs: 1 }` and the same scores.
+    - Eight days later, the expiry clears them.
+- `bun run build`: passes.
+- **Visual check, desktop 1440 and phone 390** (agent-browser, own session).
+  - Used the same throwaway harness as before (real routes against an in-memory `convex-test`), deleted afterward and never committed.
+  - Seeded Backs went through `recordBackConfirmed`.
+  - Following shows "@carol backed CR … · Backer #2" above the art, newest first, with each work once.
+  - `/u/alice?shelf=backed` lists three works newest first with #2, #3, #1, and shows "3 backed". It's identical signed out.
+  - Notifications show "@alice backed Pigeon Club CR ….", each with a "New" tag.
+  - Phone layouts hold.
+  - One thing I didn't change: on a phone, two-column cards wrap the CR number ("CR 124–" / "001") next to the TESTNET badge. The Works shelf does the same, because it comes from the shared `CrMark` component, which isn't mine.
+
+### What is stubbed or limited
+
+- **Backs confirmed before this merge** have no activity event. They won't appear in Following, on profiles, or in the count, and their creators weren't notified. Backs only reached dev today behind the switches, so this should be none or a few test Backs; a backfill can be added if needed.
+- **The "N backed" count includes works later withdrawn.** The shelf skips them, so the two can differ.
+- **One row per work in Following.** If two people you follow Back the same work, you see the newest.
+- **The rebuild runs in one transaction**, as in Round 3. That's fine for a week of hackathon data.
+- **No push or email.** Notifications are in-app only.
+
+### Merge steps for the Builder
+
+1. **Schema** (`convex/schema/social.ts`, all additive):
+   - new optional fields `userSocialStats.backed` and `workAttentionDays.backs`
+   - activity verb `back`
+   - `activityEvents.shelf` now also accepts `backed`
+   - no new tables or indexes
+2. **`convex/chain.ts`:** 2 lines (one import and one call in `reflect`). If the chain branch changes that function, keep the call right after the Back is patched to `confirmed`, and pass the Back as it was before the patch.
+3. **Optional, after deploy:** `bunx convex run trending:rebuild` (and `--prod`) brings any Backs already in the window into Trending. It's safe to rerun.
+4. **Generated API and route tree:** no changes. No new modules or routes.
+5. **Env vars:** none added.
+6. **Shared files touched:**
+   - `convex/chain.ts`
+   - `convex/feed.ts`
+   - `convex/social.ts`
+   - `src/routes/index.tsx`
+   - `src/routes/u.$username.tsx`
+   - `src/routes/notifications.tsx`
+   - `src/components/social/WorkGrid.tsx`

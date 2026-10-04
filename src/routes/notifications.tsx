@@ -59,7 +59,7 @@ function NotificationsPage() {
           <div className="mt-8">
             <p className="text-xl font-semibold text-neutral-400">Nothing yet.</p>
             <p className="mt-2 text-neutral-600">
-              When someone follows you, hearts your work, or remixes it, you’ll hear about it here.
+              When someone follows you, or hearts, remixes, or Backs your work, you’ll hear about it here.
             </p>
           </div>
         ) : (
