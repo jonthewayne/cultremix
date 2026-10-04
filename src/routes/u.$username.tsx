@@ -97,13 +97,13 @@ function ProfilePage() {
 
         {data.bio && <p className="mt-6 max-w-2xl md:mt-8 text-lg leading-snug md:text-xl">{data.bio}</p>}
         <p className="mt-4 flex gap-5 text-base">
-          <span>
+          <Link to="/u/$username/followers" params={{ username: data.username }} className="hover:underline">
             <strong className="font-black tabular-nums">{data.followers}</strong>{" "}
             {data.followers === 1 ? "follower" : "followers"}
-          </span>
-          <span>
+          </Link>
+          <Link to="/u/$username/following" params={{ username: data.username }} className="hover:underline">
             <strong className="font-black tabular-nums">{data.following}</strong> following
-          </span>
+          </Link>
         </p>
 
         <nav aria-label="Designs" className="mt-12 flex gap-6 border-b-2 border-black md:mt-16">

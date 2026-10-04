@@ -24,6 +24,8 @@ export function shelfForKind(kind: WorkKind) {
 // Writes the activity event for a work that has just been published. Safe to call twice.
 export async function recordPublishActivity(ctx: MutationCtx, work: Doc<"works">) {
   if (work.status !== "published") return;
+  const createdAt = work.publishedAt ?? work._creationTime;
+  await touchCreatorActivity(ctx, work.creatorId, createdAt);
   const existing = await ctx.db
     .query("activityEvents")
     .withIndex("by_work", (q) => q.eq("workId", work._id))
@@ -33,9 +35,22 @@ export async function recordPublishActivity(ctx: MutationCtx, work: Doc<"works">
     actorId: work.creatorId,
     verb: verbForKind(work.kind),
     workId: work._id,
-    createdAt: work.publishedAt ?? work._creationTime,
+    createdAt,
     shelf: shelfForKind(work.kind),
   });
+}
+
+// Moves a creator's last-active time forward, never back, so the backfill can run in any order.
+export async function touchCreatorActivity(ctx: MutationCtx, userId: Id<"users">, at: number) {
+  const row = await ctx.db
+    .query("creatorActivity")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+  if (!row) {
+    await ctx.db.insert("creatorActivity", { userId, lastActiveAt: at });
+  } else if (at > row.lastActiveAt) {
+    await ctx.db.patch("creatorActivity", row._id, { lastActiveAt: at });
+  }
 }
 
 // A position in a newest-first list ordered by (createdAt, _creationTime). Items "after" the

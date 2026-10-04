@@ -1,6 +1,8 @@
 import { ConvexError, v } from "convex/values";
-import { paginationOptsValidator } from "convex/server";
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { feedPage, publishedItems } from "./feed";
 import { getViewerUser } from "./identity";
 import { requireMember } from "./studio";
@@ -61,6 +63,90 @@ export const works = query({
       .paginate({ ...args.paginationOpts, numItems: clampPageSize(args.paginationOpts.numItems) });
     return {
       page: await publishedItems(ctx, result.page.map((event) => event.workId)),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// A row in a list of members. Public fields only (INV-24).
+const memberCard = v.object({
+  username: v.string(),
+  creatorNumber: v.optional(v.number()),
+  image: v.optional(v.string()),
+  bio: v.optional(v.string()),
+});
+export const memberPage = paginationResultValidator(memberCard);
+const emptyPage = { page: [], isDone: true, continueCursor: "" };
+
+async function memberCards(ctx: QueryCtx, userIds: Array<Id<"users">>) {
+  const users = await Promise.all(userIds.map((id) => ctx.db.get("users", id)));
+  return users.flatMap((user) =>
+    user?.username
+      ? [
+          {
+            username: user.username,
+            creatorNumber: user.creatorNumber,
+            image: safeImageUrl(user.image),
+            bio: user.bio || undefined,
+          },
+        ]
+      : [],
+  );
+}
+
+// Who follows this member, newest follow first.
+export const followers = query({
+  args: { username: v.string(), paginationOpts: paginationOptsValidator },
+  returns: memberPage,
+  handler: async (ctx, args) => {
+    const user = await getUserByUsername(ctx, args.username);
+    if (!user?.username) return emptyPage;
+    const result = await ctx.db
+      .query("follows")
+      .withIndex("by_followee_created", (q) => q.eq("followeeId", user._id))
+      .order("desc")
+      .paginate({ ...args.paginationOpts, numItems: clampPageSize(args.paginationOpts.numItems) });
+    return {
+      page: await memberCards(ctx, result.page.map((row) => row.followerId)),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Who this member follows, newest follow first.
+export const following = query({
+  args: { username: v.string(), paginationOpts: paginationOptsValidator },
+  returns: memberPage,
+  handler: async (ctx, args) => {
+    const user = await getUserByUsername(ctx, args.username);
+    if (!user?.username) return emptyPage;
+    const result = await ctx.db
+      .query("follows")
+      .withIndex("by_follower_created", (q) => q.eq("followerId", user._id))
+      .order("desc")
+      .paginate({ ...args.paginationOpts, numItems: clampPageSize(args.paginationOpts.numItems) });
+    return {
+      page: await memberCards(ctx, result.page.map((row) => row.followeeId)),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Creators who published most recently, one row each, for home's "Who's making things".
+export const activeCreators = query({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: memberPage,
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("creatorActivity")
+      .withIndex("by_lastActive")
+      .order("desc")
+      .paginate({ ...args.paginationOpts, numItems: clampPageSize(args.paginationOpts.numItems) });
+    return {
+      page: await memberCards(ctx, result.page.map((row) => row.userId)),
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
