@@ -98,6 +98,22 @@ describe("compareDesigns", () => {
     expect(tiles[0].url).toBe("https://img.test/two/1.png");
   });
 
+  it("carries each original's size so they're drawn at one scale", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const sessionId = await addSession(t, alice.userId);
+    const one = await addBatch(t, sessionId, alice.userId, "one");
+    await t.run(async (ctx) => {
+      await ctx.db.patch(one.ids[0], { width: 1024, height: 1536 });
+    });
+
+    const tiles = await alice.as.query(api.studio.compareDesigns, { sessionId, generationIds: [one.ids[0], one.ids[1]] });
+    expect(tiles.map((tile) => [tile.width, tile.height])).toEqual([
+      [1024, 1536],
+      [undefined, undefined],
+    ]);
+  });
+
   it("leaves out repeats, unfinished designs, bad ids, and other sessions, and stops at four", async () => {
     const t = newTest();
     const alice = await member(t, "alice");
