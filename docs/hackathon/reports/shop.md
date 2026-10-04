@@ -304,3 +304,91 @@ Ops owns `wrangler.jsonc` `env.production`; I didn't touch it.
 4. **Payouts:** nothing moves earnings to Paid yet.
 5. **Live checks:** once keys land, recapture the Shopify and Printful fixtures from real responses, then run one development-store test checkout through to a Printful draft.
 6. **Balances:** replace the 2000-row balance scan with stored per-member totals once volume calls for it.
+
+## Round 2
+
+The shop now sells the colors the creator offered, and the work page has one color selection. I merged dev (fast-forward) and ran `bun install --frozen-lockfile` (no changes) first.
+
+### Commits
+
+- `287ad08` Sell only the colors a creator offered
+- `92b11e0` Share one color selection between the work page and the BuyBox
+- `c6408de` Re-sync live products that lack an offered color
+
+### One mapping function
+
+`convex/lib/shopColors.ts` (new; shared by Convex and the browser):
+
+- **`catalogColorFor(key)`** is the only place a garment color key (`works.offeredColors`) becomes a print catalog color. It matches the garment name to the Comfort Colors 1717 catalog name, ignoring case and punctuation. The result keeps the garment's key, name, and swatch hex, so the page, the BuyBox, and Shopify all say "True navy". It adds the catalog's SKU code (`TRUENAVY`) and Printful variant IDs.
+- **`sellableColors(offeredKeys)`** returns what a work is sold in:
+  - its offered colors, in order with the lead first, without colors the catalog doesn't carry and without repeats;
+  - the launch colors (White, Ivory, Pepper, Black) when the work has no offered colors;
+  - an empty list when none of the offered colors can be printed. In that case it doesn't switch to colors the creator didn't pick.
+- **`catalogColorByCode(code)`** looks up any of the 12 catalog colors. Fulfillment uses it when a variant row has no stored Printful ID, so older rows in any catalog color still map. An unknown code like `LAVENDER` still goes to needs_attention.
+
+Today 7 of the 12 garment keys map: white, ivory, butter, blue-jean, pepper, true-navy, and black.
+
+### Selling what was offered
+
+- **Product sync:**
+  - `workForSync` now returns `offeredColors`.
+  - `syncWork` builds the color list with `sellableColors`. `variantList`, `buildProductSetInput`, `matchVariants`, and `syncProduct` take that list.
+  - Shopify gets one Color option value per sold color and 5 sizes for each. `productSet` replaces the variants it has, so a color that is no longer sold leaves the store.
+  - If no offered color can be printed, the work isn't sent to Shopify. Its `shopProducts` row is marked failed with the message "None of this design's colors can be printed yet." and normal backoff.
+- **Live products:**
+  - A product that went live before this change (launch colors) is synced again when it lacks one of its work's sellable colors.
+  - It stays on sale while that happens.
+  - `syncAllPublished` ("Put everything on sale") and `onPublished` both do this. Products that already have every color are skipped as before.
+- **Offer:**
+  - `shopify.offer` returns only the work's sellable colors that have variant rows. Each color is `{ key, code, name, hex }`; the validator changed to match.
+  - Variant rows for other colors stay in `workVariants`, because old orders resolve through them, but they are no longer in the offer.
+- **Checkout:** the cart server function looks variants up only in the offer, so an add for a color the work isn't offered in gets `UNAVAILABLE` ("That color and size isn't available.") before any Shopify call.
+- **BuyBox:** it renders `offer.colors`, so it shows the same colors that sync created.
+
+### One selected color on the work page
+
+- **Shared state:**
+  - The BuyBox no longer keeps its own color state. `src/routes/cr.$cr.tsx` owns the pick, keyed by garment color key.
+  - It passes `colorKey` and `onColorChange` to the BuyBox. The BuyBox renders the publish builder's `ColorSwatches` and sends the SKU code for the selected key.
+  - Picking a swatch in the BuyBox repaints the art square, and the color in the cart is the color shown.
+- **Helpers:** `src/lib/pickedColor.ts`
+  - `pageColors(published, offer)` returns the offer's colors while the work is on sale, and the published colors otherwise.
+  - `selectedColor(colors, picked, cr)` returns the pick if it belongs to this work and is still on the list, else the lead color.
+  - A color picked before the offer loads carries over if it's for sale.
+
+### Tests
+
+- **`tests/unit/shopColors.test.ts`** (new) checks:
+  - every garment key, the 7 that map and the 5 that don't;
+  - garment name and hex combined with catalog variants;
+  - the launch colors' codes and variant IDs are unchanged;
+  - the fallback, ordering, removal of unprintable colors and repeats, and the empty case;
+  - lookup by code.
+- **`tests/unit/pickedColor.test.ts`** (new) checks:
+  - while on sale, the page uses the offer's colors and the swatches match the published colors;
+  - the selection starts on the lead and follows a pick;
+  - a pick carries over when the offer loads;
+  - the selection falls back to the lead when the pick isn't sold or belongs to another work.
+- **`tests/unit/productSync.test.ts`** checks that only the given colors are listed, in order, and that the Color option values are named after them.
+- **`tests/convex-local/shopProducts.test.ts`:**
+  - sync creates only the offered colors, in order, with real Printful IDs (True Navy M = 15182), and the offer matches;
+  - nothing goes to Shopify when no offered color can be printed;
+  - older rows for other colors aren't offered;
+  - checkout refuses `WHITE` for a work offered only in black, with no Shopify call, and lets `BLACK` through;
+  - a live product in the launch colors syncs again to its offered colors, and only once;
+  - a work with no offered colors is still sold in the launch colors.
+- **Results:** `bun run typecheck` passes. `bun run test` passes: 406 unit and 200 convex-local tests. `bun run build` passes.
+- **Not checked in a browser:** that would need a live Convex deployment, which I'm not allowed to run.
+
+### Things to know
+
+1. **Five swatch colors can't be sold.** The publish swatch board offers Chalky mint, Bay, Watermelon, Moss, and Crimson. The Comfort Colors 1717 catalog in `shared/config/print-products.ts` has no matching color.
+   - A work offered in those colors shows them as swatches while checkout is off, but sells only its printable colors once checkout is on.
+   - A work offered only in those colors isn't put on sale at all.
+   - The catalog also has five colors that no swatch offers: Red, Grey, Sage, Brick, and Seafoam.
+   - Two fixes are possible, and the publish owner should pick one:
+     - limit the swatch board to `catalogColorFor(key) !== null`, or warn there;
+     - add the five garment colors to the catalog with their Printful variant IDs.
+2. **Swatch hex vs. catalog hex.** The page, the BuyBox, and Shopify option values use the garment name and hex. The catalog's own hex values (Printful's swatches) are used only by the Print Studio.
+3. **Shopify option values changed for two colors.** New products use "True navy" and "Blue jean", the garment names. The four launch colors have the same names in both lists, so existing products keep their values.
+4. **No new tables, fields, or environment variables.** `convex/lib/shopColors.ts` was added to `convex/_generated/api.d.ts` by hand.
