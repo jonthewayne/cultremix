@@ -6,6 +6,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { MAX_IMAGES, MAX_STYLES } from "../../../convex/lib/studioRules";
 import { Art } from "~/components/cr/Art";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
+import { useReturnFocus } from "~/hooks/use-return-focus";
 import { cn } from "~/lib/utils";
 
 // The studio's inputs: numbered images to work on, and the style mixer with its picker.
@@ -123,10 +124,16 @@ export function ImageTray({
             <button
               type="button"
               onClick={() => onRemove(slot.id)}
-              className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-black text-black ring-1 ring-black hover:bg-black hover:text-white"
+              className="group absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-full"
               aria-label={`Remove image ${i + 1}`}
             >
-              ×
+              {/* A 40 px target around the small mark, so it's easy to hit on a phone. */}
+              <span
+                aria-hidden="true"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-black text-black ring-1 ring-black group-hover:bg-black group-hover:text-white"
+              >
+                ×
+              </span>
             </button>
             {reading && (
               <span className="absolute bottom-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 text-[10px] font-bold text-white">
@@ -258,7 +265,7 @@ function StyleRow({
       <button
         type="button"
         onClick={onRemove}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-black hover:bg-black hover:text-white"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-black hover:bg-black hover:text-white"
         aria-label={`Remove style ${position}, ${label}`}
       >
         ×
@@ -421,6 +428,8 @@ export function StyleLibrary({
   const recent = usePaginatedQuery(api.images.recentImages, {}, { initialNumItems: PAGE.images });
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  // Closing the sheet puts focus back on whatever opened it.
+  useReturnFocus();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
