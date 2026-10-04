@@ -509,12 +509,22 @@ function StudioPage() {
                 <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t-2 border-black pt-3">
                   <span className="h-4 w-4 shrink-0 border border-black" style={{ background: batch.backgroundColor }} />
                   {batch.images.length > 0 && (
-                    <span className="flex shrink-0 gap-1">
-                      {batch.images.map((image, i) => (
-                        <span key={i} className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
-                          <Art url={image.thumbUrl ?? image.url} alt={`Image ${i + 1}`} className="max-h-full max-w-full object-contain" />
-                        </span>
-                      ))}
+                    <span className="flex shrink-0 items-center gap-1">
+                      {batch.images.map((image, i) =>
+                        image.design ? (
+                          <ParentDesign
+                            key={i}
+                            image={image}
+                            design={image.design}
+                            here={image.design.sessionId === s}
+                            onOpen={(view) => viewerRoute.open({ view, scope: "session" })}
+                          />
+                        ) : (
+                          <span key={i} className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
+                            <Art url={image.thumbUrl ?? image.url} alt={`Image ${i + 1}`} className="max-h-full max-w-full object-contain" />
+                          </span>
+                        ),
+                      )}
                     </span>
                   )}
                   <p className="min-w-0 flex-1 truncate text-base font-semibold">
@@ -700,6 +710,45 @@ function BatchSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+// The design a batch started from ("Use as image"), on the batch's line: a thumbnail over its own
+// background color that opens it, in the viewer here or in the session it came from.
+function ParentDesign({
+  image,
+  design,
+  here,
+  onOpen,
+}: {
+  image: { url?: string; thumbUrl?: string };
+  design: { generationId: string; sessionId: string; backgroundColor: string };
+  here: boolean;
+  onOpen: (view: string) => void;
+}) {
+  const className =
+    "flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-black py-0.5 pl-2 pr-0.5 text-sm font-bold transition-transform hover:-translate-y-0.5";
+  const content = (
+    <>
+      From
+      <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-md" style={{ background: design.backgroundColor }}>
+        <Art url={image.thumbUrl ?? image.url} alt="" className="max-h-full max-w-full object-contain" />
+      </span>
+    </>
+  );
+  return here ? (
+    <button type="button" onClick={() => onOpen(design.generationId)} className={className} title="Open the design this started from">
+      {content}
+    </button>
+  ) : (
+    <Link
+      to="/studio"
+      search={{ s: design.sessionId, view: design.generationId, scope: "batch" }}
+      className={className}
+      title="Open the design this started from"
+    >
+      {content}
+    </Link>
   );
 }
 

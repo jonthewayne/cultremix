@@ -177,7 +177,9 @@ export const cultremixTables = {
     error: v.optional(v.string()),
   })
     .index("by_batch", ["batchId"])
-    .index("by_session_favorite", ["sessionId", "favorite", "favoritedAt"]),
+    .index("by_session_favorite", ["sessionId", "favorite", "favoritedAt"])
+    // A batch image that is one of the member's designs: the design it started from.
+    .index("by_owner_fullKey", ["ownerId", "fullKey"]),
 
   works: defineTable({
     crFamily: v.number(),

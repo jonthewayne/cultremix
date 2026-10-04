@@ -19,3 +19,7 @@ export const MAX_STYLES = 4;
 
 // Sessions count their batches up to this; past it the studio shows "100+".
 export const BATCH_COUNT_CAP = 100;
+
+// Compare shows two to four designs side by side.
+export const COMPARE_MIN = 2;
+export const COMPARE_MAX = 4;
