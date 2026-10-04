@@ -11,10 +11,12 @@ import {
   spendValidator,
 } from "./lib/budget";
 import { DISPATCHED_EXPIRE_MS, EXPIRED_MESSAGE, QUEUED_EXPIRE_MS, UNKNOWN_MESSAGE, dayUtc } from "./lib/paidAttempts";
+import type { Spend } from "./lib/paidAttempts";
 import { PRICING_VERSION } from "./lib/pricing";
 import { budgetProvider } from "./schema/budget";
 import { failAndRefund, flagEnabled, settleBatch } from "./studio";
 import { failShootPhoto } from "./publish";
+import { failPrintVersion } from "./print";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
@@ -59,6 +61,7 @@ export const reserve = internalMutation({
 async function finishAbandoned(ctx: MutationCtx, reservation: Doc<"reservations">, sent: boolean) {
   const status = sent ? "unknown_outcome" : "expired";
   const message = sent ? UNKNOWN_MESSAGE : EXPIRED_MESSAGE;
+  const spend: Spend = sent ? { kind: "settle", reason: "sweeper" } : { kind: "release", reason: "sweeper" };
   if (reservation.batchId) {
     const batchId = reservation.batchId;
     const generations = await ctx.db
@@ -83,8 +86,13 @@ async function finishAbandoned(ctx: MutationCtx, reservation: Doc<"reservations"
       .unique();
     // A reshoot keeps the photo that's up; only a first photo still pending is marked failed.
     if (photo?.state === "pending") await failShootPhoto(ctx, reservation.shootId, message);
+  } else if (reservation.attemptKind === "upscale") {
+    // An upscale's attempt is its print version; failing it gives the credits back.
+    const versionId = ctx.db.normalizeId("printVersions", reservation.attemptId);
+    const version = versionId ? await ctx.db.get("printVersions", versionId) : null;
+    if (version) await failPrintVersion(ctx, version, message, spend);
   }
-  await closeReservation(ctx, reservation.attemptId, sent ? { kind: "settle", reason: "sweeper" } : { kind: "release", reason: "sweeper" });
+  await closeReservation(ctx, reservation.attemptId, spend);
 }
 
 // Every 10 minutes (convex/crons.ts): settles or releases reservations left open by actions that died.

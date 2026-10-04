@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { falClient } from "../../convex/lib/fal";
 import type { FetchLike } from "../../convex/lib/fal";
 import { pngCarriesAlpha } from "../../convex/lib/printImage";
-import { UPSCALE_TIMEOUT_MS, pollDelay, pollUpscale, submitUpscale } from "../../convex/lib/upscaleFlow";
+import { UPSCALE_TIMEOUT_MS, pollDelay, pollUpscale, submitFailureSpend, submitUpscale } from "../../convex/lib/upscaleFlow";
 import type { PollDeps, SubmitDeps } from "../../convex/lib/upscaleFlow";
 
 const json = (body: unknown, status = 200) =>
@@ -42,8 +42,9 @@ function submitDeps(overrides: Partial<SubmitDeps> & { claimed?: { value: boolea
     record: async (submission) => {
       log.push(`record ${submission.requestId}`);
     },
-    fail: async (error) => {
-      log.push(`fail ${error}`);
+    // The budget reservation's fate rides along: released when nothing reached fal.
+    fail: async (error, spend) => {
+      log.push(`fail ${error} (${spend.kind})`);
     },
     schedulePoll: async (delayMs) => {
       log.push(`poll in ${delayMs}`);
@@ -110,14 +111,26 @@ describe("upscale submission", () => {
     const { deps, log } = submitDeps({ client: falClient({ key: "k", fetch }) });
     expect(await submitUpscale(deps)).toBe("failed");
     expect(posts).toBe(1);
-    expect(log).toEqual(["fail Too busy"]);
+    // fal may have the job after a 5xx, so its budget hold is paid for.
+    expect(log).toEqual(["fail Too busy (settle)"]);
+  });
+
+  it("releases the budget hold when fal refuses the post outright", async () => {
+    const fetch: FetchLike = async () => json({ detail: "Bad image" }, 422);
+    const { deps, log } = submitDeps({ client: falClient({ key: "k", fetch }) });
+    expect(await submitUpscale(deps)).toBe("failed");
+    expect(log).toEqual(["fail Bad image (release)"]);
+    expect(submitFailureSpend(new Error("socket hang up"))).toEqual({ kind: "settle", reason: "no answer" });
   });
 
   it("fails without a key or a public address, posting nothing", async () => {
-    expect((await submitUpscale(submitDeps({ client: null }).deps))).toBe("failed");
+    const noKey = submitDeps({ client: null });
+    expect(await submitUpscale(noKey.deps)).toBe("failed");
     const fal = fakeFal();
-    expect(await submitUpscale(submitDeps({ client: fal.client, imageUrl: "fake:art.png" }).deps)).toBe("failed");
+    const noAddress = submitDeps({ client: fal.client, imageUrl: "fake:art.png" });
+    expect(await submitUpscale(noAddress.deps)).toBe("failed");
     expect(fal.posts).toHaveLength(0);
+    expect([...noKey.log, ...noAddress.log].every((line) => line.endsWith("(release)"))).toBe(true);
   });
 
   it("gives up rather than posting again when the request ID can't be saved", async () => {
@@ -130,7 +143,7 @@ describe("upscale submission", () => {
     });
     expect(await submitUpscale(deps)).toBe("failed");
     expect(fal.posts).toHaveLength(1);
-    expect(log).toEqual(["fail Submission recorded twice."]);
+    expect(log).toEqual(["fail Submission recorded twice. (settle)"]);
   });
 });
 

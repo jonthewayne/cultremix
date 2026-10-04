@@ -134,3 +134,69 @@ These results agree with the earlier U0(k) numbers in `docs/image-generation/REA
    - Hand the print file to Printful (U9/U10).
    - Add an owner "unlock print file" action.
    - Optionally show the fal queue position while an upscale is waiting.
+
+## Round 2
+
+**Merge.** `git merge dev` fast-forwarded `codex/print` to dev (`3bed170`), with no conflicts. `bun install --frozen-lockfile` was clean. Five commits follow, none pushed.
+
+### 1. Topaz upscales hold their fal cost against the daily budget
+- **Price.** `convex/lib/pricing.ts` gains `topazCents(w, h)`: 8¢ per started 24 MP of output (8¢ up to 24 MP, 16¢ above). `topazWorstCaseCents` is now that price at 4× on each side, so a 1024 px design holds 8¢ and a 1536 px design holds 16¢.
+- **Reserve.** `print.upscale` checks `hasRoom(ctx, "fal", worstCase)` and opens the reservation (`attemptKind: "upscale"`, `attemptId` = the version ID, provider `fal`) in the same transaction as the 2-credit charge.
+  - The checks run in this order: flag, version, credits, budget.
+  - When the day can't hold the worst case, it returns `{ refused: "BUDGET" }` before charging anything. The studio says "Upscaling is resting until tomorrow. Your credits weren't used."
+  - The owner's free upscales are held too, with `credits: 0`.
+- **Sent.** `claimSubmission` (queued → submitting) calls `authorizeDispatch`. If the reservation is already closed (by the sweeper, for example), the version fails with "Timed out before starting.", the credits come back, and nothing is posted to fal.
+- **Settle.** `recordVersion` settles at `topazCents` of the image fal returned.
+  - **fal reports no cost,** so this price is recorded as `reported`. The output size is what fal bills by, so it's the real charge, not an estimate.
+  - Fal only overruns when it returns more than 4×. An overage then sets `overageCents` and turns `gen.upscale` off through the existing `PROVIDER_FLAG`.
+- **Release or settle on failure.** `failVersion` takes an optional `spend`, and `upscaleFlow`'s submit failures now report one:
+  - **Release:** no `FAL_KEY`, no address, or fal answered the POST with a 4xx. Nothing reached fal, or fal refused it.
+  - **Settle at the worst case:** a 5xx, no answer, a record failure, or any failure after fal took the job. Fal may have run it.
+  - **No spend given:** a still-queued version releases ("not sent"); anything later settles ("failed").
+- **Sweeper.** `finishAbandoned` in `convex/budget.ts` now handles upscales through `failPrintVersion` (exported from `convex/print.ts`):
+  - an upscale never sent releases after 10 minutes;
+  - an upscale sent and unfinished settles at the worst case after 15 minutes;
+  - either way the version fails and refunds once.
+  - The poll's own 15-minute timeout can race the sweeper. Both orders end with one refund and one close, because failing and closing each do nothing a second time.
+- **Credits unchanged.** The 2-credit charge and the refund (once, on failure) are exactly as before. A successful upscale keeps its credits even when it overran.
+- **Admin card.** The admin budget card's existing upscales block now shows real activity. The card needed no change.
+
+### 2. Print Studio starts on the work's offered colors
+- **Server.** `studio` returns `offeredColors`: the work's `works.offeredColors` (garment keys from `convex/lib/garments.ts`) as print product color names, lead first.
+  - The mapping is `src/lib/print/colors.ts` `offeredPrintColors`. It uses the same name when the product has it (Ivory, Black, True Navy, Butter, Blue Jean, White, Pepper), else the nearest shade in Lab: chalky-mint → Seafoam, moss → Sage, bay → Grey, crimson and watermelon → Brick. Repeats collapse.
+- **Default color.** A new placement starts on the lead offered color, then falls back to the color nearest the background, as before.
+- **Swatches.** The swatches show only the offered colors, plus the one in use if it's another. A "More colors" link shows the rest of the product's colors.
+  - A work with no offered colors (published before colors existed) shows every product color, as before.
+  - Saving still accepts any product color, since offered colors guide the choice rather than limit it.
+
+### Tests
+- **`tests/convex-local/print.test.ts`, "upscales and the fal budget" (10 tests):**
+  - reserve 8¢ under fal, with the gateway untouched and the claim marked sent;
+  - 16¢ for a 1536 px design (owner, 0 credits);
+  - settle at the reported price, keeping the credits;
+  - release when never sent, and on a 422, with the refund once;
+  - settle a failure after submission at the worst case, with a refund;
+  - an overage turns `gen.upscale` off, the next upscale is refused, and the credits stay spent;
+  - a budget refusal charges nothing and opens nothing;
+  - the sweeper releases an upscale that was never sent and settles one that was sent, refunding both, and a late claim or finish does nothing;
+  - a claim on a closed reservation fails and refunds.
+- **Offered colors:**
+  - `studio` returns them (one convex-local test);
+  - three unit tests for `offeredPrintColors` in `tests/unit/printHelpers.test.ts`;
+  - `tests/unit/upscaleFlow.test.ts` checks which spend each submit failure reports.
+- **Checks:** all pass.
+  - `bun run typecheck` and `bunx tsc --noEmit -p convex` are clean.
+  - `bun run test`: 47 files and 394 tests, then 18 files and 206 tests.
+  - `bun run build` is clean, and `src/routeTree.gen.ts` is unchanged.
+  - `bun run lint` isn't in the required set and fails across the repo (import order everywhere, plus a missing `react-hooks` rule definition). I fixed the two findings my changes added.
+
+### Merge notes
+- **Schema.** No schema change, and no new tables, env vars or `api.d.ts` entries. `src/lib/print/colors.ts` isn't a Convex module.
+- **`print.upscale`** can return `{ refused: "BUDGET" }`. The studio handles it.
+- **`print.failVersion`** has a new optional `spend` argument, and `failPrintVersion` is exported. `convex/budget.ts` imports it for the sweeper.
+- **`print.studio`** returns `offeredColors`, which is always an array.
+- **Budget report.** `docs/hackathon/reports/budget.md` is updated: the two pools are both wired, its merge note 8 is done, and fal reports no cost.
+
+### Follow-ups
+- Compare the fal day on the admin card with fal's own bill after the first real upscales.
+- A separate fal cap (`dailyUpscaleBudgetCents`) still sits in the budget report's follow-ups. Today fal shares `dailyBudgetCents` as its own pool.

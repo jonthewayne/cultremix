@@ -179,7 +179,7 @@ Worst cases at today's bounds:
 - **One hold per paid call:** one per grid batch, one per single design, one per photo.
 - **The worst case grows with each attached image,** so a words-only batch doesn't hold room for 12 images.
 - **The cap is read live** from `appSettings.dailyBudgetCents` at every admission. `budgetDays.capCents` only records the cap in force.
-- **The gateway and fal are separate pools,** each up to the same `dailyBudgetCents`. Today only the gateway is wired in.
+- **The gateway and fal are separate pools,** each up to the same `dailyBudgetCents`. Both are wired in (fal since the print builder's Round 2).
 - **Actual cost is stored in fractions of a cent** (`9.9`). Holds are whole cents.
 - **The grid's roles read** (GPT-6 Luna, 0.03–0.09¢) is inside the grid's hold. If the grid is then released before the call, that fraction of a cent isn't recorded.
 - **Stuck designs now get their credits back.** Before, a batch whose action died stayed `dispatched` forever with nothing back. The sweeper now finishes it and refunds by the same `creditsBack` rule. No refund amount changed.
@@ -189,9 +189,7 @@ Worst cases at today's bounds:
 ## Stubbed or waiting on keys and accounts
 
 - **Reported costs:** whether `providerMetadata.gateway.cost` arrives on real calls is unverified. Until it does, every call settles at its worst case, which is safe but overstates spend 1.5–3×. Watch the card's "reported / worst case" line after the first real calls.
-- **fal upscales:** not wired in, because they belong to the print builder. The glue is ready:
-  - `internal.budget.reserve({ attemptKind: "upscale", attemptId, provider: "fal", userId, credits, worstCaseCents: topazWorstCaseCents(w, h) })` returns `false` when the flag is off or there's no room.
-  - Close it with `internal.budget.closeAttempt({ attemptId, spend })`.
+- **fal reports no cost.** An upscale settles at `topazCents(w, h)` of the image fal returned, which is what fal bills by, recorded as `reported`. If fal's bill ever differs, compare it with the card's fal day.
 - **ChatGPT path:** unbudgeted by design (subscription, not per call).
 
 ## What the Builder must do when merging
@@ -207,7 +205,12 @@ Worst cases at today's bounds:
 5. **`publish.markPublished`** returns `attemptId?` and `resting?`, and `beginReshoot` returns `attemptId?`. Any other caller of these mutations should pass the `attemptId` back to `recordPhoto` or `recordPhotoFailed`.
 6. **Exports other code may now import:** `settleBatch` and `failAndRefund` are exported from `convex/studio.ts`, and `failShootPhoto` from `convex/publish.ts` (used by the sweeper).
 7. **Cron:** "sweep paid calls" every 10 minutes. It goes live with the next deploy. There's nothing to set.
-8. **Print and upscale builder:** wire fal through `internal.budget.reserve` and `closeAttempt`, as above.
+8. **Print and upscale builder (done in Round 2, `codex/print`):**
+   - `print.upscale` opens the hold itself (`openReservation`, same transaction as the 2-credit charge), so it doesn't go through `internal.budget.reserve`. It returns `{ refused: "BUDGET" }` when fal's day can't hold the worst case, before charging anything.
+   - `print.claimSubmission` marks it sent (`authorizeDispatch`). A closed hold fails the version and refunds instead of posting.
+   - `recordVersion` settles at the price of the returned size, so an output over 4× is an overage and turns `gen.upscale` off. `failVersion` takes an optional `spend`: release when nothing reached fal or fal answered 4xx, otherwise settle at the worst case.
+   - The sweeper's `finishAbandoned` now fails and refunds abandoned upscales through `failPrintVersion` from `convex/print.ts`.
+   - Details: `docs/hackathon/reports/print.md`, "Round 2".
 9. **After the first production calls:**
    - Check the card's reported count. If calls settle at the worst case with reason `no cost reported`, look at the raw `providerMetadata.gateway` and adjust `gatewayCostCents`.
    - If reported costs show the bounds are far too loose, tighten the token bounds in `pricing.ts` and bump `PRICING_VERSION`.

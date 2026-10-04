@@ -78,10 +78,15 @@ export function photoWorstCaseCents(quality: Quality = "medium") {
   return cents(outputTokens("single", quality), 1, PHOTO_PROMPT_TOKENS);
 }
 
+// What fal charges for a Topaz output of the given size: 8 cents up to 24 MP, 16 up to 48, and so on.
+export function topazCents(outputWidth: number, outputHeight: number) {
+  const megapixels = (outputWidth * outputHeight) / 1_000_000;
+  return TOPAZ_CENTS_PER_24MP * Math.max(1, Math.ceil(megapixels / 24));
+}
+
 // One Topaz upscale of a design of the given size (fal), 4x on each side.
 export function topazWorstCaseCents(width: number, height: number) {
-  const megapixels = (width * 4 * height * 4) / 1_000_000;
-  return TOPAZ_CENTS_PER_24MP * Math.max(1, Math.ceil(megapixels / 24));
+  return topazCents(width * 4, height * 4);
 }
 
 // The cost the gateway reported for one call, in cents to a hundredth of a cent, or undefined when it

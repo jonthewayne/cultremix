@@ -3,6 +3,7 @@ import { COMFORT_COLORS_1717, shirtColor } from "../../shared/config/print-produ
 import { dilate, measureAlpha, roundSolid } from "../../src/lib/print/alpha";
 import type { AlphaMetrics } from "../../src/lib/print/alpha";
 import { printCheck, readyLine } from "../../src/lib/print/check";
+import { offeredPrintColors } from "../../src/lib/print/colors";
 import { dpiGrade, sourceDpi } from "../../src/lib/print/dpi";
 import { applyKnockout, borderColor, parseHex, toHex } from "../../src/lib/print/knockout";
 import {
@@ -312,5 +313,20 @@ describe("product", () => {
   it("falls back to the first color", () => {
     expect(shirtColor("Butter").hex).toBe("#ffe09e");
     expect(shirtColor("nope").name).toBe("Black");
+  });
+});
+
+describe("offered colors", () => {
+  it("maps a work's garment colors to the print product's, lead first", () => {
+    expect(offeredPrintColors(["true-navy", "ivory", "black"])).toEqual(["True Navy", "Ivory", "Black"]);
+  });
+
+  it("falls back to the nearest shade and drops repeats", () => {
+    expect(offeredPrintColors(["moss", "chalky-mint", "crimson", "watermelon"])).toEqual(["Sage", "Seafoam", "Brick"]);
+  });
+
+  it("is empty for a work with no offered colors or unknown keys", () => {
+    expect(offeredPrintColors(undefined)).toEqual([]);
+    expect(offeredPrintColors(["plaid"])).toEqual([]);
   });
 });

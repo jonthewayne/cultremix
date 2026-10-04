@@ -5,10 +5,15 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { PRINT_PRODUCT, shirtColor } from "../shared/config/print-products";
 import { printCheck } from "../src/lib/print/check";
+import { offeredPrintColors } from "../src/lib/print/colors";
 import { clampTolerance, parseHex } from "../src/lib/print/knockout";
 import { aspectOf, clampPlacement } from "../src/lib/print/placement";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
+import { authorizeDispatch, closeReservation, hasRoom, openReservation, spendValidator } from "./lib/budget";
 import { imageUrlReader } from "./lib/imageUrls";
+import { EXPIRED_MESSAGE } from "./lib/paidAttempts";
+import type { Spend } from "./lib/paidAttempts";
+import { topazCents, topazWorstCaseCents } from "./lib/pricing";
 import { formatCr, parseCr, publicUrl } from "./lib/r2";
 import { flagEnabled } from "./studio";
 
@@ -133,6 +138,9 @@ export const studio = query({
       cr: v.string(),
       title: v.optional(v.string()),
       backgroundColor: v.string(),
+      // The shirt colors the work was published in, as print product color names, lead first.
+      // Empty for works published before colors were chosen.
+      offeredColors: v.array(v.string()),
       isOwner: v.boolean(),
       credits: v.number(),
       upscaleCredits: v.number(),
@@ -174,6 +182,7 @@ export const studio = query({
       cr: formatCr(work.crFamily, work.crExpression),
       title: work.title,
       backgroundColor: work.backgroundColor,
+      offeredColors: offeredPrintColors(work.offeredColors),
       isOwner: owner,
       credits: await creditBalance(ctx, user._id),
       upscaleCredits: owner ? 0 : UPSCALE_CREDITS,
@@ -340,12 +349,14 @@ export const knockout = mutation({
 });
 
 // "Upscale for print": Topaz Transparent, 4x, 2 credits (the owner is exempt). One fal submission
-// per attempt (convex/upscale.ts); a failed attempt gives the credits back.
+// per attempt (convex/upscale.ts); a failed attempt gives the credits back. Each attempt holds its
+// worst-case fal cost against today's budget (provider "fal", convex/lib/budget.ts) until it
+// settles at the price of what fal returned, or is released because nothing reached fal.
 export const upscale = mutation({
   args: { cr: v.string(), versionId: v.id("printVersions") },
   returns: v.union(
     v.object({ versionId: v.id("printVersions") }),
-    v.object({ refused: v.union(v.literal("NO_CREDITS"), v.literal("DISABLED")) }),
+    v.object({ refused: v.union(v.literal("NO_CREDITS"), v.literal("DISABLED"), v.literal("BUDGET")) }),
   ),
   handler: async (ctx, args) => {
     const { user, work } = await requirePrinter(ctx, args.cr);
@@ -365,6 +376,11 @@ export const upscale = mutation({
     }
     const owner = isOwner(user);
     if (!owner && (await creditBalance(ctx, user._id)) < UPSCALE_CREDITS) return { refused: "NO_CREDITS" as const };
+    // The owner's upscales count toward the budget too.
+    const now = Date.now();
+    const worstCaseCents = topazWorstCaseCents(parent.width, parent.height);
+    if (!(await hasRoom(ctx, "fal", worstCaseCents, now))) return { refused: "BUDGET" as const };
+    const charged = owner ? 0 : UPSCALE_CREDITS;
     const versionId = await ctx.db.insert("printVersions", {
       workId: work._id,
       number: await nextVersion(ctx, work),
@@ -375,9 +391,14 @@ export const upscale = mutation({
       // A remix of this work starts from the last version before the upscale.
       remixSourceId: parent._id,
       fal: { state: "queued", polls: 0 },
-      charged: owner ? 0 : UPSCALE_CREDITS,
+      charged,
       createdBy: user._id,
     });
+    await openReservation(
+      ctx,
+      { attemptKind: "upscale", attemptId: versionId, provider: "fal", userId: user._id, credits: charged, worstCaseCents },
+      now,
+    );
     if (!owner) {
       await ctx.db.insert("creditLedger", {
         userId: user._id,
@@ -489,6 +510,11 @@ export const recordVersion = internalMutation({
   handler: async (ctx, args) => {
     const version = await ctx.db.get("printVersions", args.versionId);
     if (!version || version.status !== "pending") return false;
+    if (version.op === "upscale") {
+      // fal bills Topaz by the size of what it returns; a bigger image than reserved for is an
+      // overage, and that turns upscaling off until an admin turns it back on.
+      await closeReservation(ctx, version._id, { kind: "settle", actualCents: topazCents(args.width, args.height), reason: "done" });
+    }
     await ctx.db.patch("printVersions", version._id, {
       status: "ready",
       key: args.key,
@@ -504,38 +530,54 @@ export const recordVersion = internalMutation({
   },
 });
 
-// Marks a version failed and gives back what it was charged (once: only a pending version fails).
+// Marks a version failed, gives back what it was charged, and closes its budget reservation (once:
+// only a pending version fails). Without a spend, an upscale still waiting to be claimed is
+// released and one that was claimed is settled at its worst case, since fal may have the job.
+export async function failPrintVersion(ctx: MutationCtx, version: Doc<"printVersions">, error: string, spend?: Spend) {
+  if (version.status !== "pending") return false;
+  await ctx.db.patch("printVersions", version._id, {
+    status: "failed",
+    error: error.slice(0, 300),
+    finishedAt: Date.now(),
+  });
+  if (version.charged > 0) {
+    await ctx.db.insert("creditLedger", {
+      userId: version.createdBy,
+      kind: "refund_credit",
+      amount: version.charged,
+      note: `print upscale ${version._id} failed`,
+    });
+  }
+  if (version.op === "upscale") {
+    const sent = version.fal !== undefined && version.fal.state !== "queued";
+    await closeReservation(ctx, version._id, spend ?? (sent ? { kind: "settle", reason: "failed" } : { kind: "release", reason: "not sent" }));
+  }
+  return true;
+}
+
 export const failVersion = internalMutation({
-  args: { versionId: v.id("printVersions"), error: v.string() },
+  args: { versionId: v.id("printVersions"), error: v.string(), spend: v.optional(spendValidator) },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const version = await ctx.db.get("printVersions", args.versionId);
-    if (!version || version.status !== "pending") return false;
-    await ctx.db.patch("printVersions", version._id, {
-      status: "failed",
-      error: args.error.slice(0, 300),
-      finishedAt: Date.now(),
-    });
-    if (version.charged > 0) {
-      await ctx.db.insert("creditLedger", {
-        userId: version.createdBy,
-        kind: "refund_credit",
-        amount: version.charged,
-        note: `print upscale ${version._id} failed`,
-      });
-    }
-    return true;
+    if (!version) return false;
+    return await failPrintVersion(ctx, version, args.error, args.spend);
   },
 });
 
 // The one claim on an upscale's fal submission. True exactly once per version, so however often
-// the submit action runs, it posts once.
+// the submit action runs, it posts once. It's also the budget's dispatch check: an attempt whose
+// reservation is no longer open (the sweeper gave up on it) fails instead of posting.
 export const claimSubmission = internalMutation({
   args: { versionId: v.id("printVersions") },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const version = await ctx.db.get("printVersions", args.versionId);
     if (!version || version.status !== "pending" || version.fal?.state !== "queued") return false;
+    if (!(await authorizeDispatch(ctx, version._id, Date.now()))) {
+      await failPrintVersion(ctx, version, EXPIRED_MESSAGE, { kind: "release", reason: "not authorized" });
+      return false;
+    }
     await ctx.db.patch("printVersions", version._id, { fal: { ...version.fal, state: "submitting" } });
     return true;
   },
