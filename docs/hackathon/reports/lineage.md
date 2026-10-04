@@ -221,3 +221,102 @@ New tests:
    - Check that `MAX_AMENDMENT_HOPS` counting (the new parent is hop 1; more than 64 refused) matches the contract.
    - Decide what happens to offchain-only corrections once chain writes turn on.
    - Social builder: `/u/$username`.
+
+## Round 2: the family tree
+
+Every family can now be seen as a tree. The original sits at the top, and each variation sits under the work it came from. Forks branch off to their own families, and the family a fork came from is drawn above its first work.
+
+### What was built
+
+**`/family/<n>`** (`src/routes/family.$family.tsx`)
+- The whole tree for one family, with a two-line key: a solid line is a variation and a dashed line is a fork.
+- The header shows how many designs there are, who started the family, and the CR number it was forked from, if any.
+- `?cr=<CR>` highlights a work and opens its branch.
+- "Show more of this family" loads 60 more works at a time, up to 240. Past that, a note says only the first 240 are drawn.
+- Signed-out visitors can see it. The server loader fetches the first page ahead.
+
+**Compact tree on the work page**
+- It replaces the grid in `FamilyView`, the family section the page already had. `cr.$cr.tsx` is unchanged.
+- It is hidden for a lone original with no remixes.
+- "See the whole tree →" opens `/family/<n>?cr=<this work>`. The work page and that page ask for the same data (same query and arguments), so it is already loaded when you get there.
+
+**What each node shows**
+- The design's thumbnail, its CR number in `font-cr`, and `@creator`.
+- Two small counts of how far it spread: **remixes** (published direct remixes, in any family) and **hearts**.
+- Hearts come from the social builder's `workSocialStats`, through `workHeartCount` in `convex/lib/social.ts`. It is one indexed read that the social code keeps up to date when hearts change, so there was no need for a TODO.
+- The current work gets the same black ring as elsewhere.
+- Fork nodes say "New family N →" and link to that family's tree.
+- The node above a forked family says "From family M" and links back to that family.
+- A withdrawn work stays in place as a dashed "Withdrawn" box with its CR number only, so its remixes don't lose their place.
+
+**Big families on a phone**
+- Wide or deep branches fold into a dashed **"+N"** node that also shows how many designs it holds.
+  - "+N" counts the hidden remixes; the number below it counts everything beneath them too.
+  - Tapping "+N" opens that branch in place.
+- Limits:
+  - Compact tree: children of works two levels below the original start folded, and each work shows 3 children before the rest fold.
+  - Full page: six levels deep, 8 children per work.
+- It never folds down to a "+1", because that box takes the same room as the design it hides.
+- The branch leading to the current work is always open. If the current work's place falls past a row's limit, it stays visible and the "+N" covers its siblings.
+- The tree scrolls sideways (native touch panning) and starts centred on the current work. Elbow links keep lines out of the counts.
+
+### Pieces
+
+**`src/lib/familyTree.ts`** — pure and browser-safe, with no Convex imports.
+- `buildFamilyTree(data, options)`:
+  - Roots are works whose parent isn't loaded in this family.
+  - Children are listed in CR order, family works first, then forks out.
+  - The family a fork came from is drawn as a parent above its root.
+  - Folding follows `maxDepth`, `maxChildren`, the `expanded` set and the current work's branch.
+  - Damaged data with a loop still shows every work once.
+- `layoutTree(roots, size)`:
+  - Each leaf takes the next column, and each parent is centred over its children.
+  - It returns node positions, links (dashed for forks), and the overall width and height.
+  - It is about 40 lines, with no graph library.
+
+**`src/components/cr/FamilyTree.tsx`** — plain SVG links under absolutely positioned HTML nodes. Only the existing `lucide-react` icons are used (`GitBranch`, `Heart`).
+
+**`lineage.familyTree({ family, limit? })`** in `convex/lineage.ts` — a public query that returns only public fields.
+- **Family works:** one `by_family_expression` read of at most `2 × limit`. `limit` defaults to 60 and is clamped to 1–240. Published and withdrawn works are kept; works still being prepared are skipped. `more` is set when the family has more.
+- **Per work:**
+  - One `by_effectiveParent_status` read of at most 51 published children. `remixes` is capped at 50, with `remixesMore` set past that. This read also finds the forks out.
+  - One `workSocialStats` read for hearts.
+  - The parent is read only when it isn't already loaded.
+- **Forks out:** capped at 60 in total. Hitting the cap sets `more` too.
+- **Fork origins:** the parents in other families.
+- **Corrected lineage:** it follows effective lineage, so corrected parents are drawn where they now belong.
+- **Missing families:** it returns `null` when nothing in the family is published.
+
+### Tests
+
+- **`tests/unit/familyTree.test.ts`** — 18 tests:
+  - reading the family number from a CR number;
+  - ordering, including corrected parents;
+  - a root whose parent wasn't loaded, and a lineage loop;
+  - forks out after family children, sorted across families;
+  - the family a fork came from drawn above, with a dashed link;
+  - folding wide rows (with the count of everything underneath), with no fold at or one past the limit;
+  - folding deep branches;
+  - keeping the current work's branch open;
+  - `expanded`;
+  - a "+N" made only of forks;
+  - layout coordinates and link endpoints;
+  - several roots and the empty case.
+- **`tests/convex-local/familyTree.test.ts`** — 6 tests:
+  - the full shape, signed out: parents, remix and heart counts, forks out, the family a fork came from, and public fields only;
+  - effective lineage;
+  - withdrawn works as bare CR numbers, and works still being prepared left out;
+  - `null` for empty or unknown families;
+  - the `limit` cap with `more`, clamping, and a root still counting remixes past the cap;
+  - the remix-count cap.
+- **Totals:** `bun run typecheck` and `bun run test` pass, with 408 unit and 201 local Convex tests. ESLint is clean on every new or changed file.
+- **Visual check:** I rendered static versions of the full tree (desktop, 1280 px) and the compact tree (phone, 390 px) and screenshotted them with agent-browser, using a family with 17 works, a withdrawn work, three forks out, a fork origin, and a deep current work. The screenshots led to the elbow links and the no-"+1" rule. The temporary render files are deleted.
+
+### Notes for merging
+
+- **Files touched:**
+  - New: `src/lib/familyTree.ts`, `src/components/cr/FamilyTree.tsx`, `src/routes/family.$family.tsx` and both test files.
+  - Changed: `src/components/cr/FamilyView.tsx`, `src/routeTree.gen.ts` (rebuilt) and `convex/lineage.ts` (the new query only).
+- **No changes needed** to the schema, environment variables, `api.d.ts` (`lineage` is already listed) or `cr.$cr.tsx`.
+- **`lineage.family`** (the old grid query) is no longer used by the page. It is kept because its tests still use it, and it can be removed later.
+- **Remix counts** are read live and capped at 50 per work. If CultRemix ever wants exact counts for very popular works, a `remixes` counter next to `hearts` in `workSocialStats`, updated at publish and when lineage is corrected, would make it one read.
