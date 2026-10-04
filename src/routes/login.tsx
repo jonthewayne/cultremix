@@ -19,7 +19,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { authClient } from "~/lib/auth-client";
-import { getPreauthClient } from "~/lib/convex-preauth";
+import { getPreauthClient, preauthQuery } from "~/lib/convex-preauth";
 import { sanitizeRedirect } from "~/lib/sanitize-redirect";
 
 type LoginSearch = {
@@ -33,10 +33,13 @@ export const Route = createFileRoute("/login")({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
     inviteId: typeof search.inviteId === "string" ? search.inviteId : undefined,
   }),
+  // Read on the server too, so the first render already says whether codes are emailed.
+  loader: () => preauthQuery(api.auth.getAuthFeatureFlags).catch(() => null),
   component: LoginPage,
 });
 
 function LoginPage() {
+  const flags = Route.useLoaderData();
   const navigate = useNavigate();
   const { redirect: redirectTo, inviteId } = useSearch({ from: "/login" });
   const [mode, setMode] = useState<"email" | "phone" | "password">("email");
@@ -45,10 +48,12 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [phoneEnabled, setPhoneEnabled] = useState(false);
-  const [emailDelivered, setEmailDelivered] = useState(true);
+  const [phoneEnabled, setPhoneEnabled] = useState(flags?.phoneEnabled ?? false);
+  const [emailDelivered, setEmailDelivered] = useState(flags?.emailDelivered ?? true);
 
   useEffect(() => {
+    // Only when the loader couldn't read them.
+    if (flags) return;
     let active = true;
     getPreauthClient()
       .query(api.auth.getAuthFeatureFlags, {})
@@ -64,7 +69,7 @@ function LoginPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [flags]);
 
   const destination = sanitizeRedirect(redirectTo);
 

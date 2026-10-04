@@ -7,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { authClient } from "~/lib/auth-client";
-import { getPreauthClient } from "~/lib/convex-preauth";
+import { getPreauthClient, preauthQuery } from "~/lib/convex-preauth";
 import { markEmailAttemptVerified } from "~/lib/mark-email-attempt-verified";
 import { sanitizeRedirect } from "~/lib/sanitize-redirect";
 
@@ -26,6 +26,8 @@ export const Route = createFileRoute("/verify-email")({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
     inviteId: typeof search.inviteId === "string" ? search.inviteId : undefined,
   }),
+  // Read on the server too, so the first render already says whether the code was emailed.
+  loader: () => preauthQuery(api.auth.getAuthFeatureFlags).catch(() => null),
   component: VerifyEmailPage,
 });
 
@@ -42,7 +44,8 @@ function VerifyEmailPage() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [wait, setWait] = useState(RESEND_WAIT_SECONDS);
-  const [emailDelivered, setEmailDelivered] = useState(true);
+  const flags = Route.useLoaderData();
+  const [emailDelivered, setEmailDelivered] = useState(flags?.emailDelivered ?? true);
   const expiresAtRef = useRef<number | null>(null);
   // The last code submitted on its own, so a failed code isn't retried in a loop.
   const autoSubmittedRef = useRef<string | null>(null);
@@ -62,6 +65,8 @@ function VerifyEmailPage() {
   }, [attemptId, inviteId, redirectTo]);
 
   useEffect(() => {
+    // Only when the loader couldn't read them.
+    if (flags) return;
     let active = true;
     getPreauthClient()
       .query(api.auth.getAuthFeatureFlags, {})
@@ -72,7 +77,7 @@ function VerifyEmailPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [flags]);
 
   useEffect(() => {
     if (wait <= 0) return;

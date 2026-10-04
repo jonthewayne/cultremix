@@ -1,6 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { DeploymentPill } from "~/components/cr/DeploymentLabel";
@@ -9,6 +9,10 @@ import { authClient } from "~/lib/auth-client";
 
 export function SiteHeader() {
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
+  // Sign in brings you back to the page you were on; from home it goes on to the studio.
+  const signInRedirect = useRouterState({
+    select: (state) => (state.location.pathname === "/" ? "/studio" : state.location.href),
+  });
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -101,7 +105,7 @@ export function SiteHeader() {
             )}
           </div>
         ) : (
-          <Link to="/login" search={{ redirect: "/studio" }} className="inline-flex h-10 items-center rounded-full bg-black px-4 text-white">
+          <Link to="/login" search={{ redirect: signInRedirect }} className="inline-flex h-10 items-center rounded-full bg-black px-4 text-white">
             Sign in
           </Link>
         )}
