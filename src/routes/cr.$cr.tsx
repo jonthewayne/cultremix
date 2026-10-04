@@ -7,6 +7,7 @@ import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
+import { BuyBox } from "~/components/commerce/BuyBox";
 
 export const Route = createFileRoute("/cr/$cr")({
   head: ({ params }) => ({ meta: [{ title: `CR ${params.cr} · CultRemix` }] }),
@@ -18,6 +19,8 @@ const SIZES = ["S", "M", "L", "XL", "2XL"];
 function ShopPage() {
   const { cr } = Route.useParams();
   const page = useQuery(convexQuery(api.feed.byCr, { cr }));
+  // Null until checkout opens and this work is on sale; the page is unchanged until then.
+  const offer = useQuery(convexQuery(api.shopify.offer, { cr })).data;
   const data = page.data;
 
   if (page.isLoading) {
@@ -70,30 +73,36 @@ function ShopPage() {
           </div>
 
           <div className="flex flex-col gap-6">
-            <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
-              <span className="text-5xl font-black tracking-tight">$36</span>
-              <span className="text-sm font-semibold">Heavyweight garment-dyed tee</span>
-            </div>
-            <div>
-              <p className="text-sm font-bold uppercase tracking-wider">Color</p>
-              <p className="mt-2 flex items-center gap-3 text-lg">
-                <span className="h-7 w-7 rounded-full border-2 border-black" style={{ background: item.backgroundColor }} />
-                <span className="capitalize">{colorName(item.backgroundColor)}</span>
-              </p>
-            </div>
-            <div>
-              <p className="text-sm font-bold uppercase tracking-wider">Size</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {SIZES.map((size) => (
-                  <span key={size} className="flex h-11 min-w-11 items-center justify-center rounded-xl border-2 border-black px-3 font-bold">
-                    {size}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-2xl bg-neutral-200 text-lg font-black text-neutral-500">
-              Buying opens soon
-            </button>
+            {offer ? (
+              <BuyBox offer={offer} />
+            ) : (
+              <>
+                <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
+                  <span className="text-5xl font-black tracking-tight">$36</span>
+                  <span className="text-sm font-semibold">Heavyweight garment-dyed tee</span>
+                </div>
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-wider">Color</p>
+                  <p className="mt-2 flex items-center gap-3 text-lg">
+                    <span className="h-7 w-7 rounded-full border-2 border-black" style={{ background: item.backgroundColor }} />
+                    <span className="capitalize">{colorName(item.backgroundColor)}</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-wider">Size</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {SIZES.map((size) => (
+                      <span key={size} className="flex h-11 min-w-11 items-center justify-center rounded-xl border-2 border-black px-3 font-bold">
+                        {size}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-2xl bg-neutral-200 text-lg font-black text-neutral-500">
+                  Buying opens soon
+                </button>
+              </>
+            )}
             <Link
               to="/studio"
               search={{ remix: item.cr }}
