@@ -258,7 +258,12 @@ Branch `codex/launch`, after merging `dev` (lineage with the Economics panel, so
 - **Who it covers:** model photos at publish (`convex/publish.ts`) and on member reshoots (`convex/photos.ts`). The owner is exempt. The admin “reshoot all” tool skips the limit.
 - **When refused at publish:** the work still publishes; only the photo waits. The feed shows “Photo coming soon” instead of “No photo this time”. On the work page, the creator sees “You’ve had your photo shoots for today. Try again tomorrow.” and a **Take the photo** button (`src/components/cr/PhotoRetry.tsx`). Tomorrow it works.
 - **When refused on a reshoot:** the same message, and the photo that's already up stays.
-- Tests: `tests/convex-local/photoShoots.test.ts` covers the limit at publish, reshoots, the owner exemption, refused attempts not counting, the next UTC day, and the waiting state in the feed.
+- Tests: `tests/convex-local/photoShoots.test.ts` covers the following:
+  - publishing past the limit, with the photo waiting and the calm message;
+  - retrying the next day;
+  - the owner never being limited;
+  - reshoots counting, a refused reshoot keeping the photo, and the operator's run going through;
+  - restarting a failed photo within the day's shoots.
 
 ### Admin switches
 
