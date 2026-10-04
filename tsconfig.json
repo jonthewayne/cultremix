@@ -27,6 +27,7 @@
     "convex",
     "tests",
     "scripts",
+    "shared",
     "vite.config.ts",
     "vitest.config.ts",
     "vitest.convex.config.ts"
