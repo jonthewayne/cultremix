@@ -10,3 +10,6 @@ dist
 .wrangler
 .tmp
 worker-configuration.d.ts
+# Judge passwords from scripts/provision-judges.ts and judge lists
+.judges.local.json
+judges.txt
