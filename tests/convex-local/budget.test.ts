@@ -113,9 +113,9 @@ async function tiles(t: T, batchId: Id<"batches">) {
   );
 }
 
-async function generateBatch(as: ReturnType<T["withIdentity"]>) {
+async function generateBatch(as: ReturnType<T["withIdentity"]>): Promise<Id<"batches">> {
   const result = await as.mutation(api.studio.generate, BATCH);
-  if (!("batchId" in result)) throw new Error(`refused: ${result.refused}`);
+  if ("refused" in result) throw new Error(`refused: ${result.refused}`);
   return result.batchId;
 }
 
