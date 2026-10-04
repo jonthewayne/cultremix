@@ -6,7 +6,7 @@
 bun run test
 ```
 
-The default suite is pure unit tests and does not require Resend, Telnyx, Cloudflare, or production credentials.
+The default suite needs no deployment and no outside credentials: no Resend, Telnyx, Cloudflare, Shopify, Printful, Circle, Monad, or production keys.
 
 `bun run test` runs two suites: the unit tests in `tests/unit` (Node), then the in-memory Convex tests in `tests/convex-local` (`convex-test` in the edge runtime; `bun run test:convex:local` runs only these). The in-memory tests call real queries, mutations, and internal functions against the real schema with no deployment, so domain rules (credits, CR numbers, lineage, follows, orders) are tested there. Start a test with `newTest()` from `tests/convex-local/setup.ts` and use `t.withIdentity({ subject, issuer })` for signed-in calls. Node actions (`"use node"` files) don't run in this harness; keep their logic in pure helpers and test those in `tests/unit`.
 
@@ -30,6 +30,16 @@ Check the resolved Bun dependency graph for security advisories with:
 ```bash
 bun audit
 ```
+
+## Contract And Local Chain
+
+The registry contract has its own Foundry suite (Foundry 1.8.4; see `contracts/README.md`):
+
+```bash
+cd contracts && forge test
+```
+
+`bun run test:chain:anvil` starts a private anvil node posing as Monad testnet (chain 10143), deploys the real registry bytecode, and runs the Convex chain writer against it end to end: registrations, remixes waiting for their parent, Backs with their onchain order, lineage amendments, and the economics config. It needs Foundry's `anvil` (`~/.foundry/bin/anvil` or `ANVIL_BIN`), so it stays out of `bun run test`, and it never reaches a public network.
 
 ## Convex Integration
 

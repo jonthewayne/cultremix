@@ -90,7 +90,7 @@ What it does **not** prove: because CultRemix holds the wallet keys for members,
 
 Only finalized blocks count. Staging uses Monad testnet (and shows a **Testnet** badge on CR numbers); production uses Monad mainnet. The full reasoning is in [ADR 0001](docs/adr/0001-onchain-provenance.md).
 
-> The registry contract and the chain writer are being built and aren't in this repository yet, so nothing is written to Monad today and the **Monad records** switch stays off. What's already here is everything the registry will record: each work's SHA-256 fingerprint on its page, its lineage (corrections are confirmed offchain until then, and the work page says so), and the economics rules file with its hash.
+> The registry contract ([contracts/](contracts/README.md)) and the chain writer are in this repository: publishing queues each work's registration, Backs and lineage corrections go through the same relayer, and `/admin/chain` shows the queue. The testnet registry isn't deployed yet, so the **Monad records** and **Backs** switches stay off and nothing is written to Monad today. Each work's page already shows its SHA-256 fingerprint and lineage (corrections are confirmed offchain while Monad records is off), and the economics rules file has its hash.
 
 ## More docs
 
