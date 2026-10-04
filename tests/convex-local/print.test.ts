@@ -218,6 +218,218 @@ describe("upscale for print", () => {
   });
 });
 
+// The daily budget (convex/lib/budget.ts): every upscale holds its worst-case fal cost from the
+// moment it's admitted until it settles or is released. The 2-credit charge and refund don't change.
+describe("upscales and the fal budget", () => {
+  const MINUTE = 60_000;
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
+  });
+
+  async function setBudget(t: T, cents: number) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("appSettings", {
+        key: "main",
+        signupGrant: { enabled: true, credits: 24 },
+        dailyBudgetCents: cents,
+        shootsPerMemberPerDay: 3,
+        updatedAt: 0,
+      });
+    });
+  }
+
+  async function startUpscale(t: T, identity = ALICE, size = 1024) {
+    const v1 = await openAndMeasure(t, identity, size);
+    const result = await t.withIdentity(identity).mutation(api.print.upscale, { cr: CR, versionId: v1 });
+    return { v1, versionId: (result as { versionId: Id<"printVersions"> }).versionId };
+  }
+
+  async function submit(t: T, versionId: Id<"printVersions">) {
+    expect(await t.mutation(internal.print.claimSubmission, { versionId })).toBe(true);
+    await t.mutation(internal.print.recordSubmission, {
+      versionId,
+      requestId: "req-1",
+      statusUrl: "https://queue.fal.run/s",
+      responseUrl: "https://queue.fal.run/r",
+    });
+  }
+
+  async function finish(t: T, versionId: Id<"printVersions">, width: number, height: number) {
+    return await t.mutation(internal.print.recordVersion, { versionId, key: "fake:up.png", width, height, metrics: METRICS });
+  }
+
+  async function reservation(t: T, attemptId: string) {
+    return await t.run((ctx) =>
+      ctx.db
+        .query("reservations")
+        .withIndex("by_attempt", (q) => q.eq("attemptId", attemptId))
+        .unique(),
+    );
+  }
+
+  async function falDay(t: T) {
+    return await t.run((ctx) =>
+      ctx.db
+        .query("budgetDays")
+        .withIndex("by_provider_day", (q) => q.eq("provider", "fal").eq("dayUtc", "2026-10-04"))
+        .unique(),
+    );
+  }
+
+  async function upscaleFlag(t: T) {
+    return await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("featureFlags")
+        .withIndex("by_key", (q) => q.eq("key", "gen.upscale"))
+        .unique();
+      return row?.enabled;
+    });
+  }
+
+  it("holds the worst case under fal when admitted, and marks it sent at the claim", async () => {
+    const { t, alice } = await setup();
+    // 1024 px comes back 4096 px square, 16.8 MP: one 24 MP block, 8 cents.
+    const { versionId } = await startUpscale(t);
+    expect(await reservation(t, versionId)).toMatchObject({
+      attemptKind: "upscale",
+      provider: "fal",
+      userId: alice,
+      credits: 2,
+      worstCaseCents: 8,
+      state: "open",
+      dayUtc: "2026-10-04",
+    });
+    expect((await reservation(t, versionId))?.dispatchedAt).toBeUndefined();
+    expect(await falDay(t)).toMatchObject({ openCents: 8, settledCents: 0 });
+    // The gateway's day is untouched.
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("budgetDays")
+          .withIndex("by_provider_day", (q) => q.eq("provider", "gateway").eq("dayUtc", "2026-10-04"))
+          .unique(),
+      ),
+    ).toBeNull();
+
+    expect(await t.mutation(internal.print.claimSubmission, { versionId })).toBe(true);
+    expect((await reservation(t, versionId))?.dispatchedAt).toBe(Date.now());
+  });
+
+  it("holds 16 cents for a 1536 px design, whose output is over 24 MP", async () => {
+    const { t, owner } = await setup();
+    const { versionId } = await startUpscale(t, OWNER, 1536);
+    // The owner pays no credits but counts toward the budget.
+    expect(await reservation(t, versionId)).toMatchObject({ userId: owner, credits: 0, worstCaseCents: 16 });
+  });
+
+  it("settles at the price of what fal returned, and keeps the credits", async () => {
+    const { t, alice } = await setup();
+    const { versionId } = await startUpscale(t);
+    await submit(t, versionId);
+    expect(await finish(t, versionId, 4096, 4096)).toBe(true);
+    expect(await reservation(t, versionId)).toMatchObject({ state: "settled", actualCents: 8, costSource: "reported" });
+    expect((await reservation(t, versionId))?.overageCents).toBeUndefined();
+    expect(await falDay(t)).toMatchObject({ openCents: 0, settledCents: 8 });
+    expect(await upscaleFlag(t)).toBe(true);
+    expect(await balance(t, alice)).toBe(8);
+  });
+
+  it("releases an upscale that never reached fal and refunds it once", async () => {
+    const { t, alice } = await setup();
+    // Failed before the claim (still queued).
+    const first = await startUpscale(t);
+    expect(await t.mutation(internal.print.failVersion, { versionId: first.versionId, error: "no key" })).toBe(true);
+    expect(await reservation(t, first.versionId)).toMatchObject({ state: "released", reason: "not sent" });
+    expect(await balance(t, alice)).toBe(10);
+
+    // Claimed, but fal refused the post outright (the submit action says so).
+    const { versionId } = (await t.withIdentity(ALICE).mutation(api.print.upscale, { cr: CR, versionId: first.v1 })) as {
+      versionId: Id<"printVersions">;
+    };
+    expect(await t.mutation(internal.print.claimSubmission, { versionId })).toBe(true);
+    await t.mutation(internal.print.failVersion, { versionId, error: "Bad image", spend: { kind: "release", reason: "refused 422" } });
+    expect(await reservation(t, versionId)).toMatchObject({ state: "released", reason: "refused 422" });
+    expect(await falDay(t)).toMatchObject({ openCents: 0, settledCents: 0 });
+    // The refund is unchanged: once per attempt, whatever closes the reservation.
+    expect(await t.mutation(internal.print.failVersion, { versionId, error: "again" })).toBe(false);
+    expect(await balance(t, alice)).toBe(10);
+    const refunds = await t.run(async (ctx) => (await ctx.db.query("creditLedger").collect()).filter((row) => row.kind === "refund_credit"));
+    expect(refunds.map((row) => row.amount)).toEqual([2, 2]);
+  });
+
+  it("settles a failure after fal took the job at the worst case, and still refunds the credits", async () => {
+    const { t, alice } = await setup();
+    const { versionId } = await startUpscale(t);
+    await submit(t, versionId);
+    await t.mutation(internal.print.failVersion, { versionId, error: "The upscale took too long." });
+    expect(await reservation(t, versionId)).toMatchObject({ state: "settled", actualCents: 8, costSource: "worst_case" });
+    expect(await falDay(t)).toMatchObject({ openCents: 0, settledCents: 8 });
+    expect(await balance(t, alice)).toBe(10);
+  });
+
+  it("an overage turns upscaling off", async () => {
+    const { t, alice } = await setup();
+    const { v1, versionId } = await startUpscale(t);
+    await submit(t, versionId);
+    // fal returned more than 4x: 6144 px square is 37.7 MP, 16 cents against a hold of 8.
+    expect(await finish(t, versionId, 6144, 6144)).toBe(true);
+    expect(await reservation(t, versionId)).toMatchObject({ state: "settled", actualCents: 16, overageCents: 8 });
+    expect(await falDay(t)).toMatchObject({ openCents: 0, settledCents: 16, overageCents: 8 });
+    expect(await upscaleFlag(t)).toBe(false);
+    // The upscale itself succeeded, so its credits stay spent; the next one is refused.
+    expect(await balance(t, alice)).toBe(8);
+    expect(await t.withIdentity(ALICE).mutation(api.print.upscale, { cr: CR, versionId: v1 })).toEqual({ refused: "DISABLED" });
+  });
+
+  it("refuses when the day's budget can't hold the worst case, before charging anything", async () => {
+    const { t, alice } = await setup();
+    await setBudget(t, 7);
+    const v1 = await openAndMeasure(t);
+    expect(await t.withIdentity(ALICE).mutation(api.print.upscale, { cr: CR, versionId: v1 })).toEqual({ refused: "BUDGET" });
+    expect(await balance(t, alice)).toBe(10);
+    const rows = await t.run(async (ctx) => ({
+      versions: (await ctx.db.query("printVersions").collect()).length,
+      reservations: (await ctx.db.query("reservations").collect()).length,
+    }));
+    expect(rows).toEqual({ versions: 1, reservations: 0 });
+  });
+
+  it("the sweeper fails and refunds an upscale that never started, and it can't be sent after", async () => {
+    const { t, alice } = await setup();
+    const { versionId } = await startUpscale(t);
+    vi.setSystemTime(Date.now() + 11 * MINUTE);
+    expect(await t.mutation(internal.budget.sweep, {})).toEqual({ settled: 0, released: 1 });
+    expect(await reservation(t, versionId)).toMatchObject({ state: "released", reason: "sweeper" });
+    expect(await t.run((ctx) => ctx.db.get("printVersions", versionId))).toMatchObject({ status: "failed", error: "Timed out before starting." });
+    expect(await balance(t, alice)).toBe(10);
+    expect(await t.mutation(internal.print.claimSubmission, { versionId })).toBe(false);
+  });
+
+  it("the sweeper settles an upscale sent and never finished, and refunds it", async () => {
+    const { t, alice } = await setup();
+    const { versionId } = await startUpscale(t);
+    await submit(t, versionId);
+    vi.setSystemTime(Date.now() + 16 * MINUTE);
+    expect(await t.mutation(internal.budget.sweep, {})).toEqual({ settled: 1, released: 0 });
+    expect(await reservation(t, versionId)).toMatchObject({ state: "settled", costSource: "worst_case", actualCents: 8 });
+    expect(await t.run((ctx) => ctx.db.get("printVersions", versionId))).toMatchObject({ status: "failed" });
+    expect(await balance(t, alice)).toBe(10);
+    // A late result from the dead poll changes nothing.
+    expect(await finish(t, versionId, 4096, 4096)).toBe(false);
+    expect(await falDay(t)).toMatchObject({ openCents: 0, settledCents: 8 });
+  });
+
+  it("a claim whose reservation is already closed fails and refunds instead of posting", async () => {
+    const { t, alice } = await setup();
+    const { versionId } = await startUpscale(t);
+    await t.mutation(internal.budget.closeAttempt, { attemptId: versionId, spend: { kind: "release" } });
+    expect(await t.mutation(internal.print.claimSubmission, { versionId })).toBe(false);
+    expect(await t.run((ctx) => ctx.db.get("printVersions", versionId))).toMatchObject({ status: "failed", fal: { state: "queued" } });
+    expect(await balance(t, alice)).toBe(10);
+  });
+});
+
 describe("placement and the print file", () => {
   const FILE = {
     key: "works/101/001/print-aaaaaaaaaaaaaaaaaaaaaaaaaa/print.png",
