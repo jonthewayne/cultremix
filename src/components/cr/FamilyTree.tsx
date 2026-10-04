@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { GitBranch, Heart } from "lucide-react";
+import { Check, GitBranch, Heart, Hourglass } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Art } from "./Art";
 import { CrMark } from "./CrMark";
@@ -121,23 +121,59 @@ function TreeNodeView({ node, compact, onExpand }: { node: TreeNode; compact: bo
       )}
     </>
   );
-  if (node.type === "work") {
-    return (
+  const link =
+    node.type === "work" ? (
       <Link to="/cr/$cr" params={{ cr: work.cr }} className="group block" aria-current={node.current ? "page" : undefined}>
         {body}
       </Link>
+    ) : (
+      <Link
+        to="/family/$family"
+        params={{ family: String(work.family) }}
+        search={{ cr: work.cr }}
+        className="group block"
+        aria-label={node.type === "fork" ? `CR ${work.cr} started family ${work.family}` : `Forked from CR ${work.cr}, family ${work.family}`}
+      >
+        {body}
+      </Link>
+    );
+  if (!work.chain) return link;
+  return (
+    <div className="relative">
+      {link}
+      <ChainMark work={work} compact={compact} />
+    </div>
+  );
+}
+
+// On the thumbnail's corner: a solid check once the work is registered on Monad, a quiet dashed
+// hourglass while it's on its way. On the full page it links to the transaction.
+function ChainMark({ work, compact }: { work: TreeWork; compact: boolean }) {
+  const recorded = work.chain === "recorded";
+  const label = recorded ? `CR ${work.cr} is recorded on Monad` : `CR ${work.cr} is being recorded on Monad`;
+  const className = cn(
+    "absolute right-1.5 top-1.5 grid place-items-center rounded-full",
+    compact ? "size-5" : "size-6",
+    recorded ? "bg-black text-white ring-2 ring-white" : "border-2 border-dashed border-neutral-400 bg-white/90 text-neutral-500",
+  );
+  const icon = recorded ? (
+    <Check aria-hidden strokeWidth={3} className={compact ? "size-3" : "size-3.5"} />
+  ) : (
+    <Hourglass aria-hidden className={compact ? "size-2.5" : "size-3"} />
+  );
+  if (!compact && work.chainTxUrl) {
+    return (
+      <a href={work.chainTxUrl} target="_blank" rel="noreferrer" title={`${label}. View the transaction.`} className={cn(className, "hover:scale-110")}>
+        {icon}
+        <span className="sr-only">{label}. View the transaction.</span>
+      </a>
     );
   }
   return (
-    <Link
-      to="/family/$family"
-      params={{ family: String(work.family) }}
-      search={{ cr: work.cr }}
-      className="group block"
-      aria-label={node.type === "fork" ? `CR ${work.cr} started family ${work.family}` : `Forked from CR ${work.cr}, family ${work.family}`}
-    >
-      {body}
-    </Link>
+    <span title={label} className={className}>
+      {icon}
+      <span className="sr-only">{label}</span>
+    </span>
   );
 }
 
