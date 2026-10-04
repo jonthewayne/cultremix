@@ -201,7 +201,8 @@ Commits:
 - `4881bbf`: merged dev (one schema conflict, both sides kept);
 - `30c6c18`: fixes from the visual check;
 - `b76277d`: this report;
-- `0fdae88`: merged dev again (no conflicts), and the counts below updated.
+- `0fdae88`: merged dev again (no conflicts);
+- `57ebea2`: the test counts below, from the merged tree.
 
 Nothing was deployed, run against a deployment, or pushed.
 
