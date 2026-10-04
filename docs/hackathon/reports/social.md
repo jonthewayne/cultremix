@@ -96,7 +96,7 @@ Branch `codex/social`, built on `042efbd` (Economics). Nothing was pushed or dep
 
 ## What is stubbed or limited
 
-- **Follower and following lists.** The counts show, but you can't open them as lists yet.
+- **Follower and following lists.** Done in Round 2.
 - **Short pages are possible.** Profile shelves and remix pages skip withdrawn works after reading a page, so a page can come back short or even empty while more remain. The UI handles this by loading the next page. If withdrawals become common, add a status to the index.
 - **No notifications.** Following someone or hearting their work doesn't notify them.
 - **Avatars** use `users.image` when set. There's no avatar upload.
@@ -118,8 +118,105 @@ Branch `codex/social`, built on `042efbd` (Economics). Nothing was pushed or dep
 6. **Env vars.** None added.
 7. **Route tree.** `src/routeTree.gen.ts` is committed. Run `bun run build` after merging if other branches also added routes.
 8. **Follow-ups.**
-   - follower and following list pages
+   - ~~follower and following list pages~~ (done in Round 2)
    - a status-aware index for profile shelves and remixes
    - notifications
    - avatar upload
    - the CR number size on phones on the work page
+
+## Round 2
+
+Built after merging dev (lineage, launch, print, the viewer, and storage). The lineage builder's `LineageNote` and `DirectRemixes` still own the work page's "Remix of" line and its remixes. Nothing was pushed or deployed.
+
+### What was built
+
+| Commit | What it does |
+| --- | --- |
+| `7c83393` | **Follower and following lists.** `social.followers` and `social.following` page over the `follows` indexes, newest follow first, capped at 48. They work signed out and return public fields only: username, creator number, https avatar, and bio. The pages are `/u/<username>/followers` and `/u/<username>/following`, reached by tapping the counts on a profile. Each row has a picture, name, creator number, a one-line bio, and a follow button. Tabs switch between the two lists and show both counts. Also added the `creatorActivity` table and the `social.activeCreators` query. |
+| `44a14f2` | **Share and link previews.** There's a Share button on work pages and profiles. On phones (touch screen plus Web Share) it opens the share sheet; closing the sheet does nothing. Elsewhere it copies the link and shows "Link copied", or shows the link in a toast if the clipboard is blocked. The `/cr/$cr` and `/u/$username` loaders now return a small share card built from the query they already fetch (from the cache in the browser). Their `head` turns the card into Open Graph and Twitter tags. Details below. |
+| `6c2822e`, `c7061de` | **"Who's making things"** on home, between the hero and the feed. It's a sideways row of creators who published most recently, each with a follow button. It loads 8 at a time, loads more as its end scrolls into view (with a button as fallback), and is prefetched with the feed. It's hidden when empty. |
+
+**What the link previews contain, server-rendered:**
+- **`/cr/101-001`**
+  - `og:title` and `twitter:title`: "CR 101-001 · Night Market", or just "CR 101-001" when there's no title.
+  - Description: "A design by @alice. Wear it, share it, or remix it on CultRemix." For a remix it starts "A remix of CR 100-001 by @alice."
+  - `og:image` and `twitter:image`: the medium art, with the creator in the alt text.
+  - `twitter:card`: `summary_large_image`.
+  - `og:url`: `https://cultremix.com/cr/101-001`.
+- **`/u/alice`**
+  - Title: "@alice · Creator № 3".
+  - Description: the bio, or "See what @alice is making on CultRemix."
+  - Image: the avatar with a `summary` card, or the site card with `summary_large_image`.
+  - `og:type` is `profile`, plus `profile:username`.
+- **Unknown CR or username:** the page title only. The root's site card covers everything else.
+- **Image URLs are always absolute.**
+  - Site paths get `https://cultremix.com`.
+  - Anything that isn't a web address, like a dev `fake:` key, falls back to the site's share image.
+- All of this is in `src/lib/share.ts`, as pure functions.
+
+**Supporting files:**
+- `src/components/social/ShareButton.tsx`
+- `src/components/social/MemberList.tsx`
+- `src/components/social/FollowListPage.tsx`
+- `src/components/social/ActiveCreators.tsx`
+- `src/routes/u.$username_.followers.tsx` and `src/routes/u.$username_.following.tsx`. The trailing `_` keeps them from nesting inside the profile route.
+- `src/routeTree.gen.ts`, regenerated.
+
+### Decisions
+
+- **Why "Who's making things" has its own table.**
+  - `creatorActivity` has one row per creator with `lastActiveAt` and an index on it, so the strip is one paged index read with no duplicates.
+  - Paging `activityEvents` and removing duplicate creators would repeat creators across pages and come back short.
+  - `recordPublishActivity` updates the row, and only ever moves the time forward. It runs on every publish and in the backfill.
+  - Rerunning `activity:backfill` fills the table for creators who published earlier. It's safe to rerun, and now updates the table even when a work's event already exists.
+- **The root no longer sets `og:image:width` and `og:image:height`.**
+  - TanStack replaces meta tag by tag, so a work page would have inherited the site card's 1200×630 size with art that isn't that size.
+  - The size tags are optional; crawlers read the size from the image.
+  - The cost: Facebook may skip the image on the very first share of a page it has never seen.
+- **Share cards come from the loader, not a new query.** The loader already fetched `feed.byCr` or `social.profile` for SSR, so it reads that result back from the query cache. A browser navigation never waits on it: if the data isn't cached yet, the tab shows the plain title, and crawlers always get the server render.
+- **Medium art is `.webp`**, the size the storage branch makes for pages (up to 1200px). Most link previewers accept WebP, but not every one does, and I couldn't test real crawlers from here. If one matters and drops the image, a PNG or JPEG copy for previews would need the storage owner.
+- **The share sheet only on touch screens.** Some desktop browsers also support Web Share, but the brief asks for copy link there.
+
+### Tests and results
+
+- `bun run typecheck`: passes. Its `convex typecheck` step is skipped because this worktree has no deployment.
+- `bun run test`:
+  - Unit tests: **291/291** (5 new in `tests/unit/share.test.ts`). They cover titles, credit, remix wording, absolute and fallback images, card types, and profile fallbacks.
+  - Convex-local tests: **91/91** (5 new in `tests/convex-local/socialLists.test.ts`):
+    - Both lists come back newest follow first, signed out, with only `username`, `creatorNumber`, `image`, and `bio`. An unfollow drops off the list.
+    - 53 followers page through exactly once in order, and a request for 1000 returns 48.
+    - An unknown member gets an empty, finished page.
+    - "Who's making things" lists each creator once, most recent first, and skips members who never published. The backfill fills it and is safe to rerun.
+    - Publishing moves a creator to the front, and the list pages correctly.
+- `bun run build`: passes.
+- **Server render, checked with curl.**
+  - This worktree has no Convex deployment, so I ran `vite dev` against a throwaway local stand-in that answered Convex's HTTP query API with canned data. It made no outside calls and is deleted.
+  - Curl confirmed the tags above in the HTML for `/cr/101-001` and `/u/alice`.
+  - It also confirmed that an unknown CR gets the plain title and the site defaults.
+- **Visual check, desktop 1440 and phone 390** (agent-browser, own session).
+  - These pages render well on both:
+    - profile with Follow and Share
+    - the followers list with long names and bios cut to one line
+    - the work page's heart, follow, and share row
+    - the creators strip
+  - "Link copied" appears on desktop.
+  - With a stubbed share sheet on a touch screen, Share passed `{ title: "@alice on CultRemix", url }` and showed no toast.
+  - Tapping "4 followers" opens `/u/alice/followers`, and the tab switches to Following.
+  - One fix came out of it (`c7061de`): the strip's first card started flush at the screen edge on phones.
+  - The stand-in doesn't support live updates, so browser-side updates and Follow clicks weren't exercised. They use the same hook and button I verified in Round 1, and the Convex tests cover the data.
+
+### What is stubbed or limited
+
+- The follower lists show who follows, but not whether *they* follow you back.
+- "Who's making things" counts publishing only; hearts and follows don't make a creator "active". A creator whose works were all withdrawn stays in the list.
+- Lists skip members without a username, so a page can come back short. The UI keeps loading.
+- No preview image is generated per profile; profiles without an avatar use the site card.
+
+### Merge steps for the Builder
+
+1. **Schema:** a new `creatorActivity` table in `convex/schema/social.ts` (additive). There are no new fields.
+2. **Generated API:** no `api.d.ts` change; the new queries live in the existing `social` module.
+3. **Run once per environment after deploy:** `bunx convex run activity:backfill` (and `--prod`). Until it runs, "Who's making things" only shows creators who publish after the deploy, and it stays hidden while empty. It's safe to rerun.
+4. **Root head:** `src/routes/__root.tsx` lost `og:image:width` and `og:image:height`. If another branch edits that block, keep them out, or move them into the routes that use the site card.
+5. **Route tree:** regenerated for `/u/$username/followers` and `/following`. Run `bun run build` again if other branches added routes.
+6. **Env vars:** none added.
