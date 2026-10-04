@@ -71,6 +71,7 @@ import type * as lib_providerConfig from "../lib/providerConfig.js";
 import type * as lib_r2 from "../lib/r2.js";
 import type * as lib_redirect from "../lib/redirect.js";
 import type * as lib_remixFields from "../lib/remixFields.js";
+import type * as lib_remixWords from "../lib/remixWords.js";
 import type * as lib_resize from "../lib/resize.js";
 import type * as lib_roleReader from "../lib/roleReader.js";
 import type * as lib_sessions from "../lib/sessions.js";
@@ -193,6 +194,7 @@ declare const fullApi: ApiFromModules<{
   "lib/r2": typeof lib_r2;
   "lib/redirect": typeof lib_redirect;
   "lib/remixFields": typeof lib_remixFields;
+  "lib/remixWords": typeof lib_remixWords;
   "lib/resize": typeof lib_resize;
   "lib/roleReader": typeof lib_roleReader;
   "lib/sessions": typeof lib_sessions;

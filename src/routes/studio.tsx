@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
 import { BATCH_CREDITS } from "../../convex/lib/studioRules";
+import { changeSummary } from "../../convex/lib/remixWords";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
 import type { Tile } from "~/components/studio/design";
@@ -17,6 +18,7 @@ import { PublishDialog } from "~/components/publish/PublishDialog";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
+import { RemixWordInputs, changedWords, wordsTooLong } from "~/components/studio/RemixWordInputs";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
 import { Compare } from "~/components/studio/Compare";
 import { FavoritesTray } from "~/components/studio/FavoritesTray";
@@ -90,6 +92,8 @@ function StudioPage() {
   const markStyle = useMutation(api.images.markStyle);
 
   const [instruction, setInstruction] = useState("");
+  // A remix's new words, by field id (components/studio/RemixWordInputs.tsx).
+  const [words, setWords] = useState<Record<string, string>>({});
   const [color, setColor] = useState(DEFAULT_BG);
   // Numbered images to work on, and the style mix. Nothing joins the mix unless the member adds it.
   const [images, setImages] = useState<Array<Slot>>([]);
@@ -224,6 +228,7 @@ function StudioPage() {
     setImages([]);
     setStyles([]);
     setInstruction("");
+    setWords({});
     setColor(DEFAULT_BG);
     setMixerOpen(false);
     setError(null);
@@ -274,6 +279,7 @@ function StudioPage() {
         setImages([]);
         setStyles([]);
         setInstruction("");
+        setWords({});
         setColor(result.backgroundColor);
         const preview = result.artThumbUrl ?? result.artUrl;
         if (result.artKey && preview) void addExisting(result.artKey, preview, false);
@@ -322,12 +328,24 @@ function StudioPage() {
     setShowIdeas(false);
   };
 
+  // A remix of a design with remixable words, while its art is still image 1: its words as inputs.
+  const remixInfo = session?.remix;
+  const remixWords = useQuery(convexQuery(api.remixFields.forWork, remixInfo ? { workId: remixInfo.workId } : "skip")).data;
+  const firstKey = statusList?.find((image) => image.imageId === images[0]?.imageId)?.key;
+  const wordFields = remixInfo?.artKey && firstKey === remixInfo.artKey ? (remixWords?.fields ?? []) : [];
+  const askedWords = changedWords(wordFields, words);
+  const nothingToChange = wordFields.length > 0 && askedWords.length === 0 && !instruction.trim();
+
   const uploading = [...images, ...styles].some((slot) => slot.uploading || !slot.imageId);
   const submit = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (busy || uploading) return;
     if (!instruction.trim() && images.length === 0 && !styles.some((style) => style.weight > 0)) {
       setError("Say what to make, or add an image.");
+      return;
+    }
+    if (nothingToChange) {
+      setError("Change some words, or say what else to change.");
       return;
     }
     if (s && !session) return;
@@ -340,6 +358,7 @@ function StudioPage() {
         backgroundColor: color,
         images: images.map((slot) => slot.imageId!),
         styles: styles.map((slot) => ({ imageId: slot.imageId!, weight: slot.weight })),
+        ...(askedWords.length > 0 ? { words: askedWords } : {}),
       });
       if ("refused" in result) {
         setError(
@@ -408,7 +427,6 @@ function StudioPage() {
     });
   }, [compareRoute.ids, compareFetched, favorites, batches]);
 
-  const remixInfo = session?.remix;
   const count = images.length;
   const ink = inkOn(color);
   const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < BATCH_CREDITS);
@@ -463,9 +481,13 @@ function StudioPage() {
               onRemove={(id) => setImages((list) => list.filter((slot) => slot.id !== id))}
             />
 
+            {wordFields.length > 0 && (
+              <RemixWordInputs fields={wordFields} values={words} onChange={(id, text) => setWords((current) => ({ ...current, [id]: text }))} />
+            )}
+
             <label className="block">
               <span className="text-sm font-bold uppercase tracking-wider">
-                {count === 0 ? "What do you want to make?" : "What should change?"}
+                {wordFields.length > 0 ? "Anything else to change? (optional)" : count === 0 ? "What do you want to make?" : "What should change?"}
               </span>
               <textarea
                 ref={instructionRef}
@@ -479,7 +501,9 @@ function StudioPage() {
                 placeholder={
                   count === 0
                     ? "Describe your design…"
-                    : count === 1
+                    : wordFields.length > 0
+                      ? "Colors, characters, the mood…"
+                      : count === 1
                       ? "Change the words, colors, characters…"
                       : `Refer to them as ${listNames(count)}…`
                 }
@@ -531,7 +555,7 @@ function StudioPage() {
             <div className="flex flex-wrap items-center gap-4">
               <button
                 type="submit"
-                disabled={busy || uploading || outOfCredits || loadingSession}
+                disabled={busy || uploading || outOfCredits || loadingSession || nothingToChange || wordsTooLong(wordFields, words)}
                 className="h-16 rounded-2xl bg-black px-10 text-xl font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-40"
               >
                 {outOfCredits ? "Out of credits" : busy ? "Starting…" : uploading ? "Uploading…" : "Generate 4"}
@@ -582,7 +606,14 @@ function StudioPage() {
                     </span>
                   )}
                   <p className="min-w-0 flex-1 truncate text-base font-semibold">
-                    {batch.instruction || "From your images"}
+                    {batch.wordChanges?.length ? (
+                      <>
+                        Changed the words: {changeSummary(batch.wordChanges)}
+                        {batch.instruction && <span className="font-normal text-neutral-500"> · {batch.instruction}</span>}
+                      </>
+                    ) : (
+                      batch.instruction || "From your images"
+                    )}
                     {batch.presets.length > 0 && <span className="font-normal text-neutral-500"> · {batch.presets.join(", ")}</span>}
                   </p>
                   {batch.styles.length > 0 && (

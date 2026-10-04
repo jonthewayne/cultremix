@@ -5,6 +5,9 @@
 // Server only, like convex/lib/prompts.ts: the notes and the prompt never reach the browser.
 
 import { noteSections, spellOut } from "./prompts";
+import { changeSummary, cleanFieldText, length } from "./remixWords";
+
+export { changeSummary, cleanFieldText, length };
 
 // kind is "text" for now; people and counts ("how many elves") can join as other kinds later
 // without changing the stored shape.
@@ -29,11 +32,6 @@ export const MAX_LABEL_LENGTH = 40;
 
 export function maxLengthFor(text: string) {
   return Math.max(MIN_MAX_LENGTH, Math.ceil(length(text) * 1.5));
-}
-
-// Characters as people count them (an emoji is one).
-export function length(text: string) {
-  return [...text].length;
 }
 
 // The role words the notes use, in the order they're checked, and the label each gives.
@@ -152,16 +150,6 @@ export function inheritRemixFields(parent: Array<RemixField>, changes: Array<{ f
   });
 }
 
-// New text as it's compared and stored: Windows line breaks made plain, ends trimmed.
-export function cleanFieldText(text: string) {
-  return text
-    .replace(/\r\n?/gu, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .join("\n")
-    .trim();
-}
-
 export type WordChangeProblem = "UNKNOWN_FIELD" | "FIELD_LOCKED" | "TOO_LONG" | "EMPTY" | "REPEATED";
 
 // What a remix asks to change, checked against the parent's fields as the server stored them:
@@ -212,9 +200,4 @@ export function wordChangeInstruction(fields: Array<RemixField>, changes: Array<
       (breaks ? " A slash in quoted text marks a line break." : ""),
   );
   return parts.join("\n");
-}
-
-// "GROW SLOW to GROW WILD", for the batch line and the published remix.
-export function changeSummary(changes: Array<{ from: string; to: string }>) {
-  return changes.map((c) => `${c.from.replace(/\s*\n\s*/gu, " ")} to ${c.to.replace(/\s*\n\s*/gu, " ")}`).join("; ");
 }

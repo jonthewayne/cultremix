@@ -17,6 +17,8 @@ const BROWSER_SAFE = new Set([
   "convex/lib/garments.ts",
   "convex/lib/earlyAccess.ts",
   "convex/lib/studioRules.ts",
+  // How remixable words are cleaned, counted, and summarized (no notes, no prompts).
+  "convex/lib/remixWords.ts",
   "convex/lib/username.ts",
 ]);
 
