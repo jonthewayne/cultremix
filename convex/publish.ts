@@ -4,6 +4,7 @@ import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { requireMember } from "./studio";
 import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
+import { publishPlacement } from "./lib/lineage";
 import type { MutationCtx } from "./_generated/server";
 
 const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
@@ -30,14 +31,16 @@ async function nextFamily(ctx: MutationCtx) {
   return counter.next;
 }
 
-// Publishes a tile: allocates the CR number (a new family for an original, the
-// family's next expression for a remix), inserts the work, and starts the
+// Publishes a tile: allocates the CR number (a new family for an original or a
+// fork, the family's next expression for a variation), inserts the work, and starts the
 // asset copy and model photo. Idempotent by requestId and by generation.
 export const quick = mutation({
   args: {
     requestId: v.string(),
     generationId: v.id("generations"),
     title: v.optional(v.string()),
+    // For a remix: a variation joins the family (the default); a fork starts a new one.
+    remixKind: v.optional(v.union(v.literal("variation"), v.literal("fork"))),
   },
   returns: v.object({ workId: v.id("works"), cr: v.string() }),
   handler: async (ctx, args) => {
@@ -69,20 +72,29 @@ export const quick = mutation({
     if (!batch || !session) throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
     const title = args.title?.trim().slice(0, 80) || undefined;
 
+    // A remix is a variation (the parent's family, next expression) or a fork (a new family,
+    // expression 1, crediting the parent). The parent must still have its public record.
     const parent = session.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
+    if (session.remixOfWorkId && (!parent || (parent.status !== "published" && parent.status !== "withdrawn"))) {
+      throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
+    }
+    const placement = publishPlacement(
+      parent ? { id: parent._id, family: parent.crFamily } : null,
+      args.remixKind ?? "variation",
+    );
     let crFamily: number;
     let crExpression: number;
-    if (parent && parent.status === "published") {
-      crFamily = parent.crFamily;
+    if (placement.family !== "new") {
+      crFamily = placement.family;
       const family = await ctx.db
         .query("crFamilies")
-        .withIndex("by_family", (q) => q.eq("family", parent.crFamily))
+        .withIndex("by_family", (q) => q.eq("family", crFamily))
         .unique();
       if (family) {
         crExpression = family.nextExpression;
         await ctx.db.patch("crFamilies", family._id, { nextExpression: crExpression + 1 });
       } else {
-        crExpression = parent.crExpression + 1;
+        crExpression = parent!.crExpression + 1;
         await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: crExpression + 1 });
       }
     } else {
@@ -90,20 +102,23 @@ export const quick = mutation({
       crExpression = 1;
     }
 
+    const startsFamily = placement.family === "new";
     const workId = await ctx.db.insert("works", {
       crFamily,
       crExpression,
       creatorId: user._id,
-      kind: parent ? "variation" : "original",
+      kind: placement.kind,
       parentWorkId: parent?._id,
-      familyRootId: parent ? (parent.familyRootId ?? parent._id) : undefined,
+      // Direct remixes are listed by effective parent (convex/lineage.ts).
+      effectiveParentWorkId: parent?._id,
+      familyRootId: startsFamily ? undefined : (parent!.familyRootId ?? parent!._id),
       generationId: generation._id,
       requestId: args.requestId,
       title,
       backgroundColor: batch.backgroundColor,
       status: "preparing",
     });
-    if (!parent) {
+    if (startsFamily) {
       await ctx.db.patch("works", workId, { familyRootId: workId });
       await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: 2, rootWorkId: workId });
     }

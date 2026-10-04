@@ -10,6 +10,9 @@ const BROWSER_SAFE = new Set([
   "convex/_generated/api.js",
   "convex/lib/authz.ts",
   "convex/lib/colors.ts",
+  // The published economics config (served at /economics/v1.json) and its pure share math.
+  "convex/lib/economics.ts",
+  "convex/lib/economicsConfigs.ts",
   "convex/lib/studioRules.ts",
   "convex/lib/username.ts",
 ]);
