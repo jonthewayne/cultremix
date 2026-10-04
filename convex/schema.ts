@@ -9,6 +9,13 @@ export const platformRoleValidator = v.union(
   v.literal("super_admin_owner"),
 );
 
+export const walletStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("provisioning"),
+  v.literal("ready"),
+  v.literal("failed"),
+);
+
 export const scopeRoleValidator = v.union(
   v.literal("owner"),
   v.literal("admin"),
@@ -46,13 +53,24 @@ export default defineSchema({
     creatorNumber: v.optional(v.number()),
     emailVerified: v.optional(v.boolean()),
     signupGrantAt: v.optional(v.number()),
+    // Onchain wallet (convex/wallets.ts). Users created before wallets have none of these
+    // fields; the reconciliation cron backfills them.
+    walletStatus: v.optional(walletStatusValidator),
+    walletAddress: v.optional(v.string()),
+    circleWalletId: v.optional(v.string()),
+    walletIdempotencyKey: v.optional(v.string()),
+    walletCustody: v.optional(v.union(v.literal("circle"), v.literal("local"))),
+    walletAttempts: v.optional(v.number()),
+    walletNextAttemptAt: v.optional(v.number()),
+    walletError: v.optional(v.string()),
   })
     .index("by_authId", ["authId"])
     .index("by_email", ["email"])
     .index("by_phone", ["phone"])
     .index("by_platformRole", ["platformRole"])
     .index("by_usernameLower", ["usernameLower"])
-    .index("by_creatorNumber", ["creatorNumber"]),
+    .index("by_creatorNumber", ["creatorNumber"])
+    .index("by_walletStatus_and_nextAttempt", ["walletStatus", "walletNextAttemptAt"]),
 
   organizations: defineTable({
     name: v.string(),

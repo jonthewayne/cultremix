@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
 import type * as bootstrap from "../bootstrap.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
 import type * as feed from "../feed.js";
 import type * as http from "../http.js";
@@ -24,7 +25,16 @@ import type * as lib_authEmail from "../lib/authEmail.js";
 import type * as lib_authRateLimit from "../lib/authRateLimit.js";
 import type * as lib_authVerification from "../lib/authVerification.js";
 import type * as lib_authz from "../lib/authz.js";
+import type * as lib_chain_abi from "../lib/chain/abi.js";
+import type * as lib_chain_calldata from "../lib/chain/calldata.js";
+import type * as lib_chain_custody from "../lib/chain/custody.js";
+import type * as lib_chain_deps from "../lib/chain/deps.js";
+import type * as lib_chain_eip712 from "../lib/chain/eip712.js";
+import type * as lib_chain_events from "../lib/chain/events.js";
+import type * as lib_chain_ids from "../lib/chain/ids.js";
+import type * as lib_circle from "../lib/circle.js";
 import type * as lib_colors from "../lib/colors.js";
+import type * as lib_economics from "../lib/economics.js";
 import type * as lib_gridCut from "../lib/gridCut.js";
 import type * as lib_imageErrors from "../lib/imageErrors.js";
 import type * as lib_imageUrls from "../lib/imageUrls.js";
@@ -53,6 +63,7 @@ import type * as sms from "../sms.js";
 import type * as storageMoves from "../storageMoves.js";
 import type * as studio from "../studio.js";
 import type * as testHelpers from "../testHelpers.js";
+import type * as wallets from "../wallets.js";
 
 import type {
   ApiFromModules,
@@ -64,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authVerification: typeof authVerification;
   bootstrap: typeof bootstrap;
+  crons: typeof crons;
   email: typeof email;
   feed: typeof feed;
   http: typeof http;
@@ -77,7 +89,16 @@ declare const fullApi: ApiFromModules<{
   "lib/authRateLimit": typeof lib_authRateLimit;
   "lib/authVerification": typeof lib_authVerification;
   "lib/authz": typeof lib_authz;
+  "lib/chain/abi": typeof lib_chain_abi;
+  "lib/chain/calldata": typeof lib_chain_calldata;
+  "lib/chain/custody": typeof lib_chain_custody;
+  "lib/chain/deps": typeof lib_chain_deps;
+  "lib/chain/eip712": typeof lib_chain_eip712;
+  "lib/chain/events": typeof lib_chain_events;
+  "lib/chain/ids": typeof lib_chain_ids;
+  "lib/circle": typeof lib_circle;
   "lib/colors": typeof lib_colors;
+  "lib/economics": typeof lib_economics;
   "lib/gridCut": typeof lib_gridCut;
   "lib/imageErrors": typeof lib_imageErrors;
   "lib/imageUrls": typeof lib_imageUrls;
@@ -106,6 +127,7 @@ declare const fullApi: ApiFromModules<{
   storageMoves: typeof storageMoves;
   studio: typeof studio;
   testHelpers: typeof testHelpers;
+  wallets: typeof wallets;
 }>;
 
 /**

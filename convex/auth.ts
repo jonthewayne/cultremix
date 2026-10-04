@@ -33,13 +33,15 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
           .unique();
         if (existing) return;
 
-        await ctx.db.insert("users", {
+        const userId = await ctx.db.insert("users", {
           authId: doc._id,
           email: normalizeAppEmail(doc.email),
           name: doc.name,
           phone: (doc as { phoneNumber?: string }).phoneNumber,
           platformRole: "user",
+          walletStatus: "pending",
         });
+        await ctx.scheduler.runAfter(0, internal.wallets.provisionWallet, { userId });
       },
       onUpdate: async (ctx, newDoc, oldDoc) => {
         const patch: {
