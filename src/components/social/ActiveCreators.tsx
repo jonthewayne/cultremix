@@ -17,7 +17,7 @@ export function ActiveCreators() {
       <h2 id="active-creators" className="text-2xl font-black tracking-tight md:text-3xl">
         Who’s making things
       </h2>
-      <ul className="-mx-4 mt-5 flex snap-x gap-3 overflow-x-auto px-4 pb-2 md:-mx-10 md:px-10">
+      <ul className="-mx-4 mt-5 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 md:-mx-10 md:scroll-px-10 md:px-10">
         {items.map((member) => (
           <li
             key={member.username}
