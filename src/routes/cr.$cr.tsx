@@ -90,7 +90,7 @@ function ShopPage() {
 
         <section className="mt-8 grid gap-10 md:mt-12 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:gap-16">
           <div>
-            <CrMark cr={item.cr} className="text-[20vw] md:text-[10vw]" />
+            <CrMark cr={item.cr} className="text-[13vw] md:text-[6.5vw]" />
             {item.title && <h1 className="mt-4 text-4xl font-black leading-none tracking-tight md:text-6xl">{item.title}</h1>}
             {description && <p className="mt-4 max-w-prose whitespace-pre-line text-lg leading-snug">{description}</p>}
             <p className="mt-4 text-xl">
