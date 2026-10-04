@@ -25,6 +25,7 @@ import type * as lib_authRateLimit from "../lib/authRateLimit.js";
 import type * as lib_authVerification from "../lib/authVerification.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_colors from "../lib/colors.js";
+import type * as lib_fal from "../lib/fal.js";
 import type * as lib_gridCut from "../lib/gridCut.js";
 import type * as lib_imageErrors from "../lib/imageErrors.js";
 import type * as lib_imageUrls from "../lib/imageUrls.js";
@@ -32,6 +33,9 @@ import type * as lib_otp from "../lib/otp.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as lib_phone from "../lib/phone.js";
 import type * as lib_pngMeta from "../lib/pngMeta.js";
+import type * as lib_printImage from "../lib/printImage.js";
+import type * as lib_printKeys from "../lib/printKeys.js";
+import type * as lib_printPng from "../lib/printPng.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_providerConfig from "../lib/providerConfig.js";
 import type * as lib_r2 from "../lib/r2.js";
@@ -42,17 +46,22 @@ import type * as lib_sessions from "../lib/sessions.js";
 import type * as lib_sizes from "../lib/sizes.js";
 import type * as lib_storage from "../lib/storage.js";
 import type * as lib_studioRules from "../lib/studioRules.js";
+import type * as lib_upscaleFlow from "../lib/upscaleFlow.js";
 import type * as lib_username from "../lib/username.js";
 import type * as organizations from "../organizations.js";
 import type * as phoneVerification from "../phoneVerification.js";
+import type * as print from "../print.js";
+import type * as printTools from "../printTools.js";
 import type * as publish from "../publish.js";
 import type * as resources from "../resources.js";
 import type * as schema_cultremix from "../schema/cultremix.js";
+import type * as schema_print from "../schema/print.js";
 import type * as sizing from "../sizing.js";
 import type * as sms from "../sms.js";
 import type * as storageMoves from "../storageMoves.js";
 import type * as studio from "../studio.js";
 import type * as testHelpers from "../testHelpers.js";
+import type * as upscale from "../upscale.js";
 
 import type {
   ApiFromModules,
@@ -78,6 +87,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authVerification": typeof lib_authVerification;
   "lib/authz": typeof lib_authz;
   "lib/colors": typeof lib_colors;
+  "lib/fal": typeof lib_fal;
   "lib/gridCut": typeof lib_gridCut;
   "lib/imageErrors": typeof lib_imageErrors;
   "lib/imageUrls": typeof lib_imageUrls;
@@ -85,6 +95,9 @@ declare const fullApi: ApiFromModules<{
   "lib/permissions": typeof lib_permissions;
   "lib/phone": typeof lib_phone;
   "lib/pngMeta": typeof lib_pngMeta;
+  "lib/printImage": typeof lib_printImage;
+  "lib/printKeys": typeof lib_printKeys;
+  "lib/printPng": typeof lib_printPng;
   "lib/prompts": typeof lib_prompts;
   "lib/providerConfig": typeof lib_providerConfig;
   "lib/r2": typeof lib_r2;
@@ -95,17 +108,22 @@ declare const fullApi: ApiFromModules<{
   "lib/sizes": typeof lib_sizes;
   "lib/storage": typeof lib_storage;
   "lib/studioRules": typeof lib_studioRules;
+  "lib/upscaleFlow": typeof lib_upscaleFlow;
   "lib/username": typeof lib_username;
   organizations: typeof organizations;
   phoneVerification: typeof phoneVerification;
+  print: typeof print;
+  printTools: typeof printTools;
   publish: typeof publish;
   resources: typeof resources;
   "schema/cultremix": typeof schema_cultremix;
+  "schema/print": typeof schema_print;
   sizing: typeof sizing;
   sms: typeof sms;
   storageMoves: typeof storageMoves;
   studio: typeof studio;
   testHelpers: typeof testHelpers;
+  upscale: typeof upscale;
 }>;
 
 /**

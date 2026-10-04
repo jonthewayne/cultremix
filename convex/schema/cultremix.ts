@@ -200,6 +200,9 @@ export const cultremixTables = {
     notesSummary: v.optional(v.string()),
     notesKind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
     notesModel: v.optional(v.string()),
+    // The work's print file (convex/print.ts): set once when it's made, never changed.
+    printKey: v.optional(v.string()),
+    printSha256: v.optional(v.string()),
   })
     .index("by_status_publishedAt", ["status", "publishedAt"])
     .index("by_family_expression", ["crFamily", "crExpression"])
