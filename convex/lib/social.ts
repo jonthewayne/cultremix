@@ -1,5 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { notify } from "./notifications";
+import { addAttention } from "./trending";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -38,6 +40,18 @@ export async function recordPublishActivity(ctx: MutationCtx, work: Doc<"works">
     createdAt,
     shelf: shelfForKind(work.kind),
   });
+}
+
+// A remix that has just been published: its parent's creator hears about it, and the parent gains
+// trending attention. Remixing your own work does neither. Called once, from markPublished (not
+// the backfill, which would notify about old remixes).
+export async function recordRemix(ctx: MutationCtx, work: Doc<"works">) {
+  if (work.status !== "published" || work.kind === "original" || !work.parentWorkId) return;
+  const parent = await ctx.db.get("works", work.parentWorkId);
+  if (!parent || parent.creatorId === work.creatorId) return;
+  const at = work.publishedAt ?? Date.now();
+  await notify(ctx, { recipientId: parent.creatorId, actorId: work.creatorId, kind: "remix", workId: work._id, at });
+  if (parent.status === "published") await addAttention(ctx, parent._id, at, { remixes: 1 });
 }
 
 // Moves a creator's last-active time forward, never back, so the backfill can run in any order.
@@ -141,4 +155,15 @@ export async function bumpWorkHearts(ctx: MutationCtx, workId: Id<"works">, chan
     await ctx.db.insert("workSocialStats", { workId, hearts });
   }
   return hearts;
+}
+
+// Only web images make it to a public page.
+export function safeImageUrl(image: string | undefined) {
+  if (!image) return undefined;
+  try {
+    const url = new URL(image);
+    return url.protocol === "https:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }

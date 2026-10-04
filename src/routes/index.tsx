@@ -15,18 +15,17 @@ import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
 import type { PagedStatus } from "~/hooks/use-paged-query";
 import { cn } from "~/lib/utils";
 
-type FeedTab = "latest" | "following";
+type FeedTab = "latest" | "trending" | "following";
 const PAGE_SIZE = 6;
+const feeds = { latest: api.feed.latest, trending: api.feed.trending, following: api.feed.following };
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): { tab?: "following" } =>
-    search.tab === "following" ? { tab: "following" } : {},
+  validateSearch: (search: Record<string, unknown>): { tab?: "trending" | "following" } =>
+    search.tab === "following" || search.tab === "trending" ? { tab: search.tab } : {},
   loaderDeps: ({ search }) => ({ tab: search.tab }),
   loader: ({ context, deps }) =>
     Promise.all([
-      deps.tab === "following"
-        ? prefetchFirstPage(context, api.feed.following, {}, PAGE_SIZE)
-        : prefetchFirstPage(context, api.feed.latest, {}, PAGE_SIZE),
+      prefetchFirstPage(context, feeds[deps.tab ?? "latest"], {}, PAGE_SIZE),
       prefetchFirstPage(context, api.social.activeCreators, {}, ACTIVE_CREATORS_PAGE_SIZE),
     ]).then(() => undefined),
   component: FeedPage,
@@ -35,8 +34,9 @@ export const Route = createFileRoute("/")({
 function FeedPage() {
   const { tab: requested } = Route.useSearch();
   const { signedIn } = useMemberAction();
-  // Following is for members; signed out, everyone sees Latest.
-  const tab: FeedTab = requested === "following" && signedIn !== false ? "following" : "latest";
+  // Following is for members; signed out, it falls back to Latest.
+  const tab: FeedTab =
+    requested === "trending" ? "trending" : requested === "following" && signedIn !== false ? "following" : "latest";
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
@@ -59,26 +59,27 @@ function FeedPage() {
         </section>
         <ActiveCreators />
         <section className="mt-20">
-          {signedIn && <FeedTabs tab={tab} />}
-          {tab === "following" ? <FollowingFeed /> : <LatestFeed />}
+          <FeedTabs tab={tab} signedIn={signedIn === true} />
+          {tab === "following" ? <FollowingFeed /> : tab === "trending" ? <TrendingFeed /> : <LatestFeed />}
         </section>
       </main>
     </div>
   );
 }
 
-function FeedTabs({ tab }: { tab: FeedTab }) {
+function FeedTabs({ tab, signedIn }: { tab: FeedTab; signedIn: boolean }) {
   const tabs: Array<{ id: FeedTab; label: string }> = [
     { id: "latest", label: "Latest" },
-    { id: "following", label: "Following" },
+    { id: "trending", label: "Trending" },
+    ...(signedIn ? [{ id: "following" as const, label: "Following" }] : []),
   ];
   return (
-    <nav aria-label="Feed" className="mb-10 flex gap-2 md:mb-14">
+    <nav aria-label="Feed" className="mb-10 flex flex-wrap gap-2 md:mb-14">
       {tabs.map(({ id, label }) => (
         <Link
           key={id}
           to="/"
-          search={id === "following" ? { tab: "following" } : {}}
+          search={id === "latest" ? {} : { tab: id }}
           resetScroll={false}
           aria-current={tab === id ? "page" : undefined}
           className={cn(
@@ -100,6 +101,21 @@ function LatestFeed() {
       <p className="text-2xl font-semibold text-neutral-400">Nothing published yet. The first one gets CR 101-001.</p>
       <Link to="/studio" className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
         Make it in the studio
+      </Link>
+    </FeedList>
+  );
+}
+
+// Most hearted and remixed this week (convex/lib/trending.ts).
+function TrendingFeed() {
+  const { items, status, loadMore } = usePagedQuery(api.feed.trending, {}, PAGE_SIZE);
+  return (
+    <FeedList items={items} status={status} loadMore={loadMore}>
+      <p className="max-w-xl text-2xl font-semibold text-neutral-400">
+        Nothing trending this week yet. Heart or remix something you love.
+      </p>
+      <Link to="/" search={{}} resetScroll={false} className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
+        See the latest
       </Link>
     </FeedList>
   );
@@ -133,9 +149,12 @@ function FeedList({
 }) {
   if (status === "LoadingFirstPage") return <p className="text-neutral-500">Loading…</p>;
   if (items.length === 0 && status === "Exhausted") return <div>{children}</div>;
+  // Trending reorders as hearts come in, so a work can move from one page to the next; show it once.
+  const seen = new Set<string>();
+  const shown = items.filter((item) => !seen.has(item.workId) && seen.add(item.workId));
   return (
     <div className="flex flex-col gap-16 md:gap-24">
-      {items.map((item, i) => (
+      {shown.map((item, i) => (
         <FeedRow key={item.workId} item={item} index={i} />
       ))}
       <LoadMore status={status} loadMore={loadMore} />

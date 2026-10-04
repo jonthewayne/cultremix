@@ -220,3 +220,118 @@ Built after merging dev (lineage, launch, print, the viewer, and storage). The l
 4. **Root head:** `src/routes/__root.tsx` lost `og:image:width` and `og:image:height`. If another branch edits that block, keep them out, or move them into the routes that use the site card.
 5. **Route tree:** regenerated for `/u/$username/followers` and `/following`. Run `bun run build` again if other branches added routes.
 6. **Env vars:** none added.
+
+## Round 3
+
+Built after merging dev, for Monad's "Social, Attention & Culture" track. Nothing was pushed or deployed, and `src/routes/cr.$cr.tsx` was not touched.
+
+### What was built
+
+| Commit | What it does |
+| --- | --- |
+| `8c9d022` | **Notifications and Trending scores (backend).** New tables, the `notify` helper and the Backs hook, the `notifications` queries and mutation, Trending counters, an hourly expiry cron, a one-time rebuild, `feed.trending`, and 12 Convex tests. |
+| `9c919f7` | **The bell, `/notifications`, and the Trending tab.** |
+| `094ea3e` | Fixes from the visual check: a clearer "New" tag, and CR numbers that don't break across lines. |
+
+**Notifications**
+- **When they're written.** `notify()` (`convex/lib/notifications.ts`) runs in the same transaction as the action:
+  - `social.setFollow`: "@bob followed you."
+  - `social.setHeart`: "@bob hearted Night Market CR 101-001."
+  - `publish.markPublished`, when a variation or fork of someone else's work is published: "@bob remixed Night Market CR 101-001 into CR 111-001." It notifies the parent's creator. Remixes are written at publish, not in the activity backfill, so old remixes don't flood anyone.
+- **No self-notifications.** Nothing is written when the recipient is the actor, so hearting or remixing your own work is silent.
+- **Collapsing.** A heart or follow from the same person (and, for hearts, on the same work) within 24 hours of an earlier one doesn't notify again, so heart, unheart, heart writes one row. After 24 hours it notifies again. Remixes and Backs never collapse.
+- **Unread count.** `notificationState` keeps one row per member with `unread` and `lastReadAt`. Only a new, uncollapsed notification adds to it, so the bell reads one small row.
+- **API**
+  - `notifications.status`: `{ unread, lastReadAt }`, or zeros when signed out.
+  - `notifications.list`: paginated, newest first, capped at 48. Each item has the actor's username and https avatar, the work (CR, title, thumbnail) while it's still published, and for a remix, the work it came from. Signed out, it returns an empty page.
+  - `notifications.markAllRead`: sets unread to 0 and `lastReadAt` to now. It writes only when something is unread.
+- **Bell** (`src/components/social/NotificationBell.tsx`): in the header for signed-in members only, between Studio and the account menu. It shows a black badge with the count ("99+" past 99) and an aria-label like "Notifications, 3 new".
+- **Page** (`src/routes/notifications.tsx`)
+  - Members only (`requireAuthenticatedRoute`), 20 per page, using the same `usePagedQuery` and `LoadMore` pattern.
+  - On open, it saves the previous `lastReadAt` and then calls `markAllRead`, so the badge clears and the newly arrived rows keep a "New" tag while you're on the page.
+  - Each row shows the actor's avatar, one plain sentence, how long ago, and the work's thumbnail.
+  - A row opens the work it's about. A follow, or a work that's since been withdrawn, opens the actor's profile.
+  - Empty state: "Nothing yet. When someone follows you, hearts your work, or remixes it, you'll hear about it here."
+- **The Backs hook.** `notifyBacked(ctx, { workId, backerId, at? })` in `convex/lib/notifications.ts`. Call it once per back from the mutation that records the back. It notifies the work's creator ("@x backed CR 101-001."), skips self-backs, and never collapses. The page already renders `kind: "back"`, and it's covered by a test.
+
+**Trending**
+- **Score.** Hearts plus 3 × remixes from other members, over the last 7 UTC days, today included. Ties go to the most recent attention.
+- **How it stays bounded.** No request scans or counts anything.
+  - Each heart or remix adds 1 to a per-work, per-day bucket (`workAttentionDays`) and to the work's running score (`trendingWorks`, indexed by `[score, lastAttentionAt]`), in the same transaction.
+  - Unhearting takes the heart back off, but only if its day is still in the window.
+  - `feed.trending` reads one page of that index, descending, and builds items with the same `publishedItems` helper as Latest, so unpublished works drop out.
+  - An hourly cron (`trending.expire`, at :03) takes buckets that have left the window off their works' scores and deletes them, 200 at a time. If there are more, it schedules itself again.
+  - Rows at score 0 are deleted.
+- **Home tabs.** Latest, Trending, and Following, with Following for members only. Signed-out visitors now see the tabs too, with Latest and Trending.
+  - `/?tab=trending` is prefetched on the server like the other tabs.
+  - Scores move while you scroll, so the list shows each work once.
+  - Empty state: "Nothing trending this week yet. Heart or remix something you love." with a link to Latest.
+- **`trending.rebuild`** (internal) clears the Trending tables and replays the last week of hearts (via a new `hearts.by_created` index) and published remixes. It's safe to rerun.
+
+### Decisions
+
+- **Counters plus a cron, not an hourly rollup.** Trending updates the moment someone hearts, and the cron only removes days that have aged out. An hourly recompute would have to read every heart in the week on each run.
+- **Remixes are weighted 3×.** A remix takes much more effort than a heart. The weight is one constant, `REMIX_WEIGHT` in `convex/lib/trending.ts`.
+- **Self-attention doesn't count** toward Trending or notifications, so no one can boost their own work.
+- **Notifications stay when the action is undone.** An unheart or unfollow leaves the notification in place; it did happen, and deleting it would make the count jump around. Collapsing stops the same person flooding you by toggling.
+- **The unread count is a counter, not a count of rows**, so the bell is one tiny read on every page.
+
+### Tests and results
+
+- `bun run typecheck`: passes. Its `convex typecheck` step is skipped because this worktree has no deployment.
+- `bun run test`:
+  - Unit tests: **390/390**.
+  - Convex-local tests: **207/207**, 12 of them new.
+- **`tests/convex-local/notifications.test.ts`** (7 tests):
+  - A follow, a heart, and a remix each notify, newest first, with the actor, the work, and the remix's original.
+  - No self-notifications: your own hearts and remixes are silent, and following yourself is rejected.
+  - Collapsing: three heart/unheart and follow/unfollow cycles within a day give one of each. A different work or person still notifies. 24 hours later, it notifies again.
+  - Unread: it counts up, `markAllRead` sets it to 0 and records the time, a second open changes nothing, and only later notifications count.
+  - Paging: 7 notifications in pages of 3, newest first, with no gaps or repeats.
+  - Signed out: the status is zeros, the list is empty, and mark-read does nothing.
+  - The Backs hook: every back notifies, and self-backs don't.
+- **`tests/convex-local/trending.test.ts`** (5 tests):
+  - Order:
+    - a remix (3) outranks two hearts (2), which outrank one heart
+    - self-hearts and self-remixes don't count
+    - works signed out
+  - Ties go to the most recent attention, and an unheart drops a work and its row.
+  - 7-day expiry through the cron: an old day leaves the window, an unheart from that day changes nothing, and a rerun expires nothing.
+  - Paging: 7 works in pages of 3, in score order, with no gaps. A withdrawn work drops out.
+  - The rebuild counts only the last week from other members, matches the live scores, and gives the same result when rerun.
+- `bun run build`: passes.
+- **Visual check, desktop 1440 and phone 390** (agent-browser, own session). This used the same throwaway harness as Round 1: real routes against an in-memory `convex-test`, deleted afterward and never committed.
+  - The bell showed 11. Opening it cleared the badge, and all 11 rows showed "New".
+  - Follow rows link to `/u/<name>`. Heart, remix, and back rows link to `/cr/<cr>`.
+  - Signed out: no bell, and the tabs are Latest and Trending.
+  - Trending listed 7 works in the expected order across two pages, with no duplicates. A self-heart was left out.
+  - Phone layouts hold.
+  - Two fixes came out of it, in `094ea3e`: the "new" dot was invisible on black avatars, and CR numbers broke at the hyphen.
+
+### What is stubbed or limited
+
+- **Expiry lag.** Trending forgets a day up to an hour after it leaves the window. The window is the 7 UTC days that include today.
+- **Withdrawn works** keep their Trending row until it expires. The query skips them, so a page can come back short; the list keeps loading.
+- **Withdrawn remixes.** A remix notification whose works were later withdrawn reads "remixed your work." and opens the remixer's profile.
+- **Mark-read happens once per visit.** Notifications that arrive while the page is open show up live and count on the bell again until the next visit.
+- **The rebuild runs in one transaction.** That's fine for a week of hackathon data; a large deployment would need it batched.
+- **No notification for a remix of a remix's original.** Only the direct parent's creator is notified.
+- **No push or email.** Notifications are in-app only.
+
+### Merge steps for the Builder
+
+1. **Schema** (`convex/schema/social.ts`, all additive):
+   - new tables: `notifications`, `notificationState`, `workAttentionDays`, `trendingWorks`
+   - a new `by_created` index on `hearts`
+   - no new fields on existing tables
+2. **Cron:** `convex/crons.ts` gains "expire trending attention" (hourly at :03). If another branch also edits `crons.ts`, keep both entries.
+3. **Run once per environment after deploy:** `bunx convex run trending:rebuild` (and `--prod`). Without it, Trending starts empty and fills from new hearts and remixes. It's safe to rerun. Notifications start fresh; there's nothing to backfill.
+4. **Generated API:** `convex/_generated/api.d.ts` was edited by hand to add `lib/notifications`, `lib/trending`, `notifications`, and `trending`.
+5. **Route tree:** regenerated for `/notifications`. Run `bun run build` again if other branches added routes.
+6. **Backs:** call `notifyBacked(ctx, { workId, backerId })` from `convex/lib/notifications.ts` in the mutation that records a back. Nothing else is needed; the page already shows Backs.
+7. **Shared files touched:**
+   - `convex/publish.ts`: `markPublished` calls `recordRemix`.
+   - `convex/social.ts`: `setHeart` and `setFollow` notify, and hearts update Trending.
+   - `src/components/cr/SiteHeader.tsx`: the bell.
+   - `src/routes/index.tsx`: the tabs.
+8. **Env vars:** none added.
