@@ -104,12 +104,12 @@ export function RemixableWords({ workId, tone = "light", editing: alwaysEditing 
                   )}
                 />
               ) : (
-                <p className="text-sm font-bold uppercase tracking-wider">{field.label}</p>
+                <p className="text-sm font-bold uppercase tracking-wider">
+                  {field.label}
+                  {!field.on && <span className="font-semibold normal-case tracking-normal"> · stays as made</span>}
+                </p>
               )}
-              <p className="mt-0.5 truncate text-lg font-semibold">
-                {oneLine(field.text)}
-                {!editing && !field.on && <span className={cn("text-sm font-normal", muted)}> · stays as made</span>}
-              </p>
+              <p className="mt-0.5 truncate text-lg font-semibold">{oneLine(field.text)}</p>
             </div>
           </li>
         ))}
