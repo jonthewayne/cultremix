@@ -1,24 +1,29 @@
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { isPreloaded } from "~/lib/imagePreload";
 import { cn } from "~/lib/utils";
 
 // Renders a stored image, or a drawn placeholder for the dev stand-in ("fake:" keys). With
-// fullUrl, it shows url (a smaller copy) first and switches to fullUrl once that has loaded.
+// fullUrl, it shows url (a smaller copy) first and switches to fullUrl once that has loaded, or
+// starts with fullUrl when it was already loaded ahead. instant skips the fade in (the viewer,
+// where paging should land on a drawn design).
 export function Art({
   url,
   fullUrl,
   alt,
   className,
+  instant = false,
 }: {
   url?: string;
   fullUrl?: string;
   alt: string;
   className?: string;
+  instant?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
-  const [upgraded, setUpgraded] = useState<string | null>(null);
+  const [upgraded, setUpgraded] = useState<string | null>(() => (fullUrl && isPreloaded(fullUrl) ? fullUrl : null));
   useEffect(() => {
-    if (!fullUrl || fullUrl === url || fullUrl.startsWith("fake:")) return;
+    if (!fullUrl || fullUrl === url || fullUrl.startsWith("fake:") || upgraded === fullUrl) return;
     let live = true;
     const full = new Image();
     full.onload = () => {
@@ -28,12 +33,14 @@ export function Art({
     return () => {
       live = false;
     };
-  }, [url, fullUrl]);
+  }, [url, fullUrl, upgraded]);
   if (!url) return null;
   if (url.startsWith("fake:")) return <FakeArt seed={url} className={className} />;
+  const src = upgraded && upgraded === fullUrl ? upgraded : url;
+  if (instant) return <img src={src} alt={alt} draggable={false} decoding="sync" className={className} />;
   return (
     <motion.img
-      src={upgraded && upgraded === fullUrl ? upgraded : url}
+      src={src}
       alt={alt}
       draggable={false}
       className={className}

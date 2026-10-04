@@ -59,6 +59,8 @@ export const cultremixTables = {
     purpose: v.optional(v.union(v.literal("studio"), v.literal("shoot"))),
     // A name the member gave the session; without one the studio uses its first request.
     title: v.optional(v.string()),
+    // How many batches the session has; the next batch takes the next number (batch-01, ...).
+    batchCount: v.optional(v.number()),
   }).index("by_owner_updated", ["ownerId", "updatedAt"]),
 
   // Today's additions: instruction, inspirationKey, backgroundColor, operation, model.
@@ -87,6 +89,8 @@ export const cultremixTables = {
     gridKey: v.optional(v.string()),
     // What the request wanted from each numbered image (convex/lib/roleReader.ts).
     roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
+    // The batch's number within its session, starting at 1; its files live in batch-01/ and so on.
+    number: v.optional(v.number()),
   }).index("by_session", ["sessionId"]),
 
   // Every image a member brings into the studio: uploads, their own designs, and remix sources.
@@ -131,6 +135,8 @@ export const cultremixTables = {
   storageMoves: defineTable({
     from: v.string(),
     to: v.string(),
+    // The moved file's SHA-256 when moving changed its bytes (the image model's metadata removed).
+    sha256: v.optional(v.string()),
   }).index("by_from", ["from"]),
 
   generations: defineTable({
@@ -172,7 +178,9 @@ export const cultremixTables = {
     error: v.optional(v.string()),
   })
     .index("by_batch", ["batchId"])
-    .index("by_session_favorite", ["sessionId", "favorite", "favoritedAt"]),
+    .index("by_session_favorite", ["sessionId", "favorite", "favoritedAt"])
+    // A batch image that is one of the member's designs: the design it started from.
+    .index("by_owner_fullKey", ["ownerId", "fullKey"]),
 
   works: defineTable({
     crFamily: v.number(),
@@ -181,9 +189,22 @@ export const cultremixTables = {
     kind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
     parentWorkId: v.optional(v.id("works")),
     familyRootId: v.optional(v.id("works")),
+    // Effective lineage (convex/lib/lineage.ts). effectiveParentWorkId is set at publish and when a
+    // lineage amendment confirms; effectiveKind only when an amendment confirms (so a set value
+    // means "amended", and an amended original has no effective parent).
+    effectiveParentWorkId: v.optional(v.id("works")),
+    effectiveKind: v.optional(
+      v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
+    ),
+    lineageAmendedAt: v.optional(v.number()),
     generationId: v.id("generations"),
     requestId: v.string(),
     title: v.optional(v.string()),
+    // A short note from the creator for the shop page.
+    description: v.optional(v.string()),
+    // Shirt color keys (convex/lib/garments.ts), lead color first. Absent on works published
+    // before colors were chosen; their one color is backgroundColor.
+    offeredColors: v.optional(v.array(v.string())),
     backgroundColor: v.string(),
     status: v.union(
       v.literal("preparing"),
@@ -206,13 +227,19 @@ export const cultremixTables = {
     chainWriteId: v.optional(v.id("chainWrites")),
     chainTxHash: v.optional(v.string()),
     provenanceConfirmedAt: v.optional(v.number()),
+    // The work's print file (Print Studio sets these once; the shop sends printKey to Printful).
+    printKey: v.optional(v.string()),
+    printSha256: v.optional(v.string()),
   })
     .index("by_status_publishedAt", ["status", "publishedAt"])
     .index("by_family_expression", ["crFamily", "crExpression"])
     .index("by_parent", ["parentWorkId"])
+    .index("by_effectiveParent_status", ["effectiveParentWorkId", "status", "publishedAt"])
     .index("by_requestId", ["requestId"])
     .index("by_creator", ["creatorId"])
-    .index("by_artKey", ["artKey"]),
+    .index("by_artKey", ["artKey"])
+    // The studio marks a design as published (its CR number) one design at a time.
+    .index("by_generation", ["generationId"]),
 
   shoots: defineTable({
     workId: v.id("works"),

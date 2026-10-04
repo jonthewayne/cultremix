@@ -1,15 +1,29 @@
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
+import { authorizeDispatch, closeReservation, hasRoom, openReservation, spendValidator } from "./lib/budget";
+import { flagDefault } from "./lib/flags";
 import { isBlockedError, publicTileError } from "./lib/imageErrors";
 import { imageUrlReader } from "./lib/imageUrls";
+import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { styleShares } from "./lib/prompts";
 import type { ImageRole } from "./lib/prompts";
+import { gridWorstCaseCents, qualityOf, singleWorstCaseCents } from "./lib/pricing";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
-import { BATCH_CREDITS, DESIGNS_PER_BATCH, MAX_IMAGES, MAX_STYLES, creditsBack } from "./lib/studioRules";
+import { isImageKey } from "./lib/sizes";
+import {
+  BATCH_COUNT_CAP,
+  BATCH_CREDITS,
+  COMPARE_MAX,
+  DESIGNS_PER_BATCH,
+  MAX_IMAGES,
+  MAX_STYLES,
+  creditsBack,
+} from "./lib/studioRules";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -18,10 +32,6 @@ type Ctx = QueryCtx | MutationCtx;
 export const MODEL_TEXT = "openai/gpt-image-2.5-flare";
 export const MODEL_EDIT = "openai/gpt-image-2.5-sunburst";
 const HEX = /^#[0-9a-f]{6}$/iu;
-// An image a member can bring into the studio: a design or upload in its folder (convex/lib/sizes.ts),
-// an older key from before folders, or a Convex storage key.
-export const IMAGE_KEY =
-  /^((designs|uploads)\/[0-9a-f]{64}\/original\.(png|jpg|webp)|(inspo|gen|art)\/[0-9a-f]{64}\.(png|jpg|webp)|cvx:[A-Za-z0-9_-]{8,64})$/u;
 
 export const tileStatus = v.union(
   v.literal("queued"),
@@ -44,12 +54,17 @@ const tileView = v.object({
   thumbUrl: v.optional(v.string()),
   key: v.optional(v.string()),
   favorite: v.boolean(),
+  // Dismissed from the studio (hidden unless the member shows dismissed designs); never deleted.
+  rejected: v.boolean(),
   // A fixed message (publicTileError); the provider's own error text stays on the server.
   error: v.optional(v.string()),
   // The provider's content filter refused it; the studio shows a friendly stamp instead of the error.
   blocked: v.boolean(),
   backgroundColor: v.string(),
   publishedCr: v.optional(v.string()),
+  // The original's size in pixels, when known (Compare draws every design at the same scale).
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
 });
 
 const batchView = v.object({
@@ -59,7 +74,17 @@ const batchView = v.object({
   presets: v.array(v.string()),
   backgroundColor: v.string(),
   inspirationUrl: v.optional(v.string()),
-  images: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()) })),
+  // An image that is one of the member's own designs ("Use as image") names it, so the batch line
+  // can link back to the design it started from.
+  images: v.array(
+    v.object({
+      url: v.optional(v.string()),
+      thumbUrl: v.optional(v.string()),
+      design: v.optional(
+        v.object({ generationId: v.id("generations"), sessionId: v.id("creativeSessions"), backgroundColor: v.string() }),
+      ),
+    }),
+  ),
   // The style mix as thumbnails and shares; what the styles were read as stays on the server.
   styles: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), share: v.number() })),
   // A grid batch is charged as a whole; refunded is the credits it gave back for missing designs.
@@ -85,8 +110,8 @@ const sessionView = v.object({
       backgroundColor: v.string(),
     }),
   ),
-  batches: v.array(batchView),
-  favorites: v.array(v.id("generations")),
+  // How many batches it has, counted up to BATCH_COUNT_CAP.
+  batchCount: v.number(),
   // The newest batch's settings, so reopening a session picks up where it left off.
   lastInputs: v.optional(
     v.object({
@@ -115,7 +140,8 @@ export async function flagEnabled(ctx: Ctx, key: string) {
     .query("featureFlags")
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
-  return row ? row.enabled : true;
+  // No row yet: the switch's default, as the admin page shows it (convex/lib/flags.ts).
+  return row ? row.enabled : flagDefault(key);
 }
 
 async function latestSession(ctx: Ctx, ownerId: Id<"users">) {
@@ -142,88 +168,109 @@ async function remixCrOf(ctx: Ctx, session: Doc<"creativeSessions">) {
   return work ? formatCr(work.crFamily, work.crExpression) : undefined;
 }
 
+// One design as the studio shows it.
+async function tileOf(
+  ctx: Ctx,
+  urls: ReturnType<typeof imageUrlReader>,
+  g: Doc<"generations">,
+  backgroundColor: string,
+): Promise<Infer<typeof tileView>> {
+  const blocked = g.status === "failed" && isBlockedError(g.error);
+  const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
+  const work =
+    g.status === "succeeded"
+      ? await ctx.db
+          .query("works")
+          .withIndex("by_generation", (q) => q.eq("generationId", g._id))
+          .first()
+      : null;
+  return {
+    generationId: g._id,
+    batchId: g.batchId,
+    status: g.status,
+    url,
+    mediumUrl,
+    thumbUrl,
+    key: g.fullKey,
+    favorite: g.favorite,
+    rejected: g.rejected === true,
+    error: blocked ? undefined : publicTileError(g.error),
+    blocked,
+    backgroundColor,
+    publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
+    width: g.width,
+    height: g.height,
+  };
+}
+
+// The member's own finished design that a batch image is (its parent, for a batch made with
+// "Use as image"), or undefined for an upload. Another member's design never matches.
+async function designFor(ctx: Ctx, batch: Doc<"batches">, key: string) {
+  const found = await ctx.db
+    .query("generations")
+    .withIndex("by_owner_fullKey", (q) => q.eq("ownerId", batch.ownerId).eq("fullKey", key))
+    .take(4);
+  const design = found.find((g) => g.status === "succeeded" && g.batchId !== batch._id);
+  if (!design) return undefined;
+  const from = await ctx.db.get("batches", design.batchId);
+  if (!from) return undefined;
+  return { generationId: design._id, sessionId: design.sessionId, backgroundColor: from.backgroundColor };
+}
+
+// A batch as the studio shows it: its line (request, images, style mix) and its four designs.
+async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, batch: Doc<"batches">) {
+  const generations = await ctx.db
+    .query("generations")
+    .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
+    .take(DESIGNS_PER_BATCH * 2);
+  generations.sort((a, b) => a.index - b.index);
+  // The mixer's styles plus images the request named for their look (as studioPrompt reads them).
+  const mix = (batch.styles ?? []).map((s) => ({ imageId: s.imageId, key: s.key, weight: s.weight }));
+  for (const [i, role] of (batch.roles ?? []).entries()) {
+    const image = batch.images?.[i];
+    if (!image || role === "content") continue;
+    const at = mix.findIndex((s) => s.imageId === image.imageId);
+    if (at < 0) mix.push({ imageId: image.imageId, key: image.key, weight: 100 });
+    else if (mix[at].weight <= 0) mix[at] = { ...mix[at], weight: 100 };
+  }
+  const shares = styleShares(mix.map((s) => s.weight));
+  const styles = [];
+  for (const [i, style] of mix.entries()) {
+    if (shares[i] <= 0) continue;
+    const { url, thumbUrl } = await urls(style.key);
+    styles.push({ url, thumbUrl, share: shares[i] });
+  }
+  const images = [];
+  for (const image of batch.images ?? []) {
+    const { url, thumbUrl } = await urls(image.key);
+    images.push({ url, thumbUrl, design: await designFor(ctx, batch, image.key) });
+  }
+  const tiles = [];
+  for (const g of generations) tiles.push(await tileOf(ctx, urls, g, batch.backgroundColor));
+  return {
+    batchId: batch._id,
+    createdAt: batch._creationTime,
+    instruction: batch.instruction,
+    presets: batch.presets,
+    backgroundColor: batch.backgroundColor,
+    inspirationUrl: publicUrl(batch.inspirationKey),
+    images,
+    styles,
+    grid: batch.layout === "grid",
+    refunded: batch.refunded,
+    tiles,
+  };
+}
+
+// The session's header: its name, remix source, how many batches it has, and the newest batch's
+// settings. Its batches page in through sessionBatches.
 async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
   const urls = imageUrlReader(ctx);
-  const batches = await ctx.db
+  const counted = await ctx.db
     .query("batches")
     .withIndex("by_session", (q) => q.eq("sessionId", session._id))
     .order("desc")
-    .take(40);
-  const published = new Map<string, string>();
-  const myWorks = await ctx.db
-    .query("works")
-    .withIndex("by_creator", (q) => q.eq("creatorId", session.ownerId))
-    .collect();
-  for (const work of myWorks) {
-    published.set(work.generationId, formatCr(work.crFamily, work.crExpression));
-  }
-  const batchViews = [];
-  for (const batch of batches) {
-    const generations = await ctx.db
-      .query("generations")
-      .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
-      .collect();
-    generations.sort((a, b) => a.index - b.index);
-    // The mixer's styles plus images the request named for their look (as studioPrompt reads them).
-    const mix = (batch.styles ?? []).map((s) => ({ imageId: s.imageId, key: s.key, weight: s.weight }));
-    for (const [i, role] of (batch.roles ?? []).entries()) {
-      const image = batch.images?.[i];
-      if (!image || role === "content") continue;
-      const at = mix.findIndex((s) => s.imageId === image.imageId);
-      if (at < 0) mix.push({ imageId: image.imageId, key: image.key, weight: 100 });
-      else if (mix[at].weight <= 0) mix[at] = { ...mix[at], weight: 100 };
-    }
-    const shares = styleShares(mix.map((s) => s.weight));
-    const styles = [];
-    for (const [i, style] of mix.entries()) {
-      if (shares[i] <= 0) continue;
-      const { url, thumbUrl } = await urls(style.key);
-      styles.push({ url, thumbUrl, share: shares[i] });
-    }
-    const images = [];
-    for (const image of batch.images ?? []) {
-      const { url, thumbUrl } = await urls(image.key);
-      images.push({ url, thumbUrl });
-    }
-    const tiles = [];
-    for (const g of generations) {
-      const blocked = g.status === "failed" && isBlockedError(g.error);
-      const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
-      tiles.push({
-        generationId: g._id,
-        batchId: g.batchId,
-        status: g.status,
-        url,
-        mediumUrl,
-        thumbUrl,
-        key: g.fullKey,
-        favorite: g.favorite,
-        error: blocked ? undefined : publicTileError(g.error),
-        blocked,
-        backgroundColor: batch.backgroundColor,
-        publishedCr: published.get(g._id),
-      });
-    }
-    batchViews.push({
-      batchId: batch._id,
-      createdAt: batch._creationTime,
-      instruction: batch.instruction,
-      presets: batch.presets,
-      backgroundColor: batch.backgroundColor,
-      inspirationUrl: publicUrl(batch.inspirationKey),
-      images,
-      styles,
-      grid: batch.layout === "grid",
-      refunded: batch.refunded,
-      tiles,
-    });
-  }
-  const favorites = await ctx.db
-    .query("generations")
-    .withIndex("by_session_favorite", (q) =>
-      q.eq("sessionId", session._id).eq("favorite", true),
-    )
-    .collect();
+    .take(BATCH_COUNT_CAP);
 
   let remix = undefined;
   if (session.remixOfWorkId) {
@@ -241,7 +288,7 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       };
     }
   }
-  const newest = batches[0];
+  const newest = counted[0];
   let lastInputs = undefined;
   if (newest) {
     const images = [];
@@ -274,10 +321,19 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
     }),
     createdAt: session._creationTime,
     remix,
-    batches: batchViews,
-    favorites: favorites.map((g) => g._id),
+    batchCount: counted.length,
     lastInputs,
   };
+}
+
+// The member's own session, or null (signed out, a bad id, or someone else's).
+async function ownSession(ctx: Ctx, sessionId: string) {
+  const user = await getViewerUser(ctx);
+  if (!user) return null;
+  const id = ctx.db.normalizeId("creativeSessions", sessionId);
+  if (!id) return null;
+  const found = await ctx.db.get("creativeSessions", id);
+  return found && found.ownerId === user._id ? found : null;
 }
 
 // The member's latest session (the previous studio always reopened it).
@@ -296,15 +352,106 @@ export const current = query({
 // One session, by the id in the studio's address (?s=…). Null if it isn't the member's.
 export const session = query({
   args: { sessionId: v.string() },
-  returns: v.union(v.null(), sessionView),
+  // null while the caller isn't signed in (the page is still waiting for its sign-in token);
+  // { missing: true } when the session isn't the member's or no longer exists, so the page falls
+  // back to a blank studio only then.
+  returns: v.union(v.null(), v.object({ missing: v.literal(true) }), sessionView),
   handler: async (ctx, args) => {
-    const user = await getViewerUser(ctx);
-    if (!user) return null;
-    const sessionId = ctx.db.normalizeId("creativeSessions", args.sessionId);
-    if (!sessionId) return null;
-    const found = await ctx.db.get("creativeSessions", sessionId);
-    if (!found || found.ownerId !== user._id) return null;
-    return await buildSessionView(ctx, found);
+    if (!(await ctx.auth.getUserIdentity())) return null;
+    const found = await ownSession(ctx, args.sessionId);
+    return found ? await buildSessionView(ctx, found) : { missing: true as const };
+  },
+});
+
+// A session's batches, newest first, a page at a time. Empty if the session isn't the member's.
+// A new batch lands at the top of the first page, and in-flight designs update in place.
+export const sessionBatches = query({
+  args: { sessionId: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(batchView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return EMPTY_PAGE;
+    const result = await ctx.db
+      .query("batches")
+      .withIndex("by_session", (q) => q.eq("sessionId", found._id))
+      .order("desc")
+      .paginate(cappedPage(args.paginationOpts, 12));
+    const urls = imageUrlReader(ctx);
+    const page = [];
+    for (const batch of result.page) page.push(await batchViewOf(ctx, urls, batch));
+    return { ...result, page };
+  },
+});
+
+// A session's favorites in the order they were favorited, a page at a time, for the favorites tray
+// and the viewer's favorites scope. Empty if the session isn't the member's.
+export const sessionFavorites = query({
+  args: { sessionId: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(tileView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return EMPTY_PAGE;
+    const result = await ctx.db
+      .query("generations")
+      .withIndex("by_session_favorite", (q) => q.eq("sessionId", found._id).eq("favorite", true))
+      .order("asc")
+      .paginate(cappedPage(args.paginationOpts, 100));
+    const urls = imageUrlReader(ctx);
+    const colors = new Map<Id<"batches">, string>();
+    const page = [];
+    for (const g of result.page) {
+      // Rejecting a design unfavorites it; this only guards rows written some other way.
+      if (g.status !== "succeeded" || g.rejected) continue;
+      let color = colors.get(g.batchId);
+      if (color === undefined) {
+        color = (await ctx.db.get("batches", g.batchId))?.backgroundColor ?? "#ffffff";
+        colors.set(g.batchId, color);
+      }
+      page.push(await tileOf(ctx, urls, g, color));
+    }
+    return { ...result, page };
+  },
+});
+
+// The batch holding one design, for a viewer opened from a link before that batch has paged in.
+// Null unless the design is in this session and the session is the member's.
+export const designBatch = query({
+  args: { sessionId: v.string(), generationId: v.string() },
+  returns: v.union(v.null(), batchView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return null;
+    const id = ctx.db.normalizeId("generations", args.generationId);
+    const generation = id ? await ctx.db.get("generations", id) : null;
+    if (!generation || generation.sessionId !== found._id) return null;
+    const batch = await ctx.db.get("batches", generation.batchId);
+    return batch ? await batchViewOf(ctx, imageUrlReader(ctx), batch) : null;
+  },
+});
+
+// Up to four of a session's finished designs, in the order asked, for Compare (a link can name
+// designs whose batches haven't paged in). Designs that aren't in this session of the member's,
+// aren't finished, or repeat are left out.
+export const compareDesigns = query({
+  args: { sessionId: v.string(), generationIds: v.array(v.string()) },
+  returns: v.array(tileView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return [];
+    const urls = imageUrlReader(ctx);
+    const seen = new Set<string>();
+    const tiles = [];
+    for (const raw of args.generationIds.slice(0, COMPARE_MAX * 2)) {
+      const id = ctx.db.normalizeId("generations", raw);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const g = await ctx.db.get("generations", id);
+      if (!g || g.sessionId !== found._id || g.status !== "succeeded") continue;
+      const batch = await ctx.db.get("batches", g.batchId);
+      tiles.push(await tileOf(ctx, urls, g, batch?.backgroundColor ?? "#ffffff"));
+      if (tiles.length === COMPARE_MAX) break;
+    }
+    return tiles;
   },
 });
 
@@ -312,62 +459,65 @@ const sessionCard = v.object({
   sessionId: v.id("creativeSessions"),
   name: v.string(),
   updatedAt: v.number(),
+  // Counted up to BATCH_COUNT_CAP; the studio shows "100+" from there.
   batches: v.number(),
   // The newest finished designs, newest first: the original and its thumbnail.
   thumbs: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), backgroundColor: v.string() })),
 });
 
-// The member's sessions with work in them, most recently used first, for the blank studio.
+// A session's card, or null for a session with no batches (opened, then left).
+async function sessionCardOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, row: Doc<"creativeSessions">) {
+  const batches = await ctx.db
+    .query("batches")
+    .withIndex("by_session", (q) => q.eq("sessionId", row._id))
+    .order("desc")
+    .take(BATCH_COUNT_CAP);
+  if (batches.length === 0) return null;
+  const thumbs = [];
+  for (const batch of batches.slice(0, 6)) {
+    const generations = await ctx.db
+      .query("generations")
+      .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
+      .take(DESIGNS_PER_BATCH * 2);
+    generations.sort((a, b) => a.index - b.index);
+    for (const g of generations) {
+      if (g.status === "succeeded" && !g.rejected && g.fullKey && thumbs.length < 4) {
+        const { url, thumbUrl } = await urls(g.fullKey);
+        thumbs.push({ url, thumbUrl, backgroundColor: batch.backgroundColor });
+      }
+    }
+    if (thumbs.length >= 4) break;
+  }
+  const first = [...batches].reverse().find((batch) => batch.instruction.trim())?.instruction;
+  return {
+    sessionId: row._id,
+    name: sessionName({ title: row.title, remixCr: await remixCrOf(ctx, row), firstInstruction: first }),
+    updatedAt: row.updatedAt,
+    batches: batches.length,
+    thumbs,
+  };
+}
+
+// The member's sessions with work in them, most recently used first, a page at a time, for the
+// blank studio. Sessions with no batches are left out, so a page can hold fewer cards than asked.
 export const sessions = query({
-  args: { limit: v.optional(v.number()) },
-  returns: v.object({ sessions: v.array(sessionCard), more: v.boolean() }),
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(sessionCard),
   handler: async (ctx, args) => {
     const user = await getViewerUser(ctx);
-    if (!user) return { sessions: [], more: false };
-    const urls = imageUrlReader(ctx);
-    const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 12)), 60);
-    const cards = [];
-    let more = false;
-    // Sessions with no batches (opened, then left) are skipped.
-    for await (const row of ctx.db
+    if (!user) return EMPTY_PAGE;
+    const result = await ctx.db
       .query("creativeSessions")
       .withIndex("by_owner_updated", (q) => q.eq("ownerId", user._id))
-      .order("desc")) {
-      const batches = await ctx.db
-        .query("batches")
-        .withIndex("by_session", (q) => q.eq("sessionId", row._id))
-        .order("desc")
-        .take(100);
-      if (batches.length === 0) continue;
-      if (cards.length === limit) {
-        more = true;
-        break;
-      }
-      const thumbs = [];
-      for (const batch of batches.slice(0, 6)) {
-        const generations = await ctx.db
-          .query("generations")
-          .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
-          .collect();
-        generations.sort((a, b) => a.index - b.index);
-        for (const g of generations) {
-          if (g.status === "succeeded" && g.fullKey && thumbs.length < 4) {
-            const { url, thumbUrl } = await urls(g.fullKey);
-            thumbs.push({ url, thumbUrl, backgroundColor: batch.backgroundColor });
-          }
-        }
-        if (thumbs.length >= 4) break;
-      }
-      const first = [...batches].reverse().find((batch) => batch.instruction.trim())?.instruction;
-      cards.push({
-        sessionId: row._id,
-        name: sessionName({ title: row.title, remixCr: await remixCrOf(ctx, row), firstInstruction: first }),
-        updatedAt: row.updatedAt,
-        batches: batches.length,
-        thumbs,
-      });
+      .order("desc")
+      .paginate(cappedPage(args.paginationOpts, 24));
+    const urls = imageUrlReader(ctx);
+    const page = [];
+    for (const row of result.page) {
+      const card = await sessionCardOf(ctx, urls, row);
+      if (card) page.push(card);
     }
-    return { sessions: cards, more };
+    return { ...result, page };
   },
 });
 
@@ -479,7 +629,7 @@ export const generate = mutation({
   returns: v.union(
     v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
     v.object({
-      refused: v.union(v.literal("NO_CREDITS"), v.literal("GENERATION_OFF")),
+      refused: v.union(v.literal("NO_CREDITS"), v.literal("GENERATION_OFF"), v.literal("BUDGET")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -522,7 +672,7 @@ export const generate = mutation({
     const styleOnly = styles.filter((s) => s.weight > 0 && !imageIds.includes(s.imageId));
     // The previous studio's one image, used as it was: no notes and no style mix.
     const legacyKey = images.length === 0 && styles.length === 0 ? args.inspirationKey : undefined;
-    if (legacyKey && !IMAGE_KEY.test(legacyKey) && !(isDevDeployment() && legacyKey.startsWith("fake:"))) {
+    if (legacyKey && !isImageKey(legacyKey) && !(isDevDeployment() && legacyKey.startsWith("fake:"))) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "That image did not upload." });
     }
     const presets = (args.presets ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 6);
@@ -548,8 +698,18 @@ export const generate = mutation({
     if (!owner && (await creditBalance(ctx, user._id)) < price) {
       return { refused: "NO_CREDITS" as const };
     }
-
+    // The daily budget (convex/lib/budget.ts): the batch's worst case must fit in what's left of
+    // the gateway's UTC day, all four designs or none. The owner counts too.
     const now = Date.now();
+    const designCents = provider === "gateway"
+      ? layout === "grid"
+        ? gridWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high"))
+        : singleWorstCaseCents(attached, qualityOf(process.env.IMAGE_QUALITY, "medium"))
+      : 0;
+    const batchCents = layout === "grid" ? designCents : designCents * DESIGNS_PER_BATCH;
+    if (batchCents > 0 && !(await hasRoom(ctx, "gateway", batchCents, now))) {
+      return { refused: "BUDGET" as const };
+    }
     let session: Doc<"creativeSessions"> | null = null;
     if (args.sessionId) {
       session = await ctx.db.get("creativeSessions", args.sessionId);
@@ -570,6 +730,8 @@ export const generate = mutation({
       session = (await ctx.db.get("creativeSessions", sessionId))!;
     }
     const inspirationKey = images[0]?.key ?? legacyKey;
+    // The batch's number in its session, which names its folder (batch-01, batch-02, ...).
+    const batchNumber = (session.batchCount ?? (await countBatches(ctx, session._id))) + 1;
     const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
     const model = provider === "chatgpt"
       ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
@@ -590,9 +752,21 @@ export const generate = mutation({
       count: DESIGNS_PER_BATCH,
       layout,
       charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
+      number: batchNumber,
     });
     if (layout === "grid" && !owner) {
       await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
+    }
+    if (layout === "grid" && designCents > 0) {
+      await openReservation(ctx, {
+        attemptKind: "batch",
+        attemptId: batchId,
+        batchId,
+        provider: "gateway",
+        userId: user._id,
+        credits: owner ? 0 : BATCH_CREDITS,
+        worstCaseCents: designCents,
+      }, now);
     }
     for (let index = 0; index < DESIGNS_PER_BATCH; index++) {
       const generationId = await ctx.db.insert("generations", {
@@ -610,6 +784,17 @@ export const generate = mutation({
       });
       if (layout === "single") {
         if (!owner) await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -1, generationId });
+        if (designCents > 0) {
+          await openReservation(ctx, {
+            attemptKind: "tile",
+            attemptId: generationId,
+            generationId,
+            provider: "gateway",
+            userId: user._id,
+            credits: owner ? 0 : 1,
+            worstCaseCents: designCents,
+          }, now);
+        }
         await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
       }
     }
@@ -621,29 +806,69 @@ export const generate = mutation({
     await ctx.db.patch("creativeSessions", session._id, {
       updatedAt: now,
       phrase: instruction,
+      batchCount: batchNumber,
     });
     return { batchId, sessionId: session._id };
   },
 });
 
+// How many batches a session has (sessions from before batch numbers are counted once).
+async function countBatches(ctx: QueryCtx, sessionId: Id<"creativeSessions">) {
+  const batches = await ctx.db
+    .query("batches")
+    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+    .collect();
+  return batches.length;
+}
+
+// The member's own design, or an error.
+async function ownDesign(ctx: MutationCtx, generationId: Id<"generations">) {
+  const user = await requireMember(ctx);
+  const generation = await ctx.db.get("generations", generationId);
+  if (!generation || generation.ownerId !== user._id) {
+    throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
+  }
+  return generation;
+}
+
+// Hearts a design or takes the heart away. With favorite, sets it (so a quick double tap can't
+// flip it back); without, toggles. Favoriting brings a dismissed design back, and a design that's
+// already a favorite keeps its place in the tray.
 export const toggleFavorite = mutation({
-  args: { generationId: v.id("generations") },
+  args: { generationId: v.id("generations"), favorite: v.optional(v.boolean()) },
   returns: v.object({ favorite: v.boolean() }),
   handler: async (ctx, args) => {
-    const user = await requireMember(ctx);
-    const generation = await ctx.db.get("generations", args.generationId);
-    if (!generation || generation.ownerId !== user._id) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
-    }
+    const generation = await ownDesign(ctx, args.generationId);
     if (generation.status !== "succeeded") {
       throw new ConvexError({ code: "NOT_READY", message: "That tile is not ready." });
     }
-    const favorite = !generation.favorite;
+    const favorite = args.favorite ?? !generation.favorite;
+    if (favorite === generation.favorite && !(favorite && generation.rejected)) return { favorite };
     await ctx.db.patch("generations", generation._id, {
       favorite,
-      favoritedAt: favorite ? Date.now() : undefined,
+      favoritedAt: favorite ? (generation.favorite ? generation.favoritedAt : Date.now()) : undefined,
+      ...(favorite ? { rejected: undefined } : {}),
     });
     return { favorite };
+  },
+});
+
+// Dismisses a design (or brings it back). Dismissed designs stay in the session, hidden unless the
+// member shows them, and leave the favorites. Nothing is deleted.
+export const setRejected = mutation({
+  args: { generationId: v.id("generations"), rejected: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const generation = await ownDesign(ctx, args.generationId);
+    if (generation.status === "queued" || generation.status === "dispatched") {
+      throw new ConvexError({ code: "NOT_READY", message: "That tile is still being made." });
+    }
+    if (args.rejected) {
+      await ctx.db.patch("generations", generation._id, { rejected: true, favorite: false, favoritedAt: undefined });
+    } else if (generation.rejected) {
+      await ctx.db.patch("generations", generation._id, { rejected: undefined });
+    }
+    return null;
   },
 });
 
@@ -668,14 +893,20 @@ const jobInputs = {
   attachments: v.array(attachmentView),
   // Each style's 1-based attachment number and slider value.
   styles: v.array(v.object({ attachment: v.number(), weight: v.number() })),
+  place: v.object({
+    memberId: v.id("users"),
+    sessionId: v.id("creativeSessions"),
+    sessionStartedAt: v.number(),
+    batchNumber: v.number(),
+  }),
 };
 
 // What a batch's prompt is built from.
 async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
+  const session = await ctx.db.get("creativeSessions", batch.sessionId);
   // A remix keeps the parent's look only while the parent is still the reference image.
   let remixOfParent = false;
   if (batch.operation === "remix" && batch.inspirationKey) {
-    const session = await ctx.db.get("creativeSessions", batch.sessionId);
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     remixOfParent = parent?.artKey === batch.inspirationKey;
   }
@@ -707,12 +938,28 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
   } else if (batch.inspirationKey) {
     attachments.push({ key: batch.inspirationKey, styleOnly: false });
   }
-  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, attachments, styles };
+  // Where the batch's files go (convex/lib/sizes.ts batchFolder).
+  const place = {
+    memberId: batch.ownerId,
+    sessionId: batch.sessionId,
+    sessionStartedAt: session?._creationTime ?? batch._creationTime,
+    batchNumber: batch.number ?? (await batchNumberOf(ctx, batch)),
+  };
+  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, attachments, styles, place };
+}
+
+// A batch's number from its position in its session (for batches made before batches had numbers).
+export async function batchNumberOf(ctx: QueryCtx, batch: Doc<"batches">) {
+  const earlier = await ctx.db
+    .query("batches")
+    .withIndex("by_session", (q) => q.eq("sessionId", batch.sessionId).lte("_creationTime", batch._creationTime))
+    .collect();
+  return earlier.length;
 }
 
 export const tileJob = internalQuery({
   args: { generationId: v.id("generations") },
-  returns: v.union(v.null(), v.object({ status: tileStatus, ...jobInputs })),
+  returns: v.union(v.null(), v.object({ status: tileStatus, index: v.number(), ...jobInputs })),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation) return null;
@@ -720,6 +967,7 @@ export const tileJob = internalQuery({
     if (!batch) return null;
     return {
       status: generation.status,
+      index: generation.index,
       model: generation.model,
       provider: generation.provider,
       ...(await batchInputs(ctx, batch)),
@@ -768,9 +1016,12 @@ export const markBatchDispatched = internalMutation({
     if (generations.length === 0 || generations.some((g) => g.status !== "queued")) return false;
     if (!(await flagEnabled(ctx, "gen.vercel"))) {
       await settleBatch(ctx, args.batchId, generations.map((g) => ({ index: g.index, error: "Generation is paused." })));
+      await closeReservation(ctx, args.batchId, { kind: "release", reason: "paused" });
       return false;
     }
     const now = Date.now();
+    // Its reservation must still be open (the sweeper may have released it).
+    if (!(await authorizeDispatch(ctx, args.batchId, now))) return false;
     for (const g of generations) await ctx.db.patch("generations", g._id, { status: "dispatched", dispatchedAt: now });
     return true;
   },
@@ -786,11 +1037,17 @@ const designResult = v.object({
 
 // Records a grid batch's four results and gives back credits for missing designs
 // (convex/lib/studioRules.ts).
-async function settleBatch(
+export async function settleBatch(
   ctx: MutationCtx,
   batchId: Id<"batches">,
   results: Array<Infer<typeof designResult>>,
-  extra: { gridKey?: string; roles?: Array<ImageRole> } = {},
+  extra: {
+    gridKey?: string;
+    roles?: Array<ImageRole>;
+    // What a missing design becomes: failed, or (when the call may have run) unknown_outcome, or
+    // (when it never started) expired. Credits come back the same way for all three.
+    missingStatus?: "failed" | "unknown_outcome" | "expired";
+  } = {},
 ) {
   const batch = await ctx.db.get("batches", batchId);
   if (!batch) return;
@@ -808,7 +1065,7 @@ async function settleBatch(
     } else {
       missing++;
       await ctx.db.patch("generations", g._id, {
-        status: "failed",
+        status: extra.missingStatus ?? "failed",
         finishedAt: now,
         error: (result?.error ?? "No design came back.").slice(0, 300),
       });
@@ -831,10 +1088,19 @@ export const finishBatch = internalMutation({
     results: v.array(designResult),
     gridKey: v.optional(v.string()),
     roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
+    // What the grid call cost (convex/lib/paidAttempts.ts); without it, the batch's reservation
+    // settles at its worst case. unknown: the call may have run, so missing designs are unknown_outcome.
+    spend: v.optional(spendValidator),
+    unknown: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await settleBatch(ctx, args.batchId, args.results, { gridKey: args.gridKey, roles: args.roles });
+    await settleBatch(ctx, args.batchId, args.results, {
+      gridKey: args.gridKey,
+      roles: args.roles,
+      missingStatus: args.unknown ? "unknown_outcome" : undefined,
+    });
+    await closeReservation(ctx, args.batchId, args.spend ?? { kind: "settle" });
     return null;
   },
 });
@@ -848,11 +1114,14 @@ export const markDispatched = internalMutation({
     if (!generation || generation.status !== "queued") return false;
     if (!(await flagEnabled(ctx, "gen.vercel"))) {
       await failAndRefund(ctx, generation, "Generation is paused.");
+      await closeReservation(ctx, generation._id, { kind: "release", reason: "paused" });
       return false;
     }
+    const now = Date.now();
+    if (!(await authorizeDispatch(ctx, generation._id, now))) return false;
     await ctx.db.patch("generations", generation._id, {
       status: "dispatched",
-      dispatchedAt: Date.now(),
+      dispatchedAt: now,
     });
     return true;
   },
@@ -866,11 +1135,13 @@ export const markSucceeded = internalMutation({
     width: v.number(),
     height: v.number(),
     hasAlpha: v.boolean(),
+    spend: v.optional(spendValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation || generation.status !== "dispatched") return null;
+    await closeReservation(ctx, generation._id, args.spend ?? { kind: "settle" });
     await ctx.db.patch("generations", generation._id, {
       status: "succeeded",
       finishedAt: Date.now(),
@@ -884,9 +1155,14 @@ export const markSucceeded = internalMutation({
   },
 });
 
-async function failAndRefund(ctx: MutationCtx, generation: Doc<"generations">, error: string) {
+export async function failAndRefund(
+  ctx: MutationCtx,
+  generation: Doc<"generations">,
+  error: string,
+  status: "failed" | "unknown_outcome" | "expired" = "failed",
+) {
   await ctx.db.patch("generations", generation._id, {
-    status: "failed",
+    status,
     finishedAt: Date.now(),
     error,
   });
@@ -901,14 +1177,21 @@ async function failAndRefund(ctx: MutationCtx, generation: Doc<"generations">, e
 }
 
 export const markFailed = internalMutation({
-  args: { generationId: v.id("generations"), error: v.string() },
+  args: {
+    generationId: v.id("generations"),
+    error: v.string(),
+    // As in finishBatch.
+    spend: v.optional(spendValidator),
+    unknown: v.optional(v.boolean()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation || (generation.status !== "dispatched" && generation.status !== "queued")) {
       return null;
     }
-    await failAndRefund(ctx, generation, args.error.slice(0, 300));
+    await failAndRefund(ctx, generation, args.error.slice(0, 300), args.unknown ? "unknown_outcome" : "failed");
+    await closeReservation(ctx, generation._id, args.spend ?? { kind: "settle" });
     return null;
   },
 });

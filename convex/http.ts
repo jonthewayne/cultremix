@@ -2,6 +2,8 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
 import type { Id } from "./_generated/dataModel";
+import { handleShopifyWebhook } from "./lib/shopify/webhookRoute";
+import { handlePrintfulWebhook } from "./lib/printful/webhookRoute";
 
 const http = httpRouter();
 
@@ -32,6 +34,18 @@ http.route({
       },
     });
   }),
+});
+
+// Shop webhooks: Shopify orders and refunds; Printful order and shipment events.
+http.route({
+  path: "/webhooks/shopify",
+  method: "POST",
+  handler: httpAction(handleShopifyWebhook),
+});
+http.route({
+  path: "/webhooks/printful",
+  method: "POST",
+  handler: httpAction(handlePrintfulWebhook),
 });
 
 export default http;

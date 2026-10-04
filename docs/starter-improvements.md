@@ -33,6 +33,9 @@ agent workflow changes make the starter easier to use.
 - Hide phone sign-in while the backend phone flag is disabled, and show a retry path when invite acceptance fails.
 - Check both the requested and current platform roles when editing users, so operations admins cannot demote owners.
 - Recheck inviter authority and the recipient's current role when an invite is accepted, closing owner-downgrade paths after creation.
+- Admin-made password accounts without public password sign-up: enable `emailAndPassword` with `disableSignUp`, add the sign-up and reset paths to `disabledPaths`, and create users through Better Auth's `internalAdapter` (`createUser`, `linkAccount`, `password.hash`) from an action. Email code sign-in is untouched (CultRemix `convex/judges.ts`, `convex/lib/passwordAuth.ts`).
+- Launch scripts that call `bunx convex run` should target dev by default, staging through a per-command `CONVEX_DEPLOY_KEY`, and production only with `--prod` plus a typed confirmation; parse the JSON result after any `[CONVEX …]` log lines (`scripts/lib/convex-run.ts`).
+- Expose the environment to the browser through a public Convex query instead of a build-time `VITE_` value, so one Worker build can't show the wrong environment's label.
 
 ## Still Worth Improving
 

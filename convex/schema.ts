@@ -2,6 +2,13 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { chainTables } from "./schema/chain";
 import { cultremixTables } from "./schema/cultremix";
+import { lineageTables } from "./schema/lineage";
+import { socialTables } from "./schema/social";
+import { launchTables } from "./schema/launch";
+import { printTables } from "./schema/print";
+import { shopTables } from "./schema/shop";
+import { publishTables } from "./schema/publish";
+import { budgetTables } from "./schema/budget";
 
 export const platformRoleValidator = v.union(
   v.literal("user"),
@@ -64,6 +71,8 @@ export default defineSchema({
     walletAttempts: v.optional(v.number()),
     walletNextAttemptAt: v.optional(v.number()),
     walletError: v.optional(v.string()),
+    // A short public bio for /u/<username>, set in settings (convex/social.ts setBio).
+    bio: v.optional(v.string()),
   })
     .index("by_authId", ["authId"])
     .index("by_email", ["email"])
@@ -205,4 +214,11 @@ export default defineSchema({
 
   ...cultremixTables,
   ...chainTables,
+  ...lineageTables,
+  ...socialTables,
+  ...launchTables,
+  ...printTables,
+  ...shopTables,
+  ...publishTables,
+  ...budgetTables,
 });

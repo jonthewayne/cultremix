@@ -1,113 +1,219 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { folderOf, isOrganized, legacyParts, shaOf } from "./lib/sizes";
+import { batchNumberOf } from "./studio";
+import { isCurrentLayout } from "./lib/sizes";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
-// Moving images to where they belong (convex/lib/sizes.ts): files still in Convex storage ("cvx:"
-// keys, from before R2), R2 files from before folders (gen/, art/, photo/, inspo/, and sizes/), and
-// designs, model photos, and grids stored with the image model's metadata (its C2PA content
-// credential). Without that metadata a file has a new SHA-256, so it belongs in a new folder.
-// sizing.organize copies each file and records the move here, then repoints every table that holds
-// the old key; sizing.cleanup deletes the old files once nothing points to them. A move from a key
-// to itself marks a file as checked.
+// Moving images into the current layout (convex/lib/sizes.ts): members/<member>/uploads/...,
+// members/<member>/sessions/<date>-<session>/batch-NN/..., and works/<family>/<expression>/....
+// sizing.organize (a Node action) reads each page below, copies the file to its new key, and patches
+// the row right away; the old files stay until sizing.cleanup. Moves are recorded here so a file
+// shared by several rows is copied once:
+//   "<old key>"                    a design, wherever it's referenced
+//   "upload:<member>:<old key>"    an upload, per member (two members' copies of a file stay separate)
+//   "work:<workId>"                a published work's art
+// Records whose target isn't in the current layout come from earlier layouts and are ignored.
 
-const moveTable = v.union(
-  v.literal("generations"),
-  v.literal("works"),
-  v.literal("shootPhotos"),
-  v.literal("userImages"),
-  v.literal("batches"),
-);
-
-const imageKind = v.union(v.literal("design"), v.literal("upload"), v.literal("photo"), v.literal("grid"));
-type ImageKind = "design" | "upload" | "photo" | "grid";
-
-function stored(key: string | undefined): key is string {
-  return Boolean(key && !key.startsWith("fake:"));
-}
-
-// What an image in a member's images or a batch is: a design if it came from the studio, otherwise
-// an upload. (Convex storage keys don't say; designs are moved first, through generations and
-// works, so a "cvx:" key still unmoved here is an upload.)
-function kindOf(key: string): "design" | "upload" {
-  if (key.startsWith("designs/")) return "design";
-  const prefix = legacyParts(key)?.prefix;
-  return prefix === "gen" || prefix === "art" ? "design" : "upload";
-}
-
-// The folder a key's files live in, for deleting them once nothing points there.
-function folderPrefix(key: string) {
-  return key.replace(/original\.[a-z]+$/u, "");
-}
-
-const item = v.object({
-  key: v.string(),
-  kind: imageKind,
-  // A model photo's design: its folder decides where the photo goes.
-  designKey: v.optional(v.string()),
+const page = { cursor: v.union(v.string(), v.null()), numItems: v.number() };
+const placeValidator = v.object({
+  memberId: v.id("users"),
+  sessionId: v.id("creativeSessions"),
+  sessionStartedAt: v.number(),
+  batchNumber: v.number(),
 });
 
-// One page of a table's image keys, each with what it is.
-export const imagesPage = internalQuery({
-  args: { table: moveTable, cursor: v.union(v.string(), v.null()), numItems: v.number() },
-  returns: v.object({ items: v.array(item), continueCursor: v.string(), isDone: v.boolean() }),
+function needsMove(key: string | undefined): key is string {
+  return Boolean(key && !key.startsWith("fake:") && !isCurrentLayout(key));
+}
+
+async function moveRecord(ctx: QueryCtx, from: string) {
+  const row = await ctx.db
+    .query("storageMoves")
+    .withIndex("by_from", (q) => q.eq("from", from))
+    .first();
+  return row && isCurrentLayout(row.to) ? { to: row.to, sha256: row.sha256 } : null;
+}
+
+async function placeOf(ctx: QueryCtx, batch: Doc<"batches">) {
+  const session = await ctx.db.get("creativeSessions", batch.sessionId);
+  return {
+    memberId: batch.ownerId,
+    sessionId: batch.sessionId,
+    sessionStartedAt: session?._creationTime ?? batch._creationTime,
+    batchNumber: batch.number ?? (await batchNumberOf(ctx, batch)),
+  };
+}
+
+// Gives every batch its number in its session (batch-01, ...), in the order they were made.
+export const numberPage = internalMutation({
+  args: page,
+  returns: v.object({ numbered: v.number(), continueCursor: v.string(), isDone: v.boolean() }),
   handler: async (ctx, args) => {
-    const options = { cursor: args.cursor, numItems: args.numItems };
-    const items: Array<{ key: string; kind: ImageKind; designKey?: string }> = [];
-    const seen = new Set<string>();
-    const add = (key: string | undefined, kind: ImageKind, designKey?: string) => {
-      if (!stored(key) || seen.has(key)) return;
-      seen.add(key);
-      items.push({ key, kind, designKey });
-    };
-    let page: { continueCursor: string; isDone: boolean };
-    if (args.table === "generations") {
-      const result = await ctx.db.query("generations").paginate(options);
-      for (const row of result.page) add(row.fullKey, "design");
-      page = result;
-    } else if (args.table === "works") {
-      const result = await ctx.db.query("works").paginate(options);
-      for (const row of result.page) add(row.artKey, "design");
-      page = result;
-    } else if (args.table === "shootPhotos") {
-      const result = await ctx.db.query("shootPhotos").paginate(options);
-      for (const row of result.page) {
-        if (!stored(row.publicKey)) continue;
-        const work = await ctx.db.get("works", row.workId);
-        add(row.publicKey, "photo", work?.artKey);
-      }
-      page = result;
-    } else if (args.table === "userImages") {
-      const result = await ctx.db.query("userImages").paginate(options);
-      for (const row of result.page) if (stored(row.key)) add(row.key, kindOf(row.key));
-      page = result;
-    } else {
-      const result = await ctx.db.query("batches").paginate(options);
-      for (const row of result.page) {
-        add(row.gridKey, "grid");
-        for (const key of [row.inspirationKey, ...(row.images ?? []).map((i) => i.key), ...(row.styles ?? []).map((s) => s.key)]) {
-          if (stored(key)) add(key, kindOf(key));
+    const result = await ctx.db.query("creativeSessions").paginate({ cursor: args.cursor, numItems: args.numItems });
+    let numbered = 0;
+    for (const session of result.page) {
+      const batches = await ctx.db
+        .query("batches")
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+        .collect();
+      let highest = 0;
+      for (const [i, batch] of batches.entries()) {
+        const number = batch.number ?? i + 1;
+        if (batch.number === undefined) {
+          await ctx.db.patch("batches", batch._id, { number });
+          numbered++;
         }
+        highest = Math.max(highest, number);
       }
-      page = result;
+      if ((session.batchCount ?? 0) < highest) await ctx.db.patch("creativeSessions", session._id, { batchCount: highest });
     }
-    return { items, continueCursor: page.continueCursor, isDone: page.isDone };
+    return { numbered, continueCursor: result.continueCursor, isDone: result.isDone };
+  },
+});
+
+export const designsPage = internalQuery({
+  args: page,
+  returns: v.object({
+    items: v.array(
+      v.object({ generationId: v.id("generations"), key: v.string(), place: placeValidator, designNumber: v.number() }),
+    ),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("generations").paginate({ cursor: args.cursor, numItems: args.numItems });
+    const items = [];
+    for (const generation of result.page) {
+      if (!needsMove(generation.fullKey)) continue;
+      const batch = await ctx.db.get("batches", generation.batchId);
+      if (!batch) continue;
+      items.push({
+        generationId: generation._id,
+        key: generation.fullKey,
+        place: await placeOf(ctx, batch),
+        designNumber: generation.index + 1,
+      });
+    }
+    return { items, continueCursor: result.continueCursor, isDone: result.isDone };
+  },
+});
+
+export const uploadsPage = internalQuery({
+  args: page,
+  returns: v.object({
+    items: v.array(v.object({ imageId: v.id("userImages"), key: v.string(), memberId: v.id("users"), at: v.number() })),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("userImages").paginate({ cursor: args.cursor, numItems: args.numItems });
+    const items = result.page
+      .filter((row) => needsMove(row.key))
+      .map((row) => ({ imageId: row._id, key: row.key, memberId: row.ownerId, at: row._creationTime }));
+    return { items, continueCursor: result.continueCursor, isDone: result.isDone };
+  },
+});
+
+export const batchesPage = internalQuery({
+  args: page,
+  returns: v.object({
+    items: v.array(
+      v.object({
+        batchId: v.id("batches"),
+        place: placeValidator,
+        at: v.number(),
+        gridKey: v.optional(v.string()),
+        inputs: v.array(v.string()),
+      }),
+    ),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("batches").paginate({ cursor: args.cursor, numItems: args.numItems });
+    const items = [];
+    for (const batch of result.page) {
+      const inputs = [
+        ...new Set([batch.inspirationKey, ...(batch.images ?? []).map((i) => i.key), ...(batch.styles ?? []).map((s) => s.key)]),
+      ].filter(needsMove);
+      const gridKey = needsMove(batch.gridKey) ? batch.gridKey : undefined;
+      if (!gridKey && inputs.length === 0) continue;
+      items.push({ batchId: batch._id, place: await placeOf(ctx, batch), at: batch._creationTime, gridKey, inputs });
+    }
+    return { items, continueCursor: result.continueCursor, isDone: result.isDone };
+  },
+});
+
+export const photosPage = internalQuery({
+  args: page,
+  returns: v.object({
+    items: v.array(v.object({ photoId: v.id("shootPhotos"), key: v.string(), family: v.number(), expression: v.number() })),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("shootPhotos").paginate({ cursor: args.cursor, numItems: args.numItems });
+    const items = [];
+    for (const photo of result.page) {
+      if (!needsMove(photo.publicKey)) continue;
+      const work = await ctx.db.get("works", photo.workId);
+      if (!work) continue;
+      items.push({ photoId: photo._id, key: photo.publicKey, family: work.crFamily, expression: work.crExpression });
+    }
+    return { items, continueCursor: result.continueCursor, isDone: result.isDone };
+  },
+});
+
+export const worksPage = internalQuery({
+  args: page,
+  returns: v.object({
+    items: v.array(v.object({ workId: v.id("works"), key: v.string(), family: v.number(), expression: v.number() })),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("works").paginate({ cursor: args.cursor, numItems: args.numItems });
+    const items = result.page
+      .filter((work) => needsMove(work.artKey))
+      .map((work) => ({ workId: work._id, key: work.artKey!, family: work.crFamily, expression: work.crExpression }));
+    return { items, continueCursor: result.continueCursor, isDone: result.isDone };
+  },
+});
+
+// Where an image a member uses (one of their images, or a batch input) goes: a published work's art
+// goes to the work's folder; a design that already moved follows it; anything else is that member's
+// upload.
+export const resolveKey = internalQuery({
+  args: { key: v.string(), memberId: v.id("users") },
+  returns: v.union(
+    v.object({ kind: v.literal("work"), workId: v.id("works"), family: v.number(), expression: v.number() }),
+    v.object({ kind: v.literal("moved"), to: v.string(), sha256: v.optional(v.string()) }),
+    v.object({ kind: v.literal("upload"), from: v.string() }),
+  ),
+  handler: async (ctx, args) => {
+    const work = await ctx.db
+      .query("works")
+      .withIndex("by_artKey", (q) => q.eq("artKey", args.key))
+      .first();
+    if (work) return { kind: "work" as const, workId: work._id, family: work.crFamily, expression: work.crExpression };
+    const design = await moveRecord(ctx, args.key);
+    if (design) return { kind: "moved" as const, ...design };
+    const from = "upload:" + args.memberId + ":" + args.key;
+    const upload = await moveRecord(ctx, from);
+    if (upload) return { kind: "moved" as const, ...upload };
+    return { kind: "upload" as const, from };
   },
 });
 
 export const movedTo = internalQuery({
   args: { from: v.string() },
-  returns: v.union(v.null(), v.string()),
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("storageMoves")
-      .withIndex("by_from", (q) => q.eq("from", args.from))
-      .first();
-    return row ? row.to : null;
-  },
+  returns: v.union(v.null(), v.object({ to: v.string(), sha256: v.optional(v.string()) })),
+  handler: async (ctx, args) => await moveRecord(ctx, args.from),
 });
 
 export const recordMove = internalMutation({
-  args: { from: v.string(), to: v.string() },
+  args: { from: v.string(), to: v.string(), sha256: v.optional(v.string()) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -115,133 +221,80 @@ export const recordMove = internalMutation({
       .withIndex("by_from", (q) => q.eq("from", args.from))
       .first();
     if (!existing) await ctx.db.insert("storageMoves", args);
-    else if (existing.to !== args.to) await ctx.db.patch("storageMoves", existing._id, { to: args.to });
+    else await ctx.db.patch("storageMoves", existing._id, { to: args.to, sha256: args.sha256 });
     return null;
   },
 });
 
-// Points one page of a table at the moved files, with the new files' SHA-256 where a table keeps it.
-export const repointPage = internalMutation({
-  args: {
-    table: v.union(moveTable, v.literal("imageSizes")),
-    cursor: v.union(v.string(), v.null()),
-    numItems: v.number(),
-  },
-  returns: v.object({ patched: v.number(), continueCursor: v.string(), isDone: v.boolean() }),
+// Patches, each applied as soon as the file is in its new place.
+export const setDesign = internalMutation({
+  args: { generationId: v.id("generations"), key: v.string(), sha256: v.optional(v.string()) },
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const moves = new Map<string, string | null>();
-    const moved = async (key: string | undefined) => {
-      if (!stored(key)) return undefined;
-      if (!moves.has(key)) {
-        const row = await ctx.db
-          .query("storageMoves")
-          .withIndex("by_from", (q) => q.eq("from", key))
-          .first();
-        moves.set(key, row && row.to !== key ? row.to : null);
-      }
-      return moves.get(key) ?? undefined;
-    };
-    const options = { cursor: args.cursor, numItems: args.numItems };
-    let patched = 0;
-    if (args.table === "generations") {
-      const result = await ctx.db.query("generations").paginate(options);
-      for (const row of result.page) {
-        const fullKey = await moved(row.fullKey);
-        if (fullKey) {
-          await ctx.db.patch("generations", row._id, { fullKey, sha256: shaOf(fullKey) ?? row.sha256 });
-          patched++;
-        }
-      }
-      return { patched, continueCursor: result.continueCursor, isDone: result.isDone };
-    }
-    if (args.table === "works") {
-      const result = await ctx.db.query("works").paginate(options);
-      for (const row of result.page) {
-        const artKey = await moved(row.artKey);
-        if (artKey) {
-          // The work's hash is its art file's; the shop page shows it.
-          await ctx.db.patch("works", row._id, { artKey, contentHash: shaOf(artKey) ?? row.contentHash });
-          patched++;
-        }
-      }
-      return { patched, continueCursor: result.continueCursor, isDone: result.isDone };
-    }
-    if (args.table === "shootPhotos") {
-      const result = await ctx.db.query("shootPhotos").paginate(options);
-      for (const row of result.page) {
-        const publicKey = await moved(row.publicKey);
-        if (publicKey) {
-          await ctx.db.patch("shootPhotos", row._id, { publicKey });
-          patched++;
-        }
-      }
-      return { patched, continueCursor: result.continueCursor, isDone: result.isDone };
-    }
-    if (args.table === "userImages") {
-      const result = await ctx.db.query("userImages").paginate(options);
-      for (const row of result.page) {
-        const key = await moved(row.key);
-        if (key) {
-          await ctx.db.patch("userImages", row._id, { key });
-          patched++;
-        }
-      }
-      return { patched, continueCursor: result.continueCursor, isDone: result.isDone };
-    }
-    if (args.table === "batches") {
-      const result = await ctx.db.query("batches").paginate(options);
-      for (const row of result.page) {
-        const inspirationKey = await moved(row.inspirationKey);
-        const gridKey = await moved(row.gridKey);
-        let changed = Boolean(inspirationKey || gridKey);
-        const images = [];
-        for (const image of row.images ?? []) {
-          const key = await moved(image.key);
-          if (key) changed = true;
-          images.push({ ...image, key: key ?? image.key });
-        }
-        const styles = [];
-        for (const style of row.styles ?? []) {
-          const key = await moved(style.key);
-          if (key) changed = true;
-          styles.push({ ...style, key: key ?? style.key });
-        }
-        if (changed) {
-          await ctx.db.patch("batches", row._id, {
-            ...(inspirationKey ? { inspirationKey } : {}),
-            ...(gridKey ? { gridKey } : {}),
-            ...(row.images ? { images } : {}),
-            ...(row.styles ? { styles } : {}),
-          });
-          patched++;
-        }
-      }
-      return { patched, continueCursor: result.continueCursor, isDone: result.isDone };
-    }
-    // Copies: a moved image's old row goes (organize recorded the copies in its new folder), and so
-    // does a row whose copies aren't beside its original; sizing.backfill makes any that are missing.
-    const result = await ctx.db.query("imageSizes").paginate(options);
-    for (const row of result.page) {
-      const folder = folderOf(row.key);
-      const misplaced = folder && (row.thumbKey !== folder + "/thumb.webp" || row.mediumKey !== folder + "/medium.webp");
-      if ((await moved(row.key)) || misplaced) {
-        await ctx.db.delete("imageSizes", row._id);
-        patched++;
-      }
-    }
-    return { patched, continueCursor: result.continueCursor, isDone: result.isDone };
+    await ctx.db.patch("generations", args.generationId, { fullKey: args.key, ...(args.sha256 ? { sha256: args.sha256 } : {}) });
+    return null;
   },
 });
 
-// Every key the tables point to, for checking before cleanup: how many still point at a file that
-// has to move, and the full list of files in use (none of which cleanup may delete).
+export const setUpload = internalMutation({
+  args: { imageId: v.id("userImages"), key: v.string(), sha256: v.optional(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("userImages", args.imageId, { key: args.key, ...(args.sha256 ? { sha256: args.sha256 } : {}) });
+    return null;
+  },
+});
+
+export const setBatch = internalMutation({
+  args: {
+    batchId: v.id("batches"),
+    gridKey: v.optional(v.string()),
+    inputs: v.array(v.object({ from: v.string(), to: v.string() })),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const batch = await ctx.db.get("batches", args.batchId);
+    if (!batch) return null;
+    const map = new Map(args.inputs.map((m) => [m.from, m.to]));
+    const swap = (key: string) => map.get(key) ?? key;
+    await ctx.db.patch("batches", batch._id, {
+      ...(args.gridKey ? { gridKey: args.gridKey } : {}),
+      ...(batch.inspirationKey ? { inspirationKey: swap(batch.inspirationKey) } : {}),
+      ...(batch.images ? { images: batch.images.map((i) => ({ ...i, key: swap(i.key) })) } : {}),
+      ...(batch.styles ? { styles: batch.styles.map((s) => ({ ...s, key: swap(s.key) })) } : {}),
+    });
+    return null;
+  },
+});
+
+export const setPhoto = internalMutation({
+  args: { photoId: v.id("shootPhotos"), key: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("shootPhotos", args.photoId, { publicKey: args.key });
+    return null;
+  },
+});
+
+// A work's art in its own folder; its fingerprint is the SHA-256 of the file as stored.
+export const setWorkArt = internalMutation({
+  args: { workId: v.id("works"), key: v.string(), sha256: v.optional(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("works", args.workId, { artKey: args.key, ...(args.sha256 ? { contentHash: args.sha256 } : {}) });
+    return null;
+  },
+});
+
+// Every key the tables point to, for checking before cleanup: how many are still outside the
+// current layout, and the full list of files in use (cleanup never deletes those).
 export const keysInUse = internalQuery({
   args: {},
   returns: v.object({ pending: v.number(), examples: v.array(v.string()), inUse: v.array(v.string()) }),
   handler: async (ctx) => {
     const keys = new Set<string>();
     const add = (key: string | undefined) => {
-      if (stored(key)) keys.add(key);
+      if (key && !key.startsWith("fake:")) keys.add(key);
     };
     for await (const row of ctx.db.query("generations")) add(row.fullKey);
     for await (const row of ctx.db.query("works")) add(row.artKey);
@@ -253,42 +306,24 @@ export const keysInUse = internalQuery({
       for (const image of row.images ?? []) add(image.key);
       for (const style of row.styles ?? []) add(style.key);
     }
-    const pending: Array<string> = [];
-    for (const key of keys) {
-      const move = await ctx.db
-        .query("storageMoves")
-        .withIndex("by_from", (q) => q.eq("from", key))
-        .first();
-      if (!isOrganized(key) || (move && move.to !== key)) pending.push(key);
-    }
+    const pending = [...keys].filter((key) => !isCurrentLayout(key));
     const inUse = [...keys];
-    for await (const row of ctx.db.query("imageSizes")) inUse.push(row.thumbKey, row.mediumKey);
+    for await (const row of ctx.db.query("imageSizes")) {
+      if (isCurrentLayout(row.key)) inUse.push(row.thumbKey, row.mediumKey);
+    }
     return { pending: pending.length, examples: pending.slice(0, 5), inUse };
   },
 });
 
-// The folders files were moved out of, for cleanup to delete.
-export const movedFromFolders = internalQuery({
-  args: {},
-  returns: v.array(v.string()),
-  handler: async (ctx) => {
-    const folders = new Set<string>();
-    for await (const row of ctx.db.query("storageMoves")) {
-      if (row.from !== row.to && isOrganized(row.from)) folders.add(folderPrefix(row.from));
-    }
-    return [...folders];
-  },
-});
-
-// Cleanup: drops copy records for originals outside folders; once every table points into folders,
-// nothing uses them.
-export const dropStrayCopies = internalMutation({
+// Cleanup: drops copy records for originals outside the current layout; nothing uses them once
+// every table points into it.
+export const dropOldCopies = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
     let dropped = 0;
     for await (const row of ctx.db.query("imageSizes")) {
-      if (!folderOf(row.key) && !row.key.startsWith("fake:")) {
+      if (!isCurrentLayout(row.key) && !row.key.startsWith("fake:")) {
         await ctx.db.delete("imageSizes", row._id);
         dropped++;
       }
@@ -307,3 +342,5 @@ export const deleteStoredFiles = internalMutation({
     return files.length;
   },
 });
+
+export type MovePlace = { memberId: Id<"users">; sessionId: Id<"creativeSessions">; sessionStartedAt: number; batchNumber: number };

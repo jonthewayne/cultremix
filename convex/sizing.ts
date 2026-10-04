@@ -5,10 +5,12 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
-import { storageMode } from "./lib/r2";
+import { randomCode } from "./lib/codes";
 import { stripPngMetadata } from "./lib/pngMeta";
-import { designKey, folderOf, gridImageKey, isOrganized, legacyParts, photoKey, shaOf, sizeKey, uploadKey } from "./lib/sizes";
+import { storageMode } from "./lib/r2";
+import { designKey, extensionOf, gridKey, sizeKey, uploadKey, workArtKey, workPhotoKey } from "./lib/sizes";
 import { copyObject, deleteKeys, fetchPublicImage, listKeys, makeSizes, sha256Hex, storeObject } from "./lib/storage";
+import type { MovePlace } from "./storageMoves";
 
 // Makes an image's thumbnail and medium after it's stored: uploads, and images stored before
 // copies existed. Designs and model photos get theirs before they're shown (convex/imageGen.ts).
@@ -65,19 +67,21 @@ export const backfill = internalAction({
 
 // ---- Moving images to where they belong (convex/storageMoves.ts) ----
 
-// Designs first, so a file a member's images share with a design moves as a design, and photos
-// after their designs, since a photo's folder sits inside its design's.
-const COPY_TABLES = ["generations", "works", "shootPhotos", "userImages", "batches"] as const;
-const REPOINT_TABLES = [...COPY_TABLES, "imageSizes"] as const;
-const PHASES = ["copy", "repoint"] as const;
+// ---- Moving images into the current layout (convex/lib/sizes.ts, convex/storageMoves.ts) ----
+
+// Batches are numbered first; designs move before the images and batch inputs that point at them;
+// published art last, so remix sources already have their work's folder.
+const PHASES = ["number", "designs", "uploads", "batches", "photos", "works"] as const;
+type Phase = (typeof PHASES)[number];
 const EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 const TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" };
-// R2 prefixes from before folders; cleanup deletes everything under them.
-const LEGACY_PREFIXES = ["gen/", "art/", "photo/", "inspo/", "sizes/"];
+// Top folders of older layouts; cleanup deletes what's under them once no table uses it.
+const OLD_PREFIXES = /^(designs|uploads|grids|gen|art|photo|inspo|sizes)\//u;
 const CONCURRENCY = 4;
 
-type MoveItem = { key: string; kind: "design" | "upload" | "photo" | "grid"; designKey?: string };
 type Copies = { thumbKey: string; mediumKey: string; width: number; height: number };
+type Counts = { moved: number; checked: number; failed: number };
+type Placed = { to: string; sha256?: string };
 
 // Brings an image's existing thumbnail and medium into its new folder, or makes them. The copies
 // show the same pixels, so they stay valid when only metadata was removed.
@@ -106,55 +110,136 @@ async function relocateCopies(ctx: ActionCtx, from: string, to: string, sha256: 
 }
 
 async function readStored(ctx: ActionCtx, key: string) {
-  if (!key.startsWith("cvx:")) return { bytes: await fetchPublicImage(key, ctx), type: "image/png" };
+  if (!key.startsWith("cvx:")) {
+    return { bytes: await fetchPublicImage(key, ctx), type: TYPES[extensionOf(key) ?? "png"] ?? "image/png" };
+  }
   const blob = await ctx.storage.get(key.slice(4) as Id<"_storage">);
   if (!blob) throw new Error("Not in Convex storage.");
   return { bytes: new Uint8Array(await blob.arrayBuffer()), type: blob.type || "image/png" };
 }
 
-// An upload goes to its folder as it is: the browser re-encoded it, so it carries no model metadata.
-async function placeUpload(ctx: ActionCtx, key: string) {
-  const legacy = legacyParts(key);
-  if (legacy) {
-    const to = uploadKey(legacy.sha256, legacy.extension);
-    await copyObject(key, to);
-    await relocateCopies(ctx, key, to, legacy.sha256);
-    return to;
-  }
-  const { bytes, type } = await readStored(ctx, key);
+// Stores a design, grid, model photo, or published art at its new key without the image model's
+// metadata, with its copies unless it's a grid.
+async function storeModelImage(ctx: ActionCtx, from: string, to: string, copies: boolean): Promise<Placed> {
+  const bytes = stripPngMetadata((await readStored(ctx, from)).bytes);
   const sha256 = sha256Hex(bytes);
-  const to = uploadKey(sha256, EXTENSIONS[type] ?? "png");
-  await storeObject(ctx, to, bytes, type);
-  await relocateCopies(ctx, key, to, sha256, bytes);
-  return to;
-}
-
-// Where a design, model photo, or grid belongs once the model's metadata is removed: the folder for
-// its clean bytes, with a model photo inside its design's current folder. Stores it there if that's
-// a new place. Returns the key, which is the same key when the file was already clean and in place.
-async function placeModelImage(ctx: ActionCtx, item: MoveItem) {
-  const { bytes: raw } = await readStored(ctx, item.key);
-  const bytes = stripPngMetadata(raw);
-  const sha256 = sha256Hex(bytes);
-  let to: string;
-  if (item.kind === "grid") {
-    to = gridImageKey(sha256);
-  } else if (item.kind === "photo") {
-    if (!item.designKey) throw new Error("A model photo without its design.");
-    const designNow = (await ctx.runQuery(internal.storageMoves.movedTo, { from: item.designKey })) ?? item.designKey;
-    let designSha = folderOf(designNow) ? shaOf(designNow) : undefined;
-    if (!designSha) designSha = sha256Hex(stripPngMetadata((await readStored(ctx, designNow)).bytes));
-    to = photoKey(designSha, sha256);
-  } else {
-    to = designKey(sha256);
-  }
-  if (to === item.key) return to;
   await storeObject(ctx, to, bytes, "image/png");
-  if (item.kind !== "grid") await relocateCopies(ctx, item.key, to, sha256, bytes);
-  return to;
+  if (copies) await relocateCopies(ctx, from, to, sha256, bytes);
+  return { to, sha256 };
 }
 
-type OrganizeResult = { moved: number; checked: number; patched: number; failed: number; continued: boolean };
+// A published work's art in works/<family>/<expression>/, copied once per work.
+async function ensureWorkArt(ctx: ActionCtx, workId: Id<"works">, from: string, family: number, expression: number) {
+  const done: Placed | null = await ctx.runQuery(internal.storageMoves.movedTo, { from: "work:" + workId });
+  if (done) return { ...done, moved: false };
+  const placed = await storeModelImage(ctx, from, workArtKey(family, expression), true);
+  await ctx.runMutation(internal.storageMoves.recordMove, { from: "work:" + workId, to: placed.to, sha256: placed.sha256 });
+  return { ...placed, moved: true };
+}
+
+// Where one of a member's images or batch inputs goes (storageMoves.resolveKey), copied if needed.
+async function placeMemberImage(ctx: ActionCtx, key: string, memberId: Id<"users">, at: number) {
+  const target = await ctx.runQuery(internal.storageMoves.resolveKey, { key, memberId });
+  if (target.kind === "moved") return { to: target.to, sha256: target.sha256, moved: false };
+  if (target.kind === "work") return await ensureWorkArt(ctx, target.workId, key, target.family, target.expression);
+  // An upload keeps its bytes: the browser re-encoded it, so it carries no model metadata.
+  const { bytes, type } = await readStored(ctx, key);
+  const extension = extensionOf(key) ?? EXTENSIONS[type] ?? "png";
+  const to = uploadKey(memberId, at, randomCode(), extension);
+  const sha256 = sha256Hex(bytes);
+  await storeObject(ctx, to, bytes, TYPES[extension] ?? type);
+  await relocateCopies(ctx, key, to, sha256, bytes);
+  await ctx.runMutation(internal.storageMoves.recordMove, { from: target.from, to, sha256 });
+  return { to, sha256, moved: true };
+}
+
+async function each<T>(items: Array<T>, counts: Counts, run: (item: T) => Promise<boolean>) {
+  for (let i = 0; i < items.length; i += CONCURRENCY) {
+    await Promise.all(
+      items.slice(i, i + CONCURRENCY).map(async (item) => {
+        try {
+          if (await run(item)) counts.moved++;
+          else counts.checked++;
+        } catch (error) {
+          console.error("organize: move failed", JSON.stringify(item).slice(0, 300), error);
+          counts.failed++;
+        }
+      }),
+    );
+  }
+}
+
+type PageResult = { continueCursor: string; isDone: boolean };
+
+// One page of one phase; returns the cursor for the next.
+async function organizePage(ctx: ActionCtx, phase: Phase, cursor: string | null, counts: Counts): Promise<PageResult> {
+  const args = { cursor, numItems: 40 };
+  if (phase === "number") {
+    const page: PageResult & { numbered: number } = await ctx.runMutation(internal.storageMoves.numberPage, args);
+    return page;
+  }
+  if (phase === "designs") {
+    const page: PageResult & {
+      items: Array<{ generationId: Id<"generations">; key: string; place: MovePlace; designNumber: number }>;
+    } = await ctx.runQuery(internal.storageMoves.designsPage, args);
+    await each(page.items, counts, async (item) => {
+      const done: Placed | null = await ctx.runQuery(internal.storageMoves.movedTo, { from: item.key });
+      const placed = done ?? (await storeModelImage(ctx, item.key, designKey(item.place, item.designNumber, randomCode()), true));
+      if (!done) await ctx.runMutation(internal.storageMoves.recordMove, { from: item.key, to: placed.to, sha256: placed.sha256 });
+      await ctx.runMutation(internal.storageMoves.setDesign, { generationId: item.generationId, key: placed.to, sha256: placed.sha256 });
+      return !done;
+    });
+    return page;
+  }
+  if (phase === "uploads") {
+    const page: PageResult & {
+      items: Array<{ imageId: Id<"userImages">; key: string; memberId: Id<"users">; at: number }>;
+    } = await ctx.runQuery(internal.storageMoves.uploadsPage, args);
+    await each(page.items, counts, async (item) => {
+      const placed = await placeMemberImage(ctx, item.key, item.memberId, item.at);
+      await ctx.runMutation(internal.storageMoves.setUpload, { imageId: item.imageId, key: placed.to, sha256: placed.sha256 });
+      return placed.moved;
+    });
+    return page;
+  }
+  if (phase === "batches") {
+    const page: PageResult & {
+      items: Array<{ batchId: Id<"batches">; place: MovePlace; at: number; gridKey?: string; inputs: Array<string> }>;
+    } = await ctx.runQuery(internal.storageMoves.batchesPage, args);
+    await each(page.items, counts, async (item) => {
+      const grid = item.gridKey ? await storeModelImage(ctx, item.gridKey, gridKey(item.place, randomCode()), false) : undefined;
+      const inputs: Array<{ from: string; to: string }> = [];
+      for (const key of item.inputs) {
+        inputs.push({ from: key, to: (await placeMemberImage(ctx, key, item.place.memberId, item.at)).to });
+      }
+      await ctx.runMutation(internal.storageMoves.setBatch, { batchId: item.batchId, gridKey: grid?.to, inputs });
+      return true;
+    });
+    return page;
+  }
+  if (phase === "photos") {
+    const page: PageResult & {
+      items: Array<{ photoId: Id<"shootPhotos">; key: string; family: number; expression: number }>;
+    } = await ctx.runQuery(internal.storageMoves.photosPage, args);
+    await each(page.items, counts, async (item) => {
+      const placed = await storeModelImage(ctx, item.key, workPhotoKey(item.family, item.expression, 1), true);
+      await ctx.runMutation(internal.storageMoves.setPhoto, { photoId: item.photoId, key: placed.to });
+      return true;
+    });
+    return page;
+  }
+  const page: PageResult & {
+    items: Array<{ workId: Id<"works">; key: string; family: number; expression: number }>;
+  } = await ctx.runQuery(internal.storageMoves.worksPage, args);
+  await each(page.items, counts, async (item) => {
+    const placed = await ensureWorkArt(ctx, item.workId, item.key, item.family, item.expression);
+    await ctx.runMutation(internal.storageMoves.setWorkArt, { workId: item.workId, key: placed.to, sha256: placed.sha256 });
+    return placed.moved;
+  });
+  return page;
+}
+
+type OrganizeResult = Counts & { continued: boolean };
 type CleanupResult = {
   deletedR2: number;
   deletedConvex: number;
@@ -162,92 +247,41 @@ type CleanupResult = {
   blocked?: { count: number; examples: Array<string> };
 };
 
-// Puts every image where it belongs: files in Convex storage and R2 files from before folders move
-// into their folders, and designs, model photos, and grids lose the image model's metadata (its
-// C2PA content credential), which gives them new folders. bunx convex run sizing:organize
-// (production: --prod). Copies first, then points every table at the new keys and hashes. Safe to
-// run again; the old files stay until sizing:cleanup.
+// Moves every image into the current layout (convex/lib/sizes.ts): bunx convex run sizing:organize
+// (production: --prod). Files in Convex storage and in older R2 layouts are copied to their new keys
+// (designs, model photos, grids, and published art without the image model's metadata) and each row
+// is patched as soon as its file is in place. Safe to run again: a second run reports moved 0. The
+// old files stay until sizing:cleanup.
 export const organize = internalAction({
-  args: {
-    phase: v.optional(v.union(v.literal("copy"), v.literal("repoint"))),
-    table: v.optional(v.number()),
-    cursor: v.optional(v.union(v.string(), v.null())),
-  },
-  returns: v.object({
-    moved: v.number(),
-    checked: v.number(),
-    patched: v.number(),
-    failed: v.number(),
-    continued: v.boolean(),
-  }),
+  args: { phase: v.optional(v.string()), cursor: v.optional(v.union(v.string(), v.null())) },
+  returns: v.object({ moved: v.number(), checked: v.number(), failed: v.number(), continued: v.boolean() }),
   handler: async (ctx, args): Promise<OrganizeResult> => {
     if (storageMode() !== "r2") throw new Error("R2 isn't configured on this deployment.");
     const started = Date.now();
-    let moved = 0;
-    let checked = 0;
-    let patched = 0;
-    let failed = 0;
-    const firstPhase = PHASES.indexOf(args.phase ?? "copy");
-    for (let p = firstPhase; p < PHASES.length; p++) {
-      const tables = PHASES[p] === "copy" ? COPY_TABLES : REPOINT_TABLES;
-      const firstTable = p === firstPhase ? (args.table ?? 0) : 0;
-      for (let t = firstTable; t < tables.length; t++) {
-        let cursor: string | null = p === firstPhase && t === firstTable ? (args.cursor ?? null) : null;
-        for (;;) {
-          if (Date.now() - started > BUDGET_MS) {
-            await ctx.scheduler.runAfter(0, internal.sizing.organize, { phase: PHASES[p], table: t, cursor });
-            console.log("sizing.organize continues", { moved, checked, patched, failed });
-            return { moved, checked, patched, failed, continued: true };
-          }
-          if (PHASES[p] === "copy") {
-            const page: { items: Array<MoveItem>; continueCursor: string; isDone: boolean } = await ctx.runQuery(
-              internal.storageMoves.imagesPage,
-              { table: COPY_TABLES[t], cursor, numItems: 40 },
-            );
-            const todo: Array<MoveItem> = [];
-            for (const item of page.items) {
-              // Uploads already in their folders stay as they are.
-              if (item.kind === "upload" && isOrganized(item.key)) continue;
-              if (!(await ctx.runQuery(internal.storageMoves.movedTo, { from: item.key }))) todo.push(item);
-            }
-            for (let i = 0; i < todo.length; i += CONCURRENCY) {
-              await Promise.all(
-                todo.slice(i, i + CONCURRENCY).map(async (item) => {
-                  try {
-                    const to = item.kind === "upload" ? await placeUpload(ctx, item.key) : await placeModelImage(ctx, item);
-                    await ctx.runMutation(internal.storageMoves.recordMove, { from: item.key, to });
-                    if (to === item.key) checked++;
-                    else moved++;
-                  } catch (error) {
-                    console.error("organize: move failed", item.key, error);
-                    failed++;
-                  }
-                }),
-              );
-            }
-            if (page.isDone) break;
-            cursor = page.continueCursor;
-          } else {
-            const page: { patched: number; continueCursor: string; isDone: boolean } = await ctx.runMutation(
-              internal.storageMoves.repointPage,
-              { table: REPOINT_TABLES[t], cursor, numItems: 50 },
-            );
-            patched += page.patched;
-            if (page.isDone) break;
-            cursor = page.continueCursor;
-          }
+    const counts: Counts = { moved: 0, checked: 0, failed: 0 };
+    const first = Math.max(0, PHASES.indexOf((args.phase ?? "number") as Phase));
+    for (let p = first; p < PHASES.length; p++) {
+      let cursor: string | null = p === first ? (args.cursor ?? null) : null;
+      for (;;) {
+        if (Date.now() - started > BUDGET_MS) {
+          await ctx.scheduler.runAfter(0, internal.sizing.organize, { phase: PHASES[p], cursor });
+          console.log("sizing.organize continues", counts);
+          return { ...counts, continued: true };
         }
+        const page = await organizePage(ctx, PHASES[p], cursor, counts);
+        if (page.isDone) break;
+        cursor = page.continueCursor;
       }
     }
-    console.log("sizing.organize done", { moved, checked, patched, failed });
-    return { moved, checked, patched, failed, continued: false };
+    console.log("sizing.organize done", counts);
+    return { ...counts, continued: false };
   },
 });
 
-// Deletes the old files once sizing:organize has moved everything: R2 files from before folders,
-// the folders files were moved out of, and all of Convex file storage. bunx convex run
-// sizing:cleanup (production: --prod). Refuses, deleting nothing, while any table still points at a
-// file that has to move, and never deletes a file a table uses. Run sizing:backfill first.
+// Deletes the old files once sizing:organize has moved everything: every R2 file in an older layout
+// (designs/, uploads/, grids/, gen/, art/, photo/, inspo/, sizes/) and all of Convex file storage.
+// bunx convex run sizing:cleanup (production: --prod). Refuses, deleting nothing, while any table
+// still points outside the current layout, and never deletes a file a table uses.
 export const cleanup = internalAction({
   args: {},
   returns: v.object({
@@ -266,21 +300,16 @@ export const cleanup = internalAction({
       return { deletedR2: 0, deletedConvex: 0, droppedCopies: 0, blocked: { count: use.pending, examples: use.examples } };
     }
     const inUse = new Set(use.inUse);
-    const droppedCopies: number = await ctx.runMutation(internal.storageMoves.dropStrayCopies, {});
-    const folders: Array<string> = await ctx.runQuery(internal.storageMoves.movedFromFolders, {});
-    let deletedR2 = 0;
-    for (const prefix of [...LEGACY_PREFIXES, ...folders]) {
-      const keys = (await listKeys(prefix)).filter((key) => !inUse.has(key));
-      await deleteKeys(keys);
-      deletedR2 += keys.length;
-    }
+    const old = (await listKeys("")).filter((key) => OLD_PREFIXES.test(key) && !inUse.has(key));
+    await deleteKeys(old);
+    const droppedCopies: number = await ctx.runMutation(internal.storageMoves.dropOldCopies, {});
     let deletedConvex = 0;
     for (;;) {
       const deleted: number = await ctx.runMutation(internal.storageMoves.deleteStoredFiles, {});
       deletedConvex += deleted;
       if (deleted === 0) break;
     }
-    console.log("sizing.cleanup done", { deletedR2, deletedConvex, droppedCopies });
-    return { deletedR2, deletedConvex, droppedCopies };
+    console.log("sizing.cleanup done", { deletedR2: old.length, deletedConvex, droppedCopies });
+    return { deletedR2: old.length, deletedConvex, droppedCopies };
   },
 });

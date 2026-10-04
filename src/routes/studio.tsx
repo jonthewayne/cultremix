@@ -1,60 +1,87 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { BATCH_CREDITS } from "../../convex/lib/studioRules";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
+import type { Tile } from "~/components/studio/design";
+import type { Scope } from "~/lib/viewerNav";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
+import { PublishDialog } from "~/components/publish/PublishDialog";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
-import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
+import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
-import type { MenuItem } from "~/components/studio/StudioSessions";
+import { Compare } from "~/components/studio/Compare";
+import { FavoritesTray } from "~/components/studio/FavoritesTray";
+import { Viewer } from "~/components/studio/Viewer";
+import { designItems, isFailed } from "~/components/studio/design";
+import { useDesignActions } from "~/components/studio/designActions";
+import { useCompareRoute } from "~/components/studio/useCompareRoute";
+import { useViewerRoute } from "~/components/studio/useViewerRoute";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
 import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
-import { designFilename, isTouchDevice, prefetchImage, saveImage } from "~/lib/saveImage";
+import { prefetchImage } from "~/lib/saveImage";
+import { COMPARE_MAX, canCompare, compareParam, parseCompare, togglePick } from "~/lib/compare";
 import { cn } from "~/lib/utils";
+import { parseScope } from "~/lib/viewerNav";
 
 // /studio is always a blank design with the member's sessions below it; /studio?s=<id> opens a
 // session (every batch made in it, newest first); /studio?remix=<CR> starts a new remix session.
+// &view=<design>&scope=<favorites|batch|session> opens the large viewer on a design;
+// &compare=<design>,<design>,… opens Compare on two to four of them.
 export const Route = createFileRoute("/studio")({
-  validateSearch: (search: Record<string, unknown>): { remix?: string; s?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { remix?: string; s?: string; view?: string; scope?: Scope; compare?: string } => ({
     remix: typeof search.remix === "string" ? search.remix : undefined,
     s: typeof search.s === "string" ? search.s : undefined,
+    view: typeof search.view === "string" ? search.view : undefined,
+    scope: parseScope(search.scope),
+    compare: compareParam(parseCompare(search.compare)),
   }),
   beforeLoad: requireAuthenticatedRoute,
   component: StudioPage,
 });
 
-type Tile = {
-  generationId: Id<"generations">;
-  batchId: Id<"batches">;
-  status: string;
-  // The original (download, "Open full size") and the copies shown in the studio.
-  url?: string;
-  mediumUrl?: string;
-  thumbUrl?: string;
-  favorite: boolean;
-  error?: string;
-  blocked?: boolean;
-  backgroundColor: string;
-  publishedCr?: string;
-  key?: string;
-};
-
 let slotCounter = 0;
 const newSlotId = () => `slot-${Date.now()}-${slotCounter++}`;
 
 function StudioPage() {
-  const { remix, s } = Route.useSearch();
+  const search = Route.useSearch();
+  const { remix, s } = search;
   const navigate = useNavigate();
   const sessionQuery = useQuery(convexQuery(api.studio.session, s ? { sessionId: s } : "skip"));
-  const session = s ? sessionQuery.data : undefined;
+  const sessionData = s ? sessionQuery.data : undefined;
+  const session = sessionData && !("missing" in sessionData) ? sessionData : undefined;
+  // The session's batches, newest first; older ones page in as the list scrolls.
+  const batchPages = usePaginatedQuery(api.studio.sessionBatches, s ? { sessionId: s } : "skip", {
+    initialNumItems: PAGE.batches,
+  });
+  // Its favorites, in the order they were hearted: the tray, and the viewer's Favorites.
+  const favoritePages = usePaginatedQuery(api.studio.sessionFavorites, s ? { sessionId: s } : "skip", {
+    initialNumItems: PAGE.favorites,
+  });
+  const viewerRoute = useViewerRoute(search);
+  const compareRoute = useCompareRoute(search);
+  // Designs picked for Compare (from the favorites tray or the viewer), in the order picked.
+  const [picks, setPicks] = useState<Array<string>>([]);
+  const [picking, setPicking] = useState(false);
+  useEffect(() => {
+    setPicks([]);
+    setPicking(false);
+  }, [s]);
+  const designActions = useDesignActions(s);
+  // Dismissed designs stay hidden unless the member shows them.
+  const [showDismissed, setShowDismissed] = useState(false);
+  const instructionRef = useRef<HTMLTextAreaElement>(null);
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
   const generate = useMutation(api.studio.generate);
   const startRemix = useMutation(api.studio.startRemix);
@@ -71,8 +98,9 @@ function StudioPage() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [viewer_, setViewer] = useState<{ list: Array<Tile>; index: number } | null>(null);
   const [publishing, setPublishing] = useState<Tile | null>(null);
+  // Publish buttons hide while an admin has publishing turned off.
+  const canPublish = useQuery(convexQuery(api.publish.availability, {})).data?.publishing !== false;
   const remixStarted = useRef<string | null>(null);
   const imagesRef = useRef(images);
   const stylesRef = useRef(styles);
@@ -187,7 +215,7 @@ function StudioPage() {
   const adopted = useRef<string | undefined>(undefined);
   const seeded = useRef<string | undefined>(undefined);
   useEffect(() => {
-    setViewer(null);
+    setShowDismissed(false);
     if (s && s === adopted.current) {
       seeded.current = s;
       return;
@@ -230,9 +258,10 @@ function StudioPage() {
       }
     }
   }, [s, session, addExisting]);
-  // A session that isn't the member's (or no longer exists) falls back to a blank studio.
+  // A session that isn't the member's (or no longer exists) falls back to a blank studio. The query
+  // answers null until the page's sign-in token reaches Convex, so only "missing" counts.
   useEffect(() => {
-    if (s && sessionQuery.data === null) void navigate({ to: "/studio", search: {}, replace: true });
+    if (s && sessionQuery.data && "missing" in sessionQuery.data) void navigate({ to: "/studio", search: {}, replace: true });
   }, [s, sessionQuery.data, navigate]);
 
   // Remix: a new session with the published design as image 1.
@@ -316,7 +345,9 @@ function StudioPage() {
         setError(
           result.refused === "NO_CREDITS"
             ? "You're out of credits for today."
-            : "Generation is paused right now.",
+            : result.refused === "BUDGET"
+              ? "The studio is resting until tomorrow. Your credits are safe."
+              : "Generation is paused right now.",
         );
       } else if (result.sessionId !== s) {
         adopted.current = result.sessionId;
@@ -329,22 +360,53 @@ function StudioPage() {
     }
   };
 
-  const batches = session?.batches ?? [];
-  const allTiles: Array<Tile> = useMemo(() => batches.flatMap((b) => b.tiles), [batches]);
-  const favorites = allTiles.filter((t) => t.favorite && t.status === "succeeded");
-  const tileById = useMemo(() => new Map(allTiles.map((t) => [t.generationId, t])), [allTiles]);
+  const batches = session ? batchPages.results : [];
+  const favorites = s ? favoritePages.results : [];
 
-  const openViewer = (tile: Tile, batchTiles: Array<Tile>) => {
-    const list = favorites.length
-      ? favorites
-      : batchTiles.filter((t) => t.status === "succeeded");
-    const index = Math.max(0, list.findIndex((t) => t.generationId === tile.generationId));
-    if (!list.some((t) => t.generationId === tile.generationId)) {
-      setViewer({ list: [tile, ...list], index: 0 });
+  // Back to the studio itself from the viewer, and from Compare under it.
+  const leaveViewer = () => {
+    if (compareRoute.ids) {
+      viewerRoute.hide();
+      compareRoute.dismiss();
     } else {
-      setViewer({ list, index });
+      viewerRoute.close();
     }
   };
+  // B in the viewer: the design becomes an image to work on, ready for what should change.
+  const branch = (tile: Tile) => {
+    leaveViewer();
+    useAsImage(tile);
+    window.requestAnimationFrame(() => instructionRef.current?.focus({ preventScroll: true }));
+  };
+  const reject = (tile: Tile, rejected: boolean) => designActions.setRejected(tile.generationId, rejected, tile.favorite);
+
+  const pick = (tile: Tile) => {
+    const next = togglePick(picks, tile.generationId);
+    if (next.full) toast(`Compare holds up to ${COMPARE_MAX} designs. Take one out first.`);
+    setPicks(next.picks);
+  };
+  const startCompare = () => {
+    if (!canCompare(picks)) return;
+    viewerRoute.hide();
+    compareRoute.open(picks);
+    setPicks([]);
+    setPicking(false);
+  };
+  // Compare's designs: the ones already on the page, and the rest (from a link) fetched.
+  const compareFetched = useQuery(
+    convexQuery(api.studio.compareDesigns, s && compareRoute.ids ? { sessionId: s, generationIds: compareRoute.ids } : "skip"),
+  ).data;
+  const compareTiles = useMemo(() => {
+    if (!compareRoute.ids) return [];
+    const known = new Map<string, Tile>();
+    for (const tile of compareFetched ?? []) known.set(tile.generationId, tile);
+    for (const tile of favorites) known.set(tile.generationId, tile);
+    for (const batch of batches) for (const tile of batch.tiles) known.set(tile.generationId, tile);
+    return compareRoute.ids.flatMap((id) => {
+      const tile = known.get(id);
+      return tile && tile.status === "succeeded" && tile.url ? [tile] : [];
+    });
+  }, [compareRoute.ids, compareFetched, favorites, batches]);
 
   const remixInfo = session?.remix;
   const count = images.length;
@@ -355,13 +417,13 @@ function StudioPage() {
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
-      <main className="px-4 pb-24 md:px-10">
+      <main className={cn("px-4 md:px-10", favorites.length > 0 ? "pb-40" : "pb-24")}>
         <section className="grid grid-cols-1 gap-8 pt-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12 md:pt-10">
           <div className="flex min-w-0 flex-col gap-6">
             <h1 className="text-[18vw] font-black leading-[0.8] tracking-[-0.06em] md:text-[9.5vw]">Studio</h1>
             {session ? (
               <div className="flex flex-col gap-4">
-                <SessionTitle key={session.sessionId} sessionId={session.sessionId} name={session.name} batches={session.batches.length} />
+                <SessionTitle key={session.sessionId} sessionId={session.sessionId} name={session.name} batches={session.batchCount} />
                 {remixInfo && (
                   <div className="flex items-center gap-4">
                     <div
@@ -406,6 +468,7 @@ function StudioPage() {
                 {count === 0 ? "What do you want to make?" : "What should change?"}
               </span>
               <textarea
+                ref={instructionRef}
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
                 onKeyDown={(e) => {
@@ -487,7 +550,7 @@ function StudioPage() {
 
         <section className="mt-16 flex flex-col gap-14">
           {!s && <SessionList onOpen={openSession} />}
-          {loadingSession && <p className="text-neutral-500">Opening the session…</p>}
+          {s && session !== null && batchPages.status === "LoadingFirstPage" && <BatchSkeleton />}
           <AnimatePresence initial={false}>
             {batches.map((batch) => (
               <motion.div
@@ -500,12 +563,22 @@ function StudioPage() {
                 <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t-2 border-black pt-3">
                   <span className="h-4 w-4 shrink-0 border border-black" style={{ background: batch.backgroundColor }} />
                   {batch.images.length > 0 && (
-                    <span className="flex shrink-0 gap-1">
-                      {batch.images.map((image, i) => (
-                        <span key={i} className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
-                          <Art url={image.thumbUrl ?? image.url} alt={`Image ${i + 1}`} className="max-h-full max-w-full object-contain" />
-                        </span>
-                      ))}
+                    <span className="flex shrink-0 items-center gap-1">
+                      {batch.images.map((image, i) =>
+                        image.design ? (
+                          <ParentDesign
+                            key={i}
+                            image={image}
+                            design={image.design}
+                            here={image.design.sessionId === s}
+                            onOpen={(view) => viewerRoute.open({ view, scope: "session" })}
+                          />
+                        ) : (
+                          <span key={i} className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
+                            <Art url={image.thumbUrl ?? image.url} alt={`Image ${i + 1}`} className="max-h-full max-w-full object-contain" />
+                          </span>
+                        ),
+                      )}
                     </span>
                   )}
                   <p className="min-w-0 flex-1 truncate text-base font-semibold">
@@ -526,24 +599,35 @@ function StudioPage() {
                       {batch.refunded} {batch.refunded === 1 ? "credit" : "credits"} back
                     </span>
                   ) : null}
+                  <DismissedToggle
+                    count={batch.tiles.filter((tile) => tile.rejected).length}
+                    shown={showDismissed}
+                    onToggle={() => setShowDismissed(!showDismissed)}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-                  {batch.tiles.map((tile) => (
-                    <TileCard
-                      key={tile.generationId}
-                      tile={tile}
-                      grid={batch.grid}
-                      onOpen={() => openViewer(tile, batch.tiles)}
-                      onPublish={() => setPublishing(tile)}
-                      onInspire={() => useAsImage(tile)}
-                      onStyle={() => useAsStyle(tile)}
-                    />
-                  ))}
+                  {batch.tiles
+                    .filter((tile) => showDismissed || !tile.rejected)
+                    .map((tile) => (
+                      <TileCard
+                        key={tile.generationId}
+                        tile={tile}
+                        grid={batch.grid}
+                        onOpen={() => viewerRoute.open({ view: tile.generationId, scope: "batch" })}
+                        onPublish={canPublish ? () => setPublishing(tile) : undefined}
+                        onInspire={() => useAsImage(tile)}
+                        onStyle={() => useAsStyle(tile)}
+                        onFavorite={(on) => designActions.setFavorite(tile.generationId, on)}
+                        onReject={(rejected) => reject(tile, rejected)}
+                      />
+                    ))}
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
-          {session && batches.length === 0 && (
+          {session && batchPages.status === "LoadingMore" && <BatchSkeleton />}
+          {session && <LoadMore status={batchPages.status} onMore={() => batchPages.loadMore(PAGE.batches)} label="Show older batches" />}
+          {session && batchPages.status === "Exhausted" && batches.length === 0 && (
             <p className="max-w-lg text-lg text-neutral-500">
               Designs in this session show up here, four at a time, newest on top. Heart the ones you like, then publish one to get its CR number.
             </p>
@@ -552,24 +636,71 @@ function StudioPage() {
       </main>
 
       <AnimatePresence>
-        {viewer_ && (
+        {s && favorites.length > 0 && (
+          <FavoritesTray
+            favorites={favorites}
+            status={favoritePages.status}
+            onMore={() => favoritePages.loadMore(PAGE.favorites)}
+            onOpen={(tile) => viewerRoute.open({ view: tile.generationId, scope: "favorites" })}
+            picking={picking || picks.length > 0}
+            picks={picks}
+            onStartPicking={() => setPicking(true)}
+            onPick={pick}
+            onCompare={startCompare}
+            onStopPicking={() => {
+              setPicks([]);
+              setPicking(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {s && compareRoute.ids && (
+          <Compare
+            tiles={compareTiles}
+            missing={compareFetched !== undefined && compareTiles.length < compareRoute.ids.length}
+            active={!viewerRoute.spot}
+            onRemove={(tile) => compareRoute.remove(tile.generationId)}
+            onOpen={(tile) =>
+              viewerRoute.open({ view: tile.generationId, scope: tile.favorite && !tile.rejected ? "favorites" : "batch" })
+            }
+            onClose={compareRoute.close}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {s && viewerRoute.spot && (
           <Viewer
-            list={viewer_.list.map((t) => tileById.get(t.generationId) ?? t)}
-            index={viewer_.index}
-            onIndex={(index) => setViewer({ ...viewer_, index })}
-            onClose={() => setViewer(null)}
-            onPublish={(tile) => {
-              setViewer(null);
-              setPublishing(tile);
-            }}
-            onInspire={(tile) => {
-              setViewer(null);
-              useAsImage(tile);
-            }}
+            sessionId={s}
+            spot={viewerRoute.spot}
+            batches={batches}
+            batchesStatus={batchPages.status}
+            onMoreBatches={() => batchPages.loadMore(PAGE.batches)}
+            favorites={favorites}
+            favoritesStatus={favoritePages.status}
+            onMoreFavorites={() => favoritePages.loadMore(PAGE.favorites)}
+            showRejected={showDismissed}
+            onShowRejected={setShowDismissed}
+            onMove={viewerRoute.move}
+            onClose={viewerRoute.close}
+            onFavorite={(tile, on) => designActions.setFavorite(tile.generationId, on)}
+            onReject={reject}
+            onBranch={branch}
             onStyle={(tile) => {
-              setViewer(null);
+              leaveViewer();
               useAsStyle(tile);
             }}
+            onPublish={
+              canPublish
+                ? (tile) => {
+                    leaveViewer();
+                    setPublishing(tile);
+                  }
+                : undefined
+            }
+            picks={picks}
+            onPick={pick}
+            onCompare={startCompare}
           />
         )}
       </AnimatePresence>
@@ -591,25 +722,6 @@ function StudioPage() {
       </AnimatePresence>
     </div>
   );
-}
-
-// The ⋯ menu's choices for a finished design.
-function designItems(
-  tile: Tile,
-  actions: { onOpen: () => void; onPublish: () => void; onInspire: () => void; onStyle: () => void },
-): Array<MenuItem> {
-  const filename = designFilename(tile);
-  const items: Array<MenuItem> = [
-    { label: "View large", onSelect: actions.onOpen },
-    { label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, filename) },
-  ];
-  if (tile.url && !tile.url.startsWith("fake:")) items.push({ label: "Open full size", href: tile.url });
-  if (tile.key) {
-    items.push({ label: "Use as image", onSelect: actions.onInspire });
-    items.push({ label: "Use as style", onSelect: actions.onStyle });
-  }
-  if (!tile.publishedCr) items.push({ label: "Publish", onSelect: actions.onPublish });
-  return items;
 }
 
 function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClose: () => void }) {
@@ -668,6 +780,72 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
   );
 }
 
+// A batch still loading: its line and four grey squares, laid out like the real thing.
+function BatchSkeleton() {
+  return (
+    <div aria-hidden="true">
+      <div className="mb-3 flex items-center gap-3 border-t-2 border-neutral-200 pt-3">
+        <Skeleton className="h-4 w-4 rounded-none" />
+        <Skeleton className="h-5 w-1/2 max-w-sm rounded-md" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="aspect-square" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// The design a batch started from ("Use as image"), on the batch's line: a thumbnail over its own
+// background color that opens it, in the viewer here or in the session it came from.
+function ParentDesign({
+  image,
+  design,
+  here,
+  onOpen,
+}: {
+  image: { url?: string; thumbUrl?: string };
+  design: { generationId: string; sessionId: string; backgroundColor: string };
+  here: boolean;
+  onOpen: (view: string) => void;
+}) {
+  const className =
+    "flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-black py-0.5 pl-2 pr-0.5 text-sm font-bold transition-transform hover:-translate-y-0.5";
+  const content = (
+    <>
+      From
+      <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-md" style={{ background: design.backgroundColor }}>
+        <Art url={image.thumbUrl ?? image.url} alt="" className="max-h-full max-w-full object-contain" />
+      </span>
+    </>
+  );
+  return here ? (
+    <button type="button" onClick={() => onOpen(design.generationId)} className={className} title="Open the design this started from">
+      {content}
+    </button>
+  ) : (
+    <Link
+      to="/studio"
+      search={{ s: design.sessionId, view: design.generationId, scope: "batch" }}
+      className={className}
+      title="Open the design this started from"
+    >
+      {content}
+    </Link>
+  );
+}
+
+// "Show 2 dismissed" on a batch's line, when it has any.
+function DismissedToggle({ count, shown, onToggle }: { count: number; shown: boolean; onToggle: () => void }) {
+  if (count === 0) return null;
+  return (
+    <button type="button" onClick={onToggle} className="shrink-0 text-sm font-semibold text-neutral-500 underline underline-offset-4 hover:text-black">
+      {shown ? "Hide dismissed" : `Show ${count} dismissed`}
+    </button>
+  );
+}
+
 function TileCard({
   tile,
   grid,
@@ -675,25 +853,37 @@ function TileCard({
   onPublish,
   onInspire,
   onStyle,
+  onFavorite,
+  onReject,
 }: {
   tile: Tile;
   // Grid batches give credits back per batch (shown on the batch line), not per design.
   grid: boolean;
   onOpen: () => void;
-  onPublish: () => void;
+  // Absent while publishing is turned off.
+  onPublish?: () => void;
   onInspire: () => void;
   onStyle: () => void;
+  onFavorite: (favorite: boolean) => void;
+  onReject: (rejected: boolean) => void;
 }) {
-  const toggle = useMutation(api.studio.toggleFavorite);
   const [menuOpen, setMenuOpen] = useState(false);
   const ready = tile.status === "succeeded";
-  const failed = tile.status === "failed" || tile.status === "unknown_outcome" || tile.status === "expired";
+  const failed = isFailed(tile);
   const ink = inkOn(tile.backgroundColor);
+  const corner = "absolute bottom-2 right-2 rounded-lg px-2.5 py-1.5 text-xs font-black";
   return (
     <div className="group relative aspect-square overflow-hidden rounded-2xl" style={{ background: tile.backgroundColor, color: ink }}>
       {ready ? (
         <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="View large">
-          <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]" />
+          <Art
+            url={tile.mediumUrl ?? tile.url}
+            alt="Design"
+            className={cn(
+              "h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]",
+              tile.rejected && "opacity-40",
+            )}
+          />
         </button>
       ) : failed && tile.blocked ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center md:p-4">
@@ -724,7 +914,7 @@ function TileCard({
       {ready && (
         <>
           <DesignMenu
-            items={designItems(tile, { onOpen, onPublish, onInspire, onStyle })}
+            items={designItems(tile, { onOpen, onPublish, onInspire, onStyle, onReject: () => onReject(!tile.rejected) })}
             onOpenChange={(open) => {
               setMenuOpen(open);
               if (open) prefetchImage(tile.url);
@@ -736,7 +926,7 @@ function TileCard({
           />
           <button
             type="button"
-            onClick={() => void toggle({ generationId: tile.generationId })}
+            onClick={() => onFavorite(!tile.favorite)}
             className={cn(
               "absolute right-2 top-2 flex h-10 w-10 items-center justify-center text-2xl transition-transform hover:scale-110",
               tile.favorite ? "opacity-100" : "opacity-70 md:opacity-0 md:group-hover:opacity-100",
@@ -754,7 +944,7 @@ function TileCard({
             >
               CR {tile.publishedCr}
             </Link>
-          ) : (
+          ) : onPublish && !tile.rejected ? (
             <button
               type="button"
               onClick={onPublish}
@@ -762,8 +952,28 @@ function TileCard({
             >
               Publish
             </button>
-          )}
+          ) : null}
         </>
+      )}
+      {tile.rejected ? (
+        <button type="button" onClick={() => onReject(false)} className={cn(corner, "bg-white text-black ring-1 ring-black/20")}>
+          Bring back
+        </button>
+      ) : (
+        (ready || failed) && (
+          <button
+            type="button"
+            onClick={() => onReject(true)}
+            className={cn(
+              corner,
+              "border-2 border-current transition-opacity",
+              failed ? "opacity-70 hover:opacity-100" : "hidden opacity-0 md:block md:group-hover:opacity-100 md:focus-visible:opacity-100",
+            )}
+            aria-label="Dismiss this design"
+          >
+            Dismiss
+          </button>
+        )
       )}
     </div>
   );
@@ -780,293 +990,5 @@ function Elapsed({ since }: { since: number }) {
     <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-neutral-500">
       Designing · {seconds} s
     </span>
-  );
-}
-
-function Viewer({
-  list,
-  index,
-  onIndex,
-  onClose,
-  onPublish,
-  onInspire,
-  onStyle,
-}: {
-  list: Array<Tile>;
-  index: number;
-  onIndex: (index: number) => void;
-  onClose: () => void;
-  onPublish: (tile: Tile) => void;
-  onInspire: (tile: Tile) => void;
-  onStyle: (tile: Tile) => void;
-}) {
-  const toggle = useMutation(api.studio.toggleFavorite);
-  const [checker, setChecker] = useState(false);
-  const tile = list[Math.min(index, list.length - 1)];
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      if (event.key === "ArrowRight") onIndex((index + 1) % list.length);
-      if (event.key === "ArrowLeft") onIndex((index - 1 + list.length) % list.length);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [index, list.length, onClose, onIndex]);
-  // Ready to save the moment it's tapped (phones only share files during the tap).
-  useEffect(() => prefetchImage(tile?.url), [tile?.url]);
-  if (!tile) return null;
-  const ink = checker ? "#000000" : inkOn(tile.backgroundColor);
-  const button = "h-11 rounded-xl px-4 text-sm font-bold";
-  const items: Array<MenuItem> = [
-    { label: checker ? "Show the background color" : "Show transparency", onSelect: () => setChecker(!checker) },
-    ...designItems(tile, {
-      onOpen: () => undefined,
-      onPublish: () => onPublish(tile),
-      onInspire: () => onInspire(tile),
-      onStyle: () => onStyle(tile),
-    }).filter((item) => item.label !== "View large" && item.label !== "Download" && item.label !== "Save image" && item.label !== "Publish"),
-  ];
-  return (
-    <motion.div
-      className={cn("fixed inset-0 z-50 flex flex-col", checker && "checker")}
-      style={checker ? { color: ink } : { background: tile.backgroundColor, color: ink }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Design viewer"
-    >
-      <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
-        <span className="font-cr text-3xl md:text-5xl">
-          {index + 1} / {list.length}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void toggle({ generationId: tile.generationId })}
-            className="h-11 px-2 text-3xl leading-none"
-            aria-label={tile.favorite ? "Remove from favorites" : "Add to favorites"}
-            aria-pressed={tile.favorite}
-          >
-            {tile.favorite ? "♥" : "♡"}
-          </button>
-          <button
-            type="button"
-            onClick={() => saveImage(tile.url, designFilename(tile))}
-            className={cn(button, "hidden border-2 border-current sm:block")}
-          >
-            {isTouchDevice() ? "Save image" : "Download"}
-          </button>
-          {tile.publishedCr ? (
-            <Link to="/cr/$cr" params={{ cr: tile.publishedCr }} className={cn(button, "flex items-center bg-black text-white")}>
-              CR {tile.publishedCr}
-            </Link>
-          ) : (
-            <button type="button" onClick={() => onPublish(tile)} className={cn(button, "bg-black text-white")}>
-              Publish
-            </button>
-          )}
-          <DesignMenu
-            items={[{ label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, designFilename(tile)) }, ...items]}
-          />
-          <button type="button" onClick={onClose} className="h-11 px-2 text-sm font-bold underline underline-offset-4">
-            Close
-          </button>
-        </div>
-      </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 pb-6 md:px-14">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tile.generationId}
-            className="flex h-full w-full items-center justify-center"
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.18 }}
-            drag={list.length > 1 ? "x" : false}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.6}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -80) onIndex((index + 1) % list.length);
-              else if (info.offset.x > 80) onIndex((index - 1 + list.length) % list.length);
-            }}
-          >
-            <Art
-              url={tile.mediumUrl ?? tile.url}
-              fullUrl={tile.url}
-              alt="Design, full size"
-              className="pointer-events-none h-full max-h-[82vh] w-auto max-w-full select-none object-contain"
-            />
-          </motion.div>
-        </AnimatePresence>
-        {list.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => onIndex((index - 1 + list.length) % list.length)}
-              className="absolute left-1 top-1/2 hidden -translate-y-1/2 p-3 text-5xl font-black sm:block md:left-6"
-              aria-label="Previous"
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              onClick={() => onIndex((index + 1) % list.length)}
-              className="absolute right-1 top-1/2 hidden -translate-y-1/2 p-3 text-5xl font-black sm:block md:right-6"
-              aria-label="Next"
-            >
-              →
-            </button>
-          </>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-function PublishDialog({ tile, onClose }: { tile: Tile; onClose: () => void }) {
-  const publish = useMutation(api.publish.quick);
-  const [title, setTitle] = useState("");
-  const [requestId] = useState(() => crypto.randomUUID());
-  const [result, setResult] = useState<{ cr: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, saving]);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const published = await publish({ requestId, generationId: tile.generationId, title: title || undefined });
-      setResult({ cr: published.cr });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (result) {
-    return (
-      <motion.div
-        className="fixed inset-0 z-50 flex flex-col justify-between gap-8 overflow-y-auto bg-black p-6 text-white md:p-12"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Published"
-      >
-        <p className="text-sm font-bold uppercase tracking-[0.3em]">Published</p>
-        <div>
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 170, damping: 20 }}
-          >
-            <CrMark cr={result.cr} className="text-[18vw] md:text-[16vw]" />
-          </motion.div>
-          {title && (
-            <motion.p
-              className="mt-4 text-3xl font-bold md:text-5xl"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.35 }}
-            >
-              {title}
-            </motion.p>
-          )}
-        </div>
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div className="flex items-center gap-4">
-            <div
-              className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl p-2"
-              style={{ background: tile.backgroundColor }}
-            >
-              <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
-            </div>
-            <p className="max-w-xs text-sm text-neutral-300">
-              The model photo is developing. It appears on the feed in a minute or two.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link to="/cr/$cr" params={{ cr: result.cr }} className="rounded-2xl bg-white px-7 py-4 text-base font-black text-black">
-              View shop page
-            </Link>
-            <button type="button" onClick={onClose} className="rounded-2xl border-2 border-white px-7 py-4 text-base font-black">
-              Keep creating
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !saving) onClose();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Publish"
-    >
-      <motion.div
-        className="grid w-full max-w-4xl overflow-hidden rounded-3xl bg-white text-black md:grid-cols-2"
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
-      >
-        <div className="flex aspect-square items-center justify-center p-[8%]" style={{ background: tile.backgroundColor }}>
-          <Art url={tile.mediumUrl ?? tile.url} alt="Design on the shirt color" className="h-full w-auto max-w-full object-contain" />
-        </div>
-        <form onSubmit={submit} className="flex flex-col justify-between gap-8 p-6 md:p-10">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wider">Publish</p>
-            <h2 className="mt-3 text-4xl font-black leading-none tracking-tight">Give it a title</h2>
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={80}
-              placeholder="Optional"
-              className="mt-6 w-full border-b-4 border-black bg-transparent py-2 text-2xl font-semibold outline-none placeholder:text-neutral-300"
-            />
-            <p className="mt-4 text-sm text-neutral-600">
-              It gets the next CR number and goes on the feed, printed on a{" "}
-              <span className="inline-block h-3 w-3 rounded-sm border border-black align-middle" style={{ background: tile.backgroundColor }} />{" "}
-              <span className="font-mono">{tile.backgroundColor}</span> shirt.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" disabled={saving} className="h-14 rounded-2xl bg-black px-8 text-lg font-black text-white disabled:opacity-50">
-              {saving ? "Publishing…" : "Publish"}
-            </button>
-            <button type="button" onClick={onClose} disabled={saving} className="px-2 text-sm font-semibold underline underline-offset-4">
-              Cancel
-            </button>
-          </div>
-          {error && (
-            <p role="alert" className="font-semibold text-red-600">
-              {error}
-            </p>
-          )}
-        </form>
-      </motion.div>
-    </motion.div>
   );
 }

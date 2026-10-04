@@ -4,7 +4,7 @@ Run `bun run setup`, apply the printed Convex env commands, then run `bun run do
 
 ## Sources
 
-`VITE_*` values are Vite build-time values. They are read by browser/server bundle code and must exist in `.env.development` and `.env.production` before build.
+`VITE_*` values are Vite build-time values. They are read by browser/server bundle code and must exist in `.env.development` and `.env.production` (and `.env.staging` for `bun run deploy:staging`) before build.
 
 Convex backend env vars are separate. Set them with `bunx convex env set`. Convex production env vars use `bunx convex env set --prod`. Cloudflare Worker runtime vars and secrets are separate again. GitHub Actions variables/secrets are separate again.
 
@@ -15,8 +15,8 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | Variable | Where | Committed | Sensitive | Set By | Read By |
 | --- | --- | --- | --- | --- | --- |
 | `CONVEX_DEPLOYMENT` | `.env.local` | no | no | wizard/Convex CLI | Convex dev CLI |
-| `VITE_CONVEX_URL` | `.env.local`, `.env.development`, `.env.production`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | router, auth server |
-| `VITE_CONVEX_SITE_URL` | `.env.local`, `.env.development`, `.env.production`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | auth server |
+| `VITE_CONVEX_URL` | `.env.local`, `.env.development`, `.env.production`, `.env.staging`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | router, auth server |
+| `VITE_CONVEX_SITE_URL` | `.env.local`, `.env.development`, `.env.production`, `.env.staging`, Worker vars, GitHub vars | dev/prod yes, local no | no | wizard | auth server |
 | `SITE_URL` | `.env.local`, Convex env, Worker vars | local no, wrangler yes | no | wizard | Better Auth base URL, SMS links, the work page URL hashed into each registry record |
 | `CONVEX_SITE_URL` | Convex system env | no | no | Convex | invite magic-link trigger |
 | `AUTH_SECRET` | `.env.local`, Convex env | no | yes | wizard | Better Auth |
@@ -42,16 +42,26 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `CLOUDFLARE_ZONE_NAME` | GitHub variable | no | no | wizard/manual | preview route patch |
 | `CLOUDFLARE_PROJECT_NAME` | GitHub variable | no | no | wizard | workflow Worker names |
 | `DEV_URL`, `PROD_URL`, `PREVIEW_BASE_DOMAIN` | GitHub variables | no | no | wizard/manual | deploy workflow |
+| `DEPLOYMENT_ENV` | Convex env (dev, staging, prod) | no | no | manual | which environment this is: `dev`, `staging`, or `prod`. Staging and dev (and an unset value) show the Testnet badge, so production must say `prod`; prod shows Early access until checkout opens (`api.deployment.get`, the only way the browser learns it); dev allows the stand-in image generator; it also decides dev-only resets, whether test orders create (simulated) earnings, Printful auto-confirm (production only), and the chain network and registry |
 | `AI_GATEWAY_API_KEY` | Convex env | no | yes | manual | image designs, model photos, image notes |
-| `IMAGE_PROVIDER` | Convex env (optional) | no | no | manual | `gateway` or `chatgpt` forces the image provider |
-| `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex env (optional) | no | no | manual | design and model-photo quality (default `medium`) |
+| `IMAGE_PROVIDER` | Convex env (optional) | no | no | manual | `gateway` or `chatgpt` forces the image provider; only gateway calls hold daily-budget reservations |
+| `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex env (optional) | no | no | manual | design and model-photo quality (default `medium`); also sets each call's worst-case budget reservation (`convex/lib/pricing.ts`) |
 | `STYLE_NOTES_MODEL` | Convex env (optional) | no | no | manual | model for image notes (default `openai/gpt-6-luna`) |
-| `GRID_QUALITY` | Convex env (optional) | no | no | manual | quality of the studio's grid call (default `high`) |
+| `GRID_QUALITY` | Convex env (optional) | no | no | manual | quality of the studio's grid call (default `high`); also sets each batch's worst-case budget reservation |
 | `STUDIO_LAYOUT` | Convex env (optional) | no | no | manual | `single` makes four separate designs per batch instead of one grid |
 | `IMAGE_STORE` | Convex env (optional) | no | no | manual | `convex` stores images in Convex when R2 keys are missing |
 | `R2_ENDPOINT`, `R2_BUCKET`, `R2_PUBLIC_URL` | Convex env | no | no | manual | image storage: the environment's public R2 bucket and its address |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Convex env | no | yes | manual | image storage; images go to R2 whenever these are set |
-| `DEPLOYMENT_ENV` | Convex env | no | no | manual | `dev`, `staging`, or `prod`: the chain network and registry, and dev-only tools |
+| `FAL_KEY` | Convex env (dev, staging, production; one key per environment, each with a fal spend limit) | no | yes | manual | "Upscale for print" (fal Topaz Transparent, `convex/upscale.ts`); without it an upscale fails and refunds its credits. `scripts/spikes/fal-topaz.ts` reads its own copy from `~/.config/cultremix/fal.env` |
+| `SHOPIFY_SHOP_DOMAIN` | Convex env, Worker secret/var | no | no | manual | the store's `*.myshopify.com` domain: Admin API, webhook check, Storefront API |
+| `SHOPIFY_CLIENT_ID` | Convex env | no | no | manual | Admin API client-credentials token (product sync, order hydration) |
+| `SHOPIFY_CLIENT_SECRET` | Convex env | no | yes | manual | Admin API token, and the key that signs Shopify webhooks |
+| `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` | Worker secret | no | yes | manual | Storefront API cart and checkout (TanStack Start server functions) |
+| `SHOPIFY_API_VERSION` | Convex env, Worker var (optional) | no | no | manual | overrides the API version pinned in `shared/config/shopify.ts` (`2026-07`); leave unset |
+| `PRINTFUL_API_TOKEN` | Convex env | no | yes | manual | Printful v2 orders, shipments, and confirmations |
+| `PRINTFUL_STORE_ID` | Convex env | no | no | manual | the Printful store orders go to; webhooks from other stores are ignored |
+| `PRINTFUL_WEBHOOK_SECRET` | Convex env | no | yes | manual | verifies `x-pf-webhook-signature` on `/webhooks/printful` |
+| `PRINTFUL_AUTO_CONFIRM` | Convex env (prod only) | no | no | manual | `true` lets production confirm Printful drafts after the 1-hour hold |
 | `MONAD_RPC_URL` | Convex env (optional) | no | no | manual | chain reads and writes; defaults to the network's public RPC; https only, except a localhost node in dev |
 | `CHAIN_REGISTRY_ADDRESS` | Convex env (dev only, optional) | no | no | manual | a local or fresh dev registry in place of the committed one |
 | `MONAD_RELAYER_PRIVATE_KEY` | Convex env | no | yes | manual | the relayer that sends every chain write; must belong to the environment's relayer in `shared/config/chains.ts`; never logged |
@@ -61,6 +71,19 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `ANVIL_BIN` | shell (optional) | no | no | manual | `bun run test:chain:anvil` uses this anvil instead of `~/.foundry/bin/anvil` |
 
 Image settings are explained in `docs/image-generation/README.md`.
+
+## Shop (Shopify and Printful)
+
+Each environment has its own Shopify store and Printful store. Set the same names in dev, staging, and production, with that environment's values.
+
+- Products, orders, and earnings run in Convex: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`. Without them product sync and order hydration wait, and `/webhooks/shopify` answers 503.
+- The cart runs in the Worker: `SHOPIFY_SHOP_DOMAIN` and `SHOPIFY_STOREFRONT_PRIVATE_TOKEN`. Buying is also behind the `commerce.checkout` feature flag; with it off the work page is unchanged.
+- Fulfillment runs in Convex: `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID`, `PRINTFUL_WEBHOOK_SECRET`. Without the first two, paid orders wait and the 30-minute sweep picks them up once they are set. Without the secret, `/webhooks/printful` answers 503.
+- Print files go to Printful by their public address, so `R2_PUBLIC_URL` must be set wherever orders are fulfilled.
+- Drafts are confirmed only when `DEPLOYMENT_ENV=prod` and `PRINTFUL_AUTO_CONFIRM=true`, and the `fulfillment.autoConfirm` flag isn't turned off (turning it off pauses confirmation). Never set `PRINTFUL_AUTO_CONFIRM` in dev or staging; it has no effect there.
+- Test orders (Shopify `test`) make labeled test earnings and Printful drafts in dev and staging, and nothing at all in production. An unset or unrecognized `DEPLOYMENT_ENV` is treated like production for test orders and never confirms.
+
+## Chain (Monad)
 
 Each environment's chain network, registry, relayer, and Circle wallet set are committed in `shared/config/chains.ts`, and Convex refuses settings that mix environments (for example a testnet RPC in prod, or a key that belongs to another relayer). Chain writes also need the `chain.writes` flag, which `bootstrap:ensureDefaults` turns on in dev only. See `docs/hackathon/reports/chain.md` and `contracts/README.md`.
 

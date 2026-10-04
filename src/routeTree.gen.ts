@@ -20,11 +20,24 @@ import { Route as TeamRouteImport } from './routes/team'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VerifyPhoneRouteImport } from './routes/verify-phone'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminJudgesRouteImport } from './routes/admin.judges'
+import { Route as AdminLineageRouteImport } from './routes/admin.lineage'
+import { Route as AdminMembersRouteImport } from './routes/admin.members'
+import { Route as AdminMetricsRouteImport } from './routes/admin.metrics'
+import { Route as AdminWaitlistRouteImport } from './routes/admin.waitlist'
 import { Route as AdminChainRouteImport } from './routes/admin_.chain'
+import { Route as AdminOrdersRouteImport } from './routes/admin_.orders'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
+import { Route as EconomicsFileRouteImport } from './routes/economics.$file'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
+import { Route as MeEarningsRouteImport } from './routes/me.earnings'
+import { Route as PrintCrRouteImport } from './routes/print.$cr'
+import { Route as UUsernameRouteImport } from './routes/u.$username'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as UUsernameFollowersRouteImport } from './routes/u.$username_.followers'
+import { Route as UUsernameFollowingRouteImport } from './routes/u.$username_.following'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -81,9 +94,44 @@ const VerifyPhoneRoute = VerifyPhoneRouteImport.update({
   path: '/verify-phone',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminJudgesRoute = AdminJudgesRouteImport.update({
+  id: '/judges',
+  path: '/judges',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminLineageRoute = AdminLineageRouteImport.update({
+  id: '/lineage',
+  path: '/lineage',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMembersRoute = AdminMembersRouteImport.update({
+  id: '/members',
+  path: '/members',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMetricsRoute = AdminMetricsRouteImport.update({
+  id: '/metrics',
+  path: '/metrics',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWaitlistRoute = AdminWaitlistRouteImport.update({
+  id: '/waitlist',
+  path: '/waitlist',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminChainRoute = AdminChainRouteImport.update({
   id: '/admin_/chain',
   path: '/admin/chain',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/admin_/orders',
+  path: '/admin/orders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCompleteRoute = AuthCompleteRouteImport.update({
@@ -96,9 +144,29 @@ const CrCrRoute = CrCrRouteImport.update({
   path: '/cr/$cr',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EconomicsFileRoute = EconomicsFileRouteImport.update({
+  id: '/economics/$file',
+  path: '/economics/$file',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InviteAcceptRoute = InviteAcceptRouteImport.update({
   id: '/invite/accept',
   path: '/invite/accept',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeEarningsRoute = MeEarningsRouteImport.update({
+  id: '/me/earnings',
+  path: '/me/earnings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrintCrRoute = PrintCrRouteImport.update({
+  id: '/print/$cr',
+  path: '/print/$cr',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UUsernameRoute = UUsernameRouteImport.update({
+  id: '/u/$username',
+  path: '/u/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -106,10 +174,20 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UUsernameFollowersRoute = UUsernameFollowersRouteImport.update({
+  id: '/u/$username_/followers',
+  path: '/u/$username/followers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UUsernameFollowingRoute = UUsernameFollowingRouteImport.update({
+  id: '/u/$username_/following',
+  path: '/u/$username/following',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -119,15 +197,27 @@ export interface FileRoutesByFullPath {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/judges': typeof AdminJudgesRoute
+  '/admin/lineage': typeof AdminLineageRoute
+  '/admin/members': typeof AdminMembersRoute
+  '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin/chain': typeof AdminChainRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
+  '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
+  '/print/$cr': typeof PrintCrRoute
+  '/u/$username': typeof UUsernameRoute
+  '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/u/$username/followers': typeof UUsernameFollowersRoute
+  '/u/$username/following': typeof UUsernameFollowingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -137,16 +227,29 @@ export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/judges': typeof AdminJudgesRoute
+  '/admin/lineage': typeof AdminLineageRoute
+  '/admin/members': typeof AdminMembersRoute
+  '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin/chain': typeof AdminChainRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
+  '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
+  '/print/$cr': typeof PrintCrRoute
+  '/u/$username': typeof UUsernameRoute
+  '/admin': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/u/$username/followers': typeof UUsernameFollowersRoute
+  '/u/$username/following': typeof UUsernameFollowingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -156,11 +259,24 @@ export interface FileRoutesById {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/judges': typeof AdminJudgesRoute
+  '/admin/lineage': typeof AdminLineageRoute
+  '/admin/members': typeof AdminMembersRoute
+  '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin_/chain': typeof AdminChainRoute
+  '/admin_/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
+  '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
+  '/print/$cr': typeof PrintCrRoute
+  '/u/$username': typeof UUsernameRoute
+  '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/u/$username_/followers': typeof UUsernameFollowersRoute
+  '/u/$username_/following': typeof UUsernameFollowingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -176,15 +292,27 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/judges'
+    | '/admin/lineage'
+    | '/admin/members'
+    | '/admin/metrics'
+    | '/admin/waitlist'
     | '/admin/chain'
+    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
+    | '/economics/$file'
     | '/invite/accept'
+    | '/me/earnings'
+    | '/print/$cr'
+    | '/u/$username'
+    | '/admin/'
     | '/api/auth/$'
+    | '/u/$username/followers'
+    | '/u/$username/following'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/dashboard'
     | '/login'
     | '/onboarding'
@@ -194,11 +322,24 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/judges'
+    | '/admin/lineage'
+    | '/admin/members'
+    | '/admin/metrics'
+    | '/admin/waitlist'
     | '/admin/chain'
+    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
+    | '/economics/$file'
     | '/invite/accept'
+    | '/me/earnings'
+    | '/print/$cr'
+    | '/u/$username'
+    | '/admin'
     | '/api/auth/$'
+    | '/u/$username/followers'
+    | '/u/$username/following'
   id:
     | '__root__'
     | '/'
@@ -212,16 +353,29 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/judges'
+    | '/admin/lineage'
+    | '/admin/members'
+    | '/admin/metrics'
+    | '/admin/waitlist'
     | '/admin_/chain'
+    | '/admin_/orders'
     | '/auth/complete'
     | '/cr/$cr'
+    | '/economics/$file'
     | '/invite/accept'
+    | '/me/earnings'
+    | '/print/$cr'
+    | '/u/$username'
+    | '/admin/'
     | '/api/auth/$'
+    | '/u/$username_/followers'
+    | '/u/$username_/following'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
@@ -232,10 +386,17 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
   AdminChainRoute: typeof AdminChainRoute
+  AdminOrdersRoute: typeof AdminOrdersRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
+  EconomicsFileRoute: typeof EconomicsFileRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
+  MeEarningsRoute: typeof MeEarningsRoute
+  PrintCrRoute: typeof PrintCrRoute
+  UUsernameRoute: typeof UUsernameRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  UUsernameFollowersRoute: typeof UUsernameFollowersRoute
+  UUsernameFollowingRoute: typeof UUsernameFollowingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -317,11 +478,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyPhoneRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/judges': {
+      id: '/admin/judges'
+      path: '/judges'
+      fullPath: '/admin/judges'
+      preLoaderRoute: typeof AdminJudgesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/lineage': {
+      id: '/admin/lineage'
+      path: '/lineage'
+      fullPath: '/admin/lineage'
+      preLoaderRoute: typeof AdminLineageRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/members': {
+      id: '/admin/members'
+      path: '/members'
+      fullPath: '/admin/members'
+      preLoaderRoute: typeof AdminMembersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/metrics': {
+      id: '/admin/metrics'
+      path: '/metrics'
+      fullPath: '/admin/metrics'
+      preLoaderRoute: typeof AdminMetricsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/waitlist': {
+      id: '/admin/waitlist'
+      path: '/waitlist'
+      fullPath: '/admin/waitlist'
+      preLoaderRoute: typeof AdminWaitlistRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin_/chain': {
       id: '/admin_/chain'
       path: '/admin/chain'
       fullPath: '/admin/chain'
       preLoaderRoute: typeof AdminChainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin_/orders': {
+      id: '/admin_/orders'
+      path: '/admin/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/complete': {
@@ -338,11 +548,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CrCrRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/economics/$file': {
+      id: '/economics/$file'
+      path: '/economics/$file'
+      fullPath: '/economics/$file'
+      preLoaderRoute: typeof EconomicsFileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invite/accept': {
       id: '/invite/accept'
       path: '/invite/accept'
       fullPath: '/invite/accept'
       preLoaderRoute: typeof InviteAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/earnings': {
+      id: '/me/earnings'
+      path: '/me/earnings'
+      fullPath: '/me/earnings'
+      preLoaderRoute: typeof MeEarningsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/print/$cr': {
+      id: '/print/$cr'
+      path: '/print/$cr'
+      fullPath: '/print/$cr'
+      preLoaderRoute: typeof PrintCrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/u/$username': {
+      id: '/u/$username'
+      path: '/u/$username'
+      fullPath: '/u/$username'
+      preLoaderRoute: typeof UUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -352,12 +590,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/u/$username_/followers': {
+      id: '/u/$username_/followers'
+      path: '/u/$username/followers'
+      fullPath: '/u/$username/followers'
+      preLoaderRoute: typeof UUsernameFollowersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/u/$username_/following': {
+      id: '/u/$username_/following'
+      path: '/u/$username/following'
+      fullPath: '/u/$username/following'
+      preLoaderRoute: typeof UUsernameFollowingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminJudgesRoute: typeof AdminJudgesRoute
+  AdminLineageRoute: typeof AdminLineageRoute
+  AdminMembersRoute: typeof AdminMembersRoute
+  AdminMetricsRoute: typeof AdminMetricsRoute
+  AdminWaitlistRoute: typeof AdminWaitlistRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminJudgesRoute: AdminJudgesRoute,
+  AdminLineageRoute: AdminLineageRoute,
+  AdminMembersRoute: AdminMembersRoute,
+  AdminMetricsRoute: AdminMetricsRoute,
+  AdminWaitlistRoute: AdminWaitlistRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
@@ -368,10 +640,17 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
   AdminChainRoute: AdminChainRoute,
+  AdminOrdersRoute: AdminOrdersRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
+  EconomicsFileRoute: EconomicsFileRoute,
   InviteAcceptRoute: InviteAcceptRoute,
+  MeEarningsRoute: MeEarningsRoute,
+  PrintCrRoute: PrintCrRoute,
+  UUsernameRoute: UUsernameRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  UUsernameFollowersRoute: UUsernameFollowersRoute,
+  UUsernameFollowingRoute: UUsernameFollowingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

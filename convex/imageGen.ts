@@ -10,11 +10,15 @@ import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY } from "./lib/imageErrors";
 import { stripPngMetadata } from "./lib/pngMeta";
 import { photoPrompt, pickLook, rolesFromWords, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
+import { callFailure } from "./lib/paidAttempts";
+import type { Spend } from "./lib/paidAttempts";
+import { gatewayCostCents } from "./lib/pricing";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
 import { readRoles } from "./lib/roleReader";
 import { decodeToRgba, encodePng } from "./lib/resize";
-import { designKey, gridImageKey, photoKey, uploadKey } from "./lib/sizes";
-import { fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
+import { randomCode } from "./lib/codes";
+import { designKey, gridKey as gridFileKey, photoNumberOf, testImageKey, uploadKey, workArtKey, workPhotoKey } from "./lib/sizes";
+import { copyImage, fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -215,7 +219,38 @@ async function gridImage(text: string, images: Array<Uint8Array>) {
     maxRetries: 0,
     abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
   });
-  return clean({ bytes: result.image.uint8Array });
+  return clean({ bytes: result.image.uint8Array, providerMetadata: result.providerMetadata });
+}
+
+// Runs one paid call and says what it spent: the reported cost when it answers, and when it fails,
+// whether the reservation is released (a definitive refusal) or settled (it may have been billed).
+async function paidCall<T extends { providerMetadata?: unknown }>(call: () => Promise<T>) {
+  try {
+    const out = await call();
+    const actualCents = gatewayCostCents(out.providerMetadata);
+    return { out, spend: { kind: "settle", actualCents, reason: actualCents === undefined ? "no cost reported" : undefined } as Spend };
+  } catch (error) {
+    throw new PaidCallError(error);
+  }
+}
+
+class PaidCallError extends Error {
+  readonly spend: Spend;
+  readonly ambiguous: boolean;
+  constructor(readonly original: unknown) {
+    super(original instanceof Error ? original.message : String(original));
+    this.name = original instanceof Error ? original.name : "Error";
+    const failure = callFailure(original);
+    this.spend = failure.spend;
+    this.ambiguous = failure.ambiguous;
+  }
+}
+
+// What a failed attempt spent: the call's own verdict, the call's reported cost when it answered
+// and something later failed, or nothing when it was never sent.
+function spendAfter(error: unknown, sent: Spend | null): { spend: Spend; unknown: boolean } {
+  if (error instanceof PaidCallError) return { spend: error.spend, unknown: error.ambiguous };
+  return { spend: sent ?? { kind: "release", reason: "not sent" }, unknown: false };
 }
 
 // The model photo: one opaque 1024x1024 edit with the design as input.
@@ -258,6 +293,7 @@ export const runTile = internalAction({
     if (!job || job.status !== "queued") return null;
     const claimed = await ctx.runMutation(internal.studio.markDispatched, { generationId });
     if (!claimed) return null;
+    let sent: Spend | null = null;
 
     try {
       if (!liveGeneration()) {
@@ -270,6 +306,7 @@ export const runTile = internalAction({
           width: 1024,
           height: 1536,
           hasAlpha: true,
+          spend: { kind: "release", reason: "stand-in" },
         });
         return null;
       }
@@ -296,11 +333,15 @@ export const runTile = internalAction({
       const images = await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
       const provider = job.provider === "gateway" || job.provider === "chatgpt" ? job.provider : imageProvider();
       const started = Date.now();
-      const { bytes } = await designImage(text, images, provider);
+      const paid = await paidCall(() => designImage(text, images, provider));
+      sent = paid.spend;
+      const { bytes } = paid.out;
       const made = Date.now();
       const info = pngInfo(bytes);
       // Stores the design with its thumbnail and medium, so pages never load the PNG first.
-      const { key, sha256 } = await storeNew(ctx, bytes, "image/png", designKey);
+      const place = job.place;
+      const designNumber = job.index + 1;
+      const { key, sha256 } = await storeNew(ctx, bytes, "image/png", () => designKey(place, designNumber, randomCode()));
       console.log("runTile ok", provider, images.length, "images", text.length, "chars", made - started, "ms, stored and sized in", Date.now() - made, "ms", info);
       await ctx.runMutation(internal.studio.markSucceeded, {
         generationId,
@@ -309,12 +350,14 @@ export const runTile = internalAction({
         width: info.width || 1024,
         height: info.height || 1536,
         hasAlpha: info.hasAlpha,
+        spend: sent,
       });
     } catch (error) {
       console.error("runTile failed", generationId, error);
       await ctx.runMutation(internal.studio.markFailed, {
         generationId,
         error: readableError(error),
+        ...spendAfter(error, sent),
       });
     }
     return null;
@@ -338,6 +381,7 @@ export const runBatch = internalAction({
     const claimed = await ctx.runMutation(internal.studio.markBatchDispatched, { batchId });
     if (!claimed) return null;
     const indexes = job.tiles.map((tile) => tile.index);
+    let sent: Spend | null = null;
     try {
       if (!liveGeneration()) {
         if (!isDevDeployment()) throw new Error("Image generation is not configured.");
@@ -349,6 +393,7 @@ export const runBatch = internalAction({
             index: tile.index,
             design: { fullKey: `fake:${tile.generationId}`, width: 1024, height: 1536, hasAlpha: true },
           })),
+          spend: { kind: "release", reason: "stand-in" },
         });
         return null;
       }
@@ -385,10 +430,15 @@ export const runBatch = internalAction({
       const keys = job.attachments.map((a) => a.key);
       const started = Date.now();
       // The inputs are only needed for the call; letting them go keeps memory for the cut.
-      const { bytes } = await gridImage(text, await Promise.all(keys.map((key) => fetchPublicImage(key, ctx))));
+      let inputs: Array<Uint8Array> | null = await Promise.all(keys.map((key) => fetchPublicImage(key, ctx)));
+      const paid = await paidCall(() => gridImage(text, inputs!));
+      inputs = null;
+      sent = paid.spend;
+      const { bytes } = paid.out;
       const made = Date.now();
       const cpu0 = process.cpuUsage();
-      const gridStored = storeObject(ctx, gridImageKey(sha256Hex(bytes)), bytes, "image/png");
+      const place = job.place;
+      const gridStored = storeObject(ctx, gridFileKey(place, randomCode()), bytes, "image/png");
       const cells = cutGrid(await decodeToRgba(bytes));
       const cut = Date.now();
       const cpu1 = process.cpuUsage(cpu0);
@@ -399,7 +449,13 @@ export const runBatch = internalAction({
           ...(await Promise.all(
             cells.slice(i, i + 2).map(async (cell): Promise<DesignResult> => {
               if (!cell.tile) return { index: cell.index, error: cell.reason === "merged" ? GRID_MERGED : GRID_EMPTY };
-              const { key, sha256 } = await storeNew(ctx, await encodePng(cell.tile), "image/png", designKey, cell.tile);
+              const { key, sha256 } = await storeNew(
+                ctx,
+                await encodePng(cell.tile),
+                "image/png",
+                () => designKey(place, cell.index + 1, randomCode()),
+                cell.tile,
+              );
               return { index: cell.index, design: { fullKey: key, sha256, width: cell.tile.width, height: cell.tile.height, hasAlpha: true } };
             }),
           )),
@@ -419,11 +475,16 @@ export const runBatch = internalAction({
         results,
         gridKey,
         roles: roles.length > 0 ? roles : undefined,
+        spend: sent,
       });
     } catch (error) {
       console.error("runBatch failed", batchId, error);
       const message = readableError(error);
-      await ctx.runMutation(internal.studio.finishBatch, { batchId, results: indexes.map((index) => ({ index, error: message })) });
+      await ctx.runMutation(internal.studio.finishBatch, {
+        batchId,
+        results: indexes.map((index) => ({ index, error: message })),
+        ...spendAfter(error, sent),
+      });
     }
     return null;
   },
@@ -458,10 +519,12 @@ export const uploadInspiration = action({
       key = `fake:inspo-${sha256.slice(0, 12)}`;
     } else {
       const existing = await ctx.runQuery(internal.images.findUpload, { authId: identity.subject, sha256 });
-      if (existing) {
+      if (!existing) throw new ConvexError({ code: "SIGNED_OUT", message: "Sign in first." });
+      if (existing.key) {
         key = existing.key;
       } else {
-        key = await storeObject(ctx, uploadKey(sha256, ext), bytes, args.contentType);
+        // The member's own uploads folder, under a code nobody can guess (convex/lib/sizes.ts).
+        key = await storeObject(ctx, uploadKey(existing.userId, Date.now(), randomCode(), ext), bytes, args.contentType);
         // The studio shows its own preview meanwhile; pickers and chips use the thumbnail later.
         await ctx.scheduler.runAfter(0, internal.sizing.ensure, { key });
       }
@@ -494,11 +557,12 @@ export const publishAssets = internalAction({
         artKey = job.fullKey;
         contentHash = sha256Hex(new TextEncoder().encode(job.fullKey));
       } else {
-        artKey = job.fullKey;
         art = await fetchPublicImage(job.fullKey, ctx);
         contentHash = sha256Hex(art);
         // Designs get their copies when they're made; this covers older ones.
-        await makeSizes(ctx, artKey, art);
+        await makeSizes(ctx, job.fullKey, art);
+        // The work's own public folder, works/<family>/<expression>/, with the design's copies.
+        artKey = await copyImage(ctx, job.fullKey, workArtKey(job.crFamily, job.crExpression), art);
       }
     } catch (error) {
       console.error("publishAssets failed", workId, error);
@@ -513,8 +577,9 @@ export const publishAssets = internalAction({
       artKey,
       contentHash,
     });
-    if (!shoot) return null;
-    const { shootId, look } = shoot;
+    if (!shoot || shoot.resting) return null;
+    const { shootId, look, attemptId } = shoot;
+    let sent: Spend | null = null;
 
     try {
       let publicKey: string;
@@ -522,17 +587,23 @@ export const publishAssets = internalAction({
         if (!isDevDeployment()) throw new Error("Image generation is not configured.");
         await new Promise((resolve) => setTimeout(resolve, 4000));
         publicKey = `fake:photo-${workId}`;
+        sent = { kind: "release", reason: "stand-in" };
       } else {
         const source = art ?? (await fetchPublicImage(artKey, ctx));
-        const { bytes } = await photoImage(source, job.backgroundColor, look);
-        publicKey = (await storeNew(ctx, bytes, "image/png", (sha256) => photoKey(contentHash, sha256))).key;
+        const paid = await paidCall(() => photoImage(source, job.backgroundColor, look));
+        sent = paid.spend;
+        const { bytes } = paid.out;
+        // The work's first model photo: works/<family>/<expression>/photos/1/.
+        publicKey = (await storeNew(ctx, bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, 1))).key;
       }
-      await ctx.runMutation(internal.publish.recordPhoto, { shootId, publicKey });
+      await ctx.runMutation(internal.publish.recordPhoto, { shootId, publicKey, attemptId, spend: sent ?? undefined });
     } catch (error) {
       console.error("model photo failed", workId, error);
       await ctx.runMutation(internal.publish.recordPhotoFailed, {
         shootId,
         reason: readableError(error),
+        attemptId,
+        spend: spendAfter(error, sent).spend,
       });
     }
     return null;
@@ -597,7 +668,7 @@ export const selfTest = internalAction({
           stored: false,
         };
       }
-      const { key } = await storeNew(ctx, out.bytes, "image/png", designKey);
+      const { key } = await storeNew(ctx, out.bytes, "image/png", () => testImageKey(Date.now(), randomCode()));
       return {
         provider: args.provider ?? imageProvider(),
         ms: Date.now() - started,
@@ -616,9 +687,10 @@ export const selfTest = internalAction({
 
 // Gives a published work a new model photo with a different model, pose, and
 // setting; the current photo stays up until the new one is recorded.
+// It counts against the creator's photo shoots for today unless skipLimit is set.
 // bunx convex run imageGen:reshoot '{"cr":"101-001"}'
 export const reshoot = internalAction({
-  args: { cr: v.string() },
+  args: { cr: v.string(), skipLimit: v.optional(v.boolean()) },
   returns: v.union(
     v.null(),
     v.object({ cr: v.string(), look: v.object({ casting: v.string(), pose: v.string(), world: v.string() }) }),
@@ -630,16 +702,43 @@ export const reshoot = internalAction({
       artKey: string;
       backgroundColor: string;
       look: ShootLook;
-    } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr });
+      crFamily: number;
+      crExpression: number;
+      photoKey?: string;
+      attemptId?: string;
+    } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr, skipLimit: args.skipLimit });
     if (!job) return null;
-    if (!liveGeneration() || job.artKey.startsWith("fake:")) {
-      throw new Error("Image generation is not configured.");
+    let sent: Spend | null = null;
+    try {
+      let key: string;
+      if (!liveGeneration() || job.artKey.startsWith("fake:")) {
+        if (!isDevDeployment()) throw new Error("Image generation is not configured.");
+        key = `fake:photo-${job.shootId}-${Date.now()}`;
+      } else {
+        const art = await fetchPublicImage(job.artKey, ctx);
+        const paid = await paidCall(() => photoImage(art, job.backgroundColor, job.look));
+        sent = paid.spend;
+        // The next photo number, so the photo a page has cached never changes under its link.
+        const n = (photoNumberOf(job.photoKey) ?? 0) + 1;
+        key = (await storeNew(ctx, paid.out.bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, n))).key;
+      }
+      await ctx.runMutation(internal.publish.recordPhoto, {
+        shootId: job.shootId,
+        publicKey: key,
+        attemptId: job.attemptId,
+        // The dev stand-in never made a paid call.
+        spend: sent ?? { kind: "release", reason: "stand-in" },
+      });
+    } catch (error) {
+      // The photo that's up stays up and the reservation closes (publish.recordPhotoFailed).
+      await ctx.runMutation(internal.publish.recordPhotoFailed, {
+        shootId: job.shootId,
+        reason: readableError(error),
+        attemptId: job.attemptId,
+        spend: spendAfter(error, sent).spend,
+      });
+      throw error;
     }
-    const art = await fetchPublicImage(job.artKey, ctx);
-    const { bytes } = await photoImage(art, job.backgroundColor, job.look);
-    const designSha = sha256Hex(art);
-    const { key } = await storeNew(ctx, bytes, "image/png", (sha256) => photoKey(designSha, sha256));
-    await ctx.runMutation(internal.publish.recordPhoto, { shootId: job.shootId, publicKey: key });
     return { cr: args.cr, look: job.look };
   },
 });

@@ -1,11 +1,11 @@
-import { convexQuery } from "@convex-dev/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { usePaginatedQuery } from "convex/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MAX_IMAGES, MAX_STYLES } from "../../../convex/lib/studioRules";
 import { Art } from "~/components/cr/Art";
+import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { cn } from "~/lib/utils";
 
 // The studio's inputs: numbered images to work on, and the style mixer with its picker.
@@ -416,7 +416,9 @@ export function StyleLibrary({
   onFiles: (files: Array<File>) => void;
   onClose: () => void;
 }) {
-  const library = useQuery(convexQuery(api.images.library, {})).data;
+  // Style images first, then everything else the member has added; both page in as they scroll.
+  const styles = usePaginatedQuery(api.images.styleImages, {}, { initialNumItems: PAGE.images });
+  const recent = usePaginatedQuery(api.images.recentImages, {}, { initialNumItems: PAGE.images });
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
@@ -427,7 +429,9 @@ export function StyleLibrary({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const grid = (list: Array<LibraryImage>) => (
+  const pending = (status: typeof recent.status, count: number) =>
+    status === "LoadingFirstPage" || status === "LoadingMore" || (count === 0 && status === "CanLoadMore");
+  const grid = (list: Array<LibraryImage>, loading: boolean) => (
     <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
       {list.map((image) => {
         const used = taken.has(image.imageId);
@@ -448,6 +452,7 @@ export function StyleLibrary({
           </button>
         );
       })}
+      {loading && Array.from({ length: 6 }, (_, i) => <Skeleton key={`loading-${i}`} className="aspect-square rounded-xl" />)}
     </div>
   );
 
@@ -512,26 +517,24 @@ export function StyleLibrary({
             }}
           />
         </div>
-        {library === undefined ? (
-          <p className="mt-8 text-neutral-500">Loading your images…</p>
-        ) : (
-          <>
-            {library.styles.length > 0 && (
-              <section className="mt-8">
-                <h3 className="text-sm font-bold uppercase tracking-wider">Your style images</h3>
-                {grid(library.styles)}
-              </section>
-            )}
-            <section className="mt-8">
-              <h3 className="text-sm font-bold uppercase tracking-wider">Your images</h3>
-              {library.recent.length > 0 ? (
-                grid(library.recent)
-              ) : (
-                <p className="mt-2 text-sm text-neutral-500">Images you add to the studio show up here.</p>
-              )}
-            </section>
-          </>
+        {styles.results.length > 0 && (
+          <section className="mt-8">
+            <h3 className="text-sm font-bold uppercase tracking-wider">Your style images</h3>
+            {grid(styles.results, styles.status === "LoadingMore")}
+            <LoadMore status={styles.status} onMore={() => styles.loadMore(PAGE.images)} className="mt-4" />
+          </section>
         )}
+        <section className="mt-8">
+          <h3 className="text-sm font-bold uppercase tracking-wider">Your images</h3>
+          {recent.status === "Exhausted" && recent.results.length === 0 ? (
+            <p className="mt-2 text-sm text-neutral-500">Images you add to the studio show up here.</p>
+          ) : (
+            <>
+              {grid(recent.results, pending(recent.status, recent.results.length))}
+              <LoadMore status={recent.status} onMore={() => recent.loadMore(PAGE.images)} className="mt-4" />
+            </>
+          )}
+        </section>
       </motion.div>
     </motion.div>
   );

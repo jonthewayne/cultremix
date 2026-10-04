@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { DeploymentPill } from "~/components/cr/DeploymentLabel";
 import { authClient } from "~/lib/auth-client";
 
 export function SiteHeader() {
@@ -25,9 +26,12 @@ export function SiteHeader() {
 
   return (
     <header className="flex items-center justify-between gap-4 px-4 py-4 md:px-10 md:py-6">
-      <Link to="/" className="text-base font-black uppercase tracking-[0.2em] md:text-lg">
-        CultRemix
-      </Link>
+      <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
+        <Link to="/" className="text-base font-black uppercase tracking-[0.2em] md:text-lg">
+          CultRemix
+        </Link>
+        <DeploymentPill />
+      </div>
       <nav className="flex items-center gap-4 text-sm font-semibold md:gap-7">
         <Link to="/" activeOptions={{ exact: true }} activeProps={{ className: "underline decoration-2 underline-offset-8" }}>
           Feed
@@ -55,6 +59,16 @@ export function SiteHeader() {
                 </p>
                 {viewer.creatorNumber === 1 && (
                   <p className="border-b border-neutral-200 px-4 py-3 text-xs font-bold">Creator № 1</p>
+                )}
+                {viewer.username && (
+                  <Link
+                    to="/u/$username"
+                    params={{ username: viewer.username }}
+                    className="block px-4 py-3 hover:bg-neutral-100"
+                    onClick={() => setOpen(false)}
+                  >
+                    Your profile
+                  </Link>
                 )}
                 <Link to="/settings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
                   Settings

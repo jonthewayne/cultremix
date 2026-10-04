@@ -1,0 +1,54 @@
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { MenuItem } from "~/components/studio/StudioSessions";
+import { designFilename, isTouchDevice, saveImage } from "~/lib/saveImage";
+
+// One design in a batch, as the studio shows it.
+export type Tile = {
+  generationId: Id<"generations">;
+  batchId: Id<"batches">;
+  status: string;
+  // The original (download, "Open full size") and the copies shown in the studio.
+  url?: string;
+  mediumUrl?: string;
+  thumbUrl?: string;
+  favorite: boolean;
+  // Dismissed: hidden unless the member shows dismissed designs. Never deleted.
+  rejected?: boolean;
+  error?: string;
+  blocked?: boolean;
+  backgroundColor: string;
+  publishedCr?: string;
+  key?: string;
+  // The original's size in pixels, when known.
+  width?: number;
+  height?: number;
+};
+
+export const isFinished = (tile: Tile) => tile.status === "succeeded";
+export const isFailed = (tile: Tile) =>
+  tile.status === "failed" || tile.status === "unknown_outcome" || tile.status === "expired";
+
+// The ⋯ menu's choices for a finished design.
+export function designItems(
+  tile: Tile,
+  actions: {
+    onOpen?: () => void;
+    onPublish?: () => void;
+    onInspire: () => void;
+    onStyle: () => void;
+    onReject?: () => void;
+  },
+): Array<MenuItem> {
+  const filename = designFilename(tile);
+  const items: Array<MenuItem> = [];
+  if (actions.onOpen) items.push({ label: "View large", onSelect: actions.onOpen });
+  items.push({ label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, filename) });
+  if (tile.url && !tile.url.startsWith("fake:")) items.push({ label: "Open full size", href: tile.url });
+  if (tile.key) {
+    items.push({ label: "Use as image", onSelect: actions.onInspire });
+    items.push({ label: "Use as style", onSelect: actions.onStyle });
+  }
+  if (!tile.publishedCr && actions.onPublish) items.push({ label: "Publish", onSelect: actions.onPublish });
+  if (actions.onReject) items.push({ label: tile.rejected ? "Bring back" : "Dismiss", onSelect: actions.onReject });
+  return items;
+}

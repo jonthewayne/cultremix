@@ -73,7 +73,7 @@ export const queueLineageAmendment = internalMutation({
     const request = { work, newParent, newKind: args.newKind, reasonHash: args.reasonHash as Hex, sequence: args.sequence };
 
     const writes = await amendmentWrites(ctx, work._id);
-    const last = writes.at(-1);
+    const last = writes[writes.length - 1];
     if (last && last.status !== "confirmed" && last.status !== "failed" && last.status !== "rejected") {
       if (writes.length === args.sequence && last.payload === amendmentPayload(request)) return last._id;
       refuse("IN_FLIGHT", `Amendment ${writes.length} for this work is still being recorded.`);

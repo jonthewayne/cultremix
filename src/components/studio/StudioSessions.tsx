@@ -1,12 +1,12 @@
-import { convexQuery } from "@convex-dev/react-query";
-import { useQuery } from "@tanstack/react-query";
-import { useMutation } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../../convex/_generated/api";
+import { BATCH_COUNT_CAP } from "../../../convex/lib/studioRules";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Art } from "~/components/cr/Art";
+import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { errorMessage } from "~/lib/imagePrep";
 import { cn } from "~/lib/utils";
 
@@ -23,32 +23,31 @@ function ago(timestamp: number, now: number) {
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+// The card count reads "100+" from the server's cap (convex/studio.ts BATCH_COUNT_CAP).
+function batchLabel(count: number) {
+  return `${count >= BATCH_COUNT_CAP ? `${BATCH_COUNT_CAP}+` : count} ${count === 1 ? "batch" : "batches"}`;
+}
+
 export function SessionList({ onOpen }: { onOpen: (sessionId: Id<"creativeSessions">) => void }) {
-  const [limit, setLimit] = useState(12);
-  const query = useQuery(convexQuery(api.studio.sessions, { limit }));
-  const [shown, setShown] = useState(query.data);
-  // Keep the cards up while "Show more" loads the longer list.
-  useEffect(() => {
-    if (query.data) setShown(query.data);
-  }, [query.data]);
+  const { results, status, loadMore } = usePaginatedQuery(api.studio.sessions, {}, { initialNumItems: PAGE.sessions });
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  if (!shown) return <p className="text-neutral-500">Loading your sessions…</p>;
-  if (shown.sessions.length === 0) {
+  if (status === "Exhausted" && results.length === 0) {
     return (
       <p className="max-w-lg text-lg text-neutral-500">
         Your sessions show up here. Each one keeps every batch you make in it, so you can come back to a design and see how it got there.
       </p>
     );
   }
+  const loading = status === "LoadingFirstPage" || status === "LoadingMore" || (results.length === 0 && status === "CanLoadMore");
   return (
     <div>
       <h2 className="text-sm font-bold uppercase tracking-wider">Your sessions</h2>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {shown.sessions.map((card) => (
+        {results.map((card) => (
           <button
             key={card.sessionId}
             type="button"
@@ -72,22 +71,30 @@ export function SessionList({ onOpen }: { onOpen: (sessionId: Id<"creativeSessio
             <div className="px-3 py-2.5">
               <p className="truncate font-bold group-hover:underline">{card.name}</p>
               <p className="text-sm text-neutral-500">
-                {card.batches >= 100 ? "100+" : card.batches} {card.batches === 1 ? "batch" : "batches"} · {ago(card.updatedAt, now)}
+                {batchLabel(card.batches)} · {ago(card.updatedAt, now)}
               </p>
             </div>
           </button>
         ))}
+        {loading && Array.from({ length: 4 }, (_, i) => <SessionCardSkeleton key={`loading-${i}`} />)}
       </div>
-      {shown.more && (
-        <button
-          type="button"
-          onClick={() => setLimit(limit + 12)}
-          disabled={query.isFetching}
-          className="mt-6 rounded-xl border-2 border-black px-4 py-2 text-sm font-bold hover:bg-black hover:text-white disabled:opacity-40"
-        >
-          {query.isFetching ? "Loading…" : "Show more sessions"}
-        </button>
-      )}
+      <LoadMore status={status} onMore={() => loadMore(PAGE.sessions)} label="Show more sessions" className="mt-6 justify-start" />
+    </div>
+  );
+}
+
+function SessionCardSkeleton() {
+  return (
+    <div aria-hidden="true" className="overflow-hidden rounded-2xl border-2 border-neutral-200">
+      <div className="grid grid-cols-4 gap-px">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="aspect-square animate-pulse bg-neutral-100" />
+        ))}
+      </div>
+      <div className="flex flex-col gap-2 px-3 py-3">
+        <Skeleton className="h-4 w-2/3 rounded-md" />
+        <Skeleton className="h-3 w-1/3 rounded-md" />
+      </div>
     </div>
   );
 }
@@ -154,9 +161,7 @@ export function SessionTitle({
           <span className="shrink-0 text-sm font-semibold text-neutral-500 underline-offset-4 group-hover:underline">Rename</span>
         </button>
       )}
-      <p className="mt-1 text-sm text-neutral-500">
-        {batches} {batches === 1 ? "batch" : "batches"}
-      </p>
+      <p className="mt-1 text-sm text-neutral-500">{batchLabel(batches)}</p>
       {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
     </div>
   );

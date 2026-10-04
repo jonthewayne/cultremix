@@ -1,0 +1,125 @@
+import type { FalClient, Submission } from "./fal";
+import type { Spend } from "./paidAttempts";
+
+// "Upscale for print" as two steps with everything outside passed in, so tests can run them
+// without Convex or the network (convex/upscale.ts wires the real ones).
+//
+// Submit: claim the attempt, POST once, save the request ID, then poll. A claim that fails means
+// another run already submitted (or the attempt ended), so nothing is posted.
+// Poll: GETs only. Never submits again, whatever happens.
+//
+// Each submit failure says what happened to the attempt's fal budget reservation: released when
+// nothing reached fal (or fal refused it outright), settled when fal may have the job.
+
+export const POLL_FIRST_MS = 4_000;
+export const POLL_MAX_MS = 20_000;
+export const UPSCALE_TIMEOUT_MS = 15 * 60_000;
+
+export function pollDelay(polls: number) {
+  return Math.min(POLL_MAX_MS, Math.round(POLL_FIRST_MS * 1.5 ** Math.max(0, polls - 1)));
+}
+
+function message(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message.slice(0, 200) : fallback;
+}
+
+// A refused post (fal answered 4xx) took no job and costs nothing. Anything else (a 5xx, a lost
+// connection, a reply without a request ID) may have left a job running on fal, so it's paid for.
+export function submitFailureSpend(error: unknown): Spend {
+  const status = error && typeof error === "object" ? (error as { httpStatus?: unknown }).httpStatus : undefined;
+  if (typeof status === "number" && status >= 400 && status < 500) return { kind: "release", reason: `refused ${status}` };
+  return { kind: "settle", reason: typeof status === "number" ? `failed ${status}` : "no answer" };
+}
+
+export type SubmitDeps = {
+  claim: () => Promise<boolean>;
+  client: Pick<FalClient, "submit"> | null;
+  imageUrl: string | undefined;
+  record: (submission: Submission) => Promise<void>;
+  fail: (error: string, spend: Spend) => Promise<void>;
+  schedulePoll: (delayMs: number) => Promise<void>;
+};
+
+export async function submitUpscale(deps: SubmitDeps): Promise<"skipped" | "submitted" | "failed"> {
+  if (!(await deps.claim())) return "skipped";
+  if (!deps.client) {
+    await deps.fail("Upscaling isn't set up yet.", { kind: "release", reason: "no key" });
+    return "failed";
+  }
+  if (!deps.imageUrl || !/^https?:\/\//u.test(deps.imageUrl)) {
+    await deps.fail("This version has no public address to upscale from.", { kind: "release", reason: "no address" });
+    return "failed";
+  }
+  let submission: Submission;
+  try {
+    submission = await deps.client.submit(deps.imageUrl);
+  } catch (error) {
+    await deps.fail(message(error, "The upscaler couldn't take it."), submitFailureSpend(error));
+    return "failed";
+  }
+  try {
+    await deps.record(submission);
+  } catch (error) {
+    // fal has the job but we couldn't save its ID: give up on it rather than ever posting again.
+    await deps.fail(message(error, "The upscale couldn't be tracked."), { kind: "settle", reason: "untracked" });
+    return "failed";
+  }
+  await deps.schedulePoll(pollDelay(1));
+  return "submitted";
+}
+
+export type PollDeps = {
+  client: Pick<FalClient, "status" | "result">;
+  statusUrl: string;
+  responseUrl: string;
+  submittedAt: number;
+  now: () => number;
+  notePoll: () => Promise<number>;
+  download: (url: string) => Promise<Uint8Array>;
+  // PNG with an alpha channel. The pixels are checked again when stored.
+  carriesAlpha: (bytes: Uint8Array) => boolean;
+  accept: (bytes: Uint8Array, latencyMs: number) => Promise<void>;
+  fail: (error: string) => Promise<void>;
+  scheduleNext: (delayMs: number) => Promise<void>;
+};
+
+export async function pollUpscale(deps: PollDeps): Promise<"waiting" | "done" | "failed"> {
+  const polls = await deps.notePoll();
+  const elapsed = deps.now() - deps.submittedAt;
+  try {
+    const status = await deps.client.status(deps.statusUrl);
+    if (status.status === "FAILED") {
+      await deps.fail(status.error);
+      return "failed";
+    }
+    if (status.status !== "COMPLETED") {
+      if (elapsed > UPSCALE_TIMEOUT_MS) {
+        await deps.fail("The upscale took too long.");
+        return "failed";
+      }
+      await deps.scheduleNext(pollDelay(polls + 1));
+      return "waiting";
+    }
+    const image = await deps.client.result(deps.responseUrl);
+    const bytes = await deps.download(image.url);
+    if (!deps.carriesAlpha(bytes)) {
+      await deps.fail("The upscale came back without transparency, so it can't be used.");
+      return "failed";
+    }
+    try {
+      await deps.accept(bytes, elapsed);
+    } catch (error) {
+      await deps.fail(message(error, "The upscale couldn't be saved."));
+      return "failed";
+    }
+    return "done";
+  } catch (error) {
+    // Reading failed even after retries. Keep polling (GETs only) until the time runs out.
+    if (elapsed > UPSCALE_TIMEOUT_MS) {
+      await deps.fail(message(error, "The upscale couldn't be read."));
+      return "failed";
+    }
+    await deps.scheduleNext(pollDelay(polls + 1));
+    return "waiting";
+  }
+}

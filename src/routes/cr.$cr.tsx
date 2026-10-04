@@ -1,17 +1,45 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { ChainStatus } from "~/components/cr/ChainStatus";
+import { ColorSwatches } from "~/components/cr/ColorSwatches";
 import { CrMark } from "~/components/cr/CrMark";
+import { DirectRemixes } from "~/components/cr/DirectRemixes";
+import { EarlyAccess } from "~/components/cr/EarlyAccess";
+import { EconomicsPanel } from "~/components/cr/EconomicsPanel";
+import { FamilyView } from "~/components/cr/FamilyView";
+import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
+import { PhotoRetry } from "~/components/cr/PhotoRetry";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { Backers } from "~/components/work/Backers";
-import { colorName } from "../../convex/lib/colors";
+import { FollowButton } from "~/components/social/FollowButton";
+import { HeartButton } from "~/components/social/HeartButton";
+import { ShareButton } from "~/components/social/ShareButton";
+import { PrintEntry } from "~/components/print/PrintEntry";
+import { pageColors, selectedColor, type PickedColor } from "~/lib/pickedColor";
+import { shareMeta, workShareCard } from "~/lib/share";
 import { PhotoSquare } from "./index";
+import { BuyBox } from "~/components/commerce/BuyBox";
 
 export const Route = createFileRoute("/cr/$cr")({
-  head: ({ params }) => ({ meta: [{ title: `CR ${params.cr} · CultRemix` }] }),
+  loader: async ({ context, params }) => {
+    const options = convexQuery(api.feed.byCr, { cr: params.cr });
+    if (context.convexQueryClient.serverHttpClient) {
+      await context.queryClient.fetchQuery(options).catch(() => null);
+    }
+    // The link preview comes from the page data already fetched (or cached, in the browser).
+    const data = context.queryClient.getQueryData(options.queryKey) as
+      | FunctionReturnType<typeof api.feed.byCr>
+      | undefined;
+    return { share: data ? workShareCard(data.item) : null };
+  },
+  head: ({ params, loaderData }) => ({
+    meta: loaderData?.share ? shareMeta(loaderData.share) : [{ title: `CR ${params.cr} · CultRemix` }],
+  }),
   component: ShopPage,
 });
 
@@ -20,7 +48,12 @@ const SIZES = ["S", "M", "L", "XL", "2XL"];
 function ShopPage() {
   const { cr } = Route.useParams();
   const page = useQuery(convexQuery(api.feed.byCr, { cr }));
+  // Null until checkout opens and this work is on sale; the page is unchanged until then.
+  const offer = useQuery(convexQuery(api.shopify.offer, { cr })).data;
   const data = page.data;
+  // The picked shirt color, remembered per work so moving to another CR starts on its lead. The
+  // one selection for the art square, the swatches, and the buy box.
+  const [picked, setPicked] = useState<PickedColor>(null);
 
   if (page.isLoading) {
     return (
@@ -41,61 +74,68 @@ function ShopPage() {
       </div>
     );
   }
-  const { item, contentHash, remixes } = data;
+  const { item, contentHash, description } = data;
+  const colors = pageColors(data.colors, offer);
+  const color = selectedColor(colors, picked, item.cr);
+  const pick = (key: string) => setPicked({ cr: item.cr, key });
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
       <main className="px-4 pb-24 md:px-10">
         <div className="grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2 md:gap-4">
-          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%]" style={{ background: item.backgroundColor }}>
+          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%] transition-colors duration-300" style={{ background: color?.hex ?? item.backgroundColor }}>
             <Art url={item.artMediumUrl ?? item.artUrl} fullUrl={item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain" />
           </div>
           <PhotoSquare item={item} large />
         </div>
+        <PhotoRetry cr={item.cr} />
 
         <section className="mt-8 grid gap-10 md:mt-12 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:gap-16">
           <div>
             <CrMark cr={item.cr} className="text-[20vw] md:text-[10vw]" />
             {item.title && <h1 className="mt-4 text-4xl font-black leading-none tracking-tight md:text-6xl">{item.title}</h1>}
+            {description && <p className="mt-4 max-w-prose whitespace-pre-line text-lg leading-snug">{description}</p>}
             <p className="mt-4 text-xl">
-              by <span className="font-bold">@{item.creator.username}</span>
+              by{" "}
+              <Link to="/u/$username" params={{ username: item.creator.username }} className="font-bold hover:underline">
+                @{item.creator.username}
+              </Link>
               {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
             </p>
-            {item.parentCr && (
-              <p className="mt-3 text-lg">
-                Remix of{" "}
-                <Link to="/cr/$cr" params={{ cr: item.parentCr }} className="font-bold underline underline-offset-4">
-                  CR {item.parentCr}
-                </Link>
-              </p>
-            )}
+            <LineageNote cr={item.cr} />
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <HeartButton workId={item.workId} count={item.hearts} />
+              <FollowButton username={item.creator.username} />
+              <ShareButton path={`/cr/${item.cr}`} title={item.title ? `CR ${item.cr} · ${item.title}` : `CR ${item.cr}`} />
+            </div>
           </div>
 
           <div className="flex flex-col gap-6">
-            <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
-              <span className="text-5xl font-black tracking-tight">$36</span>
-              <span className="text-sm font-semibold">Heavyweight garment-dyed tee</span>
-            </div>
-            <div>
-              <p className="text-sm font-bold uppercase tracking-wider">Color</p>
-              <p className="mt-2 flex items-center gap-3 text-lg">
-                <span className="h-7 w-7 rounded-full border-2 border-black" style={{ background: item.backgroundColor }} />
-                <span className="capitalize">{colorName(item.backgroundColor)}</span>
-              </p>
-            </div>
-            <div>
-              <p className="text-sm font-bold uppercase tracking-wider">Size</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {SIZES.map((size) => (
-                  <span key={size} className="flex h-11 min-w-11 items-center justify-center rounded-xl border-2 border-black px-3 font-bold">
-                    {size}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-2xl bg-neutral-200 text-lg font-black text-neutral-500">
-              Buying opens soon
-            </button>
+            {offer ? (
+              <BuyBox offer={offer} colorKey={color?.key ?? ""} onColorChange={pick} />
+            ) : (
+              <>
+                <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
+                  <span className="text-5xl font-black tracking-tight">$36</span>
+                  <span className="text-sm font-semibold">Heavyweight garment-dyed tee</span>
+                </div>
+                {color && <ColorSwatches colors={colors} value={color.key} onChange={pick} />}
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-wider">Size</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {SIZES.map((size) => (
+                      <span key={size} className="flex h-11 min-w-11 items-center justify-center rounded-xl border-2 border-black px-3 font-bold">
+                        {size}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-2xl bg-neutral-200 text-lg font-black text-neutral-500">
+                  Buying opens soon
+                </button>
+                <EarlyAccess workId={item.workId} />
+              </>
+            )}
             <Link
               to="/studio"
               search={{ remix: item.cr }}
@@ -103,6 +143,7 @@ function ShopPage() {
             >
               Remix this
             </Link>
+            <EconomicsPanel cr={item.cr} />
             {contentHash && (
               <div className="border-t-2 border-black pt-4 text-sm">
                 <p className="font-bold uppercase tracking-wider">Fingerprint</p>
@@ -111,25 +152,13 @@ function ShopPage() {
               </div>
             )}
             <Backers workId={item.workId} cr={item.cr} />
+            <PrintEntry cr={item.cr} />
           </div>
         </section>
 
-        {remixes.length > 0 && (
-          <section className="mt-20">
-            <h2 className="border-t-2 border-black pt-4 text-sm font-bold uppercase tracking-wider">Remixes</h2>
-            <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-              {remixes.map((remix) => (
-                <Link key={remix.workId} to="/cr/$cr" params={{ cr: remix.cr }} className="group block">
-                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[8%]" style={{ background: remix.backgroundColor }}>
-                    <Art url={remix.artMediumUrl ?? remix.artUrl} alt={`CR ${remix.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
-                  </div>
-                  <CrMark cr={remix.cr} className="mt-2 text-3xl" />
-                  <p className="text-sm">@{remix.creator.username}</p>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
+        <LineageSection cr={item.cr} />
+        <DirectRemixes cr={item.cr} />
+        <FamilyView cr={item.cr} />
       </main>
     </div>
   );
