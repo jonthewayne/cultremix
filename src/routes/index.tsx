@@ -127,7 +127,7 @@ function FollowingFeed() {
   return (
     <FeedList items={items} status={status} loadMore={loadMore}>
       <p className="max-w-xl text-2xl font-semibold text-neutral-400">
-        New designs from the people you follow land here.
+        New designs from the people you follow, and the work they Back, land here.
       </p>
       <Link to="/" search={{}} resetScroll={false} className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
         Find someone to follow
@@ -170,6 +170,15 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.5, delay: Math.min(index % PAGE_SIZE, 3) * 0.05, ease: [0.2, 0.8, 0.2, 1] }}
     >
+      {item.backedBy && (
+        <p className="mb-3 text-lg leading-snug md:mb-4 md:text-xl">
+          <Link to="/u/$username" params={{ username: item.backedBy.username }} className="font-black hover:underline">
+            @{item.backedBy.username}
+          </Link>{" "}
+          backed <span className="whitespace-nowrap font-cr tabular-nums">CR {item.cr}</span>
+          <span className="text-neutral-500"> · Backer #{item.backedBy.ordinal}</span>
+        </p>
+      )}
       <Link to="/cr/$cr" params={{ cr: item.cr }} className="group block">
         <div className="grid grid-cols-2 gap-2 md:gap-4">
           <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%]" style={{ background: item.backgroundColor }}>
