@@ -121,7 +121,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
             animate={{ y: 0, opacity: 1 }}
             transition={{ type: "spring", stiffness: 170, damping: 20 }}
           >
-            <CrMark cr={result.cr} className="text-[18vw] md:text-[16vw]" />
+            <CrMark cr={result.cr} className="whitespace-nowrap text-[14vw] md:text-[16vw]" />
           </motion.div>
           {title && (
             <motion.p
@@ -147,7 +147,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link to="/cr/$cr" params={{ cr: result.cr }} className="rounded-2xl bg-white px-7 py-4 text-base font-black text-black">
+            <Link to="/cr/$cr" params={{ cr: result.cr }} className="rounded-2xl border-2 border-white bg-white px-7 py-4 text-base font-black text-black">
               View shop page
             </Link>
             <button type="button" onClick={onClose} className="rounded-2xl border-2 border-white px-7 py-4 text-base font-black">
@@ -173,20 +173,20 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
       aria-label="Publish"
     >
       <motion.div
-        className="grid w-full max-w-5xl overflow-y-auto bg-white text-black md:max-h-[92svh] md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] md:overflow-hidden md:rounded-3xl"
+        className="grid w-full max-w-5xl overflow-y-auto bg-white text-black md:h-[min(92svh,860px)] md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden md:rounded-3xl"
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
       >
         <div
-          className="relative flex aspect-square items-center justify-center p-[10%] transition-colors duration-300 md:aspect-auto md:h-full"
+          className="relative flex aspect-square max-h-[45svh] items-center justify-center p-[8%] transition-colors duration-300 md:aspect-auto md:h-full md:max-h-none md:p-[10%]"
           style={{ background: shown.hex, color: inkOn(shown.hex) }}
         >
           <Art url={tile.mediumUrl ?? tile.url} alt={`Design on ${shown.name}`} className="h-full max-h-[70svh] w-auto max-w-full object-contain" />
           <span className="absolute bottom-3 left-4 text-sm font-bold">{shown.name}</span>
         </div>
 
-        <form onSubmit={submit} className="flex flex-col gap-7 p-5 md:overflow-y-auto md:p-8">
+        <form onSubmit={submit} className="flex flex-col gap-7 p-5 pb-0 md:min-h-0 md:overflow-y-auto md:p-8 md:pb-0">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-bold uppercase tracking-wider">Publish</p>
@@ -317,7 +317,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
             </div>
           )}
 
-          <div className="sticky bottom-0 -mx-5 mt-auto flex flex-col gap-2 border-t border-neutral-200 bg-white px-5 py-4 md:-mx-8 md:px-8">
+          <div className="sticky bottom-0 -mx-5 mt-auto flex flex-col gap-2 border-t border-neutral-200 bg-white px-5 py-4 md:-mx-8 md:px-8 md:pb-6">
             {paused && (
               <p role="status" className="font-semibold">
                 Publishing is paused for now. Your designs are safe here; try again soon.

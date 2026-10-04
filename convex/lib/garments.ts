@@ -117,11 +117,14 @@ export function defaultOfferedColors(backgroundHex: string, hidden: ReadonlySet<
 }
 
 // Advisory contrast check (A5). `pixels` are the design's visible pixels as [r, g, b]. A pixel
-// blends in when it's within BLEND_DISTANCE of the shirt in Lab; when most of the design blends
-// in, it would disappear on that shirt.
+// blends in when it's within BLEND_DISTANCE of the shirt in Lab, or when it's nearly the same
+// brightness (under LOW_CONTRAST to 1) without a strong hue difference: dark ink on navy reads as
+// one shade on fabric. When most of the design blends in, it would disappear on that shirt.
 export type Visibility = "clear" | "faint" | "disappears";
 
 const BLEND_DISTANCE = 14;
+const LOW_CONTRAST = 1.5;
+const HUE_DISTANCE = 30;
 const FAINT_SHARE = 0.3;
 const DISAPPEARS_SHARE = 0.6;
 
@@ -130,8 +133,21 @@ export function blendShare(pixels: ReadonlyArray<[number, number, number]>, shir
   if (!shirt || pixels.length === 0) return 0;
   const shirtLab = toLab(shirt);
   let blended = 0;
-  for (const pixel of pixels) if (labDistance(toLab(pixel), shirtLab) < BLEND_DISTANCE) blended++;
+  for (const pixel of pixels) {
+    const lab = toLab(pixel);
+    const distance = labDistance(lab, shirtLab);
+    if (distance < BLEND_DISTANCE || (distance < HUE_DISTANCE && contrastRatio(lab, shirtLab) < LOW_CONTRAST)) {
+      blended++;
+    }
+  }
   return blended / pixels.length;
+}
+
+// WCAG contrast ratio from Lab lightness.
+function contrastRatio(a: [number, number, number], b: [number, number, number]) {
+  const luminance = ([l]: [number, number, number]) => (l > 8 ? ((l + 16) / 116) ** 3 : l / 903.3);
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
 }
 
 export function visibilityOn(pixels: ReadonlyArray<[number, number, number]>, shirtHex: string): Visibility {

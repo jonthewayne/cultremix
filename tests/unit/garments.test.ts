@@ -48,6 +48,11 @@ describe("the contrast check", () => {
     const half = [...Array.from({ length: 20 }, () => black), ...Array.from({ length: 30 }, () => yellow)];
     expect(visibilityOn(half, "#1f1f1f")).toBe("faint");
     expect(visibilityOn([], "#1f1f1f")).toBe("clear");
+    // Dark ink on navy is nearly the same brightness; a bright hue of the same brightness isn't lost.
+    expect(visibilityOn(allBlack, "#2c3447")).toBe("disappears");
+    expect(visibilityOn(allBlack, "#6c6c47")).toBe("clear");
+    const red = Array.from({ length: 50 }, (): [number, number, number] => [200, 40, 40]);
+    expect(visibilityOn(red, "#b4d9c8")).toBe("clear");
   });
 });
 
