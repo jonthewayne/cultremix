@@ -56,6 +56,16 @@ export function SiteHeader() {
                 {viewer.creatorNumber === 1 && (
                   <p className="border-b border-neutral-200 px-4 py-3 text-xs font-bold">Creator № 1</p>
                 )}
+                {viewer.username && (
+                  <Link
+                    to="/u/$username"
+                    params={{ username: viewer.username }}
+                    className="block px-4 py-3 hover:bg-neutral-100"
+                    onClick={() => setOpen(false)}
+                  >
+                    Your profile
+                  </Link>
+                )}
                 <Link to="/settings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
                   Settings
                 </Link>
