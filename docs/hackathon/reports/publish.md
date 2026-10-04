@@ -189,3 +189,144 @@ New tests:
 9. **Follow-ups.**
    - The commerce builder: email the list when checkout opens, and map offered colors to product variants.
    - Fix the shop page's big CR heading wrapping on phones (`whitespace-nowrap` with a smaller vw size).
+
+## Round 2: remixable words
+
+Branch `codex/publish`, after dev was merged at `5bd6c28` and again at `9e18593`.
+
+Commits:
+- `4adbf12`: the parser, fields on works, and checked word changes in remixes;
+- `4fb5af9`: Convex tests;
+- `c87f9f1`: the studio inputs, the creator's editor on the reveal and the work page, and the changed-words lines;
+- `4881bbf`: merged dev (one schema conflict, both sides kept);
+- `30c6c18`: fixes from the visual check;
+- this report.
+
+Nothing was deployed, run against a deployment, or pushed.
+
+### What was built
+
+This covers plan R11 (Remixability) and R16 (a remix changes only the remixable fields). CultRemix reads the finished design and proposes which words can vary. The creator approves them, and a remix changes only those words.
+
+**1. Proposed fields.** `convex/lib/remixFields.ts` is a pure helper, server-only like `prompts.ts`.
+- **Parsing.** `wordPieces` reads every quoted piece in the notes' "Words" section, in order:
+  - straight, curly, „ and « quotes;
+  - bullets, and `**bold**` markers;
+  - quotes that run onto the next lines;
+  - inner quotes and apostrophes ("DON'T");
+  - line breaks written as real breaks, `\n`, or ` / `.
+- **Proposing.** `proposeRemixFields` makes one field per piece, with ids `t1`, `t2`, …
+  - **Label:** the role named nearest the start of the piece's description: Headline, Subhead, Tagline, Date, Name, Caption, Label, Body, or "Text" if none. Repeats are numbered ("Label 2").
+  - **Text:** exact, line breaks kept.
+  - **Length cap:** `max(12, ceil(1.5 × length))`, counted in code points.
+  - **Switches:** body copy and anything past the first 8 pieces start off.
+  - **Limits:** at most 24 fields. No words gives `[]`, which is stored, so "no words" is told apart from "not read yet".
+- **Stored shape.** `works.remixFields` is an optional array of `{id, kind: "text", label, text, maxLength, on}`. People and counts can be added later as other `kind`s without a migration.
+
+**2. Saving and adjusting.**
+- **Saving.** `images.saveWorkNotes` calls `remixFields.proposeOnNotes` when a work's notes are written. A work that already has fields keeps them.
+- **On the reveal screen.** The publish reveal shows `RemixableWords` (dark), always in edit mode. It says "Reading the words…" until the notes land.
+- **On the work page.** `cr.$cr.tsx` shows "Remixable words" under "Remix this", only to the creator or an admin with manage rights (ops, owner).
+  - It has an Edit control, a switch and an editable label per field, and the line "People who remix this can change these words. Everything else stays as you made it."
+  - In view mode, switched-off fields say "· stays as made".
+- **Edits.** `remixFields.update` changes only labels (up to 40 characters, spaces collapsed) and switches. Text and caps come from the design.
+  - Refusals: `FORBIDDEN` for anyone else, `NOT_READY` before the notes, `INVALID_INPUT` for unknown or repeated ids and empty or long labels.
+- **One-time backfill.** `remixFields.backfill` (internal) runs oldest first, so parents get fields before their remixes inherit them. It works in pages of 50 and reschedules itself. Works without notes are skipped, so run the notes backfill first:
+
+  ```
+  bunx convex run imageNotes:backfillWorks
+  bunx convex run remixFields:backfill
+  ```
+
+**3. Remixing.**
+- **Studio.** When a remix session's image 1 is the parent's art, `studio.tsx` shows the switched-on fields above the prompt box as inputs (`RemixWordInputs`).
+  - Each input is prefilled with the current text and labelled with the field's label.
+  - A piece with line breaks gets a textarea.
+  - Each changed field has an Undo.
+  - Over the cap, it says "Up to N characters, so it fits the space."
+  - The prompt box is labelled "Anything else to change? (optional)".
+  - Generate is enabled once a field has changed or the box has text. With neither, it says "Change some words, or say what else to change."
+- **Server checks.** `studio.generate` takes optional `words: [{fieldId, text}]` (at most 24, each text at most 400 characters), and `checkedWordChanges` checks them against the parent's stored fields, never the browser's copy.
+  - **Refused:** unknown ids (`WORDS_UNKNOWN_FIELD`), switched-off fields (`WORDS_FIELD_LOCKED`), text over the cap (`WORDS_TOO_LONG`), empty text (`WORDS_EMPTY`) and repeats (`WORDS_REPEATED`).
+  - **Also refused:** any word change when image 1 isn't the parent's art (`WORDS_NOT_REMIXABLE`).
+  - Unchanged entries are dropped.
+- **Instruction.** `wordChangeInstruction` goes into `studioPrompt` ahead of the request:
+  - each changed piece: replace the old text with the new, spelled letter for letter (the existing spelling helper, now exported as `spellOut`), keeping that piece's typography, size, color, effects and placement;
+  - every unchanged piece is listed, to be kept letter for letter;
+  - composition, drawing, palette and transparent background are kept;
+  - a slash marks line breaks.
+
+  With only word changes, the request reads "Change only the words listed above and keep everything else exactly as it is." The batch path is unchanged: `wordChanges` is one more string passed through `batchInputs` and `jobInputs` into both `studioPrompt` calls in `imageGen.ts`.
+- **Record.** The batch stores `wordChanges: [{fieldId, label, from, to}]`. The studio batch line shows "Changed the words: GROW SLOW to GROW WILD", and the published remix's page shows the same line under its lineage.
+
+**4. A remix's own fields.** `publish.markPublished` calls `inheritOnPublish` (2 lines plus a comment). A remix made on its parent's art starts with the parent's fields: same ids, labels and switches, the new text, and the cap raised if the new text is longer. Its creator can adjust them as usual.
+- A free-text remix whose request names other words is the exception: it gets fields proposed from its own notes.
+
+**5. Privacy.**
+- `remixFields.forWork` is public and works signed out. It returns only switched-on fields `{id, label, text, maxLength}` and, for a remix, `changes: [{label, from, to}]`.
+- `forEditor` adds the switch state, for the creator or an admin only.
+- Notes, prompts and instructions never leave the server.
+- `id` and `maxLength` are exposed because the studio needs them to submit changes and show the cap; neither says anything about the design that isn't already on it.
+- The browser imports only `convex/lib/remixWords.ts`: length, cleanup, and the change summary, with no imports of its own. It's added to the client-boundary allowlist.
+
+### Files
+
+| Area | Files |
+| --- | --- |
+| Parser, checks, instruction | `convex/lib/remixFields.ts` (new), `convex/lib/remixWords.ts` (new, browser-safe), `convex/lib/prompts.ts` (`spellOut` exported, `studioPrompt` takes `wordChanges`) |
+| Storage and functions | `convex/schema/cultremix.ts` (`works.remixFields`, `batches.wordChanges`, both optional), `convex/remixFields.ts` (new) |
+| Hooks | `convex/images.ts` (`saveWorkNotes`), `convex/publish.ts` (2 lines), `convex/studio.ts` (`generate`, `batchView`, inputs), `convex/imageGen.ts` (one argument in each of the two prompt calls) |
+| UI | `src/components/cr/RemixableWords.tsx` (new), `src/components/studio/RemixWordInputs.tsx` (new), `src/routes/studio.tsx`, `src/components/publish/PublishDialog.tsx` (reveal), `src/routes/cr.$cr.tsx` (3 lines: an import and two components) |
+| Other | `convex/_generated/api.d.ts` (hand-edited: `remixFields`, `lib/remixFields`, `lib/remixWords`), `tests/unit/clientBoundary.test.ts` (allowlist) |
+
+`convex/lib/sizes.ts`, `storage.ts`, `sizing.ts` and `storageMoves.ts` weren't touched.
+
+### Tests
+
+From the final tree:
+
+| Command | Result |
+| --- | --- |
+| `bun run typecheck` | passes |
+| `bunx tsc --noEmit -p convex` | passes |
+| `bun run test`, unit | 56 files, 493 tests passed |
+| `bun run test`, convex-local | 27 files, 290 tests passed |
+| `bun run build` | passes |
+
+On one run under heavy machine load (load average over 60 on 12 cores), four unrelated convex-local tests hit vitest's 5-second timeout. All 290 passed with `--testTimeout 30000`, and the full check then passed with the default timeout.
+
+New tests:
+- **`tests/unit/remixFields.test.ts`, 19 tests:**
+  - the parser: order, role labels and numbering, the cap, line breaks, exact punctuation, unlabelled pieces, body and past-8 switched off, no words, malformed notes, inline sections;
+  - the checks: changes recorded against stored text; unknown, switched-off, empty, repeated and too-long refused;
+  - the instruction: letter-for-letter spelling, line breaks, placement in the remix prompt, alongside a free-text request;
+  - inheritance and the summary line.
+- **`tests/convex-local/remixFields.test.ts`, 9 tests:**
+  - fields saved when notes are written, and `[]` for a design with no words;
+  - only the creator or an admin edits; signed out and other members are refused; not-ready and invalid edits;
+  - signed out, `forWork` returns only switched-on labels and text, with no notes;
+  - a member with a username remixes with words: the batch records the change, and the job prompt has the spelling and the kept pieces;
+  - too long, switched off and unknown ids are refused, and a member without a username can't start a remix;
+  - words are refused when image 1 isn't the parent's art;
+  - works without fields fall back to the free-text remix;
+  - a published remix inherits the parent's fields with the new text, and later notes don't overwrite them;
+  - the backfill.
+
+**Visual check.** As in Round 1, I mounted the real `RemixWordInputs`, `RemixableWords` (light, dark, reading, and as a non-creator) and `WordChangesNote` in a throwaway Vite page with mocked Convex data, and drove them with agent-browser at 1280 px and 390 px. The page has been deleted and isn't committed.
+- **Checked:** Generate turns on with a changed word or with text in the box, and off when a word is too long. Undo restores the text. Edit, a switch, a rename and Save send the right `update` arguments and show "Saved", and a refused save shows the server's message. Non-creators see nothing.
+- **Fixed on the way:** each field's Undo button sat inside its label, so the label named the button and clicking the field name undid the change. Also, the "stays as made" note was cut off on long text.
+
+### Notes and decisions
+
+- **Inheritance happens at publish, proposals happen at notes.** `markPublished` runs before the notes are written, and `proposeOnNotes` skips works that already have fields, so a remix keeps its parent's labels and switches.
+- **Word changes need the parent's art as image 1.** The art is the thing being edited, so this is checked on both sides. If the remixer swaps image 1, the inputs disappear and the request box alone remains.
+- **In dev with `fake:` image keys, notes may never arrive.** The editor stops saying "Reading the words…" three minutes after publishing and hides itself, so the reveal and work page don't wait forever.
+- **Free-text remixes still work.** Works without fields, older works before the backfill, and designs with no words show the prompt box as before.
+
+### What the Builder must do when merging
+
+1. **Schema (additive only).** The optional `works.remixFields` and `batches.wordChanges` fields need a Convex deploy and a Worker deploy.
+2. **Backfill.** After deploying, run `bunx convex run imageNotes:backfillWorks`, then `bunx convex run remixFields:backfill`.
+3. **`convex/_generated/api.d.ts`** was edited by hand. On conflict, keep both sides' entries.
+4. **`convex/publish.ts` and `src/routes/cr.$cr.tsx`** have only the few lines listed above. On conflict, keep the `inheritOnPublish` call before `analyzeWork` is scheduled, and the two components in the page.
+5. **Environment variables.** None added.
