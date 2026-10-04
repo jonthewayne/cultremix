@@ -23,7 +23,7 @@ const CrLink = ({ cr, className }: { cr: string; className?: string }) => (
 export function LineageNote({ cr }: { cr: string }) {
   const trail = useTrail(cr);
   if (!trail) return null;
-  const parent = trail.steps[0];
+  const parent = trail.steps.at(0);
   return (
     <div className="mt-3 space-y-2 text-lg">
       {parent && trail.kind === "fork" && (
@@ -40,7 +40,12 @@ export function LineageNote({ cr }: { cr: string }) {
       {(trail.pending || trail.amended) && (
         <p className="flex flex-wrap gap-2 text-sm font-bold">
           {trail.pending && <span className="rounded-full bg-amber-200 px-3 py-1">Correction pending</span>}
-          {trail.amended && <span className="rounded-full bg-neutral-200 px-3 py-1">Lineage amended</span>}
+          {trail.amended && (
+            <span className="rounded-full bg-neutral-200 px-3 py-1">
+              Lineage amended
+              {trail.history.find((row) => row.status === "confirmed")?.chain === "recorded" && " · recorded on Monad"}
+            </span>
+          )}
         </p>
       )}
     </div>
@@ -53,7 +58,7 @@ function families(steps: Array<Step>, self: { cr: string; family: number }) {
   const groups: Array<{ family: number; works: Array<{ cr: string; username?: string; published: boolean }>; forked: boolean }> = [];
   ordered.forEach((step, index) => {
     // A step's `via` says how the next work down came from it; a fork means the next work is a new family.
-    const previous = ordered[index - 1];
+    const previous = index > 0 ? ordered.at(index - 1) : undefined;
     if (!previous || previous.via === "fork" || groups.at(-1)?.family !== step.family) {
       groups.push({ family: step.family, works: [], forked: previous?.via === "fork" });
     }
@@ -141,6 +146,7 @@ export function LineageSection({ cr }: { cr: string }) {
                     : `Pending: ${was} to ${now}.`}{" "}
                   <span className="text-neutral-600">“{row.reason}”</span>
                   {row.offchainOnly && <span className="text-neutral-500"> Not yet recorded on Monad.</span>}
+                  <CorrectionOnchain row={row} />
                 </li>
               );
             })}
@@ -149,5 +155,24 @@ export function LineageSection({ cr }: { cr: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+// Whether a correction is on Monad yet, with its transaction once there is one.
+function CorrectionOnchain({ row }: { row: Trail["history"][number] }) {
+  if (!row.chain) return null;
+  const link = row.chainTxUrl && (
+    <>
+      {" "}
+      <a href={row.chainTxUrl} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-4">
+        View transaction
+      </a>
+    </>
+  );
+  return (
+    <span className={row.chain === "recorded" ? "font-semibold" : "text-neutral-500"}>
+      {row.chain === "recorded" ? " Recorded on Monad." : " Recording on Monad…"}
+      {link}
+    </span>
   );
 }

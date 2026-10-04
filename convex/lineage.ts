@@ -4,6 +4,7 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { getViewerUser } from "./identity";
 import { imageUrlReader } from "./lib/imageUrls";
 import { workHeartCount } from "./lib/social";
+import { deploymentChainId, explorerTxLink } from "./provenance";
 import { formatCr, parseCr } from "./lib/r2";
 import { LineageError, MAX_TRAIL, effectiveAncestors, effectiveOf, validateAmendment } from "./lib/lineage";
 import { amendmentStatusValidator, workKindValidator } from "./schema/lineage";
@@ -120,6 +121,10 @@ const historyItem = v.object({
   requestedAt: v.number(),
   effectiveFrom: v.optional(v.number()),
   offchainOnly: v.boolean(),
+  // Its amendLineage write on Monad: confirmed, or sent and waiting. chainTxUrl links to the
+  // explorer once the write has a transaction hash.
+  chain: v.optional(v.union(v.literal("recorded"), v.literal("recording"))),
+  chainTxUrl: v.optional(v.string()),
 });
 
 async function crById(ctx: Ctx, id: Id<"works"> | undefined) {
@@ -134,8 +139,20 @@ async function historyOf(ctx: Ctx, workId: Id<"works">, limit: number) {
     .withIndex("by_work_sequence", (q) => q.eq("workId", workId))
     .order("desc")
     .take(limit);
+  const chainId = deploymentChainId();
+  const onchain = async (row: Doc<"lineageAmendments">): Promise<Pick<Infer<typeof historyItem>, "chain" | "chainTxUrl">> => {
+    const writeId = row.chainWriteId ? ctx.db.normalizeId("chainWrites", row.chainWriteId) : null;
+    if (!writeId || row.offchainOnly || (row.status !== "confirmed" && row.status !== "submitted")) return {};
+    const write = await ctx.db.get("chainWrites", writeId);
+    const chainTxUrl = explorerTxLink(write?.chainId ?? chainId, write?.txHash);
+    return {
+      chain: row.status === "confirmed" ? ("recorded" as const) : ("recording" as const),
+      ...(chainTxUrl && { chainTxUrl }),
+    };
+  };
   return await Promise.all(
     rows.map(async (row) => ({
+      ...(await onchain(row)),
       sequence: row.sequence,
       status: row.status,
       fromKind: row.fromKind,
@@ -278,6 +295,12 @@ export const family = query({
   },
 });
 
+function chainState(status: Doc<"works">["provenanceStatus"]) {
+  if (status === "confirmed") return "recorded" as const;
+  if (status === "pending" || status === "submitted") return "recording" as const;
+  return null;
+}
+
 // The family tree (src/lib/familyTree.ts draws it). Withdrawn works stay in as bare CR numbers
 // so their remixes keep their place.
 const treeWork = v.object({
@@ -294,6 +317,10 @@ const treeWork = v.object({
   remixes: v.optional(v.number()),
   remixesMore: v.optional(v.boolean()),
   hearts: v.optional(v.number()),
+  // Its registration on Monad, from works.provenanceStatus: confirmed, or queued and on its way.
+  // Absent when it hasn't been queued (or the write failed). chainTxUrl links to the explorer.
+  chain: v.optional(v.union(v.literal("recorded"), v.literal("recording"))),
+  chainTxUrl: v.optional(v.string()),
 });
 
 export const TREE_PAGE = 60;
@@ -329,6 +356,7 @@ export const familyTree = query({
     const loaded = new Map(inTree.map((row) => [row._id as string, row]));
     const reader = worksReader(ctx);
     const urls = imageUrlReader(ctx);
+    const chainId = deploymentChainId();
     const usernames = new Map<string, Promise<string>>();
     const nameOf = (id: Id<"users">) => {
       if (!usernames.has(id)) usernames.set(id, usernameOf(ctx, id));
@@ -351,12 +379,16 @@ export const familyTree = query({
       };
       if (row.status !== "published") return base;
       const art = await urls(row.artKey);
+      const chain = chainState(row.provenanceStatus);
+      const chainTxUrl = chain ? explorerTxLink(chainId, row.chainTxHash) : null;
       return {
         ...base,
         title: row.title,
         username: await nameOf(row.creatorId),
         backgroundColor: row.backgroundColor,
         thumbUrl: art.thumbUrl ?? art.url,
+        ...(chain && { chain }),
+        ...(chainTxUrl && { chainTxUrl }),
       };
     };
 

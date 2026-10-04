@@ -1,10 +1,25 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
-// Where a work's onchain registration stands, under its fingerprint on the work page.
+// Where a work's onchain registration stands, under its fingerprint on the work page, and how
+// anyone can check it (/onchain).
 export function ChainStatus({ workId }: { workId: Id<"works"> }) {
+  return (
+    <>
+      <RegistrationStatus workId={workId} />
+      <p className="mt-2">
+        <Link to="/onchain" className="underline underline-offset-4 hover:no-underline">
+          What’s on Monad, and how to check it →
+        </Link>
+      </p>
+    </>
+  );
+}
+
+function RegistrationStatus({ workId }: { workId: Id<"works"> }) {
   const { data } = useQuery(convexQuery(api.provenance.forWork, { workId }));
   if (!data) return null;
   const link = data.txUrl && (
