@@ -9,6 +9,7 @@ import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
 import { publishPlacement } from "./lib/lineage";
 import { recordPublishActivity, recordRemix } from "./lib/social";
+import { inheritOnPublish } from "./remixFields";
 import {
   BUDGET_RESTING,
   closeReservation,
@@ -306,6 +307,8 @@ export const markPublished = internalMutation({
     await recordPublishActivity(ctx, published);
     // The parent's creator gets a notification, and the parent gains trending attention.
     await recordRemix(ctx, published);
+    // A remix's remixable words start from its parent's (convex/remixFields.ts).
+    await inheritOnPublish(ctx, work._id);
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
     const look = pickLook(work._id, await recentLooks(ctx));

@@ -6,6 +6,7 @@ import { getViewerUser } from "./identity";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { isDevDeployment } from "./lib/r2";
+import { proposeOnNotes } from "./remixFields";
 import { requireMember } from "./studio";
 import { isImageKey } from "./lib/sizes";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -276,6 +277,8 @@ export const saveWorkNotes = internalMutation({
       notesKind: args.kind,
       notesModel: args.model,
     });
+    // The remixable words proposed from the notes' words; the creator adjusts them.
+    await proposeOnNotes(ctx, work._id, args.notes);
     return null;
   },
 });

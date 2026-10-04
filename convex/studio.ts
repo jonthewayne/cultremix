@@ -13,6 +13,8 @@ import { styleShares } from "./lib/prompts";
 import type { ImageRole } from "./lib/prompts";
 import { gridWorstCaseCents, qualityOf, singleWorstCaseCents } from "./lib/pricing";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
+import { MAX_FIELDS } from "./lib/remixFields";
+import { checkedWordChanges, wordChangesPrompt } from "./remixFields";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
 import { isImageKey } from "./lib/sizes";
 import {
@@ -90,6 +92,8 @@ const batchView = v.object({
   // A grid batch is charged as a whole; refunded is the credits it gave back for missing designs.
   grid: v.boolean(),
   refunded: v.optional(v.number()),
+  // A remix's changed words, for "Changed the words: GROW SLOW to GROW WILD".
+  wordChanges: v.optional(v.array(v.object({ label: v.string(), from: v.string(), to: v.string() }))),
   tiles: v.array(tileView),
 });
 
@@ -258,6 +262,7 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
     styles,
     grid: batch.layout === "grid",
     refunded: batch.refunded,
+    wordChanges: batch.wordChanges?.map((c) => ({ label: c.label, from: c.from, to: c.to })),
     tiles,
   };
 }
@@ -625,6 +630,8 @@ export const generate = mutation({
     // Sent by pages still running the previous studio until they reload.
     presets: v.optional(v.array(v.string())),
     inspirationKey: v.optional(v.string()),
+    // A remix's new words for the parent's remixable words (convex/remixFields.ts).
+    words: v.optional(v.array(v.object({ fieldId: v.string(), text: v.string() }))),
   },
   returns: v.union(
     v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
@@ -730,6 +737,10 @@ export const generate = mutation({
       session = (await ctx.db.get("creativeSessions", sessionId))!;
     }
     const inspirationKey = images[0]?.key ?? legacyKey;
+    if ((args.words?.length ?? 0) > MAX_FIELDS || args.words?.some((w) => w.text.length > 400)) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "That's too many words." });
+    }
+    const wordChanges = await checkedWordChanges(ctx, session, images[0]?.key, args.words);
     // The batch's number in its session, which names its folder (batch-01, batch-02, ...).
     const batchNumber = (session.batchCount ?? (await countBatches(ctx, session._id))) + 1;
     const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
@@ -753,6 +764,7 @@ export const generate = mutation({
       layout,
       charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
       number: batchNumber,
+      wordChanges,
     });
     if (layout === "grid" && !owner) {
       await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
@@ -889,6 +901,8 @@ const jobInputs = {
   model: v.string(),
   provider: v.string(),
   remixOfParent: v.boolean(),
+  // A remix's word changes, written for the prompt (convex/lib/remixFields.ts). Server only.
+  wordChanges: v.optional(v.string()),
   // Every image sent with the call: the numbered images, then images added only as styles.
   attachments: v.array(attachmentView),
   // Each style's 1-based attachment number and slider value.
@@ -906,9 +920,11 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
   const session = await ctx.db.get("creativeSessions", batch.sessionId);
   // A remix keeps the parent's look only while the parent is still the reference image.
   let remixOfParent = false;
+  let wordChanges: string | undefined;
   if (batch.operation === "remix" && batch.inspirationKey) {
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     remixOfParent = parent?.artKey === batch.inspirationKey;
+    if (remixOfParent) wordChanges = await wordChangesPrompt(ctx, batch, parent?._id);
   }
   const describe = async (imageId: Id<"userImages">, key: string, styleOnly: boolean) => {
     const image = await ctx.db.get("userImages", imageId);
@@ -945,7 +961,7 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
     sessionStartedAt: session?._creationTime ?? batch._creationTime,
     batchNumber: batch.number ?? (await batchNumberOf(ctx, batch)),
   };
-  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, attachments, styles, place };
+  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, wordChanges, attachments, styles, place };
 }
 
 // A batch's number from its position in its session (for batches made before batches had numbers).

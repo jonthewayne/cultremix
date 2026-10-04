@@ -164,12 +164,21 @@ export function requestedWords(text: string): Array<string> {
   return [...new Set(found)];
 }
 
+// "GROW WILD" as "G-R-O-W W-I-L-D"; a line break counts as a space.
+export function spellOut(words: string) {
+  return words
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((part) => [...part].join("-"))
+    .join(" ");
+}
+
 // Letter-by-letter spelling for those words; image models copy nearby letterforms otherwise
 // (tested: a reference reading GROW turned TRASH into GRASH in all four designs).
 function spelling(ask: string) {
   const words = requestedWords(ask);
   if (words.length === 0) return "";
-  const spelled = words.map((w) => `${w} (${w.split(/\s+/u).map((part) => [...part].join("-")).join(" ")})`);
+  const spelled = words.map((w) => `${w} (${spellOut(w)})`);
   return ` Spell these words letter for letter: ${spelled.join("; ")}.`;
 }
 
@@ -339,6 +348,8 @@ export function studioPrompt(args: {
   // What the request wants from each numbered image, when the role reader decided; otherwise the
   // request's phrases decide (namedStyles).
   roles?: Array<ImageRole>;
+  // A remix's changed words, as convex/lib/remixFields.ts wordChangeInstruction writes them.
+  wordChanges?: string;
 }) {
   const grid = args.layout === "grid";
   const ask = sentence(args.instruction);
@@ -431,11 +442,15 @@ export function studioPrompt(args: {
   }
 
   const words = spelling(ask);
+  const wordChanges = args.remix && work.length > 0 ? args.wordChanges?.trim() : undefined;
+  if (wordChanges) parts.push(wordChanges);
   if (images.length === 0) {
     const vary = grid ? " Make the four clearly different in composition, lettering, and color." : "";
     parts.push(`Request: ${ask} Spell any words exactly as given.${words}${vary}`);
   } else {
-    const fallback = args.remix
+    const fallback = wordChanges
+      ? "Change only the words listed above and keep everything else exactly as it is."
+      : args.remix
       ? "Make a fresh variation."
       : work.length > 0
         ? `Make a fresh take on image ${work[0].n}.`
@@ -443,7 +458,9 @@ export function studioPrompt(args: {
     const workNames = work.map((image) => `image ${image.n}`).join(" and ");
     const styleOnlyCount = images.length - work.length;
     const neverCopy = styleOnlyCount > 0 ? " Never copy words from a style-only image." : "";
-    const wordRule = work.length > 0
+    const wordRule = wordChanges
+      ? ` Make the word changes above exactly; keep every other word from ${workNames} unless the request gives new words.${neverCopy}`
+      : work.length > 0
       ? ` If the request gives new words, use exactly those and drop the old ones; otherwise keep the words from ${workNames}.${neverCopy}`
       : " Spell any words exactly as given, and never copy words from a style image.";
     const vary = !grid
