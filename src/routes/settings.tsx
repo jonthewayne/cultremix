@@ -10,6 +10,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/settings")({
+  head: () => ({ meta: [{ title: "Settings · CultRemix" }] }),
   beforeLoad: requireAuthenticatedRoute,
   component: SettingsPage,
 });

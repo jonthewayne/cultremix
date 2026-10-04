@@ -67,6 +67,12 @@ export function familyOfCr(cr: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
+// How a remix names its parent, the same words as the work page: a remix in its parent's family
+// is a variation; one that started a new family was forked.
+export function remixOfLabel(cr: string, parentCr: string): string {
+  return familyOfCr(cr) === familyOfCr(parentCr) ? "Variation of" : "Forked from";
+}
+
 const byCr = (a: TreeWork, b: TreeWork) => a.family - b.family || a.expression - b.expression;
 
 export function buildFamilyTree(data: FamilyTreeData, options: TreeOptions): Array<TreeNode> {

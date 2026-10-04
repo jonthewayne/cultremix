@@ -1,12 +1,15 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { Check } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
+import { NotFoundPage } from "~/components/app/not-found";
 import { FamilyTree } from "~/components/cr/FamilyTree";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { chainSummary, familyOfCr } from "~/lib/familyTree";
+import { familyShareCard, pageMeta, shareMeta } from "~/lib/share";
 
 // Works per load; "Show more" adds another page (the query caps the total).
 const PAGE = 60;
@@ -19,13 +22,42 @@ export const Route = createFileRoute("/family/$family")({
     typeof search.cr === "string" && familyOfCr(search.cr) !== null ? { cr: search.cr } : {},
   loader: async ({ context, params }) => {
     const family = familyNumber(params.family);
-    if (family !== null && context.convexQueryClient.serverHttpClient) {
-      await context.queryClient.fetchQuery(convexQuery(api.lineage.familyTree, { family, limit: PAGE })).catch(() => null);
+    if (family === null) throw notFound();
+    const options = convexQuery(api.lineage.familyTree, { family, limit: PAGE });
+    if (context.convexQueryClient.serverHttpClient) {
+      await context.queryClient.fetchQuery(options).catch(() => null);
     }
+    const data = context.queryClient.getQueryData(options.queryKey) as
+      | FunctionReturnType<typeof api.lineage.familyTree>
+      | undefined;
+    // Null (not undefined) means the server asked and there's no such family: answer 404.
+    if (data === null) throw notFound();
+    const root = data?.works.find((work) => work.expression === 1);
+    return {
+      share: data
+        ? familyShareCard({
+            family,
+            designs: data.works.filter((work) => !work.withdrawn).length,
+            startedBy: root?.username,
+            image: root?.withdrawn ? undefined : root?.thumbUrl,
+            imageTitle: root?.title,
+          })
+        : null,
+    };
   },
-  head: ({ params }) => ({ meta: [{ title: `Family ${params.family} · CultRemix` }] }),
+  head: ({ params, loaderData }) => ({
+    meta: loaderData?.share
+      ? shareMeta(loaderData.share)
+      : pageMeta(`Family ${params.family}`, `/family/${params.family}`),
+  }),
+  notFoundComponent: FamilyNotFound,
   component: FamilyPage,
 });
+
+function FamilyNotFound() {
+  const { family } = Route.useParams();
+  return <NotFoundPage mark={`Family ${family}`} message="There’s no family with this number yet." mono={false} />;
+}
 
 function FamilyPage() {
   const params = Route.useParams();
@@ -42,6 +74,8 @@ function FamilyPage() {
   const origin = root?.parentCr ? data?.origins.find((work) => work.cr === root.parentCr) : undefined;
   const count = data?.works.filter((work) => !work.withdrawn).length ?? 0;
   const chain = data ? chainSummary(data) : null;
+  // Placeholder data is the previous family's while the next one loads; that isn't a miss.
+  if (family === null || (tree.isSuccess && !tree.isPlaceholderData && !data)) return <FamilyNotFound />;
 
   return (
     <div className="min-h-svh bg-white text-black">
@@ -50,14 +84,7 @@ function FamilyPage() {
         <h1 className="pt-8 text-5xl font-black tracking-tight md:text-7xl">
           Family <span className="font-cr">{params.family}</span>
         </h1>
-        {tree.isLoading && family !== null ? null : !data ? (
-          <>
-            <p className="mt-6 text-xl">There’s no family with this number yet.</p>
-            <Link to="/" className="mt-6 inline-block font-bold underline underline-offset-4">
-              Back to the feed
-            </Link>
-          </>
-        ) : (
+        {!data ? null : (
           <>
             <p className="mt-4 max-w-prose text-lg leading-snug">
               {count}

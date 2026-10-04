@@ -28,6 +28,7 @@ type LoginSearch = {
 };
 
 export const Route = createFileRoute("/login")({
+  head: () => ({ meta: [{ title: "Sign in · CultRemix" }] }),
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
     inviteId: typeof search.inviteId === "string" ? search.inviteId : undefined,

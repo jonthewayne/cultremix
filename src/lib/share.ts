@@ -66,6 +66,42 @@ export function profileShareCard(profile: ProfileLike): ShareCard {
   };
 }
 
+type FamilyLike = { family: number; designs: number; startedBy?: string; image?: string; imageTitle?: string };
+
+export function familyShareCard(family: FamilyLike): ShareCard {
+  const name = `Family ${family.family}`;
+  const image = absoluteUrl(family.image);
+  const count = `${family.designs} ${family.designs === 1 ? "design" : "designs"}`;
+  const by = family.startedBy ? `, started by @${family.startedBy}` : "";
+  return {
+    title: name,
+    description: `${count}${by}. See every variation and fork on ${SITE_NAME}.`,
+    url: `${SITE_URL}/family/${family.family}`,
+    image: image ?? SHARE_IMAGE,
+    imageAlt: image ? (family.imageTitle ?? name) : SHARE_IMAGE_ALT,
+    card: "summary_large_image",
+    type: "website",
+  };
+}
+
+// A page without a card of its own: its title and address over the site card, so a shared link
+// doesn't preview as the home page.
+export function pageMeta(title: string, path: string, description?: string) {
+  return [
+    { title: `${title} · ${SITE_NAME}` },
+    { property: "og:url", content: `${SITE_URL}${path}` },
+    { property: "og:title", content: title },
+    { name: "twitter:title", content: title },
+    ...(description
+      ? [
+          { name: "description", content: description },
+          { property: "og:description", content: description },
+          { name: "twitter:description", content: description },
+        ]
+      : []),
+  ];
+}
+
 export function shareMeta(card: ShareCard) {
   return [
     { title: `${card.title} · ${SITE_NAME}` },

@@ -11,14 +11,24 @@ export function SiteHeader() {
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const close = (event: MouseEvent) => {
       if (!menu.current?.contains(event.target as Node)) setOpen(false);
     };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      toggle.current?.focus();
+    };
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
   }, [open]);
 
   const signOut = async () => {
@@ -33,21 +43,30 @@ export function SiteHeader() {
         </Link>
         <DeploymentPill />
       </div>
-      <nav className="flex items-center gap-4 text-sm font-semibold md:gap-7">
-        <Link to="/" activeOptions={{ exact: true }} activeProps={{ className: "underline decoration-2 underline-offset-8" }}>
+      <nav className="flex items-center gap-3 text-sm font-semibold md:gap-7">
+        <Link
+          to="/"
+          activeOptions={{ exact: true }}
+          // Signed in, a phone can't fit Feed beside the bell and the account button; the
+          // wordmark already goes to the feed.
+          className={viewer ? "hidden h-10 items-center sm:inline-flex" : "inline-flex h-10 items-center"}
+          activeProps={{ className: "underline decoration-2 underline-offset-8" }}
+        >
           Feed
         </Link>
-        <Link to="/studio" activeProps={{ className: "underline decoration-2 underline-offset-8" }}>
+        <Link to="/studio" className="inline-flex h-10 items-center" activeProps={{ className: "underline decoration-2 underline-offset-8" }}>
           Studio
         </Link>
         {viewer && <NotificationBell />}
         {viewer ? (
           <div ref={menu} className="relative">
             <button
+              ref={toggle}
               type="button"
               onClick={() => setOpen(!open)}
               aria-expanded={open}
-              className="flex items-center gap-2 rounded-full border-2 border-black px-3 py-1 tabular-nums"
+              aria-haspopup="true"
+              className="flex h-10 items-center gap-2 rounded-full border-2 border-black px-3 tabular-nums"
             >
               <span className="max-w-28 truncate">{viewer.username ? `@${viewer.username}` : "You"}</span>
               <span className="hidden text-neutral-500 sm:inline">
@@ -82,7 +101,7 @@ export function SiteHeader() {
             )}
           </div>
         ) : (
-          <Link to="/login" search={{ redirect: "/studio" }} className="rounded-full bg-black px-4 py-1.5 text-white">
+          <Link to="/login" search={{ redirect: "/studio" }} className="inline-flex h-10 items-center rounded-full bg-black px-4 text-white">
             Sign in
           </Link>
         )}

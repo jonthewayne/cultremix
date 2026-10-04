@@ -19,6 +19,7 @@ type VerifyEmailSearch = {
 };
 
 export const Route = createFileRoute("/verify-email")({
+  head: () => ({ meta: [{ title: "Check your email · CultRemix" }] }),
   validateSearch: (search: Record<string, unknown>): VerifyEmailSearch => ({
     email: typeof search.email === "string" ? search.email : "",
     attemptId: typeof search.attemptId === "string" ? search.attemptId : undefined,

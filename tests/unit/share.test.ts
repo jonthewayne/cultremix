@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { absoluteUrl, profileShareCard, shareMeta, workShareCard } from "../../src/lib/share";
+import { absoluteUrl, familyShareCard, pageMeta, profileShareCard, shareMeta, workShareCard } from "../../src/lib/share";
 import { SHARE_IMAGE, SITE_URL } from "../../src/lib/site";
 
 const item = {
@@ -65,5 +65,35 @@ describe("profile link previews", () => {
       card: "summary_large_image",
       url: `${SITE_URL}/u/bob`,
     });
+  });
+});
+
+describe("family link previews", () => {
+  it("count the designs, credit who started it, and show the first design", () => {
+    const meta = shareMeta(
+      familyShareCard({ family: 101, designs: 3, startedBy: "alice", image: item.artMediumUrl, imageTitle: "Night Market" }),
+    );
+    expect(meta[0]).toEqual({ title: "Family 101 · CultRemix" });
+    expect(content(meta, "og:description")).toBe("3 designs, started by @alice. See every variation and fork on CultRemix.");
+    expect(content(meta, "og:image")).toBe(item.artMediumUrl);
+    expect(content(meta, "og:image:alt")).toBe("Night Market");
+    expect(content(meta, "og:url")).toBe(`${SITE_URL}/family/101`);
+  });
+
+  it("fall back to the site card without a usable image", () => {
+    const card = familyShareCard({ family: 7, designs: 1, image: "fake:art" });
+    expect(card.description).toBe("1 design. See every variation and fork on CultRemix.");
+    expect(card.image).toBe(SHARE_IMAGE);
+  });
+});
+
+describe("plain page previews", () => {
+  it("point the link at the page itself, not the home page", () => {
+    const meta = pageMeta("@alice’s followers", "/u/alice/followers");
+    expect(meta[0]).toEqual({ title: "@alice’s followers · CultRemix" });
+    expect(content(meta, "og:url")).toBe(`${SITE_URL}/u/alice/followers`);
+    expect(content(meta, "og:title")).toBe("@alice’s followers");
+    expect(content(meta, "og:description")).toBeUndefined();
+    expect(content(pageMeta("Family 9", "/family/9", "Nine."), "description")).toBe("Nine.");
   });
 });

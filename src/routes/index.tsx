@@ -13,6 +13,7 @@ import type { FeedItem } from "~/components/social/WorkGrid";
 import { useMemberAction } from "~/components/social/useSignIn";
 import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
 import type { PagedStatus } from "~/hooks/use-paged-query";
+import { remixOfLabel } from "~/lib/familyTree";
 import { cn } from "~/lib/utils";
 
 type FeedTab = "latest" | "trending" | "following";
@@ -203,7 +204,11 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
               @{item.creator.username}
             </Link>
             {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
-            {item.parentCr && <span className="text-neutral-500"> · Remix of CR {item.parentCr}</span>}
+            {item.parentCr && (
+              <span className="text-neutral-500">
+                {" "}· {remixOfLabel(item.cr, item.parentCr)} <span className="font-cr">CR {item.parentCr}</span>
+              </span>
+            )}
           </p>
           <div className="mt-3 flex items-center gap-2 md:justify-end">
             <HeartButton workId={item.workId} count={item.hearts} size="sm" />

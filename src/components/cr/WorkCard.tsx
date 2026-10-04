@@ -29,7 +29,7 @@ export function WorkCard({ work, current = false, small = false }: { work: WorkC
           className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]"
         />
       </div>
-      <CrMark cr={work.cr} className={cn("mt-2 whitespace-nowrap", small ? "text-base md:text-lg" : "text-2xl md:text-3xl")} />
+      <CrMark cr={work.cr} className={cn("mt-2", small ? "text-base md:text-lg" : "text-2xl md:text-3xl")} />
       {!small && (
         <p className="text-sm">
           @{work.username}

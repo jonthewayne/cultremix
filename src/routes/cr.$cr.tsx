@@ -1,9 +1,10 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
+import { NotFoundPage } from "~/components/app/not-found";
 import { Art } from "~/components/cr/Art";
 import { ChainStatus } from "~/components/cr/ChainStatus";
 import { ColorSwatches } from "~/components/cr/ColorSwatches";
@@ -36,13 +37,21 @@ export const Route = createFileRoute("/cr/$cr")({
     const data = context.queryClient.getQueryData(options.queryKey) as
       | FunctionReturnType<typeof api.feed.byCr>
       | undefined;
+    // Null (not undefined) means the server asked and there's no such work: answer 404.
+    if (data === null) throw notFound();
     return { share: data ? workShareCard(data.item) : null };
   },
   head: ({ params, loaderData }) => ({
     meta: loaderData?.share ? shareMeta(loaderData.share) : [{ title: `CR ${params.cr} · CultRemix` }],
   }),
   component: ShopPage,
+  notFoundComponent: WorkNotFound,
 });
+
+function WorkNotFound() {
+  const { cr } = Route.useParams();
+  return <NotFoundPage mark={`CR ${cr}`} message="This design isn’t published." />;
+}
 
 const SIZES = ["S", "M", "L", "XL", "2XL"];
 
@@ -63,18 +72,7 @@ function ShopPage() {
       </div>
     );
   }
-  if (!data) {
-    return (
-      <div className="min-h-svh bg-white text-black">
-        <SiteHeader />
-        <main className="px-4 pt-16 md:px-10">
-          <CrMark cr={cr} className="text-7xl text-neutral-300" />
-          <p className="mt-6 text-xl">This design isn’t published.</p>
-          <Link to="/" className="mt-6 inline-block font-bold underline underline-offset-4">Back to the feed</Link>
-        </main>
-      </div>
-    );
-  }
+  if (!data) return <WorkNotFound />;
   const { item, contentHash, description } = data;
   const colors = pageColors(data.colors, offer);
   const color = selectedColor(colors, picked, item.cr);
@@ -93,7 +91,7 @@ function ShopPage() {
 
         <section className="mt-8 grid gap-10 md:mt-12 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:gap-16">
           <div>
-            <CrMark cr={item.cr} className="text-[20vw] md:text-[10vw]" />
+            <CrMark cr={item.cr} className="text-[13vw] md:text-[6.5vw]" />
             {item.title && <h1 className="mt-4 text-4xl font-black leading-none tracking-tight md:text-6xl">{item.title}</h1>}
             {description && <p className="mt-4 max-w-prose whitespace-pre-line text-lg leading-snug">{description}</p>}
             <p className="mt-4 text-xl">

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { formatPrice } from "../../../shared/config/print-products";
 import type { CartView } from "~/server/storefront";
+import { useReturnFocus } from "~/hooks/use-return-focus";
 
 const MAX = 10;
 
@@ -21,6 +22,7 @@ export function CartDrawer({
   onQuantity: (lineId: string, quantity: number) => void;
   onRemove: (lineId: string) => void;
 }) {
+  useReturnFocus(open);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();

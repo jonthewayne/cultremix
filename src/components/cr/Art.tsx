@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isPreloaded } from "~/lib/imagePreload";
 import { cn } from "~/lib/utils";
 
@@ -21,6 +21,13 @@ export function Art({
   instant?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // A server-rendered image can finish loading before React hydrates and attaches onLoad, so
+  // check once on mount; otherwise it would stay invisible.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img?.complete && img.naturalWidth > 0) setLoaded(true);
+  }, []);
   const [upgraded, setUpgraded] = useState<string | null>(() => (fullUrl && isPreloaded(fullUrl) ? fullUrl : null));
   useEffect(() => {
     if (!fullUrl || fullUrl === url || fullUrl.startsWith("fake:") || upgraded === fullUrl) return;
@@ -40,6 +47,7 @@ export function Art({
   if (instant) return <img src={src} alt={alt} draggable={false} decoding="sync" className={className} />;
   return (
     <motion.img
+      ref={imgRef}
       src={src}
       alt={alt}
       draggable={false}

@@ -4,6 +4,7 @@ import {
   chainSummary,
   familyOfCr,
   layoutTree,
+  remixOfLabel,
   shownCount
 } from "../../src/lib/familyTree";
 import type {FamilyTreeData, TreeNode, TreeWork} from "../../src/lib/familyTree";
@@ -254,5 +255,12 @@ describe("onchain state", () => {
     expect(chainSummary(data(works))).toEqual({ recorded: 1, total: 2 });
     const noUrl = [{ ...work(101, 1), chain: "recorded" as const }];
     expect(chainSummary(data(noUrl))).toEqual({ recorded: 1, total: 1 });
+  });
+});
+
+describe("remixOfLabel", () => {
+  it("calls a remix in its parent's family a variation and one in a new family a fork", () => {
+    expect(remixOfLabel("101-002", "101-001")).toBe("Variation of");
+    expect(remixOfLabel("105-001", "101-002")).toBe("Forked from");
   });
 });

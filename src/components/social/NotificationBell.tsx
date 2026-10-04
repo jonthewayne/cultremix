@@ -11,10 +11,10 @@ export function NotificationBell() {
     <Link
       to="/notifications"
       aria-label={unread > 0 ? `Notifications, ${unread} new` : "Notifications"}
-      className="relative flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-black hover:bg-neutral-100"
+      className="relative flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-black hover:bg-neutral-100"
       activeProps={{ className: "bg-black text-white hover:bg-black" }}
     >
-      <Bell aria-hidden className="size-4" strokeWidth={2.5} />
+      <Bell aria-hidden className="size-[18px]" strokeWidth={2.5} />
       {unread > 0 && (
         <span className="absolute -right-2 -top-2 h-5 min-w-5 rounded-full border-2 border-white bg-black px-1 text-center text-[10px] font-black leading-4 text-white tabular-nums">
           {unread > 99 ? "99+" : unread}

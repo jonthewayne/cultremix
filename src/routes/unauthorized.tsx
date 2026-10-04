@@ -4,6 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 
 export const Route = createFileRoute("/unauthorized")({
+  head: () => ({ meta: [{ title: "Not allowed · CultRemix" }] }),
   component: UnauthorizedPage,
 });
 

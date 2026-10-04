@@ -7,6 +7,7 @@ import { clampPair, pairHolding, phonePairs, sharedScale } from "~/lib/compare";
 import { isTouchDevice } from "~/lib/saveImage";
 import { cn } from "~/lib/utils";
 import { viewerShortcut } from "~/lib/viewerNav";
+import { useReturnFocus } from "~/hooks/use-return-focus";
 
 // Two to four designs side by side, each over its own background color and all drawn at the same
 // scale, so a bigger design looks bigger. Phones show two at a time, stacked, and swipe between
@@ -152,6 +153,7 @@ export function Compare({
   }, []);
 
   const dialog = useRef<HTMLDivElement>(null);
+  useReturnFocus();
   useEffect(() => {
     const before = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -244,7 +246,7 @@ export function Compare({
               <div className="flex items-center gap-2">
                 <span className="font-cr text-2xl leading-none tabular-nums">{i + 1}</span>
                 {tile.favorite && (
-                  <span className="text-xl leading-none" aria-label="Favorite">
+                  <span className="text-xl leading-none" role="img" aria-label="Favorite">
                     ♥
                   </span>
                 )}
