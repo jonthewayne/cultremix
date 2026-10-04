@@ -103,7 +103,7 @@ function OnchainPage() {
           <ol className="list-decimal space-y-3 pl-5">
             <li>
               On a design’s page, find its <span className="font-bold">Fingerprint</span>. It’s the SHA-256 of the design’s
-              print file.
+              published image file, so anyone with the file can check it.
             </li>
             <li>Open the registry on the explorer and find its Read Contract tab.</li>
             <li>
