@@ -183,6 +183,26 @@ describe("wordChangeInstruction", () => {
     expect(prompt).toContain("make the mushroom blue.");
     expect(prompt).toContain("G-R-O-W W-I-L-D");
   });
+
+  it("leaves the old words out of image 1's notes and asks for the new words in all four designs", () => {
+    const notes = 'Subject and layout:\nMushrooms between two lines of lettering.\n\nWords:\n- "GROW SLOW" (headline)\n\nLettering:\nBubbly 70s letters.';
+    const attachments = [{ kind: "art" as const, styleOnly: false, notes }];
+    const prompt = studioPrompt({
+      layout: "grid",
+      instruction: "",
+      attachments,
+      styles: [],
+      remix: true,
+      wordChanges: wordChangeInstruction(FIELDS, changes),
+    });
+    expect(prompt).toContain("Bubbly 70s letters.");
+    expect(prompt).not.toContain('- "GROW SLOW" (headline)');
+    expect(prompt).toContain("Every one of the four shows the changed words; none of them keeps the old words.");
+    // A free-text remix keeps image 1's Words notes, and has no all-four rule.
+    const plain = studioPrompt({ layout: "grid", instruction: "", attachments, styles: [], remix: true });
+    expect(plain).toContain('- "GROW SLOW" (headline)');
+    expect(plain).not.toContain("none of them keeps the old words");
+  });
 });
 
 describe("inheritRemixFields and changeSummary", () => {

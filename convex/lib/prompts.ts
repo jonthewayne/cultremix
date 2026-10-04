@@ -400,6 +400,8 @@ export function studioPrompt(args: {
     parts.push(`Attached images:\n${legend.join("\n")}`);
   }
 
+  const wordChanges = args.remix && work.length > 0 ? args.wordChanges?.trim() : undefined;
+
   if (work.length > 0) {
     const first = work[0].n;
     const whose = work.length > 1 ? "the images" : `image ${first}`;
@@ -425,7 +427,16 @@ export function studioPrompt(args: {
     }
     parts.push(keep);
     for (const image of work) {
-      const notes = mix.length > 0 ? pickSections(image.notes, CONTENT_WITH_STYLE) : image.notes?.trim();
+      // With word changes, the remixed design's own Words notes still list the old words and pulled
+      // half of a grid back to them (tested 2026-10-04: GROW SLOW to GROW LOUD kept SLOW in 2 of 4).
+      // The word-change block lists every piece of text instead.
+      const dropWords = Boolean(wordChanges) && image.n === first;
+      const notes =
+        mix.length > 0
+          ? pickSections(image.notes, dropWords ? CONTENT_WITH_STYLE.filter((name) => name !== "Words") : CONTENT_WITH_STYLE)
+          : dropWords
+            ? withoutWords(image.notes)
+            : image.notes?.trim();
       if (notes) parts.push(`Notes on image ${image.n} (a checklist; where they differ from the image, follow the image):\n${notes}`);
     }
   }
@@ -442,7 +453,6 @@ export function studioPrompt(args: {
   }
 
   const words = spelling(ask);
-  const wordChanges = args.remix && work.length > 0 ? args.wordChanges?.trim() : undefined;
   if (wordChanges) parts.push(wordChanges);
   if (images.length === 0) {
     const vary = grid ? " Make the four clearly different in composition, lettering, and color." : "";
@@ -466,7 +476,9 @@ export function studioPrompt(args: {
     const vary = !grid
       ? ""
       : args.remix
-        ? " Vary only small details between the four."
+        ? wordChanges
+          ? " Every one of the four shows the changed words; none of them keeps the old words. Vary only small details between the four."
+          : " Vary only small details between the four."
         : mix.length > 0
           ? " Keep the same style mix in all four and vary their composition."
           : " Vary the composition between the four.";
