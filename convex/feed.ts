@@ -131,6 +131,25 @@ export const latest = query({
   },
 });
 
+// Trending: published works with the most attention over the last 7 days (convex/lib/trending.ts),
+// most first. Signed out too.
+export const trending = query({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: feedPage,
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("trendingWorks")
+      .withIndex("by_score")
+      .order("desc")
+      .paginate(boundedOpts(args.paginationOpts));
+    return {
+      page: await publishedItems(ctx, result.page.map((row) => row.workId)),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
 // Following: works by the people the viewer follows, newest first (KTD-13: fan-out on read over
 // the latest 200 followed accounts). Signed out, it's empty.
 export const following = query({

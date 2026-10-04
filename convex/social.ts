@@ -14,9 +14,12 @@ import {
   clampPageSize,
   getUserByUsername,
   normalizeBio,
+  safeImageUrl,
   userStats,
   workHeartCount,
 } from "./lib/social";
+import { notify } from "./lib/notifications";
+import { addAttention } from "./lib/trending";
 
 // A member's public profile (R25). Public fields only (INV-24): never email, ids, or roles.
 export const profile = query({
@@ -213,6 +216,7 @@ export const setFollow = mutation({
       });
       await bumpUserStats(ctx, viewer._id, { following: 1 });
       const stats = await bumpUserStats(ctx, target._id, { followers: 1 });
+      await notify(ctx, { recipientId: target._id, actorId: viewer._id, kind: "follow" });
       return { following: true, followers: stats.followers };
     }
     if (!args.follow && row) {
@@ -242,11 +246,21 @@ export const setHeart = mutation({
       if (!work || work.status !== "published") {
         throw new ConvexError({ code: "NOT_FOUND", message: "That design isn’t published." });
       }
-      await ctx.db.insert("hearts", { userId: viewer._id, workId: work._id, createdAt: Date.now() });
+      const now = Date.now();
+      await ctx.db.insert("hearts", { userId: viewer._id, workId: work._id, createdAt: now });
+      // Hearting your own design counts for nothing beyond the heart itself.
+      if (work.creatorId !== viewer._id) {
+        await notify(ctx, { recipientId: work.creatorId, actorId: viewer._id, kind: "heart", workId: work._id, at: now });
+        await addAttention(ctx, work._id, now, { hearts: 1 });
+      }
       return { hearted: true, count: await bumpWorkHearts(ctx, work._id, 1) };
     }
     if (!args.heart && row) {
       await ctx.db.delete("hearts", row._id);
+      // Trending forgets the heart if its day is still in the window; the notification stays.
+      if (work && work.creatorId !== viewer._id) {
+        await addAttention(ctx, work._id, row.createdAt, { hearts: -1 });
+      }
       return { hearted: false, count: await bumpWorkHearts(ctx, args.workId, -1) };
     }
     return { hearted: row !== null, count: await workHeartCount(ctx, args.workId) };
@@ -270,14 +284,3 @@ export const setBio = mutation({
     return bio;
   },
 });
-
-// Only web images make it to a public page.
-function safeImageUrl(image: string | undefined) {
-  if (!image) return undefined;
-  try {
-    const url = new URL(image);
-    return url.protocol === "https:" ? url.toString() : undefined;
-  } catch {
-    return undefined;
-  }
-}

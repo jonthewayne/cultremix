@@ -17,4 +17,7 @@ crons.daily("webhook payload purge", { hourUTC: 9, minuteUTC: 15 }, internal.ord
 // (convex/budget.ts sweep).
 crons.interval("sweep paid calls", { minutes: 10 }, internal.budget.sweep, {});
 
+// Trending: days that leave the 7-day window come off works' scores (convex/trending.ts).
+crons.hourly("expire trending attention", { minuteUTC: 3 }, internal.trending.expire, {});
+
 export default crons;

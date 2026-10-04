@@ -8,7 +8,7 @@ import { isFlagOn } from "./lib/flagState";
 import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
 import { publishPlacement } from "./lib/lineage";
-import { recordPublishActivity } from "./lib/social";
+import { recordPublishActivity, recordRemix } from "./lib/social";
 import {
   BUDGET_RESTING,
   closeReservation,
@@ -302,7 +302,10 @@ export const markPublished = internalMutation({
       contentHash: args.contentHash,
     });
     // The Following feed and profiles read this event (convex/lib/social.ts).
-    await recordPublishActivity(ctx, { ...work, status: "published", publishedAt: now });
+    const published = { ...work, status: "published" as const, publishedAt: now };
+    await recordPublishActivity(ctx, published);
+    // The parent's creator gets a notification, and the parent gains trending attention.
+    await recordRemix(ctx, published);
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
     const look = pickLook(work._id, await recentLooks(ctx));
