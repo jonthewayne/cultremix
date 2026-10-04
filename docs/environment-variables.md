@@ -42,6 +42,7 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `CLOUDFLARE_ZONE_NAME` | GitHub variable | no | no | wizard/manual | preview route patch |
 | `CLOUDFLARE_PROJECT_NAME` | GitHub variable | no | no | wizard | workflow Worker names |
 | `DEV_URL`, `PROD_URL`, `PREVIEW_BASE_DOMAIN` | GitHub variables | no | no | wizard/manual | deploy workflow |
+| `DEPLOYMENT_ENV` | Convex env (dev, staging, prod) | no | no | manual | which environment this is: `dev`, `staging`, or `prod`. Staging and dev (and an unset value) show the Testnet badge, so production must say `prod`; prod shows Early access until checkout opens (`api.deployment.get`, the only way the browser learns it); dev allows the stand-in image generator |
 | `AI_GATEWAY_API_KEY` | Convex env | no | yes | manual | image designs, model photos, image notes |
 | `IMAGE_PROVIDER` | Convex env (optional) | no | no | manual | `gateway` or `chatgpt` forces the image provider |
 | `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex env (optional) | no | no | manual | design and model-photo quality (default `medium`) |

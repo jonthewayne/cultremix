@@ -1,46 +1,92 @@
 # CultRemix submission
 
-- Live: https://cultremix-prod.jonthewayne.workers.dev
-- Code: https://github.com/jonthewayne/cultremix (branch `dev`)
-- Video: (Jon adds the link)
+**Monad hackathon, Social, Attention & Culture track.** Due 2026-10-13, 20:59 PDT.
+
+## Links
+
+Jon fills these in.
+
+- Live (staging, Monad testnet): (link)
+- Production: https://cultremix.com
+- Code: (public GitHub link, shared with metropolis@hackathon.monad.xyz)
+- Demo video (3 minutes or less): (link)
+- Pitch video (2 minutes or less): (link)
+- Logo: (file, JPG/PNG/WEBP, 3 MB or less)
+- Monad registry contract: (explorer link)
+- Judge sign-in: each judge gets an email and password privately (see [Judges](../judges.md)). On the sign-in page, tap **Have a password? Sign in with it**.
 
 ## Pitch
 
-CultRemix is a studio and shop for remixable t-shirt art. Drop in any inspiration image, say what should change, and get four print-ready designs with transparent backgrounds. Publish one and it gets a permanent CR number, like CR 101-001, a photo of someone wearing it, and a shop page. Anyone can remix a published design, and the remix joins its family as the next number, CR 101-002, so every shirt carries its lineage.
+**Remix culture, get paid.**
+
+CultRemix is a studio and shop for remixable t-shirt art. Add a few images, mix their styles, say what you want, and get four print-ready designs at once. Publish one and it gets a permanent CR number, like CR 101-001, a photo of someone wearing it, and a shop page. Anyone can remix a published design; the remix joins its family as the next number, CR 101-002, so every shirt carries its lineage, and when it sells, the creators upstream share in it.
+
+## Why this track
+
+- **Social:** remixing is the conversation. Every design invites the next one, and families grow in public.
+- **Attention:** a CR number is a name people can say, share, and collect. The feed puts new work and its remixes side by side.
+- **Culture:** the lineage is the point. Monad holds each work's fingerprint and family tree, so credit follows the design wherever it goes.
 
 ## What works today
 
-- Email sign-in, username onboarding, and 24 starting credits (one per design, refunded if a design fails). During early access, sign-in codes aren't emailed, so visitors can browse the public feed and shop pages.
-- Studio: drop in an inspiration image and describe the change. The background color is sampled from the image's edges and can be edited. Each Generate makes four transparent 1024×1536 designs that fill in as they finish.
-- Favorites, a full-size viewer with arrow keys, and "Use as inspiration".
-- Publish: an optional title, then a full-screen CR number reveal. A photo of a model wearing the design on a shirt in the background color is generated at publish.
-- Feed, newest first: the design and the model photo side by side, with the big CR lockup, title, and creator.
-- Shop page: sizes, $36 with checkout opening soon, the design's SHA-256 ("Verified on Monad — coming soon"), and its remix family.
-- Remix: a published design opens in the studio as the inspiration, and the published result becomes the next number in its family.
-- Stack: TanStack Start on Cloudflare Workers; Convex with Better Auth; GPT Image 2.5 (Sunburst for edits, Flare for text) through the Vercel AI Gateway.
+From the [build log](log.md):
+
+- **Sign-in:** email code sign-in, a username step, and starting credits. Sign-ins last 400 days.
+- **Studio:** up to 8 numbered images (“draw image 1 in the style of image 2”) and a style mixer with up to 4 styles, each with a slider for its share. What we read from each image stays on the server.
+- **Generate:** one press makes four designs at once, transparent and print-ready, for 2 credits a batch. Credits come back for any design that doesn't arrive, and a filtered request says so plainly.
+- **Sessions:** each run of batches is a session you can name, reopen, and keep working in. Every design has a menu to view it large, download it, use it as an image or a style, or publish it. Works on phones, including saving to Photos.
+- **Publish:** an optional title, then a full-screen CR number reveal. A photo of someone wearing the design arrives a moment later, with a different person, pose, and place each time.
+- **Feed and shop pages:** newest first, the design beside its photo; each shop page has sizes, $36 (checkout opening soon), the design's SHA-256 fingerprint, and its remix family.
+- **Remix:** “Remix this” opens the studio with the design as image 1; publishing makes the next number in its family (CR 101-002).
+- **Storage:** every image lives in its own folder with a thumbnail and a medium copy, so pages load fast. Images carry no hidden metadata.
+- **Live:** cultremix.com since 2026-09-30.
+
+Built for launch:
+
+- Judge accounts with a password, made by an admin (nobody else can sign up with a password).
+- Admin: switches for each part of the product, app settings, member search with credit grants, and launch metrics by day.
+- Labels: production shows **Early access** until checkout opens; staging shows a **Testnet** badge on every CR number.
+
+Stack: TanStack Start on Cloudflare Workers, Convex with Better Auth, GPT Image 2.5 through the CultRemix Gateway, Cloudflare R2, Monad.
+
+## What the registry proves
+
+A CultRemix-run service submits each record, signed by the key of a CultRemix-held wallet assigned to the member's account, with the work's fingerprint and lineage. That proves the design existed with that exact content at that time and which design it came from, in a public record. Because CultRemix holds the keys, it doesn't independently prove that a person agreed to it, and the Back limit is per account. More in the [README](../../README.md#what-the-registry-proves).
 
 ## What's next
 
-- Print on demand for every published design.
-- Shopify checkout.
-- Provenance on Monad: each design's SHA-256 and remix lineage recorded on chain.
-- Creator subscriptions, and earnings for creators whose designs get remixed.
-- Email delivery and the cultremix.com domain.
+- Checkout and print on demand for every published design.
+- Creator earnings paid out from the 15% creator pool.
+- Backs: members back the works they love.
+- Print-size art for every published design.
+- Monad mainnet records in production.
 
 ## 90-second demo script
 
 | Time | On screen | Say |
 |---|---|---|
-| 0:00–0:10 | The feed | "Every great shirt is a remix. CultRemix makes the remix the product." |
-| 0:10–0:35 | Studio: drop in the motel-sign photo, type "NO VACANCY FOR BAD VIBES", Generate; cut to the finished tiles | "Drop in anything that inspires you and say what should change. You get four print-ready designs with transparent backgrounds, on a color pulled from your photo." |
-| 0:35–0:45 | Heart two, open the viewer, arrow through | "Keep the ones you love and flip through them full size." |
-| 0:45–1:00 | Publish with a title, the CR 101-001 reveal, the feed row as the photo arrives | "Publish, and it gets a permanent number, CR 101-001, and a photo of someone wearing it." |
-| 1:00–1:10 | Shop page | "Every design gets a shop page, with a fingerprint we'll anchor on Monad." |
-| 1:10–1:25 | Remix, "make it night: navy and neon", Generate, publish, CR 101-002 | "Anyone can remix it. The remix joins the family as CR 101-002, so every shirt carries its lineage." |
-| 1:25–1:30 | The feed with both | "Next: print on demand, checkout, provenance on Monad, and creator subscriptions. This is CultRemix." |
+| 0:00–0:08 | The feed on a phone, scrolling past a family of remixes | “Every great shirt is a remix. CultRemix makes the remix the product, and pays the people it came from.” |
+| 0:08–0:25 | Studio: add a portrait as image 1 and a 70s concert poster as image 2; open the Style mixer and set the poster to 70; type “Draw image 1 as a concert poster that says FAR OUT” | “Add a few images, mix their styles, and say what you want.” |
+| 0:25–0:38 | Press Generate; cut to the four designs filling in together | “One press, four print-ready designs at once, transparent and ready for a shirt.” |
+| 0:38–0:52 | Pick one, ⋯ → Publish, add a title; the full-screen CR reveal; the shop page as the model photo arrives | “Publish, and it gets a permanent number and a photo of someone wearing it.” |
+| 0:52–1:05 | Signed in as a second member: Remix this, “make it neon at night”, Generate, publish; the next number in the family | “Anyone can remix it. The remix joins the family as the next number, so every shirt carries its lineage.” |
+| 1:05–1:15 | The remix's shop page, the Economics panel | “Every sale sets aside 15% for creators. On a remix, half goes to the original's creator and half to the remixer, and anyone can check the math.” |
+| 1:15–1:27 | The work's record on the Monad explorer, its fingerprint matching the shop page | “Each work's fingerprint and family tree are recorded on Monad, so anyone can see where a design came from.” |
+| 1:27–1:30 | The feed with both works side by side | “Remix culture, get paid. This is CultRemix.” |
 
-Designs take 20–40 seconds each, so record the Generate click and cut to the finished tiles. Inspiration images and instructions are in `~/cultremix-seed/` on mighteous (the share's `cultremix-seed` folder).
+Recording notes:
+
+- Generate takes 20–40 seconds. Record the press, then cut to the finished designs.
+- Use images you have the rights to. Pick a portrait and a poster with strong, simple shapes.
+- Record on staging, so the Testnet badge shows on the CR numbers and the Monad record is on testnet.
+- The Economics panel and the Monad record need their builds merged and the **Monad records** switch on. If either isn't ready on recording day, show the shop page's fingerprint instead and say it's coming.
 
 ## Event requirements
 
-(Jon: paste the event's submission fields here.)
+Jon: paste the event's submission fields here, and check each one.
+
+- [ ] Public GitHub repo, shared with metropolis@hackathon.monad.xyz
+- [ ] Live staging link on Monad testnet, with judge sign-in instructions (checkout labeled as a test payment)
+- [ ] Demo video, 3 minutes or less (YouTube, Loom, or Vimeo)
+- [ ] Pitch video, 2 minutes or less
+- [ ] Logo, JPG/JPEG/PNG/WEBP, 3 MB or less

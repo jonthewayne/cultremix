@@ -1,105 +1,93 @@
-# Convex Start Better Auth Starter
+# CultRemix
 
-A product-agnostic starter for Bun, Vite, React, TanStack Start, Convex, Better Auth, Cloudflare Workers, Tailwind, shadcn/ui, and Resend.
+**Remix culture, get paid.**
 
-The app is SSR-enabled through TanStack Start on Cloudflare Workers. Initial loads render on the server, then TanStack Router handles internal navigation client-side after hydration.
+CultRemix is a studio and shop for remixable t-shirt art. Add a few images, mix their styles, say what you want, and Generate makes four print-ready designs at once. Publish one and it gets a permanent CR number, like **CR 101-001**, a photo of someone wearing it, and a shop page. Anyone can remix a published design; the remix joins its family as the next number, **CR 101-002**, so every shirt carries its lineage, and the people upstream share in what it earns.
 
-## 5-Minute Start
+Built for the Monad hackathon (Social, Attention & Culture track). Live at [cultremix.com](https://cultremix.com).
 
-From this starter directory, create a clean project copy:
+## How it fits together
 
-```bash
-bun run new-project ../my-app
-cd ../my-app
-```
+| Piece | What it does |
+| --- | --- |
+| **TanStack Start on Cloudflare Workers** | The site: feed, studio, shop pages (`/cr/<number>`), sign-in, settings, and `/admin`. Routes live in `src/routes/`. |
+| **Convex** | The database and every server function: studio batches, publishing, the feed, credits, flags, metrics (`convex/`). Tables are in `convex/schema.ts` and `convex/schema/`. |
+| **Better Auth** (on Convex) | Email code sign-in for everyone; email and password only for accounts an admin made (judges). Public password sign-up is refused. |
+| **CultRemix Gateway** | Image generation (GPT Image 2.5) and the notes we read from style images. Prompts and style notes stay on the server and never reach the browser. |
+| **Cloudflare R2** | One public bucket per environment. Each image lives in its own folder with a thumbnail and a medium copy; anything not published sits under an unguessable 128-bit code. |
+| **Monad** | Provenance for published designs: each work's fingerprint (SHA-256) and remix lineage, recorded on chain. See below. |
 
-Then set up the new project:
+More detail: [Architecture](docs/architecture.md), [Image generation](docs/image-generation/README.md), [Onchain provenance ADR](docs/adr/0001-onchain-provenance.md).
+
+## Running it
+
+You need [Bun](https://bun.sh) and a Convex account.
 
 ```bash
 bun install
-bun run setup
-bun run doctor
-bun run dev
+bun run setup        # asks which Convex team to use; writes env files
+bun run dev          # Convex + the site on http://localhost:3000
 ```
 
-The setup wizard walks through project identity, Convex, domains, auth providers, optional deployment, and verification. Choose `local` for an account-free Convex deployment; for cloud projects, enter an existing team slug, type `interactive` to take over Convex CLI prompts yourself, or create a new team in the Convex dashboard and rerun setup. The wizard writes env files, patches `package.json` and `wrangler.jsonc`, preserves existing secrets on rerun, writes `.starter/setup-state.json`, applies backend env values to an account-free local Convex deployment, and prints pending commands for cloud services.
-
-Use `bun run setup --dry-run` to preview changes. Use `bun run setup --local-only` to skip deployment prompts. Use `bun run setup --skip-convex` if you want to run `bunx convex dev --configure new --once` yourself. Use `bun run setup --defaults --dry-run` for a non-interactive preview. Use `bun run setup --rotate-secrets` only when you intentionally want new auth/test secrets. Use `bun run setup --apply-external` when you are authenticated with `convex`, `wrangler`, and `gh` and want the wizard to attempt external CLI setup too.
-
-For local sign-in, choose `console` email mode and leave Resend for later. Console mode logs auth emails/OTPs to Convex/dev logs and enables test OTP storage locally.
-
-Phone authentication is disabled by default. Normal installation, setup, tests, and builds do not need Telnyx credentials; live SMS needs them only after you enable phone auth and select Telnyx.
-
-For local development, `bun run doctor` checks the local path only. When you are ready to deploy, run:
+Then set up the new deployment once:
 
 ```bash
-bun run doctor:deployment
+bun run seed:environment      # app settings, every switch at its default, CR counters
 ```
 
-That stricter check verifies Cloudflare, GitHub, production Vite values, and external CLI auth.
+Sign in with the `FIRST_SUPER_ADMIN_EMAIL` address and claim the owner account in Settings. You're Creator № 1, and `/admin` is yours.
 
-## Commands
+Without image keys, dev uses a stand-in generator so the whole flow still works. Real images need `AI_GATEWAY_API_KEY` and the R2 values in [Environment variables](docs/environment-variables.md).
+
+### Everyday commands
 
 ```bash
-bun run dev          # Convex + TanStack Start dev
-bun run new-project  # copy this starter into a clean project directory
-bun run doctor       # local/env/config checks
-bun run doctor:deployment # stricter Cloudflare/GitHub/production checks
-bun run typecheck    # TypeScript + Convex typecheck
-bun run test         # default local unit tests
-bun run test:convex  # Convex integration tests when a test backend is configured
-bun run test:e2e     # browser smoke test with agent-browser
-bun run build        # production build + typecheck
-bun audit            # dependency security audit
+bun run typecheck    # TypeScript (and Convex, when a deployment is configured)
+bun run test         # unit tests and Convex tests on an in-memory backend
+bun run build        # production build
+bun run test:e2e     # browser smoke test
 ```
 
-## What Is Included
+### Launch scripts
 
-- Better Auth with Convex persistence via `@convex-dev/better-auth`
-- Email OTP and optional magic links
-- Optional phone OTP, disabled by default, with E.164 normalization, local/Telnyx provider seam, tap-code route, and cross-device magic-link handoff
-- Resend email delivery in production and console providers for local/tests
-- DB-authoritative platform roles, scoped memberships, invites, capability checks, and route guards
-- `ConvexQueryClient` with `expectAuth: true` for authenticated app code
-- Standalone pre-auth Convex client for login and verification flows
-- Same-origin `/api/auth/*` proxy through TanStack Start
-- Clean shadcn-style UI with light/dark mode
-- Cloudflare Worker deployment workflows for `main`, `dev`, and preview branches
+```bash
+bun run seed:environment                        # set up a fresh environment (safe to rerun)
+bun run judges:provision -- --file judges.txt   # make judge accounts with passwords
+```
 
-## Setup Flow
+Both target your dev deployment by default, staging when `CONVEX_DEPLOY_KEY` is set for the command, and production with `--prod` (they ask first). Neither ever copies data between environments. See [Judges](docs/judges.md) and the [Launch checklist](docs/launch-checklist.md).
 
-1. Install dependencies with `bun install`.
-2. Run `bun run setup`; choose the intended Convex team slug when prompted, and choose local-only first if you do not have Cloudflare/GitHub details yet.
-3. Run `bun run doctor`.
-4. Run `bun run dev`.
-5. Sign in with `FIRST_SUPER_ADMIN_EMAIL`, open Settings, and bootstrap the first owner.
+## Admin
 
-The wizard is safe to rerun. It merges env files instead of deleting them, preserves existing generated secrets unless `--rotate-secrets` is passed, and prints pending commands when a CLI is not authenticated or an external project does not exist yet.
+`/admin` is for the owner and staff:
 
-For a fuller walkthrough of how the pieces fit together, read [How To Use This Starter](docs/usage-flow.md).
+- **Overview**: switches for each part of the product (studio, publishing, checkout, chain writes, backs, upscale) and app settings (signup credits, the daily image budget, photo shoots per member).
+- **Members**: search by username, email, or creator number; give credits; turn creator access on or off.
+- **Metrics**: counts by day and in total (members, members who generated, batches, designs, published works, remixes, families, credits used, model photos).
+- **Judges**: make a judge account with a password (owner only).
 
-## First Super Admin
+Support staff can look but not change anything.
 
-1. Set `FIRST_SUPER_ADMIN_EMAIL` through the wizard.
-2. Sign in with that email.
-3. Open Settings and click **Bootstrap my account**.
+## What the registry proves
 
-The mutation only succeeds when no other `super_admin_owner` exists.
+When a design is published, CultRemix records its fingerprint and its place in a remix family on Monad. In plain words, that record proves this:
 
-## Theming
+> A CultRemix-run service submitted a record, signed by the key of a CultRemix-held wallet assigned to that account, at that time, with that lineage and that fingerprint.
 
-This starter uses the full shadcn/ui CSS variable contract in `src/styles/app.css`, including base, chart, sidebar, and radius tokens. Generate a theme at https://ui.shadcn.com/themes, then replace the `:root` and `.dark` variable blocks while keeping the `@theme inline` block intact. The app shell and components use those semantic tokens, so the new theme flows through automatically.
+What it does **not** prove: because CultRemix holds the wallet keys for members, the record doesn't independently prove that a person agreed to it, and the limit on Backs is per account, not per human. It does prove the design existed with that exact content at that time, and which design it was remixed from, in a public record no one can quietly rewrite.
 
-## More Docs
+Only finalized blocks count. Staging uses Monad testnet (and shows a **Testnet** badge on CR numbers); production uses Monad mainnet. The full reasoning is in [ADR 0001](docs/adr/0001-onchain-provenance.md).
 
-- [Architecture](docs/architecture.md)
-- [How To Use This Starter](docs/usage-flow.md)
-- [Setup](docs/setup.md)
-- [Auth](docs/auth.md)
-- [Authorization](docs/authorization.md)
-- [Environment Variables](docs/environment-variables.md)
-- [Cloudflare Deployment](docs/deployment-cloudflare.md)
+> The registry contract and the chain writer aren't in this repository yet; the `chain.writes` switch stays off until they land.
+
+## More docs
+
+- [Judges](docs/judges.md)
+- [Launch checklist](docs/launch-checklist.md)
+- [Hackathon submission](docs/hackathon/submission.md) and [build log](docs/hackathon/log.md)
+- [Launch metrics](docs/launch/metrics.md) and [cohort notes](docs/launch/cohort.md)
+- [Environment variables](docs/environment-variables.md)
+- [Auth](docs/auth.md) and [Authorization](docs/authorization.md)
+- [Cloudflare deployment](docs/deployment-cloudflare.md)
 - [Testing](docs/testing.md)
-- [Theming](docs/theming.md)
-- [Recipes](docs/recipes/README.md)
-- [Starter Improvements Log](docs/starter-improvements.md)
+- [Setup](docs/setup.md) and [Starter improvements](docs/starter-improvements.md)
