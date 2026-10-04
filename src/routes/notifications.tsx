@@ -89,17 +89,17 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
   const target = item.work;
   const body = (
     <>
-      <span className="relative shrink-0">
-        <Avatar username={name ?? "?"} image={item.actor.image} className="size-11 md:size-12" />
-        {isNew && (
-          <span aria-label="New" className="absolute -left-1 -top-1 size-3 rounded-full border-2 border-white bg-black" />
-        )}
-      </span>
+      <Avatar username={name ?? "?"} image={item.actor.image} className="size-11 md:size-12" />
       <span className="min-w-0 flex-1">
         <span className="block leading-snug">
           <span className="font-black">{who}</span> <Message item={item} />
         </span>
-        {now !== null && <span className="mt-0.5 block text-sm text-neutral-500">{ago(item.createdAt, now)}</span>}
+        <span className="mt-0.5 flex items-center gap-2 text-sm text-neutral-500">
+          {isNew && (
+            <span className="rounded-full bg-black px-2 text-[11px] font-black uppercase leading-5 text-white">New</span>
+          )}
+          {now !== null && ago(item.createdAt, now)}
+        </span>
       </span>
       {target && (
         <span className="size-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100 md:size-14">
@@ -162,7 +162,7 @@ function Cr({ work }: { work: WorkRef }) {
   return (
     <>
       {work.title && <span className="font-bold">{work.title} </span>}
-      <span className="font-cr tabular-nums">CR {work.cr}</span>
+      <span className="whitespace-nowrap font-cr tabular-nums">CR {work.cr}</span>
     </>
   );
 }
