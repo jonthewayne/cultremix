@@ -131,9 +131,10 @@ describe("wordChangeInstruction", () => {
   it("replaces each changed piece letter for letter and keeps every other piece", () => {
     const text = wordChangeInstruction(FIELDS, changes);
     expect(text).toContain('- Headline: replace "GROW SLOW" with "GROW WILD", spelled letter for letter: G-R-O-W W-I-L-D.');
-    expect(text).toContain("Keep this piece's typography, size, color, effects, and placement.");
+    expect(text).toContain("Keep this piece's size and placement.");
     expect(text).toContain('Keep every other piece of text exactly as it is, letter for letter:\n- Date: "EST. 1992"\n- Label: "Good Vibes Co."');
-    expect(text).toContain("Keep the composition, the drawing, the palette, and the transparent background");
+    // How the new words look is studioPrompt's call: image 1's own lettering, or a mixer style.
+    expect(text).not.toContain("palette");
     expect(text).not.toContain("slash");
   });
 
@@ -164,6 +165,9 @@ describe("wordChangeInstruction", () => {
     expect(prompt.indexOf("Word changes in image 1")).toBeLessThan(prompt.indexOf("Request ("));
     expect(prompt).toContain("Change only the words listed above and keep everything else exactly as it is.");
     expect(prompt).toContain("Make the word changes above exactly");
+    expect(prompt).toContain(
+      "Each changed piece keeps its typography, color, and effects. Keep the composition, the drawing, the palette, and the transparent background as they are in image 1.",
+    );
     expect(prompt).not.toContain("Make a fresh variation.");
     // Without word changes, the free-text remix is as before.
     const plain = studioPrompt({ layout: "grid", instruction: "", attachments: [{ kind: "art", styleOnly: false }], styles: [], remix: true });
@@ -202,6 +206,35 @@ describe("wordChangeInstruction", () => {
     const plain = studioPrompt({ layout: "grid", instruction: "", attachments, styles: [], remix: true });
     expect(plain).toContain('- "GROW SLOW" (headline)');
     expect(plain).not.toContain("none of them keeps the old words");
+  });
+
+  it("restyles a word remix when a style is in the mixer, keeping its composition and words", () => {
+    const notes = 'Subject and layout:\nMushrooms between two lines of lettering.\n\nWords:\n- "GROW SLOW" (headline)\n\nLettering:\nBubbly 70s letters.';
+    const style = { summary: "a 70s landscape poster", kind: "art" as const, styleOnly: true, notes: "Technique:\nFlat screen print.\n\nColor:\nMustard and rust." };
+    const attachments = [{ kind: "art" as const, styleOnly: false, notes }, style];
+    const prompt = studioPrompt({
+      layout: "grid",
+      instruction: "",
+      attachments,
+      styles: [{ attachment: 2, weight: 100 }],
+      remix: true,
+      wordChanges: wordChangeInstruction(FIELDS, changes),
+    });
+    expect(prompt).toContain("Style: image 2 sets the whole look.");
+    expect(prompt).toContain("but draw all of it fully in the style below");
+    expect(prompt).toContain("Letter each changed piece in the style above");
+    expect(prompt).toContain("Change the words listed above, and draw the whole design in the style mix.");
+    expect(prompt).toContain("Keep the same style mix in all four. Every one of the four shows the changed words");
+    // Nothing asks to keep image 1's own look, which is what made a 100% style vanish.
+    expect(prompt).not.toContain("lettering style, colors, texture");
+    expect(prompt).not.toContain("Each changed piece keeps its typography");
+    expect(prompt).not.toContain("keep everything else exactly as it is");
+    expect(prompt).not.toContain("Bubbly 70s letters.");
+    expect(prompt).toContain("Mushrooms between two lines of lettering.");
+    // A free-text remix with a style redraws it in the style.
+    const restyle = studioPrompt({ layout: "grid", instruction: "", attachments, styles: [{ attachment: 2, weight: 100 }], remix: true });
+    expect(restyle).toContain("Redraw image 1 in the style mix, keeping its composition, subjects, and words.");
+    expect(restyle).not.toContain("Make a fresh variation.");
   });
 });
 

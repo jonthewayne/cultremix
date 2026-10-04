@@ -182,22 +182,21 @@ function quoted(text: string) {
 }
 
 // The remix prompt's word changes (convex/lib/prompts.ts studioPrompt): each changed piece
-// replaced letter for letter in its own lettering, and every other piece kept exactly.
+// replaced letter for letter in its own size and place, and every other piece kept exactly. How
+// the new words look (image 1's own lettering, or a style from the mixer) is said by studioPrompt,
+// the only place that knows whether a style is in play.
 export function wordChangeInstruction(fields: Array<RemixField>, changes: Array<WordChange>) {
   if (changes.length === 0) return "";
   const changed = new Set(changes.map((c) => c.fieldId));
   const lines = changes.map(
     (c) =>
       `- ${c.label}: replace ${quoted(c.from)} with ${quoted(c.to)}, spelled letter for letter: ${spellOut(c.to)}. ` +
-      "Keep this piece's typography, size, color, effects, and placement.",
+      "Keep this piece's size and placement.",
   );
   const kept = fields.filter((field) => !changed.has(field.id)).map((field) => `- ${field.label}: ${quoted(field.text)}`);
   const breaks = [...changes.map((c) => c.from + c.to), ...fields.map((f) => f.text)].some((t) => t.includes("\n"));
   const parts = [`Word changes in image 1 (only these words change):\n${lines.join("\n")}`];
   if (kept.length > 0) parts.push(`Keep every other piece of text exactly as it is, letter for letter:\n${kept.join("\n")}`);
-  parts.push(
-    "Keep the composition, the drawing, the palette, and the transparent background as they are in image 1." +
-      (breaks ? " A slash in quoted text marks a line break." : ""),
-  );
+  if (breaks) parts.push("A slash in quoted text marks a line break.");
   return parts.join("\n");
 }

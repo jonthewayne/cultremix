@@ -406,7 +406,14 @@ export function studioPrompt(args: {
     const first = work[0].n;
     const whose = work.length > 1 ? "the images" : `image ${first}`;
     let keep: string;
-    if (args.remix) {
+    if (args.remix && mix.length > 0) {
+      // A style in the mixer restyles a remix. With the remix rules below (keep its lettering,
+      // colors, and texture), a style at 100% left no trace on a word remix (tested 2026-10-04).
+      keep =
+        `Keep: study image ${first} closely. Keep its composition and layout, everything in it (its characters, objects, and words, each in its place), ` +
+        "and the recognizable likeness of any person or animal, but draw all of it fully in the style below: its technique, line work, colors, texture, and lettering. " +
+        `Don't keep image ${first}'s own drawing style, colors, or lettering style.`;
+    } else if (args.remix) {
       keep = `Keep: study image ${first} closely and keep everything the request doesn't change: its layout, illustration, lettering style, colors, texture, and how any people or characters are drawn, including their likeness.`;
     } else if (mix.length > 0) {
       // Tested 2026-10-02 (a photo in a 70s poster style and in a pop-art style, four wordings,
@@ -453,15 +460,25 @@ export function studioPrompt(args: {
   }
 
   const words = spelling(ask);
-  if (wordChanges) parts.push(wordChanges);
+  if (wordChanges) {
+    const look =
+      mix.length > 0
+        ? "Letter each changed piece in the style above, like the rest of the design. Keep the composition and the transparent background of image 1; the style sets the drawing, the palette, and the lettering."
+        : "Each changed piece keeps its typography, color, and effects. Keep the composition, the drawing, the palette, and the transparent background as they are in image 1.";
+    parts.push(`${wordChanges}\n${look}`);
+  }
   if (images.length === 0) {
     const vary = grid ? " Make the four clearly different in composition, lettering, and color." : "";
     parts.push(`Request: ${ask} Spell any words exactly as given.${words}${vary}`);
   } else {
     const fallback = wordChanges
-      ? "Change only the words listed above and keep everything else exactly as it is."
+      ? mix.length > 0
+        ? "Change the words listed above, and draw the whole design in the style mix."
+        : "Change only the words listed above and keep everything else exactly as it is."
       : args.remix
-      ? "Make a fresh variation."
+      ? mix.length > 0
+        ? `Redraw image ${work[0]?.n ?? 1} in the style mix, keeping its composition, subjects, and words.`
+        : "Make a fresh variation."
       : work.length > 0
         ? `Make a fresh take on image ${work[0].n}.`
         : "Make a bold new graphic in this style.";
@@ -476,9 +493,9 @@ export function studioPrompt(args: {
     const vary = !grid
       ? ""
       : args.remix
-        ? wordChanges
-          ? " Every one of the four shows the changed words; none of them keeps the old words. Vary only small details between the four."
-          : " Vary only small details between the four."
+        ? (mix.length > 0 ? " Keep the same style mix in all four." : "") +
+          (wordChanges ? " Every one of the four shows the changed words; none of them keeps the old words." : "") +
+          " Vary only small details between the four."
         : mix.length > 0
           ? " Keep the same style mix in all four and vary their composition."
           : " Vary the composition between the four.";
