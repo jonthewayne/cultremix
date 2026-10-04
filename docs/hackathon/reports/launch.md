@@ -239,3 +239,84 @@ Set `DEPLOYMENT_ENV` on each Convex deployment: `dev`, `staging`, or `prod`. **P
 - Gate creator-only features on `isCreator`.
 - Add the Economics panel and the registry.
 - After judging, turn off judges' creator access.
+
+## Round 2
+
+Branch `codex/launch`, after merging `dev` (lineage with the Economics panel, social, print with the Print Studio, the viewer, and the storage layout). `package.json` only gained a script, so no install was needed.
+
+### Commits
+
+- `411b93f` Photo shoots: enforce the daily limit at publish and on reshoots.
+- `ab27feb` Admin: say plainly which switches nothing reads yet (and fix a missing switch counting as on).
+- `c2857e8` Docs: README, submission, and judges say what dev has now.
+- `0c0af25` Launch checklist: staging step by step for the Ops thread (plus the `staging` Worker env, `.env.staging`, and `bun run deploy:staging`).
+- This report.
+
+### Photo shoots per member per day
+
+- **Counted when a shoot starts**, per UTC day, in a new `photoShootStarts` table (`convex/schema/launch.ts`, logic in `convex/lib/photoShoots.ts`). A refused attempt doesn't count. The limit is the `shootsPerMemberPerDay` setting (default 3).
+- **Who it covers:** model photos at publish (`convex/publish.ts`) and on member reshoots (`convex/photos.ts`). The owner is exempt. The admin “reshoot all” tool skips the limit.
+- **When refused at publish:** the work still publishes; only the photo waits. The feed shows “Photo coming soon” instead of “No photo this time”. On the work page, the creator sees “You’ve had your photo shoots for today. Try again tomorrow.” and a **Take the photo** button (`src/components/cr/PhotoRetry.tsx`). Tomorrow it works.
+- **When refused on a reshoot:** the same message, and the photo that's already up stays.
+- Tests: `tests/convex-local/photoShoots.test.ts` covers the limit at publish, reshoots, the owner exemption, refused attempts not counting, the next UTC day, and the waiting state in the feed.
+
+### Admin switches
+
+| Switch | Today |
+| --- | --- |
+| Studio (`gen.vercel`) | Wired: off stops new batches. |
+| Print-size art (`gen.upscale`) | Wired: off stops “Upscale for print” in the Print Studio. |
+| Publishing | Says “Not wired yet” (the publish builder owns it). |
+| Checkout | Says “Not wired yet”; it only changes the production label (shop builder). |
+| Monad records (`chain.writes`) | Says “Not wired yet”; today it only decides how lineage corrections are confirmed (chain builder). |
+| Backs (`social.backs`) | Says “Not wired yet” (chain builder). |
+
+The daily image budget says “Not enforced yet: nothing stops at this amount.” The notes live in `FEATURE_FLAGS` (`notWiredYet`, in `convex/lib/flags.ts`) and show under each switch in `/admin`. When a builder wires a switch, they delete its note.
+
+**A behavior fix worth knowing:** `flagEnabled` used to treat a switch with no row as on. It now falls back to the switch's default, so in an unseeded environment **Print-size art is off** until it's seeded or turned on. `tests/convex-local/print.test.ts` now turns the switch on in its setup. The Print Studio builder should know about both changes.
+
+### Docs
+
+- **README.md:** the stack table adds profiles, the Print Studio, fal, and the R2 layout (linking `docs/image-generation/README.md#storage-and-sizes`). The Monad row says the registry is being built. A new “What's in it today” section covers the studio, publishing and the photo shoot limit, lineage with forks and corrections, the Economics panel and `/economics/v1.json`, social, the Print Studio, and shop pages. The admin section uses the switch labels and adds the Lineage tab.
+- **`docs/hackathon/submission.md`:** link placeholders kept. “What works today” is rewritten. A new **Judging evidence** section has a table of what judges can verify now, each with how to check it (fingerprint vs. `shasum -a 256`, the rules file's hash, lineage, fork credit, corrections, social, studio, print file, private prompts), and a list of what lands with the registry. The demo script now includes the Print Studio, and its recording notes have a fallback if the registry isn't ready.
+- **`docs/judges.md`:** sign-in covers staging or production, and a new “What a judge can try” section has six steps.
+- **`docs/launch-checklist.md`:** staging is now nine numbered steps for the Ops thread:
+  1. A separate Convex project.
+  2. The R2 bucket, CORS, and token.
+  3. Staging keys.
+  4. Every Convex env var by name, including `DEPLOYMENT_ENV=staging`, plus the ones that must not be set.
+  5. The Worker env.
+  6. Deploy.
+  7. `seed:environment`, `activity:backfill`, the owner, switches, and settings.
+  8. Judges.
+  9. A smoke test.
+
+  The production section adds `FAL_KEY`, `activity:backfill`, and `lineage:backfillEffectiveParents`.
+- **`docs/environment-variables.md`** and **`docs/deployment-cloudflare.md`:** both mention `.env.staging` and `deploy:staging`.
+
+### Staging plumbing
+
+Staging had no Worker env, and a plain build would have baked production's Convex URL into the browser bundle. Now:
+
+- `wrangler.jsonc` has an `env.staging` block: Worker `cultremix-staging`, `staging.cultremix.com`, and `ENVIRONMENT=staging`. `env.production` is untouched.
+- `.env.staging` holds the browser values. It contains no secrets.
+- `bun run deploy:staging` builds with `--mode staging`.
+
+Both files carry `REPLACE_WITH_STAGING_DEPLOYMENT` placeholders, which **Ops must replace** (checklist step 5). A local staging-mode build was checked: the browser assets carry the staging placeholder and not production's URL, and `dist/server/wrangler.json` names `cultremix-staging` with the staging route. Nothing was deployed.
+
+### Tests
+
+At every commit: `bun run typecheck && bun run test`, with 286 unit tests and 93 Convex-local tests passing. `bun run build` passed before this commit, and `src/routeTree.gen.ts` didn't change.
+
+### Deploy notes
+
+- **Schema:** one new table, `photoShootStarts`. No changes to existing tables, nothing to backfill for it, and no new env vars.
+- **Order:** Convex first, then the Worker.
+- **Production after deploy:** run `activity:backfill`, and run `lineage:backfillEffectiveParents` until its cursor is null (both are in the checklist).
+
+### Gaps and things to flag
+
+- **The daily image budget** is still not enforced (the admin says so).
+- **Copy:** `SITE_DESCRIPTION` and `SHARE_DESCRIPTION` in `src/lib/site.ts` say “AI-made”, against the copy rule. This is share and meta copy outside this assignment, so I left it for its owner.
+- **Print area:** the CC1717 print area is still unverified (the Print builder's open item).
+- **Not done:** nothing was deployed or checked in a browser. Staging still needs the Ops steps.
