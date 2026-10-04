@@ -1,12 +1,14 @@
 import { useCallback, useState } from "react";
 import { PRINT_PRODUCT, formatPrice } from "../../../shared/config/print-products";
+import { ColorSwatches } from "~/components/cr/ColorSwatches";
 import { useCaptureRef } from "~/lib/ref";
 import { CartDrawer } from "./CartDrawer";
 import { useCart } from "./useCart";
 
 export type BuyOffer = {
   cr: string;
-  colors: Array<{ code: string; name: string; hex: string }>;
+  // key: the garment color key the page selects by; code: the SKU code the cart sends.
+  colors: Array<{ key: string; code: string; name: string; hex: string }>;
   sizes: Array<string>;
   variants: Array<{ color: string; size: string; priceCents: number }>;
 };
@@ -14,21 +16,30 @@ export type BuyOffer = {
 const MAX = 10;
 
 // Color, size, quantity, add to cart. Shown on the work page in place of "Buying opens soon"
-// once the work is on sale and checkout is open.
-export function BuyBox({ offer }: { offer: BuyOffer }) {
+// once the work is on sale and checkout is open. The page owns the color selection (colorKey), so
+// the art square and these swatches always show the same shirt.
+export function BuyBox({
+  offer,
+  colorKey,
+  onColorChange,
+}: {
+  offer: BuyOffer;
+  colorKey: string;
+  onColorChange: (key: string) => void;
+}) {
   useCaptureRef();
   const { cart, error, busy, addLine, setQuantity, removeLine } = useCart();
-  const [color, setColor] = useState(offer.colors[0]?.code ?? "");
   const [size, setSize] = useState<string | null>(null);
   const [quantity, setQty] = useState(1);
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
+  const picked = offer.colors.find((c) => c.key === colorKey) ?? offer.colors[0];
+  const color = picked?.code ?? "";
 
   const available = (c: string, s: string) => offer.variants.some((v) => v.color === c && v.size === s);
   const variant = size ? offer.variants.find((v) => v.color === color && v.size === size) : undefined;
   const fromCents = Math.min(...offer.variants.map((v) => v.priceCents));
   const price = variant?.priceCents ?? fromCents;
-  const colorName = offer.colors.find((c) => c.code === color)?.name ?? "";
   const count = cart?.totalQuantity ?? 0;
 
   async function add() {
@@ -46,26 +57,7 @@ export function BuyBox({ offer }: { offer: BuyOffer }) {
         <span className="text-sm font-semibold">{PRINT_PRODUCT.name}</span>
       </div>
 
-      <div>
-        <p className="text-sm font-bold uppercase tracking-wider">
-          Color <span className="font-semibold normal-case tracking-normal text-muted-foreground">· {colorName}</span>
-        </p>
-        <div className="mt-2 flex flex-wrap gap-3">
-          {offer.colors.map((c) => (
-            <button
-              key={c.code}
-              type="button"
-              aria-label={c.name}
-              aria-pressed={c.code === color}
-              onClick={() => setColor(c.code)}
-              className={`h-11 w-11 rounded-full border-2 border-foreground ring-offset-2 ring-offset-background transition ${
-                c.code === color ? "ring-2 ring-foreground" : ""
-              }`}
-              style={{ background: c.hex }}
-            />
-          ))}
-        </div>
-      </div>
+      {picked && <ColorSwatches colors={offer.colors} value={picked.key} onChange={onColorChange} />}
 
       <div>
         <p className="text-sm font-bold uppercase tracking-wider">Size</p>

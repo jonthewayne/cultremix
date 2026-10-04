@@ -18,6 +18,7 @@ import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
 import { ShareButton } from "~/components/social/ShareButton";
 import { PrintEntry } from "~/components/print/PrintEntry";
+import { pageColors, selectedColor, type PickedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
 import { PhotoSquare } from "./index";
 import { BuyBox } from "~/components/commerce/BuyBox";
@@ -48,8 +49,9 @@ function ShopPage() {
   // Null until checkout opens and this work is on sale; the page is unchanged until then.
   const offer = useQuery(convexQuery(api.shopify.offer, { cr })).data;
   const data = page.data;
-  // The picked shirt color, remembered per work so moving to another CR starts on its lead.
-  const [picked, setPicked] = useState<{ cr: string; key: string } | null>(null);
+  // The picked shirt color, remembered per work so moving to another CR starts on its lead. The
+  // one selection for the art square, the swatches, and the buy box.
+  const [picked, setPicked] = useState<PickedColor>(null);
 
   if (page.isLoading) {
     return (
@@ -70,8 +72,10 @@ function ShopPage() {
       </div>
     );
   }
-  const { item, contentHash, description, colors } = data;
-  const color = colors.find((c) => picked?.cr === item.cr && c.key === picked.key) ?? colors[0];
+  const { item, contentHash, description } = data;
+  const colors = pageColors(data.colors, offer);
+  const color = selectedColor(colors, picked, item.cr);
+  const pick = (key: string) => setPicked({ cr: item.cr, key });
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
@@ -106,14 +110,14 @@ function ShopPage() {
 
           <div className="flex flex-col gap-6">
             {offer ? (
-              <BuyBox offer={offer} />
+              <BuyBox offer={offer} colorKey={color?.key ?? ""} onColorChange={pick} />
             ) : (
               <>
                 <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
                   <span className="text-5xl font-black tracking-tight">$36</span>
                   <span className="text-sm font-semibold">Heavyweight garment-dyed tee</span>
                 </div>
-                {colors.length > 0 && <ColorSwatches colors={colors} value={color.key} onChange={(key) => setPicked({ cr: item.cr, key })} />}
+                {color && <ColorSwatches colors={colors} value={color.key} onChange={pick} />}
                 <div>
                   <p className="text-sm font-bold uppercase tracking-wider">Size</p>
                   <div className="mt-2 flex flex-wrap gap-2">
