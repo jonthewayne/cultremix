@@ -151,7 +151,8 @@ async function insertWrite(
 export async function enqueueRegisterWork(ctx: MutationCtx, workId: Id<"works">): Promise<Id<"chainWrites"> | null> {
   const work = await ctx.db.get("works", workId);
   // Only a work that was published has a content hash; a withdrawn parent can still anchor a remix.
-  if (!work?.contentHash) return null;
+  // A hash that isn't SHA-256 hex can't be registered, and queueing must never fail a publish.
+  if (!work?.contentHash || !/^(0x)?[0-9a-f]{64}$/iu.test(work.contentHash)) return null;
   const subjectKey = `work:${work._id}`;
   const existing = await writeBySubject(ctx, subjectKey);
   if (existing) {

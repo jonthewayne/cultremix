@@ -82,6 +82,16 @@ export function explorerAddressUrl(network: ChainNetwork, address: string) {
   return `${network.explorerUrl}/address/${address}`;
 }
 
+/**
+ * The network whose public explorer shows a chain's transactions, or null when there is none to
+ * link to: an unknown chain, or a dev deployment pointed at a localhost node.
+ */
+export function explorerNetwork(env: Record<string, string | undefined>, chainId: number): ChainNetwork | null {
+  const rpcUrl = env.MONAD_RPC_URL?.trim();
+  if (env.DEPLOYMENT_ENV?.trim() === "dev" && rpcUrl && LOCAL_RPC.test(rpcUrl)) return null;
+  return [MONAD_TESTNET, MONAD_MAINNET].find((network) => network.chainId === chainId) ?? null;
+}
+
 export class DeploymentConfigError extends Error {
   constructor(message: string) {
     super(`Deployment config: ${message}`);

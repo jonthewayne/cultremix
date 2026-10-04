@@ -8,6 +8,8 @@ import {
   assertDeploymentConsistency,
   assertRelayerAddress,
   assertRpcChainId,
+  explorerAddressUrl,
+  explorerNetwork,
   type ChainDeployment,
 } from "../shared/config/chains";
 import { decodeRegistryRevert, revertHandling, type RegistryErrorName } from "./lib/chain/calldata";
@@ -30,7 +32,7 @@ import {
   type WritePayload,
   type WriteResult,
 } from "./lib/chain/writes";
-import { requirePlatformCapability } from "./lib/permissions";
+import { requirePlatformCapability, requireSuperAdmin } from "./lib/permissions";
 import { chainTables, chainTxValidator } from "./schema/chain";
 
 // The relayer's chain-write engine ("Chain write outcomes" in the V1 plan). One tick at a time
@@ -1139,5 +1141,92 @@ export const clearStuckNonce = action({
       await ctx.runMutation(internal.chain.releaseLease, fenced).catch(() => null);
       await ctx.scheduler.runAfter(0, internal.chain.tick, {});
     }
+  },
+});
+
+// ------------------------------------------------------------------ admin: relayer status
+
+export const assertChainViewer = internalQuery({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    await requireSuperAdmin(ctx);
+    return null;
+  },
+});
+
+const relayerStatusValidator = v.object({
+  env: v.union(v.null(), v.string()),
+  networkName: v.union(v.null(), v.string()),
+  chainId: v.union(v.null(), v.number()),
+  registryAddress: v.union(v.null(), v.string()),
+  relayerAddress: v.union(v.null(), v.string()),
+  // Wei, as a decimal string.
+  balance: v.union(v.null(), v.string()),
+  listed: v.union(v.null(), v.boolean()),
+  registryAdmin: v.union(v.null(), v.string()),
+  // Explorer links, when there's a public explorer for this chain.
+  relayerUrl: v.union(v.null(), v.string()),
+  registryUrl: v.union(v.null(), v.string()),
+  problem: v.union(v.null(), v.string()),
+});
+type RelayerStatus = typeof relayerStatusValidator.type;
+
+/**
+ * For /admin/chain: the relayer's address and balance and whether the registry lists it. Each
+ * check that fails is reported as the problem rather than thrown, so the page still shows what
+ * it could read. The key itself never leaves this module.
+ */
+export const relayerStatus = action({
+  args: {},
+  returns: relayerStatusValidator,
+  handler: async (ctx): Promise<RelayerStatus> => {
+    await ctx.runQuery(internal.chain.assertChainViewer, {});
+    const status: RelayerStatus = {
+      env: null,
+      networkName: null,
+      chainId: null,
+      registryAddress: null,
+      relayerAddress: null,
+      balance: null,
+      listed: null,
+      registryAdmin: null,
+      relayerUrl: null,
+      registryUrl: null,
+      problem: null,
+    };
+    try {
+      const deployment = assertDeploymentConsistency(process.env);
+      status.env = deployment.env;
+      status.networkName = deployment.network.name;
+      status.registryAddress = deployment.registryAddress;
+      status.relayerAddress = deployment.relayerAddress;
+      const account = relayerAccount();
+      status.relayerAddress = account.address;
+      assertRelayerAddress(deployment, account.address);
+      const rpc = chainDeps().rpc(deployment.rpcUrl);
+      status.chainId = await rpc.getChainId();
+      assertRpcChainId(deployment, status.chainId);
+      const explorer = explorerNetwork(process.env, status.chainId);
+      status.relayerUrl = explorer ? explorerAddressUrl(explorer, account.address) : null;
+      status.registryUrl = explorer && deployment.registryAddress ? explorerAddressUrl(explorer, deployment.registryAddress) : null;
+      status.balance = (await rpc.getBalance(account.address)).toString();
+      if (!deployment.registryAddress) {
+        status.problem = `No registry is deployed for ${deployment.env} yet.`;
+        return status;
+      }
+      try {
+        status.listed = (await readRegistry(rpc, deployment.registryAddress, account.address, "isRelayer", [account.address], "latest")) === true;
+        status.registryAdmin = String(await readRegistry(rpc, deployment.registryAddress, account.address, "admin", [], "latest"));
+      } catch {
+        status.problem = "The registry address did not answer as a CultRemix registry.";
+        return status;
+      }
+      if (!status.listed) status.problem = "The registry does not list this relayer.";
+      else if (status.balance === "0") status.problem = "The relayer needs MON.";
+    } catch (error) {
+      status.problem = errorText(error);
+    }
+    return status;
   },
 });

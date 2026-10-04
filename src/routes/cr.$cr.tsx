@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
+import { ChainStatus } from "~/components/cr/ChainStatus";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { colorName } from "../../convex/lib/colors";
@@ -105,7 +106,7 @@ function ShopPage() {
               <div className="border-t-2 border-black pt-4 text-sm">
                 <p className="font-bold uppercase tracking-wider">Fingerprint</p>
                 <p className="mt-1 break-all font-mono text-xs">SHA-256 {contentHash}</p>
-                <p className="mt-2 font-semibold">Verified on Monad — coming soon</p>
+                <ChainStatus workId={item.workId} />
               </div>
             )}
           </div>

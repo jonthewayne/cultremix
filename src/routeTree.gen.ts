@@ -20,6 +20,7 @@ import { Route as TeamRouteImport } from './routes/team'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VerifyPhoneRouteImport } from './routes/verify-phone'
+import { Route as AdminChainRouteImport } from './routes/admin_.chain'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
@@ -80,6 +81,11 @@ const VerifyPhoneRoute = VerifyPhoneRouteImport.update({
   path: '/verify-phone',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminChainRoute = AdminChainRouteImport.update({
+  id: '/admin_/chain',
+  path: '/admin/chain',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCompleteRoute = AuthCompleteRouteImport.update({
   id: '/auth/complete',
   path: '/auth/complete',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/chain': typeof AdminChainRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
@@ -130,6 +137,7 @@ export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/chain': typeof AdminChainRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin_/chain': typeof AdminChainRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/chain'
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/chain'
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin_/chain'
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
@@ -219,6 +231,7 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
+  AdminChainRoute: typeof AdminChainRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
@@ -304,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyPhoneRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin_/chain': {
+      id: '/admin_/chain'
+      path: '/admin/chain'
+      fullPath: '/admin/chain'
+      preLoaderRoute: typeof AdminChainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/complete': {
       id: '/auth/complete'
       path: '/auth/complete'
@@ -347,6 +367,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
+  AdminChainRoute: AdminChainRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   InviteAcceptRoute: InviteAcceptRoute,

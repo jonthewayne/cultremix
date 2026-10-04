@@ -4,6 +4,7 @@ import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { requireMember } from "./studio";
 import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
+import { enqueueRegisterWork } from "./lib/chain/queue";
 import type { MutationCtx } from "./_generated/server";
 
 const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
@@ -137,6 +138,9 @@ export const markPublished = internalMutation({
       artKey: args.artKey,
       contentHash: args.contentHash,
     });
+    // Onchain provenance: registered by the relayer, signed by the creator's wallet once it's
+    // ready, after the parent's registration for a remix (convex/lib/chain/queue.ts).
+    await enqueueRegisterWork(ctx, work._id);
     const look = pickLook(work._id, await recentLooks(ctx));
     const shootId = await ctx.db.insert("shoots", {
       workId: work._id,
