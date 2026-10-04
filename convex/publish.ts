@@ -6,6 +6,8 @@ import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
 import { publishPlacement } from "./lib/lineage";
 import { recordPublishActivity } from "./lib/social";
+import { DAILY_LIMIT, startPhotoShoot } from "./lib/photoShoots";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
@@ -163,10 +165,16 @@ export const markPublished = internalMutation({
     });
     // The Following feed and profiles read this event (convex/lib/social.ts).
     await recordPublishActivity(ctx, { ...work, status: "published", publishedAt: now });
+    // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
+    await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
     const look = pickLook(work._id, await recentLooks(ctx));
+    // Past the creator's photo shoots for today, the work publishes and its photo waits;
+    // the creator can try it again tomorrow (photos.retry).
+    const allowed = await startPhotoShoot(ctx, work.creatorId, work._id, now);
     const shootId = await ctx.db.insert("shoots", {
       workId: work._id,
-      status: "running",
+      status: allowed ? "running" : "failed",
+      reason: allowed ? undefined : DAILY_LIMIT,
       requestedBy: work.creatorId,
       createdAt: now,
       updatedAt: now,
@@ -178,18 +186,20 @@ export const markPublished = internalMutation({
       shootId,
       workId: work._id,
       index: 1,
-      state: "pending",
+      state: allowed ? "pending" : "failed",
+      reason: allowed ? undefined : DAILY_LIMIT,
     });
-    // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
-    await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
+    if (!allowed) return null;
     return { shootId, look };
   },
 });
 
 // Starts a new model photo for a published work with a different casting. The
-// current photo stays up until the new one is recorded.
+// current photo stays up until the new one is recorded. A reshoot counts against the
+// creator's photo shoots for today unless skipLimit is set: photos.retry has already
+// counted it, and reshootAll is the operator's own run.
 export const beginReshoot = internalMutation({
-  args: { cr: v.string() },
+  args: { cr: v.string(), skipLimit: v.optional(v.boolean()) },
   returns: v.union(
     v.null(),
     v.object({
@@ -218,6 +228,17 @@ export const beginReshoot = internalMutation({
       .query("shoots")
       .withIndex("by_work", (q) => q.eq("workId", work._id))
       .first();
+    const current = existing
+      ? await ctx.db
+          .query("shootPhotos")
+          .withIndex("by_shoot_index", (q) => q.eq("shootId", existing._id).eq("index", 1))
+          .unique()
+      : null;
+    if (!args.skipLimit && !(await startPhotoShoot(ctx, work.creatorId, work._id, now))) {
+      // A photo that's up stays up; one that never came waits for tomorrow.
+      if (current?.state !== "succeeded") await markWaiting(ctx, work, existing?._id ?? null, current?._id ?? null, now);
+      return null;
+    }
     const look = pickLook(`${work._id}:${now}`, [
       { casting: existing?.castingNote, world: existing?.world },
       ...(await recentLooks(ctx)),
@@ -225,7 +246,8 @@ export const beginReshoot = internalMutation({
     const fields = { castingNote: look.casting, pose: look.pose, world: look.world };
     let shootId = existing?._id;
     if (shootId) {
-      await ctx.db.patch("shoots", shootId, { ...fields, updatedAt: now });
+      const running = current?.state === "succeeded" ? {} : { status: "running" as const, reason: undefined };
+      await ctx.db.patch("shoots", shootId, { ...fields, ...running, updatedAt: now });
     } else {
       shootId = await ctx.db.insert("shoots", {
         workId: work._id,
@@ -236,12 +258,11 @@ export const beginReshoot = internalMutation({
         ...fields,
       });
     }
-    const photo = await ctx.db
-      .query("shootPhotos")
-      .withIndex("by_shoot_index", (q) => q.eq("shootId", shootId).eq("index", 1))
-      .unique();
-    if (!photo) {
+    if (!current) {
       await ctx.db.insert("shootPhotos", { shootId, workId: work._id, index: 1, state: "pending" });
+    } else if (current.state === "failed") {
+      // Pages show "Developing…" again while the retry runs.
+      await ctx.db.patch("shootPhotos", current._id, { state: "pending", reason: undefined });
     }
     return {
       shootId,
@@ -250,12 +271,30 @@ export const beginReshoot = internalMutation({
       look,
       crFamily: work.crFamily,
       crExpression: work.crExpression,
-      photoKey: photo?.publicKey,
+      photoKey: current?.publicKey,
     };
   },
 });
 
-// Reshoots every published work's model photo, a couple of seconds apart:
+// Records that a work's model photo waits for its creator's next day.
+async function markWaiting(
+  ctx: MutationCtx,
+  work: Doc<"works">,
+  shootId: Id<"shoots"> | null,
+  photoId: Id<"shootPhotos"> | null,
+  now: number,
+) {
+  const waiting = { status: "failed" as const, reason: DAILY_LIMIT, updatedAt: now };
+  const id =
+    shootId ??
+    (await ctx.db.insert("shoots", { workId: work._id, requestedBy: work.creatorId, createdAt: now, ...waiting }));
+  if (shootId) await ctx.db.patch("shoots", shootId, waiting);
+  if (photoId) await ctx.db.patch("shootPhotos", photoId, { state: "failed", reason: DAILY_LIMIT });
+  else await ctx.db.insert("shootPhotos", { shootId: id, workId: work._id, index: 1, state: "failed", reason: DAILY_LIMIT });
+}
+
+// Reshoots every published work's model photo, a couple of seconds apart. An operator's
+// run, so it doesn't count against members' photo shoots:
 // bunx convex run publish:reshootAll
 export const reshootAll = internalMutation({
   args: {},
@@ -268,6 +307,7 @@ export const reshootAll = internalMutation({
     for (const [i, work] of works.entries()) {
       await ctx.scheduler.runAfter(i * 3000, internal.imageGen.reshoot, {
         cr: formatCr(work.crFamily, work.crExpression),
+        skipLimit: true,
       });
     }
     return works.length;
@@ -309,6 +349,8 @@ export const recordPhotoFailed = internalMutation({
       .query("shootPhotos")
       .withIndex("by_shoot_index", (q) => q.eq("shootId", args.shootId).eq("index", 1))
       .unique();
+    // A failed reshoot leaves the photo that's up in place.
+    if (photo?.state === "succeeded") return null;
     if (photo) {
       await ctx.db.patch("shootPhotos", photo._id, { state: "failed", reason: args.reason });
     }

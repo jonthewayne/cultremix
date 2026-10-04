@@ -8,6 +8,7 @@ import { DirectRemixes } from "~/components/cr/DirectRemixes";
 import { EconomicsPanel } from "~/components/cr/EconomicsPanel";
 import { FamilyView } from "~/components/cr/FamilyView";
 import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
+import { PhotoRetry } from "~/components/cr/PhotoRetry";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
@@ -61,6 +62,7 @@ function ShopPage() {
           </div>
           <PhotoSquare item={item} large />
         </div>
+        <PhotoRetry cr={item.cr} />
 
         <section className="mt-8 grid gap-10 md:mt-12 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:gap-16">
           <div>

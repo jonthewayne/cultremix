@@ -197,9 +197,10 @@ export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: b
     );
   }
   const failed = item.photoState === "failed";
+  const waiting = item.photoState === "waiting";
   return (
     <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 text-white">
-      {!failed && (
+      {!failed && !waiting && (
         <motion.div
           className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-950 to-neutral-800"
           animate={{ opacity: [0.4, 0.9, 0.4] }}
@@ -207,7 +208,7 @@ export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: b
         />
       )}
       <span className={large ? "relative text-3xl font-black tracking-tight" : "relative text-lg font-black tracking-tight md:text-2xl"}>
-        {failed ? "No photo this time" : "Developing…"}
+        {failed ? "No photo this time" : waiting ? "Photo coming soon" : "Developing…"}
       </span>
     </div>
   );

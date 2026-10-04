@@ -630,9 +630,10 @@ export const selfTest = internalAction({
 
 // Gives a published work a new model photo with a different model, pose, and
 // setting; the current photo stays up until the new one is recorded.
+// It counts against the creator's photo shoots for today unless skipLimit is set.
 // bunx convex run imageGen:reshoot '{"cr":"101-001"}'
 export const reshoot = internalAction({
-  args: { cr: v.string() },
+  args: { cr: v.string(), skipLimit: v.optional(v.boolean()) },
   returns: v.union(
     v.null(),
     v.object({ cr: v.string(), look: v.object({ casting: v.string(), pose: v.string(), world: v.string() }) }),
@@ -647,17 +648,26 @@ export const reshoot = internalAction({
       crFamily: number;
       crExpression: number;
       photoKey?: string;
-    } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr });
+    } | null = await ctx.runMutation(internal.publish.beginReshoot, { cr: args.cr, skipLimit: args.skipLimit });
     if (!job) return null;
-    if (!liveGeneration() || job.artKey.startsWith("fake:")) {
-      throw new Error("Image generation is not configured.");
+    try {
+      let key: string;
+      if (!liveGeneration() || job.artKey.startsWith("fake:")) {
+        if (!isDevDeployment()) throw new Error("Image generation is not configured.");
+        key = `fake:photo-${job.shootId}-${Date.now()}`;
+      } else {
+        const art = await fetchPublicImage(job.artKey, ctx);
+        const { bytes } = await photoImage(art, job.backgroundColor, job.look);
+        // The next photo number, so the photo a page has cached never changes under its link.
+        const n = (photoNumberOf(job.photoKey) ?? 0) + 1;
+        key = (await storeNew(ctx, bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, n))).key;
+      }
+      await ctx.runMutation(internal.publish.recordPhoto, { shootId: job.shootId, publicKey: key });
+    } catch (error) {
+      // A photo that's up stays up (publish.recordPhotoFailed); a retry that fails says so.
+      await ctx.runMutation(internal.publish.recordPhotoFailed, { shootId: job.shootId, reason: readableError(error) });
+      throw error;
     }
-    const art = await fetchPublicImage(job.artKey, ctx);
-    const { bytes } = await photoImage(art, job.backgroundColor, job.look);
-    // The next photo number, so the photo a page has cached never changes under its link.
-    const n = (photoNumberOf(job.photoKey) ?? 0) + 1;
-    const { key } = await storeNew(ctx, bytes, "image/png", () => workPhotoKey(job.crFamily, job.crExpression, n));
-    await ctx.runMutation(internal.publish.recordPhoto, { shootId: job.shootId, publicKey: key });
     return { cr: args.cr, look: job.look };
   },
 });
