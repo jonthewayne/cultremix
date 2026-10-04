@@ -10,6 +10,7 @@ import { pickLook } from "./lib/prompts";
 import { enqueueRegisterWork } from "./lib/chain/queue";
 import { publishPlacement } from "./lib/lineage";
 import { recordPublishActivity, recordRemix } from "./lib/social";
+import { inheritOnPublish } from "./remixFields";
 import {
   BUDGET_RESTING,
   closeReservation,
@@ -307,6 +308,8 @@ export const markPublished = internalMutation({
     await recordPublishActivity(ctx, published);
     // The parent's creator gets a notification, and the parent gains trending attention.
     await recordRemix(ctx, published);
+    // A remix's remixable words start from its parent's (convex/remixFields.ts).
+    await inheritOnPublish(ctx, work._id);
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
     // Onchain provenance: registered by the relayer, signed by the creator's wallet once it's

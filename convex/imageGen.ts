@@ -329,6 +329,7 @@ export const runTile = internalAction({
         })),
         styles: job.styles,
         remix: job.remixOfParent,
+        wordChanges: job.wordChanges,
       });
       const images = await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
       const provider = job.provider === "gateway" || job.provider === "chatgpt" ? job.provider : imageProvider();
@@ -426,6 +427,7 @@ export const runBatch = internalAction({
         styles: job.styles,
         remix: job.remixOfParent,
         roles,
+        wordChanges: job.wordChanges,
       });
       const keys = job.attachments.map((a) => a.key);
       const started = Date.now();

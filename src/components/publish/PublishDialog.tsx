@@ -15,6 +15,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { RemixKindChoice } from "~/components/cr/RemixKindChoice";
+import { RemixableWords } from "~/components/cr/RemixableWords";
 import type { RemixKind } from "~/components/cr/RemixKindChoice";
 import { useDesignPixels } from "~/lib/designPixels";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
@@ -38,7 +39,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   const [description, setDescription] = useState("");
   const [remixKind, setRemixKind] = useState<RemixKind>("variation");
   const [requestId] = useState(() => crypto.randomUUID());
-  const [result, setResult] = useState<{ cr: string; lead: string } | null>(null);
+  const [result, setResult] = useState<{ workId: Id<"works">; cr: string; lead: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -95,7 +96,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
         remixKind,
         offeredColors: selected,
       });
-      setResult({ cr: published.cr, lead: garmentColor(selected[0])!.hex });
+      setResult({ workId: published.workId, cr: published.cr, lead: garmentColor(selected[0])!.hex });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -133,6 +134,10 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
               {title}
             </motion.p>
           )}
+        </div>
+        {/* What people who remix it can change, once the words are read. */}
+        <div className="max-w-xl empty:hidden">
+          <RemixableWords workId={result.workId} tone="dark" editing />
         </div>
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="flex items-center gap-4">

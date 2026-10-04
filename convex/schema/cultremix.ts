@@ -2,6 +2,19 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { provenanceStatusValidator } from "./chain";
 
+// A remixable piece of a published design (convex/lib/remixFields.ts). kind is "text" today;
+// other kinds (people, counts) can join the union later without a migration.
+export const remixField = v.object({
+  id: v.string(),
+  kind: v.literal("text"),
+  label: v.string(),
+  text: v.string(),
+  maxLength: v.number(),
+  on: v.boolean(),
+});
+
+export const wordChange = v.object({ fieldId: v.string(), label: v.string(), from: v.string(), to: v.string() });
+
 // CultRemix tables for the 2026-09-29 sprint. Names follow the Checkpoint 0
 // plan's "Settled validators"; fields not needed today are optional, and
 // today's additions are noted in docs/hackathon/log.md.
@@ -91,6 +104,9 @@ export const cultremixTables = {
     roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
     // The batch's number within its session, starting at 1; its files live in batch-01/ and so on.
     number: v.optional(v.number()),
+    // A remix's changed words (convex/remixFields.ts): the parent's field, its text as the server
+    // read it from the parent, and the new text.
+    wordChanges: v.optional(v.array(wordChange)),
   }).index("by_session", ["sessionId"]),
 
   // Every image a member brings into the studio: uploads, their own designs, and remix sources.
@@ -222,6 +238,9 @@ export const cultremixTables = {
     notesSummary: v.optional(v.string()),
     notesKind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
     notesModel: v.optional(v.string()),
+    // What a remix may change (convex/remixFields.ts), proposed from the notes' words or carried
+    // over from the parent, then adjusted by the creator. Empty: the design has no words.
+    remixFields: v.optional(v.array(remixField)),
     // Onchain provenance (convex/chain.ts): the registerWork write and its confirmed transaction.
     provenanceStatus: v.optional(provenanceStatusValidator),
     chainWriteId: v.optional(v.id("chainWrites")),

@@ -14,6 +14,7 @@ import { EconomicsPanel } from "~/components/cr/EconomicsPanel";
 import { FamilyView } from "~/components/cr/FamilyView";
 import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { PhotoRetry } from "~/components/cr/PhotoRetry";
+import { RemixableWords, WordChangesNote } from "~/components/cr/RemixableWords";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { Backers } from "~/components/work/Backers";
 import { FollowButton } from "~/components/social/FollowButton";
@@ -103,6 +104,7 @@ function ShopPage() {
               {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
             </p>
             <LineageNote cr={item.cr} />
+            <WordChangesNote workId={item.workId} />
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <HeartButton workId={item.workId} count={item.hearts} />
               <FollowButton username={item.creator.username} />
@@ -143,6 +145,7 @@ function ShopPage() {
             >
               Remix this
             </Link>
+            <RemixableWords workId={item.workId} />
             <EconomicsPanel cr={item.cr} />
             {contentHash && (
               <div className="border-t-2 border-black pt-4 text-sm">
