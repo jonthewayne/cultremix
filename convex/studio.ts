@@ -1,3 +1,4 @@
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
@@ -5,12 +6,20 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { creditBalance, getViewerUser, isOwner } from "./identity";
 import { isBlockedError, publicTileError } from "./lib/imageErrors";
 import { imageUrlReader } from "./lib/imageUrls";
+import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { styleShares } from "./lib/prompts";
 import type { ImageRole } from "./lib/prompts";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
 import { isImageKey } from "./lib/sizes";
-import { BATCH_CREDITS, DESIGNS_PER_BATCH, MAX_IMAGES, MAX_STYLES, creditsBack } from "./lib/studioRules";
+import {
+  BATCH_COUNT_CAP,
+  BATCH_CREDITS,
+  DESIGNS_PER_BATCH,
+  MAX_IMAGES,
+  MAX_STYLES,
+  creditsBack,
+} from "./lib/studioRules";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -82,8 +91,8 @@ const sessionView = v.object({
       backgroundColor: v.string(),
     }),
   ),
-  batches: v.array(batchView),
-  favorites: v.array(v.id("generations")),
+  // How many batches it has, counted up to BATCH_COUNT_CAP.
+  batchCount: v.number(),
   // The newest batch's settings, so reopening a session picks up where it left off.
   lastInputs: v.optional(
     v.object({
@@ -139,88 +148,84 @@ async function remixCrOf(ctx: Ctx, session: Doc<"creativeSessions">) {
   return work ? formatCr(work.crFamily, work.crExpression) : undefined;
 }
 
+// A batch as the studio shows it: its line (request, images, style mix) and its four designs.
+async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, batch: Doc<"batches">) {
+  const generations = await ctx.db
+    .query("generations")
+    .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
+    .take(DESIGNS_PER_BATCH * 2);
+  generations.sort((a, b) => a.index - b.index);
+  // The mixer's styles plus images the request named for their look (as studioPrompt reads them).
+  const mix = (batch.styles ?? []).map((s) => ({ imageId: s.imageId, key: s.key, weight: s.weight }));
+  for (const [i, role] of (batch.roles ?? []).entries()) {
+    const image = batch.images?.[i];
+    if (!image || role === "content") continue;
+    const at = mix.findIndex((s) => s.imageId === image.imageId);
+    if (at < 0) mix.push({ imageId: image.imageId, key: image.key, weight: 100 });
+    else if (mix[at].weight <= 0) mix[at] = { ...mix[at], weight: 100 };
+  }
+  const shares = styleShares(mix.map((s) => s.weight));
+  const styles = [];
+  for (const [i, style] of mix.entries()) {
+    if (shares[i] <= 0) continue;
+    const { url, thumbUrl } = await urls(style.key);
+    styles.push({ url, thumbUrl, share: shares[i] });
+  }
+  const images = [];
+  for (const image of batch.images ?? []) {
+    const { url, thumbUrl } = await urls(image.key);
+    images.push({ url, thumbUrl });
+  }
+  const tiles = [];
+  for (const g of generations) {
+    const blocked = g.status === "failed" && isBlockedError(g.error);
+    const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
+    const work =
+      g.status === "succeeded"
+        ? await ctx.db
+            .query("works")
+            .withIndex("by_generation", (q) => q.eq("generationId", g._id))
+            .first()
+        : null;
+    tiles.push({
+      generationId: g._id,
+      batchId: g.batchId,
+      status: g.status,
+      url,
+      mediumUrl,
+      thumbUrl,
+      key: g.fullKey,
+      favorite: g.favorite,
+      error: blocked ? undefined : publicTileError(g.error),
+      blocked,
+      backgroundColor: batch.backgroundColor,
+      publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
+    });
+  }
+  return {
+    batchId: batch._id,
+    createdAt: batch._creationTime,
+    instruction: batch.instruction,
+    presets: batch.presets,
+    backgroundColor: batch.backgroundColor,
+    inspirationUrl: publicUrl(batch.inspirationKey),
+    images,
+    styles,
+    grid: batch.layout === "grid",
+    refunded: batch.refunded,
+    tiles,
+  };
+}
+
+// The session's header: its name, remix source, how many batches it has, and the newest batch's
+// settings. Its batches page in through sessionBatches.
 async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
   const urls = imageUrlReader(ctx);
-  const batches = await ctx.db
+  const counted = await ctx.db
     .query("batches")
     .withIndex("by_session", (q) => q.eq("sessionId", session._id))
     .order("desc")
-    .take(40);
-  const published = new Map<string, string>();
-  const myWorks = await ctx.db
-    .query("works")
-    .withIndex("by_creator", (q) => q.eq("creatorId", session.ownerId))
-    .collect();
-  for (const work of myWorks) {
-    published.set(work.generationId, formatCr(work.crFamily, work.crExpression));
-  }
-  const batchViews = [];
-  for (const batch of batches) {
-    const generations = await ctx.db
-      .query("generations")
-      .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
-      .collect();
-    generations.sort((a, b) => a.index - b.index);
-    // The mixer's styles plus images the request named for their look (as studioPrompt reads them).
-    const mix = (batch.styles ?? []).map((s) => ({ imageId: s.imageId, key: s.key, weight: s.weight }));
-    for (const [i, role] of (batch.roles ?? []).entries()) {
-      const image = batch.images?.[i];
-      if (!image || role === "content") continue;
-      const at = mix.findIndex((s) => s.imageId === image.imageId);
-      if (at < 0) mix.push({ imageId: image.imageId, key: image.key, weight: 100 });
-      else if (mix[at].weight <= 0) mix[at] = { ...mix[at], weight: 100 };
-    }
-    const shares = styleShares(mix.map((s) => s.weight));
-    const styles = [];
-    for (const [i, style] of mix.entries()) {
-      if (shares[i] <= 0) continue;
-      const { url, thumbUrl } = await urls(style.key);
-      styles.push({ url, thumbUrl, share: shares[i] });
-    }
-    const images = [];
-    for (const image of batch.images ?? []) {
-      const { url, thumbUrl } = await urls(image.key);
-      images.push({ url, thumbUrl });
-    }
-    const tiles = [];
-    for (const g of generations) {
-      const blocked = g.status === "failed" && isBlockedError(g.error);
-      const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
-      tiles.push({
-        generationId: g._id,
-        batchId: g.batchId,
-        status: g.status,
-        url,
-        mediumUrl,
-        thumbUrl,
-        key: g.fullKey,
-        favorite: g.favorite,
-        error: blocked ? undefined : publicTileError(g.error),
-        blocked,
-        backgroundColor: batch.backgroundColor,
-        publishedCr: published.get(g._id),
-      });
-    }
-    batchViews.push({
-      batchId: batch._id,
-      createdAt: batch._creationTime,
-      instruction: batch.instruction,
-      presets: batch.presets,
-      backgroundColor: batch.backgroundColor,
-      inspirationUrl: publicUrl(batch.inspirationKey),
-      images,
-      styles,
-      grid: batch.layout === "grid",
-      refunded: batch.refunded,
-      tiles,
-    });
-  }
-  const favorites = await ctx.db
-    .query("generations")
-    .withIndex("by_session_favorite", (q) =>
-      q.eq("sessionId", session._id).eq("favorite", true),
-    )
-    .collect();
+    .take(BATCH_COUNT_CAP);
 
   let remix = undefined;
   if (session.remixOfWorkId) {
@@ -238,7 +243,7 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
       };
     }
   }
-  const newest = batches[0];
+  const newest = counted[0];
   let lastInputs = undefined;
   if (newest) {
     const images = [];
@@ -271,10 +276,19 @@ async function buildSessionView(ctx: Ctx, session: Doc<"creativeSessions">) {
     }),
     createdAt: session._creationTime,
     remix,
-    batches: batchViews,
-    favorites: favorites.map((g) => g._id),
+    batchCount: counted.length,
     lastInputs,
   };
+}
+
+// The member's own session, or null (signed out, a bad id, or someone else's).
+async function ownSession(ctx: Ctx, sessionId: string) {
+  const user = await getViewerUser(ctx);
+  if (!user) return null;
+  const id = ctx.db.normalizeId("creativeSessions", sessionId);
+  if (!id) return null;
+  const found = await ctx.db.get("creativeSessions", id);
+  return found && found.ownerId === user._id ? found : null;
 }
 
 // The member's latest session (the previous studio always reopened it).
@@ -295,13 +309,28 @@ export const session = query({
   args: { sessionId: v.string() },
   returns: v.union(v.null(), sessionView),
   handler: async (ctx, args) => {
-    const user = await getViewerUser(ctx);
-    if (!user) return null;
-    const sessionId = ctx.db.normalizeId("creativeSessions", args.sessionId);
-    if (!sessionId) return null;
-    const found = await ctx.db.get("creativeSessions", sessionId);
-    if (!found || found.ownerId !== user._id) return null;
-    return await buildSessionView(ctx, found);
+    const found = await ownSession(ctx, args.sessionId);
+    return found ? await buildSessionView(ctx, found) : null;
+  },
+});
+
+// A session's batches, newest first, a page at a time. Empty if the session isn't the member's.
+// A new batch lands at the top of the first page, and in-flight designs update in place.
+export const sessionBatches = query({
+  args: { sessionId: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(batchView),
+  handler: async (ctx, args) => {
+    const found = await ownSession(ctx, args.sessionId);
+    if (!found) return EMPTY_PAGE;
+    const result = await ctx.db
+      .query("batches")
+      .withIndex("by_session", (q) => q.eq("sessionId", found._id))
+      .order("desc")
+      .paginate(cappedPage(args.paginationOpts, 12));
+    const urls = imageUrlReader(ctx);
+    const page = [];
+    for (const batch of result.page) page.push(await batchViewOf(ctx, urls, batch));
+    return { ...result, page };
   },
 });
 
@@ -309,62 +338,65 @@ const sessionCard = v.object({
   sessionId: v.id("creativeSessions"),
   name: v.string(),
   updatedAt: v.number(),
+  // Counted up to BATCH_COUNT_CAP; the studio shows "100+" from there.
   batches: v.number(),
   // The newest finished designs, newest first: the original and its thumbnail.
   thumbs: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), backgroundColor: v.string() })),
 });
 
-// The member's sessions with work in them, most recently used first, for the blank studio.
+// A session's card, or null for a session with no batches (opened, then left).
+async function sessionCardOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, row: Doc<"creativeSessions">) {
+  const batches = await ctx.db
+    .query("batches")
+    .withIndex("by_session", (q) => q.eq("sessionId", row._id))
+    .order("desc")
+    .take(BATCH_COUNT_CAP);
+  if (batches.length === 0) return null;
+  const thumbs = [];
+  for (const batch of batches.slice(0, 6)) {
+    const generations = await ctx.db
+      .query("generations")
+      .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
+      .take(DESIGNS_PER_BATCH * 2);
+    generations.sort((a, b) => a.index - b.index);
+    for (const g of generations) {
+      if (g.status === "succeeded" && g.fullKey && thumbs.length < 4) {
+        const { url, thumbUrl } = await urls(g.fullKey);
+        thumbs.push({ url, thumbUrl, backgroundColor: batch.backgroundColor });
+      }
+    }
+    if (thumbs.length >= 4) break;
+  }
+  const first = [...batches].reverse().find((batch) => batch.instruction.trim())?.instruction;
+  return {
+    sessionId: row._id,
+    name: sessionName({ title: row.title, remixCr: await remixCrOf(ctx, row), firstInstruction: first }),
+    updatedAt: row.updatedAt,
+    batches: batches.length,
+    thumbs,
+  };
+}
+
+// The member's sessions with work in them, most recently used first, a page at a time, for the
+// blank studio. Sessions with no batches are left out, so a page can hold fewer cards than asked.
 export const sessions = query({
-  args: { limit: v.optional(v.number()) },
-  returns: v.object({ sessions: v.array(sessionCard), more: v.boolean() }),
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(sessionCard),
   handler: async (ctx, args) => {
     const user = await getViewerUser(ctx);
-    if (!user) return { sessions: [], more: false };
-    const urls = imageUrlReader(ctx);
-    const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 12)), 60);
-    const cards = [];
-    let more = false;
-    // Sessions with no batches (opened, then left) are skipped.
-    for await (const row of ctx.db
+    if (!user) return EMPTY_PAGE;
+    const result = await ctx.db
       .query("creativeSessions")
       .withIndex("by_owner_updated", (q) => q.eq("ownerId", user._id))
-      .order("desc")) {
-      const batches = await ctx.db
-        .query("batches")
-        .withIndex("by_session", (q) => q.eq("sessionId", row._id))
-        .order("desc")
-        .take(100);
-      if (batches.length === 0) continue;
-      if (cards.length === limit) {
-        more = true;
-        break;
-      }
-      const thumbs = [];
-      for (const batch of batches.slice(0, 6)) {
-        const generations = await ctx.db
-          .query("generations")
-          .withIndex("by_batch", (q) => q.eq("batchId", batch._id))
-          .collect();
-        generations.sort((a, b) => a.index - b.index);
-        for (const g of generations) {
-          if (g.status === "succeeded" && g.fullKey && thumbs.length < 4) {
-            const { url, thumbUrl } = await urls(g.fullKey);
-            thumbs.push({ url, thumbUrl, backgroundColor: batch.backgroundColor });
-          }
-        }
-        if (thumbs.length >= 4) break;
-      }
-      const first = [...batches].reverse().find((batch) => batch.instruction.trim())?.instruction;
-      cards.push({
-        sessionId: row._id,
-        name: sessionName({ title: row.title, remixCr: await remixCrOf(ctx, row), firstInstruction: first }),
-        updatedAt: row.updatedAt,
-        batches: batches.length,
-        thumbs,
-      });
+      .order("desc")
+      .paginate(cappedPage(args.paginationOpts, 24));
+    const urls = imageUrlReader(ctx);
+    const page = [];
+    for (const row of result.page) {
+      const card = await sessionCardOf(ctx, urls, row);
+      if (card) page.push(card);
     }
-    return { sessions: cards, more };
+    return { ...result, page };
   },
 });
 

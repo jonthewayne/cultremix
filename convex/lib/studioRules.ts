@@ -16,3 +16,6 @@ export function creditsBack(missing: number) {
 // every image's subject kept; these leave room under that.
 export const MAX_IMAGES = 8;
 export const MAX_STYLES = 4;
+
+// Sessions count their batches up to this; past it the studio shows "100+".
+export const BATCH_COUNT_CAP = 100;
