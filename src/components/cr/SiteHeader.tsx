@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { DeploymentPill } from "~/components/cr/DeploymentLabel";
+import { NotificationBell } from "~/components/social/NotificationBell";
 import { authClient } from "~/lib/auth-client";
 
 export function SiteHeader() {
@@ -39,6 +40,7 @@ export function SiteHeader() {
         <Link to="/studio" activeProps={{ className: "underline decoration-2 underline-offset-8" }}>
           Studio
         </Link>
+        {viewer && <NotificationBell />}
         {viewer ? (
           <div ref={menu} className="relative">
             <button
