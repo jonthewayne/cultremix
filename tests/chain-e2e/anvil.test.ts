@@ -29,6 +29,7 @@ import {
   insertOwner,
   insertWork,
   setChainWrites,
+  setFlag,
   useChainEnv,
 } from "../convex-local/chainFixtures";
 import { newTest } from "../convex-local/setup";
@@ -116,6 +117,7 @@ describe("chain writes on a local Monad node", () => {
     useChainEnv({ MONAD_RPC_URL: rpcUrl, CHAIN_REGISTRY_ADDRESS: registry });
     t = newTest();
     await setChainWrites(t, true);
+    await setFlag(t, "social.backs", true);
     [creator, remixer, alice, bob] = [
       await insertMember(t),
       await insertMember(t),

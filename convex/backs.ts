@@ -4,21 +4,28 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 import { getViewerUser } from "./identity";
 import { chainWritesEnabled, enqueueBack } from "./lib/chain/queue";
 import { registryWeek } from "./lib/chain/writes";
+import { isFlagOn } from "./lib/flagState";
 import { backStatusValidator } from "./schema/chain";
 
 // Backs (R28/R29): a member's public, onchain show of support for a work, signed by their
 // wallet and sent by the relayer. A Back carries no money and no promise of any (KD8).
 //
-// Admission: signed in with a username, a verified email, a ready wallet, chain writes on, a
-// published work registered on Monad, not your own, once per work, and at most 3 per registry
-// week counting reserved, submitted, and confirmed Backs. The registry enforces the same weekly
-// limit, self-Back, and once-per-work rules, and the backer's ordinal comes from its Backed event.
+// Admission: signed in with a username, a verified email, a ready wallet, the Backs and Monad
+// records switches on, a published work registered on Monad, not your own, once per work, and at
+// most 3 per registry week counting reserved, submitted, and confirmed Backs. The registry enforces
+// the same weekly limit, self-Back, and once-per-work rules, and the backer's ordinal comes from
+// its Backed event.
 
 export const MAX_BACKS_PER_WEEK = 3;
 const EARLIEST_SHOWN = 10;
 
 type Ctx = QueryCtx | MutationCtx;
 type Refusal = { code: string; message: string };
+
+/** Backing is open when both the Backs switch (social.backs) and Monad records (chain.writes) are on. */
+async function backingOpen(ctx: Ctx) {
+  return (await isFlagOn(ctx, "social.backs")) && (await chainWritesEnabled(ctx));
+}
 
 function counts(back: Doc<"backs">) {
   return back.status === "reserved" || back.status === "submitted" || back.status === "confirmed";
@@ -48,7 +55,7 @@ async function refusal(ctx: Ctx, user: Doc<"users"> | null, work: Doc<"works"> |
   if (work.creatorId === user._id) return { code: "OWN_WORK", message: "You can't Back your own work." };
   const existing = await viewerBack(ctx, work, user);
   if (existing && counts(existing)) return { code: "ALREADY_BACKED", message: "You've Backed this work." };
-  if (!(await chainWritesEnabled(ctx))) return { code: "PAUSED", message: "Backing is paused right now." };
+  if (!(await backingOpen(ctx))) return { code: "PAUSED", message: "Backing is paused right now." };
   if (work.provenanceStatus !== "confirmed") {
     return { code: "NOT_REGISTERED", message: "This work can be Backed once it's registered on Monad." };
   }
@@ -105,6 +112,8 @@ export const forWork = query({
       ),
       canBack: v.boolean(),
       reason: v.union(v.null(), v.object({ code: v.string(), message: v.string() })),
+      // Whether Backing is switched on at all; the work page hides Backers while it's off and empty.
+      open: v.boolean(),
       weeklyLimit: v.number(),
       weeklyUsed: v.union(v.null(), v.number()),
     }),
@@ -136,6 +145,7 @@ export const forWork = query({
       viewer: mine ? { status: mine.status, ordinal: mine.ordinal ?? null, error: mine.error ?? null } : null,
       canBack: reason === null,
       reason,
+      open: await backingOpen(ctx),
       weeklyLimit: MAX_BACKS_PER_WEEK,
       weeklyUsed: user ? await backsThisWeek(ctx, user, registryWeek(Date.now())) : null,
     };

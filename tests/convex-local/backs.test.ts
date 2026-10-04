@@ -5,17 +5,19 @@ import type { MutationCtx } from "../../convex/_generated/server";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { workIdFor } from "../../convex/lib/chain/ids";
 import { enqueueRegisterWork } from "../../convex/lib/chain/queue";
-import { RELAYER, insertMember, insertWork, makeWalletReady, setChainWrites, useChainEnv, type Member } from "./chainFixtures";
+import { RELAYER, insertMember, insertWork, makeWalletReady, setChainWrites, setFlag, useChainEnv, type Member } from "./chainFixtures";
 import { FakeChain } from "./fakeChain";
 import { newTest } from "./setup";
 
 type T = ReturnType<typeof newTest>;
 
-function setup() {
+// Backing needs the Backs switch as well as Monad records; each test turns Monad records on itself.
+async function setup() {
   useChainEnv();
   const t = newTest();
   const chain = new FakeChain({ relayer: RELAYER });
   setChainDepsForTests({ rpc: () => chain });
+  await setFlag(t, "social.backs", true);
   return { t, chain };
 }
 
@@ -63,7 +65,7 @@ afterEach(() => {
 
 describe("Backs", () => {
   it("records each backer's place in line from the chain's Backed event", async () => {
-    const { t, chain } = setup();
+    const { t, chain } = await setup();
     await setChainWrites(t, true);
     const creator = await insertMember(t);
     const [alice, bob] = [await insertMember(t), await insertMember(t)];
@@ -92,7 +94,7 @@ describe("Backs", () => {
   });
 
   it("admits only signed-in, verified members with a ready wallet, for a registered work that isn't theirs", async () => {
-    const { t, chain } = setup();
+    const { t, chain } = await setup();
     await setChainWrites(t, true);
     const creator = await insertMember(t);
     const workId = await registeredWork(t, chain, creator);
@@ -123,8 +125,30 @@ describe("Backs", () => {
     expect(backs).toHaveLength(1);
   });
 
+  it("stays closed until both the Backs and Monad records switches are on", async () => {
+    const { t, chain } = await setup();
+    await setChainWrites(t, true);
+    const creator = await insertMember(t);
+    const alice = await insertMember(t);
+    const workId = await registeredWork(t, chain, creator);
+    expect(await view(t, alice, workId)).toMatchObject({ open: true, canBack: true });
+
+    await setFlag(t, "social.backs", false);
+    await expect(backOf(t, alice, workId)).rejects.toMatchObject({ data: { code: "PAUSED" } });
+    expect(await view(t, alice, workId)).toMatchObject({ open: false, canBack: false, reason: { code: "PAUSED" } });
+    expect(await view(t, null, workId)).toMatchObject({ open: false, count: 0, viewer: null });
+
+    await setFlag(t, "social.backs", true);
+    await setChainWrites(t, false);
+    expect(await view(t, alice, workId)).toMatchObject({ open: false, canBack: false });
+
+    await setChainWrites(t, true);
+    expect(await refusalCode(backOf(t, alice, workId))).toBe("admitted");
+    expect(await t.run((ctx) => ctx.db.query("backs").collect())).toHaveLength(1);
+  });
+
   it("allows 3 Backs per registry week, counting ones still being recorded", async () => {
-    const { t, chain } = setup();
+    const { t, chain } = await setup();
     await setChainWrites(t, true);
     const creator = await insertMember(t);
     const backer = await insertMember(t);
@@ -148,7 +172,7 @@ describe("Backs", () => {
   });
 
   it("lets a member Back again after a Back that didn't go through", async () => {
-    const { t, chain } = setup();
+    const { t, chain } = await setup();
     await setChainWrites(t, true);
     const creator = await insertMember(t);
     const backer = await insertMember(t);

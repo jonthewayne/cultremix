@@ -33,15 +33,19 @@ export function useChainEnv(overrides: Record<string, string> = {}) {
   for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
 }
 
-export async function setChainWrites(t: T, enabled: boolean) {
+export async function setFlag(t: T, key: string, enabled: boolean) {
   await t.run(async (ctx) => {
     const flag = await ctx.db
       .query("featureFlags")
-      .withIndex("by_key", (q) => q.eq("key", CHAIN_WRITES_FLAG))
+      .withIndex("by_key", (q) => q.eq("key", key))
       .unique();
     if (flag) await ctx.db.patch("featureFlags", flag._id, { enabled });
-    else await ctx.db.insert("featureFlags", { key: CHAIN_WRITES_FLAG, enabled });
+    else await ctx.db.insert("featureFlags", { key, enabled });
   });
+}
+
+export async function setChainWrites(t: T, enabled: boolean) {
+  await setFlag(t, CHAIN_WRITES_FLAG, enabled);
 }
 
 export type Member = { userId: Id<"users">; address: Address; authId: string };

@@ -5,10 +5,12 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { BackButton } from "~/components/social/BackButton";
 
 // A work's Backs: the Back button, the earliest backers in the order the chain recorded them,
-// and the viewer's own place in that order.
+// and the viewer's own place in that order. Until Backing is switched on (social.backs and
+// chain.writes), a work with nothing recorded shows no Backers section at all.
 export function Backers({ workId, cr }: { workId: Id<"works">; cr: string }) {
   const { data } = useQuery(convexQuery(api.backs.forWork, { workId }));
   if (!data) return null;
+  if (!data.open && data.count === 0 && !data.viewer) return null;
   const mine = data.viewer?.status === "confirmed" ? data.viewer.ordinal : null;
   const listed = data.earliest.some((backer) => backer.isViewer);
   return (
@@ -18,7 +20,7 @@ export function Backers({ workId, cr }: { workId: Id<"works">; cr: string }) {
         {data.count === 0 ? "No Backs yet." : `${data.count} ${data.count === 1 ? "Back" : "Backs"} recorded on Monad.`}
       </p>
       <div className="mt-3">
-        <BackButton workId={workId} cr={cr} />
+        {data.open ? <BackButton workId={workId} cr={cr} /> : <p className="text-sm text-neutral-600">Backing is paused right now.</p>}
       </div>
       {mine && <p className="mt-3 font-semibold">You’re backer #{mine}.</p>}
       {data.earliest.length > 0 && (
