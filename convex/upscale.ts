@@ -12,7 +12,8 @@ import { storeVersion } from "./printTools";
 
 // "Upscale for print": fal's Topaz Transparent 4x (convex/lib/fal.ts). The flow itself is in
 // convex/lib/upscaleFlow.ts: one submission per attempt, the request ID saved before any polling,
-// and polling that only reads.
+// and polling that only reads. Each attempt holds its worst-case fal cost against the daily budget
+// from the moment it's admitted (convex/print.ts upscale) until it finishes.
 
 type Job = { version: Doc<"printVersions">; parent: Doc<"printVersions"> | null; family: number; expression: number };
 
@@ -37,8 +38,8 @@ export const submit = internalAction({
       record: async (submission) => {
         await ctx.runMutation(internal.print.recordSubmission, { versionId: args.versionId, ...submission });
       },
-      fail: async (error) => {
-        await ctx.runMutation(internal.print.failVersion, { versionId: args.versionId, error });
+      fail: async (error, spend) => {
+        await ctx.runMutation(internal.print.failVersion, { versionId: args.versionId, error, spend });
       },
       schedulePoll: async (delayMs) => {
         await ctx.scheduler.runAfter(delayMs, internal.upscale.poll, args);

@@ -15,6 +15,7 @@ import { PRICING_VERSION } from "./lib/pricing";
 import { budgetProvider } from "./schema/budget";
 import { failAndRefund, flagEnabled, settleBatch } from "./studio";
 import { failShootPhoto } from "./publish";
+import { failPrintVersion } from "./print";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
@@ -83,6 +84,11 @@ async function finishAbandoned(ctx: MutationCtx, reservation: Doc<"reservations"
       .unique();
     // A reshoot keeps the photo that's up; only a first photo still pending is marked failed.
     if (photo?.state === "pending") await failShootPhoto(ctx, reservation.shootId, message);
+  } else if (reservation.attemptKind === "upscale") {
+    // An upscale's attempt is its print version; failing it gives the credits back.
+    const versionId = ctx.db.normalizeId("printVersions", reservation.attemptId);
+    const version = versionId ? await ctx.db.get("printVersions", versionId) : null;
+    if (version) await failPrintVersion(ctx, version, message);
   }
   await closeReservation(ctx, reservation.attemptId, sent ? { kind: "settle", reason: "sweeper" } : { kind: "release", reason: "sweeper" });
 }

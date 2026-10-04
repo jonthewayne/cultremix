@@ -241,7 +241,9 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
         setError(
           result.refused === "NO_CREDITS"
             ? `Upscaling takes ${studio.upscaleCredits} credits. You have ${studio.credits}.`
-            : "Upscaling is paused right now.",
+            : result.refused === "BUDGET"
+              ? "Upscaling is resting until tomorrow. Your credits weren't used."
+              : "Upscaling is paused right now.",
         );
       }
     });
