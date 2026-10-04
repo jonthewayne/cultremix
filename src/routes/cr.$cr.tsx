@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
+import { ChainStatus } from "~/components/cr/ChainStatus";
 import { ColorSwatches } from "~/components/cr/ColorSwatches";
 import { CrMark } from "~/components/cr/CrMark";
 import { DirectRemixes } from "~/components/cr/DirectRemixes";
@@ -14,6 +15,7 @@ import { FamilyView } from "~/components/cr/FamilyView";
 import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { PhotoRetry } from "~/components/cr/PhotoRetry";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { Backers } from "~/components/work/Backers";
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
 import { ShareButton } from "~/components/social/ShareButton";
@@ -146,9 +148,10 @@ function ShopPage() {
               <div className="border-t-2 border-black pt-4 text-sm">
                 <p className="font-bold uppercase tracking-wider">Fingerprint</p>
                 <p className="mt-1 break-all font-mono text-xs">SHA-256 {contentHash}</p>
-                <p className="mt-2 font-semibold">Verified on Monad — coming soon</p>
+                <ChainStatus workId={item.workId} />
               </div>
             )}
+            <Backers workId={item.workId} cr={item.cr} />
             <PrintEntry cr={item.cr} />
           </div>
         </section>

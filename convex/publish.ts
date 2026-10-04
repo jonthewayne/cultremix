@@ -7,6 +7,7 @@ import { MAX_DESCRIPTION_LENGTH, defaultOfferedColors, garmentColor, validateOff
 import { isFlagOn } from "./lib/flagState";
 import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
+import { enqueueRegisterWork } from "./lib/chain/queue";
 import { publishPlacement } from "./lib/lineage";
 import { recordPublishActivity, recordRemix } from "./lib/social";
 import {
@@ -308,6 +309,9 @@ export const markPublished = internalMutation({
     await recordRemix(ctx, published);
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
+    // Onchain provenance: registered by the relayer, signed by the creator's wallet once it's
+    // ready, after the parent's registration for a remix (convex/lib/chain/queue.ts).
+    await enqueueRegisterWork(ctx, work._id);
     const look = pickLook(work._id, await recentLooks(ctx));
     // Past the creator's photo shoots for today, the work publishes and its photo waits;
     // the creator can try it again tomorrow (photos.retry).

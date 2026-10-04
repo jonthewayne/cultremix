@@ -27,6 +27,7 @@ import { Route as AdminLineageRouteImport } from './routes/admin.lineage'
 import { Route as AdminMembersRouteImport } from './routes/admin.members'
 import { Route as AdminMetricsRouteImport } from './routes/admin.metrics'
 import { Route as AdminWaitlistRouteImport } from './routes/admin.waitlist'
+import { Route as AdminChainRouteImport } from './routes/admin_.chain'
 import { Route as AdminOrdersRouteImport } from './routes/admin_.orders'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
@@ -130,6 +131,11 @@ const AdminWaitlistRoute = AdminWaitlistRouteImport.update({
   path: '/waitlist',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminChainRoute = AdminChainRouteImport.update({
+  id: '/admin_/chain',
+  path: '/admin/chain',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
   id: '/admin_/orders',
   path: '/admin/orders',
@@ -209,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
+  '/admin/chain': typeof AdminChainRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
@@ -240,6 +247,7 @@ export interface FileRoutesByTo {
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
+  '/admin/chain': typeof AdminChainRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
@@ -273,6 +281,7 @@ export interface FileRoutesById {
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
+  '/admin_/chain': typeof AdminChainRoute
   '/admin_/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
@@ -307,6 +316,7 @@ export interface FileRouteTypes {
     | '/admin/members'
     | '/admin/metrics'
     | '/admin/waitlist'
+    | '/admin/chain'
     | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
@@ -338,6 +348,7 @@ export interface FileRouteTypes {
     | '/admin/members'
     | '/admin/metrics'
     | '/admin/waitlist'
+    | '/admin/chain'
     | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
@@ -370,6 +381,7 @@ export interface FileRouteTypes {
     | '/admin/members'
     | '/admin/metrics'
     | '/admin/waitlist'
+    | '/admin_/chain'
     | '/admin_/orders'
     | '/auth/complete'
     | '/cr/$cr'
@@ -398,6 +410,7 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
+  AdminChainRoute: typeof AdminChainRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
@@ -540,6 +553,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWaitlistRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin_/chain': {
+      id: '/admin_/chain'
+      path: '/admin/chain'
+      fullPath: '/admin/chain'
+      preLoaderRoute: typeof AdminChainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin_/orders': {
       id: '/admin_/orders'
       path: '/admin/orders'
@@ -660,6 +680,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
+  AdminChainRoute: AdminChainRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
