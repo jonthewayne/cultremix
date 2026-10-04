@@ -59,4 +59,12 @@ export const socialTables = {
     workId: v.id("works"),
     hearts: v.number(),
   }).index("by_work", ["workId"]),
+
+  // One row per creator: when they last published. Home's "Who's making things" pages over it.
+  creatorActivity: defineTable({
+    userId: v.id("users"),
+    lastActiveAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_lastActive", ["lastActiveAt"]),
 };

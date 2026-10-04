@@ -2,6 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { ColorSwatches } from "~/components/cr/ColorSwatches";
@@ -14,16 +15,27 @@ import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
+import { ShareButton } from "~/components/social/ShareButton";
 import { PrintEntry } from "~/components/print/PrintEntry";
+import { shareMeta, workShareCard } from "~/lib/share";
 import { PhotoSquare } from "./index";
 import { BuyBox } from "~/components/commerce/BuyBox";
 
 export const Route = createFileRoute("/cr/$cr")({
   loader: async ({ context, params }) => {
-    if (!context.convexQueryClient.serverHttpClient) return;
-    await context.queryClient.fetchQuery(convexQuery(api.feed.byCr, { cr: params.cr })).catch(() => null);
+    const options = convexQuery(api.feed.byCr, { cr: params.cr });
+    if (context.convexQueryClient.serverHttpClient) {
+      await context.queryClient.fetchQuery(options).catch(() => null);
+    }
+    // The link preview comes from the page data already fetched (or cached, in the browser).
+    const data = context.queryClient.getQueryData(options.queryKey) as
+      | FunctionReturnType<typeof api.feed.byCr>
+      | undefined;
+    return { share: data ? workShareCard(data.item) : null };
   },
-  head: ({ params }) => ({ meta: [{ title: `CR ${params.cr} · CultRemix` }] }),
+  head: ({ params, loaderData }) => ({
+    meta: loaderData?.share ? shareMeta(loaderData.share) : [{ title: `CR ${params.cr} · CultRemix` }],
+  }),
   component: ShopPage,
 });
 
@@ -83,11 +95,12 @@ function ShopPage() {
               {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
             </p>
             <LineageNote cr={item.cr} />
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <HeartButton workId={item.workId} count={item.hearts} />
               <FollowButton username={item.creator.username} />
+              <ShareButton path={`/cr/${item.cr}`} title={item.title ? `CR ${item.cr} · ${item.title}` : `CR ${item.cr}`} />
             </div>
-                      </div>
+          </div>
 
           <div className="flex flex-col gap-6">
             {offer ? (

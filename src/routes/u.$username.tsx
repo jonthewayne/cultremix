@@ -1,14 +1,17 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { Avatar } from "~/components/social/Avatar";
 import { FollowButton } from "~/components/social/FollowButton";
 import { LoadMore } from "~/components/social/LoadMore";
+import { ShareButton } from "~/components/social/ShareButton";
 import { WorkGrid } from "~/components/social/WorkGrid";
 import { useMemberAction } from "~/components/social/useSignIn";
 import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
+import { profileShareCard, shareMeta } from "~/lib/share";
 import { cn } from "~/lib/utils";
 
 type Shelf = "works" | "remixes";
@@ -19,14 +22,22 @@ export const Route = createFileRoute("/u/$username")({
     search.shelf === "remixes" ? { shelf: "remixes" } : {},
   loaderDeps: ({ search }): { shelf: Shelf } => ({ shelf: search.shelf ?? "works" }),
   loader: async ({ context, params, deps }) => {
-    if (!context.convexQueryClient.serverHttpClient) return;
     const username = params.username;
-    await Promise.all([
-      context.queryClient.fetchQuery(convexQuery(api.social.profile, { username })).catch(() => null),
-      prefetchFirstPage(context, api.social.works, { username, shelf: deps.shelf }, PAGE_SIZE),
-    ]);
+    const options = convexQuery(api.social.profile, { username });
+    if (context.convexQueryClient.serverHttpClient) {
+      await Promise.all([
+        context.queryClient.fetchQuery(options).catch(() => null),
+        prefetchFirstPage(context, api.social.works, { username, shelf: deps.shelf }, PAGE_SIZE),
+      ]);
+    }
+    const profile = context.queryClient.getQueryData(options.queryKey) as
+      | FunctionReturnType<typeof api.social.profile>
+      | undefined;
+    return { share: profile ? profileShareCard(profile) : null };
   },
-  head: ({ params }) => ({ meta: [{ title: `@${params.username} · CultRemix` }] }),
+  head: ({ params, loaderData }) => ({
+    meta: loaderData?.share ? shareMeta(loaderData.share) : [{ title: `@${params.username} · CultRemix` }],
+  }),
   component: ProfilePage,
 });
 
@@ -92,18 +103,19 @@ function ProfilePage() {
             ) : (
               <FollowButton username={username} />
             )}
+            <ShareButton path={`/u/${data.username}`} title={`@${data.username} on CultRemix`} />
           </div>
         </section>
 
         {data.bio && <p className="mt-6 max-w-2xl md:mt-8 text-lg leading-snug md:text-xl">{data.bio}</p>}
         <p className="mt-4 flex gap-5 text-base">
-          <span>
+          <Link to="/u/$username/followers" params={{ username: data.username }} className="hover:underline">
             <strong className="font-black tabular-nums">{data.followers}</strong>{" "}
             {data.followers === 1 ? "follower" : "followers"}
-          </span>
-          <span>
+          </Link>
+          <Link to="/u/$username/following" params={{ username: data.username }} className="hover:underline">
             <strong className="font-black tabular-nums">{data.following}</strong> following
-          </span>
+          </Link>
         </p>
 
         <nav aria-label="Designs" className="mt-12 flex gap-6 border-b-2 border-black md:mt-16">

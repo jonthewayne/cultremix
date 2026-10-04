@@ -35,6 +35,8 @@ import { Route as MeEarningsRouteImport } from './routes/me.earnings'
 import { Route as PrintCrRouteImport } from './routes/print.$cr'
 import { Route as UUsernameRouteImport } from './routes/u.$username'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as UUsernameFollowersRouteImport } from './routes/u.$username_.followers'
+import { Route as UUsernameFollowingRouteImport } from './routes/u.$username_.following'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -166,6 +168,16 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UUsernameFollowersRoute = UUsernameFollowersRouteImport.update({
+  id: '/u/$username_/followers',
+  path: '/u/$username/followers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UUsernameFollowingRoute = UUsernameFollowingRouteImport.update({
+  id: '/u/$username_/following',
+  path: '/u/$username/following',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -194,6 +206,8 @@ export interface FileRoutesByFullPath {
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/u/$username/followers': typeof UUsernameFollowersRoute
+  '/u/$username/following': typeof UUsernameFollowingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -221,6 +235,8 @@ export interface FileRoutesByTo {
   '/u/$username': typeof UUsernameRoute
   '/admin': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/u/$username/followers': typeof UUsernameFollowersRoute
+  '/u/$username/following': typeof UUsernameFollowingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -250,6 +266,8 @@ export interface FileRoutesById {
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/u/$username_/followers': typeof UUsernameFollowersRoute
+  '/u/$username_/following': typeof UUsernameFollowingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -280,6 +298,8 @@ export interface FileRouteTypes {
     | '/u/$username'
     | '/admin/'
     | '/api/auth/$'
+    | '/u/$username/followers'
+    | '/u/$username/following'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -307,6 +327,8 @@ export interface FileRouteTypes {
     | '/u/$username'
     | '/admin'
     | '/api/auth/$'
+    | '/u/$username/followers'
+    | '/u/$username/following'
   id:
     | '__root__'
     | '/'
@@ -335,6 +357,8 @@ export interface FileRouteTypes {
     | '/u/$username'
     | '/admin/'
     | '/api/auth/$'
+    | '/u/$username_/followers'
+    | '/u/$username_/following'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -358,6 +382,8 @@ export interface RootRouteChildren {
   PrintCrRoute: typeof PrintCrRoute
   UUsernameRoute: typeof UUsernameRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  UUsernameFollowersRoute: typeof UUsernameFollowersRoute
+  UUsernameFollowingRoute: typeof UUsernameFollowingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -544,6 +570,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/u/$username_/followers': {
+      id: '/u/$username_/followers'
+      path: '/u/$username/followers'
+      fullPath: '/u/$username/followers'
+      preLoaderRoute: typeof UUsernameFollowersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/u/$username_/following': {
+      id: '/u/$username_/following'
+      path: '/u/$username/following'
+      fullPath: '/u/$username/following'
+      preLoaderRoute: typeof UUsernameFollowingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -588,6 +628,8 @@ const rootRouteChildren: RootRouteChildren = {
   PrintCrRoute: PrintCrRoute,
   UUsernameRoute: UUsernameRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  UUsernameFollowersRoute: UUsernameFollowersRoute,
+  UUsernameFollowingRoute: UUsernameFollowingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
