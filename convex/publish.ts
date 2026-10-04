@@ -6,7 +6,15 @@ import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
 import { publishPlacement } from "./lib/lineage";
 import { recordPublishActivity } from "./lib/social";
-import { BUDGET_RESTING, closeReservation, hasRoom, imageProviderSetting, openReservation, spendValidator } from "./lib/budget";
+import {
+  BUDGET_RESTING,
+  closeReservation,
+  hasRoom,
+  imageProviderSetting,
+  openReservation,
+  reservationFor,
+  spendValidator,
+} from "./lib/budget";
 import { photoWorstCaseCents, qualityOf } from "./lib/pricing";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -34,8 +42,9 @@ async function reservePhoto(
   if (imageProviderSetting() !== "gateway") return null;
   const worstCaseCents = photoWorstCaseCents(qualityOf(process.env.PHOTO_QUALITY, "medium"));
   if (!(await hasRoom(ctx, "gateway", worstCaseCents, now))) return "resting";
-  // A shoot can be reshot, so each photo call gets its own attempt id.
-  const attemptId = `photo:${shootId}:${now}`;
+  // A shoot can be reshot, so each photo call gets its own attempt id (two in one millisecond too).
+  let attemptId = `photo:${shootId}:${now}`;
+  for (let n = 2; await reservationFor(ctx, attemptId); n++) attemptId = `photo:${shootId}:${now}:${n}`;
   await openReservation(ctx, {
     attemptKind: "photo",
     attemptId,
