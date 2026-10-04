@@ -20,9 +20,11 @@ import { Route as TeamRouteImport } from './routes/team'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VerifyPhoneRouteImport } from './routes/verify-phone'
+import { Route as AdminOrdersRouteImport } from './routes/admin_.orders'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
+import { Route as MeEarningsRouteImport } from './routes/me.earnings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -80,6 +82,11 @@ const VerifyPhoneRoute = VerifyPhoneRouteImport.update({
   path: '/verify-phone',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/admin_/orders',
+  path: '/admin/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCompleteRoute = AuthCompleteRouteImport.update({
   id: '/auth/complete',
   path: '/auth/complete',
@@ -93,6 +100,11 @@ const CrCrRoute = CrCrRouteImport.update({
 const InviteAcceptRoute = InviteAcceptRouteImport.update({
   id: '/invite/accept',
   path: '/invite/accept',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeEarningsRoute = MeEarningsRouteImport.update({
+  id: '/me/earnings',
+  path: '/me/earnings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -113,9 +125,11 @@ export interface FileRoutesByFullPath {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -130,9 +144,11 @@ export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -148,9 +164,11 @@ export interface FileRoutesById {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin_/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -167,9 +185,11 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
+    | '/me/earnings'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -184,9 +204,11 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
+    | '/me/earnings'
     | '/api/auth/$'
   id:
     | '__root__'
@@ -201,9 +223,11 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin_/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/invite/accept'
+    | '/me/earnings'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -219,9 +243,11 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
+  AdminOrdersRoute: typeof AdminOrdersRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
+  MeEarningsRoute: typeof MeEarningsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -304,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyPhoneRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin_/orders': {
+      id: '/admin_/orders'
+      path: '/admin/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/complete': {
       id: '/auth/complete'
       path: '/auth/complete'
@@ -323,6 +356,13 @@ declare module '@tanstack/react-router' {
       path: '/invite/accept'
       fullPath: '/invite/accept'
       preLoaderRoute: typeof InviteAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/earnings': {
+      id: '/me/earnings'
+      path: '/me/earnings'
+      fullPath: '/me/earnings'
+      preLoaderRoute: typeof MeEarningsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -347,9 +387,11 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
+  AdminOrdersRoute: AdminOrdersRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   InviteAcceptRoute: InviteAcceptRoute,
+  MeEarningsRoute: MeEarningsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
