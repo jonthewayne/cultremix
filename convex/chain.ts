@@ -34,6 +34,7 @@ import {
   type WriteResult,
 } from "./lib/chain/writes";
 import { requirePlatformCapability, requireSuperAdmin } from "./lib/permissions";
+import { recordBackConfirmed } from "./lib/social";
 import { chainTables, chainTxValidator } from "./schema/chain";
 
 // The relayer's chain-write engine ("Chain write outcomes" in the V1 plan). One tick at a time
@@ -312,6 +313,7 @@ async function reflect(
         error: undefined,
         confirmedAt: now,
       });
+      await recordBackConfirmed(ctx, back, now);
     } else if (update.status === "submitted") {
       await ctx.db.patch("backs", back._id, { status: "submitted", txHash: update.txHash });
     } else if (update.status === "pending") {

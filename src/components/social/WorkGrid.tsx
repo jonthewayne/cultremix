@@ -4,7 +4,8 @@ import type { api } from "../../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 
-export type FeedItem = FunctionReturnType<typeof api.feed.latest>["page"][number];
+// Following's items carry everything the other feeds do, plus the Back an item may be about.
+export type FeedItem = FunctionReturnType<typeof api.feed.following>["page"][number];
 
 // A grid of designs: art on its color, the CR number, and the creator.
 export function WorkGrid({ items, showCreator = true }: { items: Array<FeedItem>; showCreator?: boolean }) {

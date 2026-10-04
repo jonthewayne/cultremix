@@ -112,6 +112,7 @@ describe("profiles", () => {
       bio: "Hi",
       followers: 0,
       following: 0,
+      backed: 0,
     });
     expect(JSON.stringify(profile)).not.toMatch(/secret|test\|alice|5555550100/u);
     expect(await t.query(api.social.profile, { username: "nobody" })).toBeNull();

@@ -2,16 +2,19 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
 // What a member did, for the Following feed and profiles. One event per published work
-// (recordPublishActivity in convex/lib/social.ts); Backs join later with their own verb.
+// (recordPublishActivity in convex/lib/social.ts) and one per confirmed Back (recordBackConfirmed).
 export const activityVerbValidator = v.union(
   v.literal("publish_original"),
   v.literal("publish_variation"),
   v.literal("publish_fork"),
+  v.literal("back"),
 );
 
 // Which profile list a published work belongs to: originals are "works"; anything made from
 // another work (a variation or a fork) is a "remix".
 export const shelfValidator = v.union(v.literal("works"), v.literal("remixes"));
+// An event's profile list: a published work's shelf, or "backed" for a work the member Backed.
+export const activityShelfValidator = v.union(v.literal("works"), v.literal("remixes"), v.literal("backed"));
 
 // What a notification is about (convex/lib/notifications.ts). "back" is written by Backs.
 export const notificationKindValidator = v.union(
@@ -50,7 +53,7 @@ export const socialTables = {
     workId: v.id("works"),
     // The work's publish time, so events written by the backfill sort where they belong.
     createdAt: v.number(),
-    shelf: v.optional(shelfValidator),
+    shelf: v.optional(activityShelfValidator),
   })
     .index("by_created", ["createdAt"])
     .index("by_actor_created", ["actorId", "createdAt"])
@@ -63,6 +66,8 @@ export const socialTables = {
     userId: v.id("users"),
     followers: v.number(),
     following: v.number(),
+    // Works this member has Backed, counted when each Back is confirmed.
+    backed: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   workSocialStats: defineTable({
@@ -99,18 +104,19 @@ export const socialTables = {
     lastReadAt: v.number(),
   }).index("by_user", ["userId"]),
 
-  // Trending (convex/lib/trending.ts): hearts and remixes a work got on one UTC day. Rows older
+  // Trending (convex/lib/trending.ts): hearts, remixes, and confirmed Backs a work got on one UTC day. Rows older
   // than the 7-day window are subtracted from the score and deleted by an hourly cron.
   workAttentionDays: defineTable({
     workId: v.id("works"),
     day: v.number(),
     hearts: v.number(),
     remixes: v.number(),
+    backs: v.optional(v.number()),
   })
     .index("by_work_day", ["workId", "day"])
     .index("by_day", ["day"]),
 
-  // A work's attention over the window: hearts + 3 × remixes. Only works with some have a row.
+  // A work's attention over the window: hearts + 2 × Backs + 3 × remixes. Only works with some have a row.
   trendingWorks: defineTable({
     workId: v.id("works"),
     score: v.number(),
