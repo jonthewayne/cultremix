@@ -86,9 +86,9 @@ function AdminWaitlist() {
           <ul className="divide-y-2 divide-border">
             {totals?.works.map((work) => (
               <li key={work.workId} className="flex items-center justify-between gap-4 py-3">
-                <Link to="/cr/$cr" params={{ cr: work.cr }} className="min-w-0 hover:underline">
-                  <span className="font-cr text-xl">CR {work.cr}</span>
-                  {work.title && <span className="ml-3 truncate font-semibold text-muted-foreground">{work.title}</span>}
+                <Link to="/cr/$cr" params={{ cr: work.cr }} className="flex min-w-0 items-baseline gap-3 hover:underline">
+                  <span className="shrink-0 whitespace-nowrap font-cr text-xl">CR {work.cr}</span>
+                  {work.title && <span className="min-w-0 truncate font-semibold text-muted-foreground">{work.title}</span>}
                 </Link>
                 <span className="shrink-0 text-2xl font-black tabular-nums">{work.count.toLocaleString()}</span>
               </li>
