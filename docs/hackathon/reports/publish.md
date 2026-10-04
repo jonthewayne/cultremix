@@ -192,7 +192,7 @@ New tests:
 
 ## Round 2: remixable words
 
-Branch `codex/publish`, after dev was merged at `5bd6c28` and again at `9e18593`.
+Branch `codex/publish`, with dev merged at `5bd6c28`, `9e18593` and `3523562`.
 
 Commits:
 - `4adbf12`: the parser, fields on works, and checked word changes in remixes;
@@ -200,7 +200,8 @@ Commits:
 - `c87f9f1`: the studio inputs, the creator's editor on the reveal and the work page, and the changed-words lines;
 - `4881bbf`: merged dev (one schema conflict, both sides kept);
 - `30c6c18`: fixes from the visual check;
-- this report.
+- `b76277d`: this report;
+- `0fdae88`: merged dev again (no conflicts), and the counts below updated.
 
 Nothing was deployed, run against a deployment, or pushed.
 
@@ -289,11 +290,11 @@ From the final tree:
 | --- | --- |
 | `bun run typecheck` | passes |
 | `bunx tsc --noEmit -p convex` | passes |
-| `bun run test`, unit | 56 files, 493 tests passed |
-| `bun run test`, convex-local | 27 files, 290 tests passed |
+| `bun run test`, unit | 56 files, 497 tests passed |
+| `bun run test`, convex-local | 28 files, 302 tests passed |
 | `bun run build` | passes |
 
-On one run under heavy machine load (load average over 60 on 12 cores), four unrelated convex-local tests hit vitest's 5-second timeout. All 290 passed with `--testTimeout 30000`, and the full check then passed with the default timeout.
+On one run under heavy machine load (load average over 60 on 12 cores), four unrelated convex-local tests hit vitest's 5-second timeout. All of them passed with `--testTimeout 30000`, and the full check then passed with the default timeout.
 
 New tests:
 - **`tests/unit/remixFields.test.ts`, 19 tests:**
