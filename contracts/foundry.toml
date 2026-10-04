@@ -1,0 +1,21 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+cache_path = "cache"
+libs = []
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+# Tests read the EIP-712 vectors shared with the TypeScript tests.
+fs_permissions = [{ access = "read", path = "./test/fixtures" }]
+
+[fmt]
+line_length = 100
+
+# `forge lint` still runs on demand. Its block-timestamp and revert-in-loop notes are expected
+# here: registry weeks follow block time, and the amendment walk is bounded at 64 hops.
+[lint]
+lint_on_build = false

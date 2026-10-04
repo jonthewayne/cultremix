@@ -89,12 +89,12 @@ describe("admin access", () => {
 });
 
 describe("switches", () => {
-  it("say plainly which ones nothing reads yet", async () => {
+  it("mark none as unwired once their features read them", async () => {
     const t = newTest();
     const owner = await addUser(t, "jon", "super_admin_owner");
     const overview = await owner.as.query(api.admin.overview, {});
     const notWired = overview.flags.filter((flag) => flag.notWiredYet).map((flag) => flag.key);
-    expect(notWired.sort()).toEqual(["chain.writes", "commerce.checkout", "publishing", "social.backs"]);
+    expect(notWired).toEqual([]);
   });
 
   it("act on their default until an admin sets them, as the admin page shows", async () => {

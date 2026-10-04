@@ -22,31 +22,28 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
   {
     key: "publishing",
     label: "Publishing",
-    description: "Members publish designs and get CR numbers, and remixes join their family.",
+    description: "Members publish designs and get CR numbers, and remixes join their family. Off stops new publishing; published works stay up.",
     defaultOn: true,
-    notWiredYet: "Not wired yet: publishing stays open either way.",
   },
   {
     key: "commerce.checkout",
     label: "Checkout",
-    description: "Shoppers can buy prints. While this is off, production shows Early access.",
+    description:
+      "Shoppers buy shirts through Shopify checkout, and paid orders go to Printful. Turn it on only after the Shopify and Printful keys are set. While it's off, work pages say Buying opens soon and production shows Early access.",
     defaultOn: false,
-    notWiredYet: "Not wired yet: buying stays closed either way. Today this switch only changes the production label.",
   },
   {
     key: "chain.writes",
     label: "Monad records",
     description:
-      "Published works and remixes are recorded in the registry on Monad. While this is off, admins confirm lineage corrections offchain.",
+      "Published works, remixes, Backs, and lineage corrections are recorded in the registry on Monad. It needs a deployed registry and a funded relayer; /admin/chain shows both. While it's off, admins confirm lineage corrections offchain.",
     defaultOn: false,
-    notWiredYet: "Not wired yet: nothing is written to Monad until the registry lands. Today this switch only decides how lineage corrections are confirmed.",
   },
   {
     key: "social.backs",
     label: "Backs",
-    description: "Members can back works they love.",
+    description: "Members can Back works they love, 3 a week, recorded on Monad. Backing also needs Monad records on.",
     defaultOn: false,
-    notWiredYet: "Not wired yet: there's no backing to turn on.",
   },
   {
     key: "gen.upscale",

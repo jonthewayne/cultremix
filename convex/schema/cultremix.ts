@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { provenanceStatusValidator } from "./chain";
 
 // A remixable piece of a published design (convex/lib/remixFields.ts). kind is "text" today;
 // other kinds (people, counts) can join the union later without a migration.
@@ -240,6 +241,11 @@ export const cultremixTables = {
     // What a remix may change (convex/remixFields.ts), proposed from the notes' words or carried
     // over from the parent, then adjusted by the creator. Empty: the design has no words.
     remixFields: v.optional(v.array(remixField)),
+    // Onchain provenance (convex/chain.ts): the registerWork write and its confirmed transaction.
+    provenanceStatus: v.optional(provenanceStatusValidator),
+    chainWriteId: v.optional(v.id("chainWrites")),
+    chainTxHash: v.optional(v.string()),
+    provenanceConfirmedAt: v.optional(v.number()),
     // The work's print file (Print Studio sets these once; the shop sends printKey to Printful).
     printKey: v.optional(v.string()),
     printSha256: v.optional(v.string()),

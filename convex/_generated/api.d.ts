@@ -10,10 +10,14 @@
 
 import type * as activity from "../activity.js";
 import type * as admin from "../admin.js";
+import type * as amendments from "../amendments.js";
 import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
+import type * as backs from "../backs.js";
 import type * as bootstrap from "../bootstrap.js";
 import type * as budget from "../budget.js";
+import type * as chain from "../chain.js";
+import type * as chainAdmin from "../chainAdmin.js";
 import type * as crons from "../crons.js";
 import type * as deployment from "../deployment.js";
 import type * as earnings from "../earnings.js";
@@ -34,6 +38,17 @@ import type * as lib_authRateLimit from "../lib/authRateLimit.js";
 import type * as lib_authVerification from "../lib/authVerification.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_budget from "../lib/budget.js";
+import type * as lib_chain_abi from "../lib/chain/abi.js";
+import type * as lib_chain_calldata from "../lib/chain/calldata.js";
+import type * as lib_chain_custody from "../lib/chain/custody.js";
+import type * as lib_chain_deps from "../lib/chain/deps.js";
+import type * as lib_chain_eip712 from "../lib/chain/eip712.js";
+import type * as lib_chain_events from "../lib/chain/events.js";
+import type * as lib_chain_ids from "../lib/chain/ids.js";
+import type * as lib_chain_queue from "../lib/chain/queue.js";
+import type * as lib_chain_rpc from "../lib/chain/rpc.js";
+import type * as lib_chain_writes from "../lib/chain/writes.js";
+import type * as lib_circle from "../lib/circle.js";
 import type * as lib_codes from "../lib/codes.js";
 import type * as lib_colors from "../lib/colors.js";
 import type * as lib_creatorPool from "../lib/creatorPool.js";
@@ -100,10 +115,12 @@ import type * as phoneVerification from "../phoneVerification.js";
 import type * as photos from "../photos.js";
 import type * as print from "../print.js";
 import type * as printTools from "../printTools.js";
+import type * as provenance from "../provenance.js";
 import type * as publish from "../publish.js";
 import type * as remixFields from "../remixFields.js";
 import type * as resources from "../resources.js";
 import type * as schema_budget from "../schema/budget.js";
+import type * as schema_chain from "../schema/chain.js";
 import type * as schema_cultremix from "../schema/cultremix.js";
 import type * as schema_launch from "../schema/launch.js";
 import type * as schema_lineage from "../schema/lineage.js";
@@ -122,6 +139,7 @@ import type * as testHelpers from "../testHelpers.js";
 import type * as trending from "../trending.js";
 import type * as upscale from "../upscale.js";
 import type * as waitlist from "../waitlist.js";
+import type * as wallets from "../wallets.js";
 import type * as workEconomics from "../workEconomics.js";
 
 import type {
@@ -133,10 +151,14 @@ import type {
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   admin: typeof admin;
+  amendments: typeof amendments;
   auth: typeof auth;
   authVerification: typeof authVerification;
+  backs: typeof backs;
   bootstrap: typeof bootstrap;
   budget: typeof budget;
+  chain: typeof chain;
+  chainAdmin: typeof chainAdmin;
   crons: typeof crons;
   deployment: typeof deployment;
   earnings: typeof earnings;
@@ -157,6 +179,17 @@ declare const fullApi: ApiFromModules<{
   "lib/authVerification": typeof lib_authVerification;
   "lib/authz": typeof lib_authz;
   "lib/budget": typeof lib_budget;
+  "lib/chain/abi": typeof lib_chain_abi;
+  "lib/chain/calldata": typeof lib_chain_calldata;
+  "lib/chain/custody": typeof lib_chain_custody;
+  "lib/chain/deps": typeof lib_chain_deps;
+  "lib/chain/eip712": typeof lib_chain_eip712;
+  "lib/chain/events": typeof lib_chain_events;
+  "lib/chain/ids": typeof lib_chain_ids;
+  "lib/chain/queue": typeof lib_chain_queue;
+  "lib/chain/rpc": typeof lib_chain_rpc;
+  "lib/chain/writes": typeof lib_chain_writes;
+  "lib/circle": typeof lib_circle;
   "lib/codes": typeof lib_codes;
   "lib/colors": typeof lib_colors;
   "lib/creatorPool": typeof lib_creatorPool;
@@ -223,10 +256,12 @@ declare const fullApi: ApiFromModules<{
   photos: typeof photos;
   print: typeof print;
   printTools: typeof printTools;
+  provenance: typeof provenance;
   publish: typeof publish;
   remixFields: typeof remixFields;
   resources: typeof resources;
   "schema/budget": typeof schema_budget;
+  "schema/chain": typeof schema_chain;
   "schema/cultremix": typeof schema_cultremix;
   "schema/launch": typeof schema_launch;
   "schema/lineage": typeof schema_lineage;
@@ -245,6 +280,7 @@ declare const fullApi: ApiFromModules<{
   trending: typeof trending;
   upscale: typeof upscale;
   waitlist: typeof waitlist;
+  wallets: typeof wallets;
   workEconomics: typeof workEconomics;
 }>;
 

@@ -20,8 +20,8 @@ export const panel = query({
       creatorPoolBps: v.number(),
       configPath: v.string(),
       configSha256: v.string(),
-      // Shares are recorded on Monad once the work's provenance is confirmed there. No works field
-      // records that yet, so this is "pending" until the chain builder adds one.
+      // Shares are recorded on Monad once the work's registration is confirmed there
+      // (works.provenanceStatus, set by the chain engine in convex/chain.ts).
       provenance: v.union(v.literal("pending"), v.literal("confirmed")),
       // Lineage the panel couldn't resolve (a missing ancestor); no shares are shown.
       unavailable: v.boolean(),
@@ -40,7 +40,7 @@ export const panel = query({
       creatorPoolBps: config.creatorPoolBps,
       configPath: economicsConfigPath(config.version),
       configSha256: await sha256Hex(canonicalConfigJson(config)),
-      provenance: "pending" as "pending" | "confirmed",
+      provenance: work.provenanceStatus === "confirmed" ? ("confirmed" as const) : ("pending" as const),
     };
     let lineage;
     try {
