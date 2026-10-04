@@ -11,6 +11,10 @@ import authConfig from "./auth.config";
 import { sendAuthEmail, sendInviteEmailWithMagicLink } from "./email";
 import { isPhoneTempEmail, phoneTempEmail } from "./lib/phone";
 import {
+  PASSWORD_DISABLED_PATHS,
+  emailAndPasswordOptions,
+} from "./lib/passwordAuth";
+import {
   canGrantPlatformRole,
   hasCapability,
   isValidPlatformRole,
@@ -101,6 +105,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       expiresIn: 60 * 60 * 24 * 400,
       updateAge: 60 * 60 * 24,
     },
+    // Passwords only for accounts an admin provisions (convex/judges.ts).
+    emailAndPassword: emailAndPasswordOptions,
+    disabledPaths: [...PASSWORD_DISABLED_PATHS],
     plugins: [
       magicLink({
         expiresIn: 60 * 60 * 24 * 30,

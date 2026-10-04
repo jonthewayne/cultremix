@@ -4,7 +4,6 @@ import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
-import { AppShell } from "~/components/app/app-shell";
 import { PageHeader } from "~/components/app/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -12,10 +11,8 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useCurrentUser } from "~/hooks/use-auth";
 import { errorMessage } from "~/lib/imagePrep";
-import { requireAuthenticatedRoute } from "~/lib/route-guards";
 
-export const Route = createFileRoute("/admin_/lineage")({
-  beforeLoad: requireAuthenticatedRoute,
+export const Route = createFileRoute("/admin/lineage")({
   head: () => ({ meta: [{ title: "Lineage corrections · CultRemix" }] }),
   component: LineageAdminPage,
 });
@@ -39,7 +36,7 @@ function LineageAdminPage() {
   const isAdmin = isLineageAdmin(user?.platformRole);
   if (!isAdmin) {
     return (
-      <AppShell>
+      <>
         <Card>
           <CardHeader>
             <CardTitle>Unauthorized</CardTitle>
@@ -51,11 +48,11 @@ function LineageAdminPage() {
             </Button>
           </CardContent>
         </Card>
-      </AppShell>
+      </>
     );
   }
   return (
-    <AppShell>
+    <>
       <div className="space-y-6">
         <PageHeader
           title="Lineage corrections"
@@ -64,7 +61,7 @@ function LineageAdminPage() {
         <RequestCard />
         <HistoryCard />
       </div>
-    </AppShell>
+    </>
   );
 }
 

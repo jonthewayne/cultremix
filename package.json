@@ -30,6 +30,8 @@
     "setup": "bun run scripts/setup.ts",
     "new-project": "bun run scripts/create-project.ts",
     "doctor": "bun run scripts/doctor.ts",
+    "seed:environment": "bun run scripts/seed-environment.ts",
+    "judges:provision": "bun run scripts/provision-judges.ts",
     "doctor:external": "bun run scripts/doctor.ts --external",
     "doctor:deployment": "bun run scripts/doctor.ts --deployment --external",
     "cf-typegen": "WRANGLER_LOG_PATH=.wrangler/logs CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false wrangler types",

@@ -1,11 +1,14 @@
+import { TestnetTag } from "~/components/cr/DeploymentLabel";
 import { cn } from "~/lib/utils";
 
-// The CR number lockup: the brand element. Big, blocky digits.
+// The CR number lockup: the brand element. Big, blocky digits. Off production it carries
+// a Testnet tag, since those numbers are recorded on Monad testnet.
 export function CrMark({ cr, className }: { cr: string; className?: string }) {
   return (
     <span className={cn("font-cr inline-flex items-baseline gap-[0.22em] leading-[0.85]", className)}>
       <span>CR</span>
       <span className="tabular-nums">{cr}</span>
+      <TestnetTag />
     </span>
   );
 }

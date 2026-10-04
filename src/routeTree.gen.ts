@@ -20,7 +20,11 @@ import { Route as TeamRouteImport } from './routes/team'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VerifyPhoneRouteImport } from './routes/verify-phone'
-import { Route as AdminLineageRouteImport } from './routes/admin_.lineage'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminJudgesRouteImport } from './routes/admin.judges'
+import { Route as AdminLineageRouteImport } from './routes/admin.lineage'
+import { Route as AdminMembersRouteImport } from './routes/admin.members'
+import { Route as AdminMetricsRouteImport } from './routes/admin.metrics'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as EconomicsFileRouteImport } from './routes/economics.$file'
@@ -83,10 +87,30 @@ const VerifyPhoneRoute = VerifyPhoneRouteImport.update({
   path: '/verify-phone',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminJudgesRoute = AdminJudgesRouteImport.update({
+  id: '/judges',
+  path: '/judges',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminLineageRoute = AdminLineageRouteImport.update({
-  id: '/admin_/lineage',
-  path: '/admin/lineage',
-  getParentRoute: () => rootRouteImport,
+  id: '/lineage',
+  path: '/lineage',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMembersRoute = AdminMembersRouteImport.update({
+  id: '/members',
+  path: '/members',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMetricsRoute = AdminMetricsRouteImport.update({
+  id: '/metrics',
+  path: '/metrics',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AuthCompleteRoute = AuthCompleteRouteImport.update({
   id: '/auth/complete',
@@ -121,7 +145,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -131,17 +155,20 @@ export interface FileRoutesByFullPath {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
+  '/admin/members': typeof AdminMembersRoute
+  '/admin/metrics': typeof AdminMetricsRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/u/$username': typeof UUsernameRoute
+  '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -151,18 +178,22 @@ export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
+  '/admin/members': typeof AdminMembersRoute
+  '/admin/metrics': typeof AdminMetricsRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/u/$username': typeof UUsernameRoute
+  '/admin': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -172,12 +203,16 @@ export interface FileRoutesById {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
-  '/admin_/lineage': typeof AdminLineageRoute
+  '/admin/judges': typeof AdminJudgesRoute
+  '/admin/lineage': typeof AdminLineageRoute
+  '/admin/members': typeof AdminMembersRoute
+  '/admin/metrics': typeof AdminMetricsRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/u/$username': typeof UUsernameRoute
+  '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -194,17 +229,20 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/judges'
     | '/admin/lineage'
+    | '/admin/members'
+    | '/admin/metrics'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
     | '/u/$username'
+    | '/admin/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/dashboard'
     | '/login'
     | '/onboarding'
@@ -214,12 +252,16 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/admin/judges'
     | '/admin/lineage'
+    | '/admin/members'
+    | '/admin/metrics'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
     | '/u/$username'
+    | '/admin'
     | '/api/auth/$'
   id:
     | '__root__'
@@ -234,18 +276,22 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
-    | '/admin_/lineage'
+    | '/admin/judges'
+    | '/admin/lineage'
+    | '/admin/members'
+    | '/admin/metrics'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
     | '/u/$username'
+    | '/admin/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
@@ -255,7 +301,6 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
-  AdminLineageRoute: typeof AdminLineageRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   EconomicsFileRoute: typeof EconomicsFileRoute
@@ -343,12 +388,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyPhoneRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin_/lineage': {
-      id: '/admin_/lineage'
-      path: '/admin/lineage'
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/judges': {
+      id: '/admin/judges'
+      path: '/judges'
+      fullPath: '/admin/judges'
+      preLoaderRoute: typeof AdminJudgesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/lineage': {
+      id: '/admin/lineage'
+      path: '/lineage'
       fullPath: '/admin/lineage'
       preLoaderRoute: typeof AdminLineageRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/members': {
+      id: '/admin/members'
+      path: '/members'
+      fullPath: '/admin/members'
+      preLoaderRoute: typeof AdminMembersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/metrics': {
+      id: '/admin/metrics'
+      path: '/metrics'
+      fullPath: '/admin/metrics'
+      preLoaderRoute: typeof AdminMetricsRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/auth/complete': {
       id: '/auth/complete'
@@ -395,9 +468,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminJudgesRoute: typeof AdminJudgesRoute
+  AdminLineageRoute: typeof AdminLineageRoute
+  AdminMembersRoute: typeof AdminMembersRoute
+  AdminMetricsRoute: typeof AdminMetricsRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminJudgesRoute: AdminJudgesRoute,
+  AdminLineageRoute: AdminLineageRoute,
+  AdminMembersRoute: AdminMembersRoute,
+  AdminMetricsRoute: AdminMetricsRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
@@ -407,7 +498,6 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
-  AdminLineageRoute: AdminLineageRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   EconomicsFileRoute: EconomicsFileRoute,
