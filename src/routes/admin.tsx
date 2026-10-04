@@ -4,6 +4,7 @@ import { isSuperAdminRole, useCurrentUser } from "~/hooks/use-auth";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 
 export const Route = createFileRoute("/admin")({
+  head: () => ({ meta: [{ title: "Admin · CultRemix" }] }),
   beforeLoad: requireAuthenticatedRoute,
   component: AdminLayout,
 });

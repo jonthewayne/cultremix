@@ -4,6 +4,7 @@ import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { ConvexProvider } from "convex/react";
 import { routeTree } from "./routeTree.gen";
+import { ErrorPage, NotFoundPage } from "~/components/app/not-found";
 
 export function getRouter() {
   const convexUrl = import.meta.env.VITE_CONVEX_URL;
@@ -29,15 +30,8 @@ export function getRouter() {
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
-    defaultNotFoundComponent: () => (
-      <div className="min-h-svh bg-white px-6 py-16 text-black md:px-12">
-        <p className="font-cr text-[26vw] leading-none md:text-[16vw]">404</p>
-        <p className="mt-6 text-2xl font-bold md:text-4xl">Nothing here.</p>
-        <a href="/" className="mt-8 inline-block rounded-2xl bg-black px-7 py-4 text-lg font-black text-white">
-          Back to the feed
-        </a>
-      </div>
-    ),
+    defaultNotFoundComponent: () => <NotFoundPage />,
+    defaultErrorComponent: ErrorPage,
     Wrap: ({ children }) => (
       <ConvexProvider client={convexQueryClient.convexClient}>
         {children}

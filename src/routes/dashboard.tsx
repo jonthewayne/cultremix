@@ -14,6 +14,7 @@ const organizationsQuery = convexQuery(api.organizations.listMine, {});
 const resourcesQuery = convexQuery(api.resources.listMine, {});
 
 export const Route = createFileRoute("/dashboard")({
+  head: () => ({ meta: [{ title: "Dashboard · CultRemix" }] }),
   beforeLoad: requireAuthenticatedRoute,
   component: DashboardPage,
 });

@@ -38,6 +38,7 @@ import { parseScope } from "~/lib/viewerNav";
 // &view=<design>&scope=<favorites|batch|session> opens the large viewer on a design;
 // &compare=<design>,<design>,… opens Compare on two to four of them.
 export const Route = createFileRoute("/studio")({
+  head: () => ({ meta: [{ title: "Studio · CultRemix" }] }),
   validateSearch: (
     search: Record<string, unknown>,
   ): { remix?: string; s?: string; view?: string; scope?: Scope; compare?: string } => ({

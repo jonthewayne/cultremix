@@ -17,6 +17,7 @@ type VerifyPhoneSearch = {
 };
 
 export const Route = createFileRoute("/verify-phone")({
+  head: () => ({ meta: [{ title: "Check your phone · CultRemix" }] }),
   validateSearch: (search: Record<string, unknown>): VerifyPhoneSearch => ({
     phone: typeof search.phone === "string" ? search.phone : "",
     attemptId: typeof search.attemptId === "string" ? search.attemptId : undefined,

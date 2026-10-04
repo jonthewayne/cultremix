@@ -1,8 +1,9 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
+import { NotFoundPage } from "~/components/app/not-found";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { Avatar } from "~/components/social/Avatar";
 import { FollowButton } from "~/components/social/FollowButton";
@@ -33,13 +34,21 @@ export const Route = createFileRoute("/u/$username")({
     const profile = context.queryClient.getQueryData(options.queryKey) as
       | FunctionReturnType<typeof api.social.profile>
       | undefined;
+    // Null (not undefined) means the server asked and there's no such member: answer 404.
+    if (profile === null) throw notFound();
     return { share: profile ? profileShareCard(profile) : null };
   },
   head: ({ params, loaderData }) => ({
     meta: loaderData?.share ? shareMeta(loaderData.share) : [{ title: `@${params.username} · CultRemix` }],
   }),
   component: ProfilePage,
+  notFoundComponent: MemberNotFound,
 });
+
+function MemberNotFound() {
+  const { username } = Route.useParams();
+  return <NotFoundPage mark={`@${username}`} message="No one here by that name." mono={false} />;
+}
 
 function ProfilePage() {
   const { username } = Route.useParams();
@@ -55,20 +64,7 @@ function ProfilePage() {
     );
   }
   const data = profile.data;
-  if (!data) {
-    return (
-      <div className="min-h-svh bg-white text-black">
-        <SiteHeader />
-        <main className="px-4 pt-16 md:px-10">
-          <p className="break-words text-5xl font-black tracking-tight text-neutral-300 md:text-7xl">@{username}</p>
-          <p className="mt-6 text-xl">No one here by that name.</p>
-          <Link to="/" className="mt-6 inline-block font-bold underline underline-offset-4">
-            Back to the feed
-          </Link>
-        </main>
-      </div>
-    );
-  }
+  if (!data) return <MemberNotFound />;
   const isSelf = viewerName?.toLowerCase() === data.username.toLowerCase();
 
   return (

@@ -12,6 +12,7 @@ import { isSuperAdminRole, useCurrentUser } from "~/hooks/use-auth";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 
 export const Route = createFileRoute("/team")({
+  head: () => ({ meta: [{ title: "Team · CultRemix" }] }),
   beforeLoad: requireAuthenticatedRoute,
   component: TeamPage,
 });

@@ -11,6 +11,7 @@ import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { sanitizeRedirect } from "~/lib/sanitize-redirect";
 
 export const Route = createFileRoute("/onboarding")({
+  head: () => ({ meta: [{ title: "Welcome · CultRemix" }] }),
   validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
   }),
