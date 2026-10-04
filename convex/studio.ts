@@ -59,6 +59,9 @@ const tileView = v.object({
   blocked: v.boolean(),
   backgroundColor: v.string(),
   publishedCr: v.optional(v.string()),
+  // The original's size in pixels, when known (Compare draws every design at the same scale).
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
 });
 
 const batchView = v.object({
@@ -191,6 +194,8 @@ async function tileOf(
     blocked,
     backgroundColor,
     publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
+    width: g.width,
+    height: g.height,
   };
 }
 

@@ -4,6 +4,7 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
 import { BATCH_CREDITS } from "../../convex/lib/studioRules";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -18,29 +19,34 @@ import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
+import { Compare } from "~/components/studio/Compare";
 import { FavoritesTray } from "~/components/studio/FavoritesTray";
 import { Viewer } from "~/components/studio/Viewer";
 import { designItems, isFailed } from "~/components/studio/design";
 import { useDesignActions } from "~/components/studio/designActions";
+import { useCompareRoute } from "~/components/studio/useCompareRoute";
 import { useViewerRoute } from "~/components/studio/useViewerRoute";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
 import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { prefetchImage } from "~/lib/saveImage";
+import { COMPARE_MAX, canCompare, compareParam, parseCompare, togglePick } from "~/lib/compare";
 import { cn } from "~/lib/utils";
 import { parseScope } from "~/lib/viewerNav";
 
 // /studio is always a blank design with the member's sessions below it; /studio?s=<id> opens a
 // session (every batch made in it, newest first); /studio?remix=<CR> starts a new remix session.
-// &view=<design>&scope=<favorites|batch|session> opens the large viewer on a design.
+// &view=<design>&scope=<favorites|batch|session> opens the large viewer on a design;
+// &compare=<design>,<design>,… opens Compare on two to four of them.
 export const Route = createFileRoute("/studio")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { remix?: string; s?: string; view?: string; scope?: Scope } => ({
+  ): { remix?: string; s?: string; view?: string; scope?: Scope; compare?: string } => ({
     remix: typeof search.remix === "string" ? search.remix : undefined,
     s: typeof search.s === "string" ? search.s : undefined,
     view: typeof search.view === "string" ? search.view : undefined,
     scope: parseScope(search.scope),
+    compare: compareParam(parseCompare(search.compare)),
   }),
   beforeLoad: requireAuthenticatedRoute,
   component: StudioPage,
@@ -65,6 +71,14 @@ function StudioPage() {
     initialNumItems: PAGE.favorites,
   });
   const viewerRoute = useViewerRoute(search);
+  const compareRoute = useCompareRoute(search);
+  // Designs picked for Compare (from the favorites tray or the viewer), in the order picked.
+  const [picks, setPicks] = useState<Array<string>>([]);
+  const [picking, setPicking] = useState(false);
+  useEffect(() => {
+    setPicks([]);
+    setPicking(false);
+  }, [s]);
   const designActions = useDesignActions(s);
   // Dismissed designs stay hidden unless the member shows them.
   const [showDismissed, setShowDismissed] = useState(false);
@@ -346,13 +360,50 @@ function StudioPage() {
   const batches = session ? batchPages.results : [];
   const favorites = s ? favoritePages.results : [];
 
+  // Back to the studio itself from the viewer, and from Compare under it.
+  const leaveViewer = () => {
+    if (compareRoute.ids) {
+      viewerRoute.hide();
+      compareRoute.dismiss();
+    } else {
+      viewerRoute.close();
+    }
+  };
   // B in the viewer: the design becomes an image to work on, ready for what should change.
   const branch = (tile: Tile) => {
-    viewerRoute.close();
+    leaveViewer();
     useAsImage(tile);
     window.requestAnimationFrame(() => instructionRef.current?.focus({ preventScroll: true }));
   };
   const reject = (tile: Tile, rejected: boolean) => designActions.setRejected(tile.generationId, rejected, tile.favorite);
+
+  const pick = (tile: Tile) => {
+    const next = togglePick(picks, tile.generationId);
+    if (next.full) toast(`Compare holds up to ${COMPARE_MAX} designs. Take one out first.`);
+    setPicks(next.picks);
+  };
+  const startCompare = () => {
+    if (!canCompare(picks)) return;
+    viewerRoute.hide();
+    compareRoute.open(picks);
+    setPicks([]);
+    setPicking(false);
+  };
+  // Compare's designs: the ones already on the page, and the rest (from a link) fetched.
+  const compareFetched = useQuery(
+    convexQuery(api.studio.compareDesigns, s && compareRoute.ids ? { sessionId: s, generationIds: compareRoute.ids } : "skip"),
+  ).data;
+  const compareTiles = useMemo(() => {
+    if (!compareRoute.ids) return [];
+    const known = new Map<string, Tile>();
+    for (const tile of compareFetched ?? []) known.set(tile.generationId, tile);
+    for (const tile of favorites) known.set(tile.generationId, tile);
+    for (const batch of batches) for (const tile of batch.tiles) known.set(tile.generationId, tile);
+    return compareRoute.ids.flatMap((id) => {
+      const tile = known.get(id);
+      return tile && tile.status === "succeeded" && tile.url ? [tile] : [];
+    });
+  }, [compareRoute.ids, compareFetched, favorites, batches]);
 
   const remixInfo = session?.remix;
   const count = images.length;
@@ -588,6 +639,29 @@ function StudioPage() {
             status={favoritePages.status}
             onMore={() => favoritePages.loadMore(PAGE.favorites)}
             onOpen={(tile) => viewerRoute.open({ view: tile.generationId, scope: "favorites" })}
+            picking={picking || picks.length > 0}
+            picks={picks}
+            onStartPicking={() => setPicking(true)}
+            onPick={pick}
+            onCompare={startCompare}
+            onStopPicking={() => {
+              setPicks([]);
+              setPicking(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {s && compareRoute.ids && (
+          <Compare
+            tiles={compareTiles}
+            missing={compareFetched !== undefined && compareTiles.length < compareRoute.ids.length}
+            active={!viewerRoute.spot}
+            onRemove={(tile) => compareRoute.remove(tile.generationId)}
+            onOpen={(tile) =>
+              viewerRoute.open({ view: tile.generationId, scope: tile.favorite && !tile.rejected ? "favorites" : "batch" })
+            }
+            onClose={compareRoute.close}
           />
         )}
       </AnimatePresence>
@@ -610,13 +684,16 @@ function StudioPage() {
             onReject={reject}
             onBranch={branch}
             onStyle={(tile) => {
-              viewerRoute.close();
+              leaveViewer();
               useAsStyle(tile);
             }}
             onPublish={(tile) => {
-              viewerRoute.close();
+              leaveViewer();
               setPublishing(tile);
             }}
+            picks={picks}
+            onPick={pick}
+            onCompare={startCompare}
           />
         )}
       </AnimatePresence>
