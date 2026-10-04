@@ -21,7 +21,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const items = isSuperAdminRole(user?.platformRole)
     ? [...navItems, { to: "/admin", label: "Admin", icon: Shield }]
     : navItems;
-  const activeItem = items.find((item) => item.to === pathname);
+  const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
+  const activeItem = items.find((item) => isActive(item.to));
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && pathname !== "/login") {
@@ -64,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 to={item.to}
                 label={item.label}
                 icon={item.icon}
-                active={pathname === item.to}
+                active={isActive(item.to)}
               />
             ))}
           </nav>
@@ -112,7 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   to={item.to}
                   label={item.label}
                   icon={item.icon}
-                  active={pathname === item.to}
+                  active={isActive(item.to)}
                   compact
                 />
               ))}

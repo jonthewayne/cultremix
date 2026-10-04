@@ -1,105 +1,56 @@
-import { useMutation, useQuery } from "convex/react";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { api } from "../../convex/_generated/api";
-import { canGrantPlatformRole, hasCapability } from "../../convex/lib/authz";
-import type { Id } from "../../convex/_generated/dataModel";
+import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "~/components/app/app-shell";
-import { PageHeader } from "~/components/app/page-header";
-import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { isSuperAdminRole, useCurrentUser } from "~/hooks/use-auth";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: requireAuthenticatedRoute,
-  component: AdminPage,
+  component: AdminLayout,
 });
 
-function AdminPage() {
+const tabs = [
+  { to: "/admin", label: "Overview", exact: true },
+  { to: "/admin/members", label: "Members", exact: false },
+  { to: "/admin/metrics", label: "Metrics", exact: false },
+  { to: "/admin/judges", label: "Judges", exact: false },
+] as const;
+
+function AdminLayout() {
   const user = useCurrentUser();
   const isAdmin = isSuperAdminRole(user?.platformRole);
-  const users = useQuery(api.auth.listUsers, isAdmin ? {} : "skip");
-  const updateRole = useMutation(api.auth.updatePlatformRole);
 
   if (!isAdmin) {
     return (
       <AppShell>
-        <Card>
-          <CardHeader>
-            <CardTitle>Unauthorized</CardTitle>
-            <CardDescription>
-              You do not have access to this area.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild variant="outline">
-              <Link to="/studio">Back to the studio</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="mx-auto max-w-xl space-y-4 py-10">
+          <h1 className="text-4xl font-black tracking-tight">Not for you, sorry</h1>
+          <p className="text-muted-foreground">This area is for the CultRemix team.</p>
+          <Link to="/studio" className="inline-block font-bold underline underline-offset-4">
+            Back to the studio
+          </Link>
+        </div>
       </AppShell>
     );
   }
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <PageHeader
-          title="Admin"
-          description="Platform users and DB-authoritative roles."
-        />
-        <Card>
-          <CardHeader>
-            <CardTitle>Users</CardTitle>
-            <CardDescription>
-              Roles are stored in Convex app tables.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {(users ?? []).map((row: any) => (
-              <div
-                key={row._id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <div className="truncate font-medium">
-                    {row.email ?? "No email"}
-                  </div>
-                  <div className="text-muted-foreground">
-                    {row.platformRole ?? "user"}
-                  </div>
-                </div>
-                {hasCapability(user.platformRole ?? "user", "users:invite") &&
-                  canGrantPlatformRole(
-                    user.platformRole ?? "user",
-                    row.platformRole ?? "user",
-                  ) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        updateRole({
-                          userId: row._id as Id<"users">,
-                          role:
-                            row.platformRole === "super_admin_support"
-                              ? "user"
-                              : "super_admin_support",
-                        })
-                      }
-                    >
-                      Toggle support
-                    </Button>
-                  )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      <div className="mx-auto max-w-5xl space-y-6">
+        <h1 className="text-4xl font-black tracking-tight md:text-5xl">Admin</h1>
+        <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {tabs.map((tab) => (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              activeOptions={{ exact: tab.exact }}
+              className="shrink-0 rounded-full border-2 border-border px-4 py-2 text-sm font-bold"
+              activeProps={{ className: "border-foreground bg-foreground text-background" }}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+        <Outlet />
       </div>
     </AppShell>
   );

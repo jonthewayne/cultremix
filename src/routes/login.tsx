@@ -38,9 +38,10 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { redirect: redirectTo, inviteId } = useSearch({ from: "/login" });
-  const [mode, setMode] = useState<"email" | "phone">("email");
+  const [mode, setMode] = useState<"email" | "phone" | "password">("email");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [phoneEnabled, setPhoneEnabled] = useState(false);
@@ -150,6 +151,37 @@ function LoginPage() {
     }
   };
 
+  // Judge accounts only: an admin makes them with a password (convex/judges.ts).
+  const submitPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const result = await authClient.signIn.email({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (result.error) {
+        setError(
+          result.error.status === 429
+            ? "Too many tries. Wait a minute and try again."
+            : "That email and password don’t match.",
+        );
+        return;
+      }
+      window.location.assign(destination);
+    } catch (err) {
+      setError(readableAuthError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchMode = (next: "email" | "phone" | "password") => {
+    setError("");
+    setMode(next);
+  };
+
   return (
     <PublicFrame>
       <Card className="w-full border-0 bg-transparent shadow-none">
@@ -174,8 +206,8 @@ function LoginPage() {
             <div className="mb-4 grid grid-cols-2 gap-2">
               <Button
                 type="button"
-                variant={mode === "email" ? "default" : "outline"}
-                onClick={() => setMode("email")}
+                variant={mode !== "phone" ? "default" : "outline"}
+                onClick={() => switchMode("email")}
               >
                 <Mail className="size-4" />
                 Email
@@ -183,7 +215,7 @@ function LoginPage() {
               <Button
                 type="button"
                 variant={mode === "phone" ? "default" : "outline"}
-                onClick={() => setMode("phone")}
+                onClick={() => switchMode("phone")}
               >
                 <Phone className="size-4" />
                 Phone
@@ -211,6 +243,38 @@ function LoginPage() {
                 {loading ? "Sending…" : emailDelivered ? "Email me a code" : "Get a code"}
               </Button>
             </form>
+          ) : mode === "password" ? (
+            <form className="space-y-4" onSubmit={submitPassword}>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="h-14 rounded-xl border-2 border-black px-4 text-lg"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="h-14 rounded-xl border-2 border-black px-4 text-lg"
+                  required
+                />
+              </div>
+              {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
+              <Button className="h-14 w-full rounded-2xl bg-black text-lg font-black text-white hover:bg-neutral-800" type="submit" disabled={loading}>
+                {loading ? "Signing in…" : "Sign in"}
+              </Button>
+            </form>
           ) : (
             <form className="space-y-4" onSubmit={submitPhone}>
               <div className="space-y-2">
@@ -230,6 +294,18 @@ function LoginPage() {
                 {loading ? "Sending..." : "Continue"}
               </Button>
             </form>
+          )}
+
+          {mode !== "phone" && (
+            <p className="mt-6 text-center text-sm">
+              <button
+                type="button"
+                onClick={() => switchMode(mode === "password" ? "email" : "password")}
+                className="font-semibold underline underline-offset-4"
+              >
+                {mode === "password" ? "Use an email code instead" : "Have a password? Sign in with it"}
+              </button>
+            </p>
           )}
 
           <p className="mt-5 text-center text-xs text-muted-foreground">
