@@ -1,8 +1,9 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
 import { imageUrlReader } from "./lib/imageUrls";
+import { workHeartCount } from "./lib/social";
 import { formatCr, parseCr } from "./lib/r2";
 import { LineageError, MAX_TRAIL, effectiveAncestors, effectiveOf, validateAmendment } from "./lib/lineage";
 import { amendmentStatusValidator, workKindValidator } from "./schema/lineage";
@@ -272,6 +273,141 @@ export const family = query({
       family: work.crFamily,
       works: await Promise.all(published.slice(0, FAMILY_LIMIT).map((row) => toCard(ctx, row, urls))),
       more: published.length > FAMILY_LIMIT || rows.length === FAMILY_LIMIT * 2,
+    };
+  },
+});
+
+// The family tree (src/lib/familyTree.ts draws it). Withdrawn works stay in as bare CR numbers
+// so their remixes keep their place.
+const treeWork = v.object({
+  cr: v.string(),
+  family: v.number(),
+  expression: v.number(),
+  kind: workKindValidator,
+  parentCr: v.optional(v.string()),
+  withdrawn: v.boolean(),
+  title: v.optional(v.string()),
+  username: v.optional(v.string()),
+  backgroundColor: v.optional(v.string()),
+  thumbUrl: v.optional(v.string()),
+  remixes: v.optional(v.number()),
+  remixesMore: v.optional(v.boolean()),
+  hearts: v.optional(v.number()),
+});
+
+export const TREE_PAGE = 60;
+export const TREE_MAX = 240;
+// Direct remixes read per work: enough to count and to find its forks into other families.
+export const TREE_CHILD_SCAN = 50;
+export const TREE_FORKS = 60;
+
+// A family's works in CR order (up to `limit`, raised by "show more"), each with its spread
+// (published direct remixes, hearts), the forks out of it, and where it was forked from.
+export const familyTree = query({
+  args: { family: v.number(), limit: v.optional(v.number()) },
+  returns: v.union(
+    v.null(),
+    v.object({
+      family: v.number(),
+      works: v.array(treeWork),
+      forks: v.array(treeWork),
+      origins: v.array(treeWork),
+      more: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const limit = Math.min(TREE_MAX, Math.max(1, Math.floor(args.limit ?? TREE_PAGE)));
+    // Designs still being prepared hold numbers too; read past them, within a bound.
+    const rows = await ctx.db
+      .query("works")
+      .withIndex("by_family_expression", (q) => q.eq("crFamily", args.family))
+      .take(limit * 2);
+    const shown = rows.filter((row) => row.status === "published" || row.status === "withdrawn");
+    if (!shown.some((row) => row.status === "published")) return null;
+    const inTree = shown.slice(0, limit);
+    const loaded = new Map(inTree.map((row) => [row._id as string, row]));
+    const reader = worksReader(ctx);
+    const urls = imageUrlReader(ctx);
+    const usernames = new Map<string, Promise<string>>();
+    const nameOf = (id: Id<"users">) => {
+      if (!usernames.has(id)) usernames.set(id, usernameOf(ctx, id));
+      return usernames.get(id)!;
+    };
+
+    const parentOf = async (row: Doc<"works">) => {
+      const id = row.effectiveParentWorkId ?? row.parentWorkId;
+      if (!id) return null;
+      return loaded.get(id) ?? (await reader.doc(id));
+    };
+    const toTreeWork = async (row: Doc<"works">, parent: Doc<"works"> | null): Promise<Infer<typeof treeWork>> => {
+      const base = {
+        cr: crOf(row),
+        family: row.crFamily,
+        expression: row.crExpression,
+        kind: effectiveOf(toLineageWork(row)).kind,
+        parentCr: parent ? crOf(parent) : undefined,
+        withdrawn: row.status !== "published",
+      };
+      if (row.status !== "published") return base;
+      const art = await urls(row.artKey);
+      return {
+        ...base,
+        title: row.title,
+        username: await nameOf(row.creatorId),
+        backgroundColor: row.backgroundColor,
+        thumbUrl: art.thumbUrl ?? art.url,
+      };
+    };
+
+    const forkRows: Array<Doc<"works">> = [];
+    let forksMore = false;
+    const works = await Promise.all(
+      inTree.map(async (row) => {
+        const [children, hearts, parent] = await Promise.all([
+          ctx.db
+            .query("works")
+            .withIndex("by_effectiveParent_status", (q) =>
+              q.eq("effectiveParentWorkId", row._id).eq("status", "published"),
+            )
+            .take(TREE_CHILD_SCAN + 1),
+          workHeartCount(ctx, row._id),
+          parentOf(row),
+        ]);
+        for (const child of children.slice(0, TREE_CHILD_SCAN)) {
+          if (child.crFamily === args.family) continue;
+          if (forkRows.length < TREE_FORKS) forkRows.push(child);
+          else forksMore = true;
+        }
+        const node = await toTreeWork(row, parent);
+        if (row.status !== "published") return { node, parent };
+        return {
+          node: {
+            ...node,
+            remixes: Math.min(children.length, TREE_CHILD_SCAN),
+            remixesMore: children.length > TREE_CHILD_SCAN,
+            hearts,
+          },
+          parent,
+        };
+      }),
+    );
+
+    // Where this family was forked from (normally just its original's parent).
+    const originRows = new Map<string, Doc<"works">>();
+    for (const { parent } of works) {
+      if (parent && parent.crFamily !== args.family) originRows.set(parent._id, parent);
+    }
+    const origins = await Promise.all(
+      [...originRows.values()].map((row) => toTreeWork(row, null)),
+    );
+    const forks = await Promise.all(forkRows.map((row) => toTreeWork(row, loaded.get(row.effectiveParentWorkId!) ?? null)));
+
+    return {
+      family: args.family,
+      works: works.map((entry) => entry.node),
+      forks,
+      origins,
+      more: shown.length > limit || rows.length === limit * 2 || forksMore,
     };
   },
 });
