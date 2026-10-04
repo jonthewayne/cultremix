@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { ACTIVE_CREATORS_PAGE_SIZE, ActiveCreators } from "~/components/social/ActiveCreators";
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
 import { LoadMore } from "~/components/social/LoadMore";
@@ -22,9 +23,12 @@ export const Route = createFileRoute("/")({
     search.tab === "following" ? { tab: "following" } : {},
   loaderDeps: ({ search }) => ({ tab: search.tab }),
   loader: ({ context, deps }) =>
-    deps.tab === "following"
-      ? prefetchFirstPage(context, api.feed.following, {}, PAGE_SIZE)
-      : prefetchFirstPage(context, api.feed.latest, {}, PAGE_SIZE),
+    Promise.all([
+      deps.tab === "following"
+        ? prefetchFirstPage(context, api.feed.following, {}, PAGE_SIZE)
+        : prefetchFirstPage(context, api.feed.latest, {}, PAGE_SIZE),
+      prefetchFirstPage(context, api.social.activeCreators, {}, ACTIVE_CREATORS_PAGE_SIZE),
+    ]).then(() => undefined),
   component: FeedPage,
 });
 
@@ -53,6 +57,7 @@ function FeedPage() {
             Open the studio
           </Link>
         </section>
+        <ActiveCreators />
         <section className="mt-20">
           {signedIn && <FeedTabs tab={tab} />}
           {tab === "following" ? <FollowingFeed /> : <LatestFeed />}
