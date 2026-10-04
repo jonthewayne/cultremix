@@ -29,6 +29,7 @@ import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as EconomicsFileRouteImport } from './routes/economics.$file'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
+import { Route as PrintCrRouteImport } from './routes/print.$cr'
 import { Route as UUsernameRouteImport } from './routes/u.$username'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -132,6 +133,11 @@ const InviteAcceptRoute = InviteAcceptRouteImport.update({
   path: '/invite/accept',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrintCrRoute = PrintCrRouteImport.update({
+  id: '/print/$cr',
+  path: '/print/$cr',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UUsernameRoute = UUsernameRouteImport.update({
   id: '/u/$username',
   path: '/u/$username',
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -237,6 +246,7 @@ export interface FileRouteTypes {
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
+    | '/print/$cr'
     | '/u/$username'
     | '/admin/'
     | '/api/auth/$'
@@ -260,6 +270,7 @@ export interface FileRouteTypes {
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
+    | '/print/$cr'
     | '/u/$username'
     | '/admin'
     | '/api/auth/$'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
+    | '/print/$cr'
     | '/u/$username'
     | '/admin/'
     | '/api/auth/$'
@@ -305,6 +317,7 @@ export interface RootRouteChildren {
   CrCrRoute: typeof CrCrRoute
   EconomicsFileRoute: typeof EconomicsFileRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
+  PrintCrRoute: typeof PrintCrRoute
   UUsernameRoute: typeof UUsernameRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -451,6 +464,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteAcceptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/print/$cr': {
+      id: '/print/$cr'
+      path: '/print/$cr'
+      fullPath: '/print/$cr'
+      preLoaderRoute: typeof PrintCrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/u/$username': {
       id: '/u/$username'
       path: '/u/$username'
@@ -502,6 +522,7 @@ const rootRouteChildren: RootRouteChildren = {
   CrCrRoute: CrCrRoute,
   EconomicsFileRoute: EconomicsFileRoute,
   InviteAcceptRoute: InviteAcceptRoute,
+  PrintCrRoute: PrintCrRoute,
   UUsernameRoute: UUsernameRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

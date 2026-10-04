@@ -11,6 +11,7 @@ import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
+import { PrintEntry } from "~/components/print/PrintEntry";
 import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
 
@@ -119,6 +120,7 @@ function ShopPage() {
                 <p className="mt-2 font-semibold">Verified on Monad — coming soon</p>
               </div>
             )}
+            <PrintEntry cr={item.cr} />
           </div>
         </section>
 
