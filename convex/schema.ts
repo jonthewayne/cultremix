@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { cultremixTables } from "./schema/cultremix";
 import { lineageTables } from "./schema/lineage";
+import { socialTables } from "./schema/social";
 
 export const platformRoleValidator = v.union(
   v.literal("user"),
@@ -47,6 +48,8 @@ export default defineSchema({
     creatorNumber: v.optional(v.number()),
     emailVerified: v.optional(v.boolean()),
     signupGrantAt: v.optional(v.number()),
+    // A short public bio for /u/<username>, set in settings (convex/social.ts setBio).
+    bio: v.optional(v.string()),
   })
     .index("by_authId", ["authId"])
     .index("by_email", ["email"])
@@ -187,4 +190,5 @@ export default defineSchema({
 
   ...cultremixTables,
   ...lineageTables,
+  ...socialTables,
 });

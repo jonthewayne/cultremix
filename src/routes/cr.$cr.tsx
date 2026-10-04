@@ -9,10 +9,16 @@ import { EconomicsPanel } from "~/components/cr/EconomicsPanel";
 import { FamilyView } from "~/components/cr/FamilyView";
 import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { FollowButton } from "~/components/social/FollowButton";
+import { HeartButton } from "~/components/social/HeartButton";
 import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
 
 export const Route = createFileRoute("/cr/$cr")({
+  loader: async ({ context, params }) => {
+    if (!context.convexQueryClient.serverHttpClient) return;
+    await context.queryClient.fetchQuery(convexQuery(api.feed.byCr, { cr: params.cr })).catch(() => null);
+  },
   head: ({ params }) => ({ meta: [{ title: `CR ${params.cr} · CultRemix` }] }),
   component: ShopPage,
 });
@@ -60,11 +66,18 @@ function ShopPage() {
             <CrMark cr={item.cr} className="text-[20vw] md:text-[10vw]" />
             {item.title && <h1 className="mt-4 text-4xl font-black leading-none tracking-tight md:text-6xl">{item.title}</h1>}
             <p className="mt-4 text-xl">
-              by <span className="font-bold">@{item.creator.username}</span>
+              by{" "}
+              <Link to="/u/$username" params={{ username: item.creator.username }} className="font-bold hover:underline">
+                @{item.creator.username}
+              </Link>
               {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
             </p>
             <LineageNote cr={item.cr} />
-          </div>
+            <div className="mt-4 flex items-center gap-2">
+              <HeartButton workId={item.workId} count={item.hearts} />
+              <FollowButton username={item.creator.username} />
+            </div>
+                      </div>
 
           <div className="flex flex-col gap-6">
             <div className="flex items-baseline justify-between border-t-2 border-black pt-4">

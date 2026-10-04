@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as activity from "../activity.js";
 import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
 import type * as bootstrap from "../bootstrap.js";
@@ -45,6 +46,7 @@ import type * as lib_resize from "../lib/resize.js";
 import type * as lib_roleReader from "../lib/roleReader.js";
 import type * as lib_sessions from "../lib/sessions.js";
 import type * as lib_sizes from "../lib/sizes.js";
+import type * as lib_social from "../lib/social.js";
 import type * as lib_storage from "../lib/storage.js";
 import type * as lib_studioRules from "../lib/studioRules.js";
 import type * as lib_username from "../lib/username.js";
@@ -55,8 +57,10 @@ import type * as publish from "../publish.js";
 import type * as resources from "../resources.js";
 import type * as schema_cultremix from "../schema/cultremix.js";
 import type * as schema_lineage from "../schema/lineage.js";
+import type * as schema_social from "../schema/social.js";
 import type * as sizing from "../sizing.js";
 import type * as sms from "../sms.js";
+import type * as social from "../social.js";
 import type * as storageMoves from "../storageMoves.js";
 import type * as studio from "../studio.js";
 import type * as testHelpers from "../testHelpers.js";
@@ -69,6 +73,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  activity: typeof activity;
   auth: typeof auth;
   authVerification: typeof authVerification;
   bootstrap: typeof bootstrap;
@@ -106,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   "lib/roleReader": typeof lib_roleReader;
   "lib/sessions": typeof lib_sessions;
   "lib/sizes": typeof lib_sizes;
+  "lib/social": typeof lib_social;
   "lib/storage": typeof lib_storage;
   "lib/studioRules": typeof lib_studioRules;
   "lib/username": typeof lib_username;
@@ -116,8 +122,10 @@ declare const fullApi: ApiFromModules<{
   resources: typeof resources;
   "schema/cultremix": typeof schema_cultremix;
   "schema/lineage": typeof schema_lineage;
+  "schema/social": typeof schema_social;
   sizing: typeof sizing;
   sms: typeof sms;
+  social: typeof social;
   storageMoves: typeof storageMoves;
   studio: typeof studio;
   testHelpers: typeof testHelpers;
