@@ -42,7 +42,7 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `CLOUDFLARE_ZONE_NAME` | GitHub variable | no | no | wizard/manual | preview route patch |
 | `CLOUDFLARE_PROJECT_NAME` | GitHub variable | no | no | wizard | workflow Worker names |
 | `DEV_URL`, `PROD_URL`, `PREVIEW_BASE_DOMAIN` | GitHub variables | no | no | wizard/manual | deploy workflow |
-| `DEPLOYMENT_ENV` | Convex env (dev, staging, prod) | no | no | manual | which environment this is: `dev`, `staging`, or `prod`. Staging and dev (and an unset value) show the Testnet badge, so production must say `prod`; prod shows Early access until checkout opens (`api.deployment.get`, the only way the browser learns it); dev allows the stand-in image generator |
+| `DEPLOYMENT_ENV` | Convex env (dev, staging, prod) | no | no | manual | which environment this is: `dev`, `staging`, or `prod`. Staging and dev (and an unset value) show the Testnet badge, so production must say `prod`; prod shows Early access until checkout opens (`api.deployment.get`, the only way the browser learns it); dev allows the stand-in image generator; it also decides dev-only resets, whether test orders create (simulated) earnings, and Printful auto-confirm (production only) |
 | `AI_GATEWAY_API_KEY` | Convex env | no | yes | manual | image designs, model photos, image notes |
 | `IMAGE_PROVIDER` | Convex env (optional) | no | no | manual | `gateway` or `chatgpt` forces the image provider |
 | `IMAGE_QUALITY`, `PHOTO_QUALITY` | Convex env (optional) | no | no | manual | design and model-photo quality (default `medium`) |
@@ -53,8 +53,28 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `R2_ENDPOINT`, `R2_BUCKET`, `R2_PUBLIC_URL` | Convex env | no | no | manual | image storage: the environment's public R2 bucket and its address |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Convex env | no | yes | manual | image storage; images go to R2 whenever these are set |
 | `FAL_KEY` | Convex env (dev, staging, production; one key per environment, each with a fal spend limit) | no | yes | manual | "Upscale for print" (fal Topaz Transparent, `convex/upscale.ts`); without it an upscale fails and refunds its credits. `scripts/spikes/fal-topaz.ts` reads its own copy from `~/.config/cultremix/fal.env` |
+| `SHOPIFY_SHOP_DOMAIN` | Convex env, Worker secret/var | no | no | manual | the store's `*.myshopify.com` domain: Admin API, webhook check, Storefront API |
+| `SHOPIFY_CLIENT_ID` | Convex env | no | no | manual | Admin API client-credentials token (product sync, order hydration) |
+| `SHOPIFY_CLIENT_SECRET` | Convex env | no | yes | manual | Admin API token, and the key that signs Shopify webhooks |
+| `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` | Worker secret | no | yes | manual | Storefront API cart and checkout (TanStack Start server functions) |
+| `SHOPIFY_API_VERSION` | Convex env, Worker var (optional) | no | no | manual | overrides the API version pinned in `shared/config/shopify.ts` (`2026-07`); leave unset |
+| `PRINTFUL_API_TOKEN` | Convex env | no | yes | manual | Printful v2 orders, shipments, and confirmations |
+| `PRINTFUL_STORE_ID` | Convex env | no | no | manual | the Printful store orders go to; webhooks from other stores are ignored |
+| `PRINTFUL_WEBHOOK_SECRET` | Convex env | no | yes | manual | verifies `x-pf-webhook-signature` on `/webhooks/printful` |
+| `PRINTFUL_AUTO_CONFIRM` | Convex env (prod only) | no | no | manual | `true` lets production confirm Printful drafts after the 1-hour hold |
 
 Image settings are explained in `docs/image-generation/README.md`.
+
+## Shop (Shopify and Printful)
+
+Each environment has its own Shopify store and Printful store. Set the same names in dev, staging, and production, with that environment's values.
+
+- Products, orders, and earnings run in Convex: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`. Without them product sync and order hydration wait, and `/webhooks/shopify` answers 503.
+- The cart runs in the Worker: `SHOPIFY_SHOP_DOMAIN` and `SHOPIFY_STOREFRONT_PRIVATE_TOKEN`. Buying is also behind the `commerce.checkout` feature flag; with it off the work page is unchanged.
+- Fulfillment runs in Convex: `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID`, `PRINTFUL_WEBHOOK_SECRET`. Without the first two, paid orders wait and the 30-minute sweep picks them up once they are set. Without the secret, `/webhooks/printful` answers 503.
+- Print files go to Printful by their public address, so `R2_PUBLIC_URL` must be set wherever orders are fulfilled.
+- Drafts are confirmed only when `DEPLOYMENT_ENV=prod` and `PRINTFUL_AUTO_CONFIRM=true`, and the `fulfillment.autoConfirm` flag isn't turned off (turning it off pauses confirmation). Never set `PRINTFUL_AUTO_CONFIRM` in dev or staging; it has no effect there.
+- Test orders (Shopify `test`) make labeled test earnings and Printful drafts in dev and staging, and nothing at all in production. An unset or unrecognized `DEPLOYMENT_ENV` is treated like production for test orders and never confirms.
 
 ## Common Fixes
 

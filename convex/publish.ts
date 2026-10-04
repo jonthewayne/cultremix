@@ -182,6 +182,8 @@ export const markPublished = internalMutation({
     });
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
+    // Puts the work on sale in Shopify when checkout is open (convex/shopify.ts).
+    await ctx.scheduler.runAfter(0, internal.shopify.onPublished, { workId: work._id });
     return { shootId, look };
   },
 });

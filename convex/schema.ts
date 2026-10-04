@@ -5,6 +5,7 @@ import { lineageTables } from "./schema/lineage";
 import { socialTables } from "./schema/social";
 import { launchTables } from "./schema/launch";
 import { printTables } from "./schema/print";
+import { shopTables } from "./schema/shop";
 
 export const platformRoleValidator = v.union(
   v.literal("user"),
@@ -195,4 +196,5 @@ export default defineSchema({
   ...socialTables,
   ...launchTables,
   ...printTables,
+  ...shopTables,
 });

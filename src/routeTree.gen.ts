@@ -25,10 +25,12 @@ import { Route as AdminJudgesRouteImport } from './routes/admin.judges'
 import { Route as AdminLineageRouteImport } from './routes/admin.lineage'
 import { Route as AdminMembersRouteImport } from './routes/admin.members'
 import { Route as AdminMetricsRouteImport } from './routes/admin.metrics'
+import { Route as AdminOrdersRouteImport } from './routes/admin_.orders'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as EconomicsFileRouteImport } from './routes/economics.$file'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
+import { Route as MeEarningsRouteImport } from './routes/me.earnings'
 import { Route as PrintCrRouteImport } from './routes/print.$cr'
 import { Route as UUsernameRouteImport } from './routes/u.$username'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -113,6 +115,11 @@ const AdminMetricsRoute = AdminMetricsRouteImport.update({
   path: '/metrics',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/admin_/orders',
+  path: '/admin/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCompleteRoute = AuthCompleteRouteImport.update({
   id: '/auth/complete',
   path: '/auth/complete',
@@ -131,6 +138,11 @@ const EconomicsFileRoute = EconomicsFileRouteImport.update({
 const InviteAcceptRoute = InviteAcceptRouteImport.update({
   id: '/invite/accept',
   path: '/invite/accept',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeEarningsRoute = MeEarningsRouteImport.update({
+  id: '/me/earnings',
+  path: '/me/earnings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrintCrRoute = PrintCrRouteImport.update({
@@ -165,10 +177,12 @@ export interface FileRoutesByFullPath {
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
   '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
@@ -189,10 +203,12 @@ export interface FileRoutesByTo {
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
   '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin': typeof AdminIndexRoute
@@ -215,10 +231,12 @@ export interface FileRoutesById {
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
+  '/admin_/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/me/earnings': typeof MeEarningsRoute
   '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
@@ -242,10 +260,12 @@ export interface FileRouteTypes {
     | '/admin/lineage'
     | '/admin/members'
     | '/admin/metrics'
+    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
+    | '/me/earnings'
     | '/print/$cr'
     | '/u/$username'
     | '/admin/'
@@ -266,10 +286,12 @@ export interface FileRouteTypes {
     | '/admin/lineage'
     | '/admin/members'
     | '/admin/metrics'
+    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
+    | '/me/earnings'
     | '/print/$cr'
     | '/u/$username'
     | '/admin'
@@ -291,10 +313,12 @@ export interface FileRouteTypes {
     | '/admin/lineage'
     | '/admin/members'
     | '/admin/metrics'
+    | '/admin_/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
     | '/invite/accept'
+    | '/me/earnings'
     | '/print/$cr'
     | '/u/$username'
     | '/admin/'
@@ -313,10 +337,12 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
+  AdminOrdersRoute: typeof AdminOrdersRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   EconomicsFileRoute: typeof EconomicsFileRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
+  MeEarningsRoute: typeof MeEarningsRoute
   PrintCrRoute: typeof PrintCrRoute
   UUsernameRoute: typeof UUsernameRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -436,6 +462,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMetricsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin_/orders': {
+      id: '/admin_/orders'
+      path: '/admin/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/complete': {
       id: '/auth/complete'
       path: '/auth/complete'
@@ -462,6 +495,13 @@ declare module '@tanstack/react-router' {
       path: '/invite/accept'
       fullPath: '/invite/accept'
       preLoaderRoute: typeof InviteAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me/earnings': {
+      id: '/me/earnings'
+      path: '/me/earnings'
+      fullPath: '/me/earnings'
+      preLoaderRoute: typeof MeEarningsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/print/$cr': {
@@ -518,10 +558,12 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
+  AdminOrdersRoute: AdminOrdersRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   EconomicsFileRoute: EconomicsFileRoute,
   InviteAcceptRoute: InviteAcceptRoute,
+  MeEarningsRoute: MeEarningsRoute,
   PrintCrRoute: PrintCrRoute,
   UUsernameRoute: UUsernameRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

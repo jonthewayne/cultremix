@@ -1,5 +1,5 @@
-// The shirt a print file is made for, shared by the browser (placement, preview) and Convex
-// (render, readiness). Every number names where it came from.
+// The shirt CultRemix prints and sells, shared by the browser (placement, preview, the buy box)
+// and Convex (render, readiness, product sync, fulfillment). Every number names where it came from.
 
 export type ShirtColor = {
   name: string;
@@ -10,7 +10,11 @@ export type ShirtColor = {
 
 export type PrintProduct = {
   key: string;
+  // Shown to buyers.
   name: string;
+  // Shopify product fields.
+  vendor: string;
+  productType: string;
   printful: { productId: number; model: string; technique: "DTG"; placement: "front" };
   // The front print area in inches. The print file is this rectangle at DPI pixels per inch.
   printArea: { widthIn: number; heightIn: number };
@@ -34,7 +38,9 @@ export type PrintProduct = {
 // (fetched 2026-10-03). Hex values are Printful's swatch colors.
 export const COMFORT_COLORS_1717: PrintProduct = {
   key: "cc1717",
-  name: "Comfort Colors 1717 heavyweight tee",
+  name: "Heavyweight garment-dyed tee",
+  vendor: "CultRemix",
+  productType: "T-Shirt",
   printful: { productId: 586, model: "1717", technique: "DTG", placement: "front" },
   printArea: { widthIn: 15, heightIn: 17 },
   safeInsetIn: 0.5,
@@ -65,4 +71,40 @@ export const PRINT_PRODUCT = COMFORT_COLORS_1717;
 
 export function shirtColor(name: string | undefined, product: PrintProduct = PRINT_PRODUCT) {
   return product.colors.find((color) => color.name === name) ?? product.colors[0];
+}
+
+// ---- Selling it (KTD-17: 4 launch colors, S-2XL, $36 and $39 for 2XL) ----
+
+export const PRINT_SIZES = ["S", "M", "L", "XL", "2XL"] as const;
+export type PrintSize = (typeof PRINT_SIZES)[number];
+
+export type PrintColor = {
+  // Upper-case code used in SKUs.
+  code: string;
+  // Option value shown to buyers.
+  name: string;
+  hex: string;
+  // Printful catalog variant ID per size, from the product's catalog colors above. null would send
+  // an order to needs_attention instead of Printful.
+  printfulVariantIds: Record<PrintSize, number | null>;
+};
+
+// The colors offered at launch, with their Printful variants from the catalog above.
+const LAUNCH_COLORS = ["White", "Ivory", "Pepper", "Black"];
+
+export const PRINT_COLORS: ReadonlyArray<PrintColor> = LAUNCH_COLORS.map((name) => {
+  const color = PRINT_PRODUCT.colors.find((c) => c.name === name);
+  if (!color) throw new Error("Launch color missing from the catalog: " + name);
+  return { code: name.toUpperCase().replace(/[^A-Z0-9]+/gu, ""), name: color.name, hex: color.hex, printfulVariantIds: { ...color.variants } };
+});
+
+export const BASE_PRICE_CENTS = 3600;
+export const LARGE_PRICE_CENTS = 3900;
+
+export function priceCentsFor(size: PrintSize): number {
+  return size === "2XL" ? LARGE_PRICE_CENTS : BASE_PRICE_CENTS;
+}
+
+export function formatPrice(cents: number): string {
+  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
