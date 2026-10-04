@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
+import type * as backs from "../backs.js";
 import type * as bootstrap from "../bootstrap.js";
 import type * as chain from "../chain.js";
 import type * as chainAdmin from "../chainAdmin.js";
@@ -81,6 +82,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authVerification: typeof authVerification;
+  backs: typeof backs;
   bootstrap: typeof bootstrap;
   chain: typeof chain;
   chainAdmin: typeof chainAdmin;

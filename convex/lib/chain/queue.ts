@@ -172,16 +172,60 @@ export async function enqueueRegisterWork(ctx: MutationCtx, workId: Id<"works">)
   return writeId;
 }
 
-/** Queues a Back (convex/backs.ts has already admitted it). The work's registration confirms first. */
+/**
+ * Puts a failed or rejected write back in the queue from its first gate, for a fresh signature
+ * and nonce, unbound from the chain and registry it was first sent to. A registration rebuilds
+ * its record when it is next ready; other kinds keep theirs unless a new payload is given.
+ */
+export async function resetWrite(ctx: MutationCtx, write: WriteDoc, fields: Partial<Pick<WriteDoc, "payload" | "backId">> = {}) {
+  if (write.status !== "failed" && write.status !== "rejected") throw new Error("Only a failed or rejected write can go again.");
+  await ctx.db.patch("chainWrites", write._id, {
+    status: "waiting_wallet",
+    chainId: undefined,
+    registryAddress: undefined,
+    payload: write.kind === "registerWork" ? undefined : write.payload,
+    signature: undefined,
+    signatureDeadline: undefined,
+    signer: undefined,
+    nonce: undefined,
+    txs: [],
+    replacements: 0,
+    lastBroadcastError: undefined,
+    txHash: undefined,
+    blockNumber: undefined,
+    result: undefined,
+    revertReason: undefined,
+    error: undefined,
+    attempts: 0,
+    nextAttemptAt: undefined,
+    confirmedAt: undefined,
+    updatedAt: Date.now(),
+    ...fields,
+  });
+  if (write.kind === "registerWork" && write.workId) {
+    await ctx.db.patch("works", write.workId, { provenanceStatus: "pending", chainTxHash: undefined });
+  }
+  if (await promoteWrite(ctx, (await ctx.db.get("chainWrites", write._id))!)) await kickTick(ctx);
+}
+
+/**
+ * Queues a Back (convex/backs.ts has already admitted it). The work's registration confirms
+ * first. A member who Backs again after a failed or rejected Back reuses that write.
+ */
 export async function enqueueBack(
   ctx: MutationCtx,
   args: { backId: Id<"backs">; work: Doc<"works">; backer: Doc<"users"> },
 ): Promise<Id<"chainWrites">> {
   const subjectKey = `back:${args.work._id}:${args.backer._id}`;
-  const existing = await writeBySubject(ctx, subjectKey);
-  if (existing) return existing._id;
   if (!args.backer.walletAddress) throw new Error("The backer's wallet is not ready.");
   const payload = serializePayload({ workId: workIdFor(args.work._id), backer: args.backer.walletAddress as Hex });
+  const existing = await writeBySubject(ctx, subjectKey);
+  if (existing) {
+    if (existing.status === "failed" || existing.status === "rejected") {
+      await resetWrite(ctx, existing, { payload, backId: args.backId });
+    }
+    return existing._id;
+  }
   return await insertWrite(ctx, {
     kind: "back",
     subjectKey,

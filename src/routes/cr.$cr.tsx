@@ -6,6 +6,7 @@ import { Art } from "~/components/cr/Art";
 import { ChainStatus } from "~/components/cr/ChainStatus";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { Backers } from "~/components/work/Backers";
 import { colorName } from "../../convex/lib/colors";
 import { PhotoSquare } from "./index";
 
@@ -109,6 +110,7 @@ function ShopPage() {
                 <ChainStatus workId={item.workId} />
               </div>
             )}
+            <Backers workId={item.workId} cr={item.cr} />
           </div>
         </section>
 

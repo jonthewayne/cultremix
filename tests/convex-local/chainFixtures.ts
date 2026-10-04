@@ -46,11 +46,11 @@ export async function setChainWrites(t: T, enabled: boolean) {
 
 export type Member = { userId: Id<"users">; address: Address; authId: string };
 
-/** A signed-up member with a verified email and, unless walletReady is false, a ready dev wallet. */
+/** A signed-up member with a username, a verified email and, unless walletReady is false, a ready dev wallet. */
 export async function insertMember(t: T, options: { walletReady?: boolean; fields?: Partial<Doc<"users">> } = {}): Promise<Member> {
   const authId = `auth-${crypto.randomUUID()}`;
   const userId = await t.run((ctx) =>
-    ctx.db.insert("users", { email: `${authId}@example.com`, authId, name: "Member", emailVerified: true, ...options.fields }),
+    ctx.db.insert("users", { email: `${authId}@example.com`, authId, name: "Member", username: `m${authId.slice(-8)}`, emailVerified: true, ...options.fields }),
   );
   const address = privateKeyToAccount(await devWalletPrivateKey(DEV_SECRET, userId)).address;
   await t.run((ctx) =>

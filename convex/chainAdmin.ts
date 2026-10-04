@@ -4,7 +4,7 @@ import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { assertDeploymentConsistency, explorerNetwork, explorerTxUrl } from "../shared/config/chains";
 import { configHashFor } from "./lib/chain/ids";
-import { CHAIN_WRITES_FLAG, chainWritesEnabled, enqueueConfig, enqueueRegisterWork, promoteWrite, writeBySubject } from "./lib/chain/queue";
+import { CHAIN_WRITES_FLAG, chainWritesEnabled, enqueueConfig, enqueueRegisterWork, resetWrite, writeBySubject } from "./lib/chain/queue";
 import { ECONOMIC_CONFIG_V1, canonicalConfigJson } from "./lib/economics";
 import { requirePlatformCapability, requireSuperAdmin } from "./lib/permissions";
 import { formatCr } from "./lib/r2";
@@ -204,31 +204,7 @@ export const retryWrite = mutation({
     if (!write) throw new ConvexError({ code: "NOT_FOUND", message: "That write doesn't exist." });
     if (write.status !== "failed") throw new ConvexError({ code: "NOT_FAILED", message: "Only a failed write can be retried." });
     if (write.kind === "back") throw new ConvexError({ code: "BACK", message: "A failed Back goes again when the member Backs again." });
-    await ctx.db.patch("chainWrites", write._id, {
-      status: "waiting_wallet",
-      chainId: undefined,
-      registryAddress: undefined,
-      // A registration rebuilds its record when it's next ready; amendments and configs keep theirs.
-      payload: write.kind === "registerWork" ? undefined : write.payload,
-      signature: undefined,
-      signatureDeadline: undefined,
-      signer: undefined,
-      nonce: undefined,
-      txs: [],
-      replacements: 0,
-      lastBroadcastError: undefined,
-      txHash: undefined,
-      blockNumber: undefined,
-      revertReason: undefined,
-      error: undefined,
-      attempts: 0,
-      nextAttemptAt: undefined,
-      updatedAt: Date.now(),
-    });
-    if (write.kind === "registerWork" && write.workId) {
-      await ctx.db.patch("works", write.workId, { provenanceStatus: "pending", chainTxHash: undefined });
-    }
-    if (await promoteWrite(ctx, (await ctx.db.get("chainWrites", write._id))!)) await kickTick(ctx);
+    await resetWrite(ctx, write);
     return null;
   },
 });
