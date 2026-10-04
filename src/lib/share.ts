@@ -1,3 +1,4 @@
+import { familyOfCr } from "./familyTree";
 import { SHARE_IMAGE, SHARE_IMAGE_ALT, SITE_NAME, SITE_URL } from "./site";
 
 // What a link preview shows. Loaders build one from the data they already fetched; heads turn it
@@ -39,7 +40,9 @@ export function workShareCard(item: WorkLike): ShareCard {
   const name = `CR ${item.cr}`;
   const by = `@${item.creator.username}`;
   const image = absoluteUrl(item.artMediumUrl) ?? absoluteUrl(item.artUrl);
-  const lead = item.parentCr ? `A remix of CR ${item.parentCr} by ${by}.` : `A design by ${by}.`;
+  // A remix in its parent's family is a variation; one that started a new family is a fork.
+  const kind = item.parentCr && familyOfCr(item.cr) === familyOfCr(item.parentCr) ? "variation" : "fork";
+  const lead = item.parentCr ? `${by}’s ${kind} of CR ${item.parentCr}.` : `A design by ${by}.`;
   return {
     title: item.title ? `${name} · ${item.title}` : name,
     description: `${lead} Wear it, share it, or remix it on ${SITE_NAME}.`,

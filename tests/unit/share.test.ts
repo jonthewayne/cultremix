@@ -31,7 +31,9 @@ describe("work link previews", () => {
   it("name the parent of a remix and work without a title", () => {
     const card = workShareCard({ ...item, title: undefined, parentCr: "100-001" });
     expect(card.title).toBe("CR 101-001");
-    expect(card.description).toMatch(/^A remix of CR 100-001 by @alice\./u);
+    expect(card.description).toMatch(/^@alice’s fork of CR 100-001\./u);
+    const variation = workShareCard({ ...item, cr: "101-002", parentCr: "101-001" });
+    expect(variation.description).toMatch(/^@alice’s variation of CR 101-001\./u);
   });
 
   it("only ever point crawlers at absolute images", () => {
