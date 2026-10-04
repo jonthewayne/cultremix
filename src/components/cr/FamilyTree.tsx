@@ -45,12 +45,14 @@ export function FamilyTree({ data, currentCr, compact = false }: { data: FamilyT
     <div ref={scroller} className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pb-2 md:-mx-10 md:px-10">
       <div className="relative mx-auto" style={{ width: layout.width, height: layout.height }}>
         <svg aria-hidden className="absolute inset-0 overflow-visible" width={layout.width} height={layout.height}>
-          {layout.edges.map((edge) => {
-            const mid = (edge.from.y + edge.to.y) / 2;
+          {/* Elbow links: down from the parent, across between the rows, down to the child. Forks
+              (dashed) go first so a shared run reads as solid. */}
+          {[...layout.edges].sort((a, b) => Number(b.dashed) - Number(a.dashed)).map((edge) => {
+            const mid = edge.to.y - size.gapY / 2;
             return (
               <path
                 key={edge.key}
-                d={`M ${edge.from.x} ${edge.from.y} C ${edge.from.x} ${mid}, ${edge.to.x} ${mid}, ${edge.to.x} ${edge.to.y}`}
+                d={`M ${edge.from.x} ${edge.from.y + 4} V ${mid} H ${edge.to.x} V ${edge.to.y}`}
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2}

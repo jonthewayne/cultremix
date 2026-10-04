@@ -46,7 +46,8 @@ type Via = "variation" | "fork" | null;
 export type TreeOptions = {
   // Children of a work this deep (the family root is depth 0) start collapsed.
   maxDepth: number;
-  // At most this many children of one work show before the rest collapse into a "+N" node.
+  // At most this many children of one work show before the rest collapse into a "+N" node
+  // (never a "+1": one more than this shows them all).
   maxChildren: number;
   // Works whose children are all shown, whatever the limits.
   expanded?: ReadonlySet<string>;
@@ -122,10 +123,12 @@ export function buildFamilyTree(data: FamilyTreeData, options: TreeOptions): Arr
     });
     let shown = all;
     let tail: TreeNode | null = null;
-    if (!open && all.length > 0 && depth >= options.maxDepth && !path.has(work.cr)) {
+    // A "+1" takes the same room as the design it hides, so a lone design is just shown.
+    const loneLeaf = all.length === 1 && sizeOf(all[0], new Set()) === 1;
+    if (!open && all.length > 0 && !loneLeaf && depth >= options.maxDepth && !path.has(work.cr)) {
       shown = [];
       tail = more(all, "deep");
-    } else if (!open && all.length > maxChildren) {
+    } else if (!open && all.length > maxChildren + 1) {
       shown = all.slice(0, maxChildren);
       const onPath = all.findIndex((child) => path.has(child.cr));
       if (onPath >= maxChildren) shown = [...all.slice(0, maxChildren - 1), all[onPath]];

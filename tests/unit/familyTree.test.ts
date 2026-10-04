@@ -133,10 +133,16 @@ describe("buildFamilyTree collapse", () => {
     expect(more).toMatchObject({ type: "more", parentCr: "101-001", reason: "wide" });
   });
 
-  it("doesn't collapse at exactly maxChildren", () => {
-    const works = wide.slice(0, 4);
-    expect(shape(buildFamilyTree(data(works), { maxDepth: 99, maxChildren: 3 }))).toBe(
+  it("doesn't collapse at maxChildren, or to hide just one design", () => {
+    expect(shape(buildFamilyTree(data(wide.slice(0, 4)), { maxDepth: 99, maxChildren: 3 }))).toBe(
       "101-001(101-002,101-003,101-004)",
+    );
+    expect(shape(buildFamilyTree(data(wide.slice(0, 5)), { maxDepth: 99, maxChildren: 3 }))).toBe(
+      "101-001(101-002,101-003,101-004,101-005)",
+    );
+    // A single childless design past maxDepth shows too.
+    expect(shape(buildFamilyTree(data(wide), { maxDepth: 1, maxChildren: 9 }))).toBe(
+      "101-001(101-002,101-003,101-004,101-005,101-006,101-007(101-008))",
     );
   });
 
@@ -160,7 +166,7 @@ describe("buildFamilyTree collapse", () => {
 
   it("shows everything under an expanded work", () => {
     const tree = buildFamilyTree(data(wide), { maxDepth: 0, maxChildren: 3, expanded: new Set([cr(101, 1)]) });
-    expect(shape(tree)).toBe("101-001(101-002,101-003,101-004,101-005,101-006,101-007(+1/1))");
+    expect(shape(tree)).toBe("101-001(101-002,101-003,101-004,101-005,101-006,101-007(101-008))");
   });
 
   it("marks a +N of only forks as a fork link", () => {
