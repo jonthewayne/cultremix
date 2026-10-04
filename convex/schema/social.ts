@@ -2,7 +2,7 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
 // What a member did, for the Following feed and profiles. One event per published work
-// (convex/lib/activity.ts); Backs join later with their own verb.
+// (recordPublishActivity in convex/lib/social.ts); Backs join later with their own verb.
 export const activityVerbValidator = v.union(
   v.literal("publish_original"),
   v.literal("publish_variation"),
