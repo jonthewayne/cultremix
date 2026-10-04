@@ -6,6 +6,9 @@ import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
 import { publishPlacement } from "./lib/lineage";
 import { recordPublishActivity } from "./lib/social";
+import { BUDGET_RESTING, closeReservation, hasRoom, imageProviderSetting, openReservation, spendValidator } from "./lib/budget";
+import { photoWorstCaseCents, qualityOf } from "./lib/pricing";
+import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
@@ -17,6 +20,33 @@ async function recentLooks(ctx: MutationCtx) {
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 10)
     .map((shoot) => ({ casting: shoot.castingNote, world: shoot.world }));
+}
+
+// Holds one model photo's worst case against today's budget when photos go through the CultRemix
+// Gateway. Returns the attempt's id (null when photos aren't budgeted), or "resting" when the day's
+// budget can't take it. The action sends the call right away, so it counts as dispatched.
+async function reservePhoto(
+  ctx: MutationCtx,
+  shootId: Id<"shoots">,
+  userId: Id<"users"> | undefined,
+  now: number,
+): Promise<string | null | "resting"> {
+  if (imageProviderSetting() !== "gateway") return null;
+  const worstCaseCents = photoWorstCaseCents(qualityOf(process.env.PHOTO_QUALITY, "medium"));
+  if (!(await hasRoom(ctx, "gateway", worstCaseCents, now))) return "resting";
+  // A shoot can be reshot, so each photo call gets its own attempt id.
+  const attemptId = `photo:${shootId}:${now}`;
+  await openReservation(ctx, {
+    attemptKind: "photo",
+    attemptId,
+    shootId,
+    provider: "gateway",
+    userId,
+    credits: 0,
+    worstCaseCents,
+    dispatched: true,
+  }, now);
+  return attemptId;
 }
 
 async function nextFamily(ctx: MutationCtx) {
@@ -150,7 +180,16 @@ export const assetJob = internalQuery({
 
 export const markPublished = internalMutation({
   args: { workId: v.id("works"), artKey: v.string(), contentHash: v.string() },
-  returns: v.union(v.null(), v.object({ shootId: v.id("shoots"), look: lookValidator })),
+  returns: v.union(
+    v.null(),
+    v.object({
+      shootId: v.id("shoots"),
+      look: lookValidator,
+      // The photo's reservation; resting when the day's budget can't take it (no photo today).
+      attemptId: v.optional(v.string()),
+      resting: v.optional(v.boolean()),
+    }),
+  ),
   handler: async (ctx, args) => {
     const work = await ctx.db.get("works", args.workId);
     if (!work || work.status !== "preparing") return null;
@@ -182,7 +221,13 @@ export const markPublished = internalMutation({
     });
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
-    return { shootId, look };
+    const attempt = await reservePhoto(ctx, shootId, work.creatorId, now);
+    if (attempt === "resting") {
+      // The work is published; its model photo waits for a reshoot.
+      await failShootPhoto(ctx, shootId, BUDGET_RESTING);
+      return { shootId, look, resting: true };
+    }
+    return { shootId, look, attemptId: attempt ?? undefined };
   },
 });
 
@@ -201,6 +246,7 @@ export const beginReshoot = internalMutation({
       crExpression: v.number(),
       // The photo shown now; the new one takes the next photo number.
       photoKey: v.optional(v.string()),
+      attemptId: v.optional(v.string()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -214,6 +260,12 @@ export const beginReshoot = internalMutation({
       .unique();
     if (!work || work.status !== "published" || !work.artKey) return null;
     const now = Date.now();
+    // Checked before anything changes, so a refused reshoot leaves the shoot as it was.
+    const photoCents = photoWorstCaseCents(qualityOf(process.env.PHOTO_QUALITY, "medium"));
+    if (imageProviderSetting() === "gateway" && !(await hasRoom(ctx, "gateway", photoCents, now))) {
+      console.log("reshoot refused: the daily budget is spent", args.cr);
+      return null;
+    }
     const existing = await ctx.db
       .query("shoots")
       .withIndex("by_work", (q) => q.eq("workId", work._id))
@@ -243,7 +295,9 @@ export const beginReshoot = internalMutation({
     if (!photo) {
       await ctx.db.insert("shootPhotos", { shootId, workId: work._id, index: 1, state: "pending" });
     }
+    const attempt = await reservePhoto(ctx, shootId, undefined, now);
     return {
+      attemptId: attempt === null || attempt === "resting" ? undefined : attempt,
       shootId,
       artKey: work.artKey,
       backgroundColor: work.backgroundColor,
@@ -286,9 +340,16 @@ export const markAssetFailed = internalMutation({
 });
 
 export const recordPhoto = internalMutation({
-  args: { shootId: v.id("shoots"), publicKey: v.string() },
+  args: {
+    shootId: v.id("shoots"),
+    publicKey: v.string(),
+    // The photo call's reservation and what it cost (convex/lib/paidAttempts.ts).
+    attemptId: v.optional(v.string()),
+    spend: v.optional(spendValidator),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (args.attemptId) await closeReservation(ctx, args.attemptId, args.spend ?? { kind: "settle" });
     const photo = await ctx.db
       .query("shootPhotos")
       .withIndex("by_shoot_index", (q) => q.eq("shootId", args.shootId).eq("index", 1))
@@ -302,21 +363,31 @@ export const recordPhoto = internalMutation({
 });
 
 export const recordPhotoFailed = internalMutation({
-  args: { shootId: v.id("shoots"), reason: v.string() },
+  args: {
+    shootId: v.id("shoots"),
+    reason: v.string(),
+    attemptId: v.optional(v.string()),
+    spend: v.optional(spendValidator),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const photo = await ctx.db
-      .query("shootPhotos")
-      .withIndex("by_shoot_index", (q) => q.eq("shootId", args.shootId).eq("index", 1))
-      .unique();
-    if (photo) {
-      await ctx.db.patch("shootPhotos", photo._id, { state: "failed", reason: args.reason });
-    }
-    await ctx.db.patch("shoots", args.shootId, {
-      status: "failed",
-      reason: "photo_failed",
-      updatedAt: Date.now(),
-    });
+    if (args.attemptId) await closeReservation(ctx, args.attemptId, args.spend ?? { kind: "settle" });
+    await failShootPhoto(ctx, args.shootId, args.reason);
     return null;
   },
 });
+
+export async function failShootPhoto(ctx: MutationCtx, shootId: Id<"shoots">, reason: string) {
+  const photo = await ctx.db
+    .query("shootPhotos")
+    .withIndex("by_shoot_index", (q) => q.eq("shootId", shootId).eq("index", 1))
+    .unique();
+  if (photo) {
+    await ctx.db.patch("shootPhotos", photo._id, { state: "failed", reason });
+  }
+  await ctx.db.patch("shoots", shootId, {
+    status: "failed",
+    reason: "photo_failed",
+    updatedAt: Date.now(),
+  });
+}

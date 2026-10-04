@@ -323,7 +323,9 @@ function StudioPage() {
         setError(
           result.refused === "NO_CREDITS"
             ? "You're out of credits for today."
-            : "Generation is paused right now.",
+            : result.refused === "BUDGET"
+              ? "The studio is resting until tomorrow. Your credits are safe."
+              : "Generation is paused right now.",
         );
       } else if (result.sessionId !== s) {
         adopted.current = result.sessionId;

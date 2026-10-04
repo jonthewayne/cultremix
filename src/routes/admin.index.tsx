@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { AdminSection, Toggle, adminButton, adminInput } from "~/components/admin/AdminSection";
+import { BudgetCard } from "~/components/admin/BudgetCard";
 import { errorMessage } from "~/lib/imagePrep";
 
 export const Route = createFileRoute("/admin/")({
@@ -14,6 +15,7 @@ function AdminOverview() {
   if (!overview) return <p className="text-muted-foreground">Loading…</p>;
   return (
     <div className="space-y-6">
+      <BudgetCard />
       <FlagsSection flags={overview.flags} canManage={overview.canManage} />
       <SettingsSection settings={overview.settings} canManage={overview.canManage} />
     </div>

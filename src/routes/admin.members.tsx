@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { canGrantPlatformRole, hasCapability } from "../../convex/lib/authz";
 import type { Id } from "../../convex/_generated/dataModel";
 import { AdminSection, adminButton, adminInput, adminQuietButton } from "~/components/admin/AdminSection";
+import { formatDollars } from "~/components/admin/BudgetCard";
 import { useCurrentUser } from "~/hooks/use-auth";
 import { errorMessage } from "~/lib/imagePrep";
 
@@ -21,6 +22,7 @@ type Member = {
   credits: number;
   isCreator: boolean;
   joinedAt: number;
+  spentTodayCents?: number;
 };
 
 function AdminMembers() {
@@ -111,10 +113,17 @@ function MemberRow({ member, canManage }: { member: Member; canManage: boolean }
             {member.isCreator && " · creator"}
           </p>
         </div>
-        <p className="text-2xl font-black tabular-nums">
-          {member.credits}
-          <span className="ml-1 text-sm font-bold text-muted-foreground">credits</span>
-        </p>
+        <div className="text-right">
+          <p className="text-2xl font-black tabular-nums">
+            {member.credits}
+            <span className="ml-1 text-sm font-bold text-muted-foreground">credits</span>
+          </p>
+          {member.spentTodayCents !== undefined && member.spentTodayCents > 0 && (
+            <p className="text-xs font-bold text-muted-foreground tabular-nums">
+              {formatDollars(member.spentTodayCents)} of images today
+            </p>
+          )}
+        </div>
       </div>
 
       {canManage && (
