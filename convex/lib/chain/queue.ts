@@ -126,7 +126,7 @@ export async function promoteDependents(ctx: MutationCtx, writeId: Id<"chainWrit
 
 async function insertWrite(
   ctx: MutationCtx,
-  fields: Pick<WriteDoc, "kind" | "subjectKey"> & Partial<Pick<WriteDoc, "workId" | "userId" | "backId" | "dependsOnWriteId" | "payload">>,
+  fields: Pick<WriteDoc, "kind" | "subjectKey"> & Partial<Pick<WriteDoc, "workId" | "userId" | "backId" | "dependsOnWriteId" | "newParentWorkId" | "payload">>,
 ) {
   const now = Date.now();
   const writeId = await ctx.db.insert("chainWrites", {
@@ -177,7 +177,7 @@ export async function enqueueRegisterWork(ctx: MutationCtx, workId: Id<"works">)
  * and nonce, unbound from the chain and registry it was first sent to. A registration rebuilds
  * its record when it is next ready; other kinds keep theirs unless a new payload is given.
  */
-export async function resetWrite(ctx: MutationCtx, write: WriteDoc, fields: Partial<Pick<WriteDoc, "payload" | "backId">> = {}) {
+export async function resetWrite(ctx: MutationCtx, write: WriteDoc, fields: Partial<Pick<WriteDoc, "payload" | "backId" | "newParentWorkId">> = {}) {
   if (write.status !== "failed" && write.status !== "rejected") throw new Error("Only a failed or rejected write can go again.");
   await ctx.db.patch("chainWrites", write._id, {
     status: "waiting_wallet",
@@ -237,27 +237,35 @@ export async function enqueueBack(
   });
 }
 
-/**
- * Queues a lineage correction, sent by the relayer as the registry admin. Sequence n waits for
- * amendment n − 1 (or the work's registration) to confirm.
- */
-export async function enqueueAmendment(
-  ctx: MutationCtx,
-  args: { work: Doc<"works">; newParent: Doc<"works"> | null; newKind: WorkKind; reasonHash: Hex; sequence: number },
-): Promise<Id<"chainWrites">> {
-  const subjectKey = `amend:${args.work._id}:${args.sequence}`;
-  const existing = await writeBySubject(ctx, subjectKey);
-  if (existing) return existing._id;
-  const previous = args.sequence > 1 ? await writeBySubject(ctx, `amend:${args.work._id}:${args.sequence - 1}`) : null;
-  const dependsOnWriteId = previous?._id ?? args.work.chainWriteId;
-  const payload = serializePayload({
+export type AmendmentArgs = { work: Doc<"works">; newParent: Doc<"works"> | null; newKind: WorkKind; reasonHash: Hex; sequence: number };
+
+export function amendmentPayload(args: AmendmentArgs) {
+  return serializePayload({
     workId: workIdFor(args.work._id),
     newParentId: args.newParent ? workIdFor(args.newParent._id) : ZERO_BYTES32,
     newKind: KIND_CODES[args.newKind],
     reasonHash: args.reasonHash,
     sequence: BigInt(args.sequence),
   });
-  return await insertWrite(ctx, { kind: "amendLineage", subjectKey, workId: args.work._id, dependsOnWriteId, payload });
+}
+
+/**
+ * Queues a lineage correction, sent by the relayer as the registry admin. Sequence n waits for
+ * amendment n − 1 (or the work's registration) to confirm. A rejected or failed amendment never
+ * took its sequence onchain, so the next correction reuses its write.
+ */
+export async function enqueueAmendment(ctx: MutationCtx, args: AmendmentArgs): Promise<Id<"chainWrites">> {
+  const subjectKey = `amend:${args.work._id}:${args.sequence}`;
+  const payload = amendmentPayload(args);
+  const newParentWorkId = args.newParent?._id;
+  const existing = await writeBySubject(ctx, subjectKey);
+  if (existing) {
+    if (existing.status === "failed" || existing.status === "rejected") await resetWrite(ctx, existing, { payload, newParentWorkId });
+    return existing._id;
+  }
+  const previous = args.sequence > 1 ? await writeBySubject(ctx, `amend:${args.work._id}:${args.sequence - 1}`) : null;
+  const dependsOnWriteId = previous?._id ?? args.work.chainWriteId;
+  return await insertWrite(ctx, { kind: "amendLineage", subjectKey, workId: args.work._id, dependsOnWriteId, newParentWorkId, payload });
 }
 
 /** Queues an economic config hash, sent by the relayer as the registry admin. Idempotent per version. */

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as amendments from "../amendments.js";
 import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
 import type * as backs from "../backs.js";
@@ -80,6 +81,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  amendments: typeof amendments;
   auth: typeof auth;
   authVerification: typeof authVerification;
   backs: typeof backs;
