@@ -134,7 +134,7 @@ function SettingsSection({ settings, canManage }: { settings: Settings; canManag
           <NumberField label="Signup credits" value={grantCredits} onChange={setGrantCredits} disabled={!canManage} min={0} max={1000} />
           <NumberField
             label="Daily image budget ($)"
-            hint="The most CultRemix spends on images in a day. Not enforced yet: nothing stops at this amount."
+            hint="The most CultRemix spends a day (UTC) on each paid image service: the CultRemix Gateway and fal upscales. Each call holds its worst-case cost until it settles; once the day is full, new calls wait until tomorrow."
             value={budgetDollars}
             onChange={setBudgetDollars}
             disabled={!canManage}
