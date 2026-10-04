@@ -21,7 +21,10 @@ export async function setFlag(t: T, key: string, enabled: boolean) {
   });
 }
 
-export async function makeUser(t: T, fields: { name?: string; platformRole?: "super_admin_owner"; authId?: string } = {}) {
+export async function makeUser(
+  t: T,
+  fields: { name?: string; platformRole?: "super_admin_owner"; authId?: string; creatorNumber?: number } = {},
+) {
   return t.run((ctx) => ctx.db.insert("users", { name: fields.name ?? "Member", ...fields }));
 }
 

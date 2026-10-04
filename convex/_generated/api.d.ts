@@ -59,6 +59,17 @@ import type * as lib_shopify_adminClient from "../lib/shopify/adminClient.js";
 import type * as lib_shopify_productSync from "../lib/shopify/productSync.js";
 import type * as schema_shop from "../schema/shop.js";
 import type * as shopify from "../shopify.js";
+import type * as lib_shopify_webhookVerify from "../lib/shopify/webhookVerify.js";
+import type * as lib_shopify_webhookRoute from "../lib/shopify/webhookRoute.js";
+import type * as lib_shopLineage from "../lib/shopLineage.js";
+import type * as lib_creatorPool from "../lib/creatorPool.js";
+import type * as lib_shopify_orderQuery from "../lib/shopify/orderQuery.js";
+import type * as lib_shopify_reconcile from "../lib/shopify/reconcile.js";
+import type * as earnings from "../earnings.js";
+import type * as orders from "../orders.js";
+import type * as crons from "../crons.js";
+import type * as fulfillment from "../fulfillment.js";
+import type * as lib_printful_webhookRoute from "../lib/printful/webhookRoute.js";
 import type {
   ApiFromModules,
   FilterApi,
@@ -116,6 +127,17 @@ declare const fullApi: ApiFromModules<{
   "lib/shopify/productSync": typeof lib_shopify_productSync;
   "schema/shop": typeof schema_shop;
   shopify: typeof shopify;
+  "lib/shopify/webhookVerify": typeof lib_shopify_webhookVerify;
+  "lib/shopify/webhookRoute": typeof lib_shopify_webhookRoute;
+  "lib/shopLineage": typeof lib_shopLineage;
+  "lib/creatorPool": typeof lib_creatorPool;
+  "lib/shopify/orderQuery": typeof lib_shopify_orderQuery;
+  "lib/shopify/reconcile": typeof lib_shopify_reconcile;
+  earnings: typeof earnings;
+  orders: typeof orders;
+  crons: typeof crons;
+  fulfillment: typeof fulfillment;
+  "lib/printful/webhookRoute": typeof lib_printful_webhookRoute;
 }>;
 
 /**

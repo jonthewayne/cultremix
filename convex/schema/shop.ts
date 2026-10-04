@@ -41,7 +41,12 @@ export const earningStateValidator = v.union(
 
 const roleValidator = v.union(v.literal("creator"), v.literal("family_root"), v.literal("upstream"));
 
-const unitCents = v.object({ unit: v.number(), cents: v.number() });
+// One unit's reversal cents and how they split among its recipients, fixed when the refund is seen.
+const unitCents = v.object({
+  unit: v.number(),
+  cents: v.number(),
+  split: v.array(v.object({ who: v.id("users"), cents: v.number() })),
+});
 
 export const shopTables = {
   // One Shopify product per published work, by handle cr-FFF-EEE. (The plan's works.commerceStatus
@@ -144,6 +149,8 @@ export const shopTables = {
     simulated: v.boolean(),
     economicEventAt: v.optional(v.number()),
     financialState: v.string(),
+    // Shopify's updatedAt for the snapshot last applied; older snapshots are ignored.
+    shopifyUpdatedAt: v.optional(v.number()),
     cancelled: v.boolean(),
     cancelledAt: v.optional(v.number()),
     currency: v.string(),
@@ -222,7 +229,8 @@ export const shopTables = {
     ),
     unallocatedCents: v.number(),
     shippingCents: v.number(),
-    // Set once a succeeded refund has been applied to earnings and to the Printful draft.
+    // Set once a succeeded refund has been applied to fulfillment (draft reduced, or the order
+    // flagged for the owner). Earnings are applied idempotently from the allocation above.
     appliedAt: v.optional(v.number()),
   })
     .index("by_order", ["orderId"])
