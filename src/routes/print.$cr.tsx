@@ -575,7 +575,8 @@ function PrinterView({
             view={rect}
             background={shirtHex}
             afterLabel={file ? "Print file" : `v${placed.number}, preview`}
-            className="mx-auto mt-4 max-h-[70svh] max-w-full"
+            className="mx-auto mt-4"
+            style={{ width: `min(100%, calc(70svh * ${rect.width / rect.height}))` }}
           />
         )}
       </div>

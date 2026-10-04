@@ -73,7 +73,7 @@ export function CompareView({
   return (
     <div
       ref={box}
-      className={cn("relative touch-none select-none overflow-hidden rounded-2xl border border-border", className)}
+      className={cn("relative w-full touch-none select-none overflow-hidden rounded-2xl border border-border", className)}
       style={{ aspectRatio: `${view.width} / ${view.height}`, background, cursor: "ew-resize", ...style }}
       onPointerDown={(event) => {
         dragging.current = true;
@@ -182,7 +182,7 @@ export function CropZoom({
           style={{ width: w, maxWidth: "100%" }}
         />
       </div>
-      <div>
+      <div className="max-w-40 sm:max-w-none">
         <div
           className="relative cursor-crosshair touch-none overflow-hidden rounded-xl border border-border"
           style={{ aspectRatio: `${design.width} / ${design.height}`, background }}
