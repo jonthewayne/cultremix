@@ -481,9 +481,9 @@ export function studioPrompt(args: {
       // spiked hair: all four designs took its long legs, big head, and big ears and kept her
       // glasses, freckles, earrings, smile, and curls.
       // The image test suite found the pop-art style turning her copper hair pink in all four designs
-      // in 2 of 8 runs (2026-10-05): its notes say "hot pink hair", and nothing here kept her color.
+      // in 2 of 8 grids (2026-10-05): its notes say "hot pink hair", and nothing here kept her color.
       // The last sentence keeps it without mentioning the style's hair, which primes the model to copy
-      // it. With it, 5 of 5 grids kept her copper hair, though the same failing prompt without it also
+      // it. With it, 6 of 6 grids kept her copper hair, though the same failing prompt without it also
       // came back copper once, so it's a safeguard more than a proven fix.
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the recognizable likeness ` +

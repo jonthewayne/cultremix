@@ -50,7 +50,7 @@ If the designs are right and the checker is wrong, reword the case's question, n
 
 ## Where GPT Image 2.5 stands
 
-From seven full runs on 2026-10-05 (boards in each run folder). The last, `20261005-1934`, passed 70 of 71 supported cases; the one failure, her hair turned pink, is fixed below and passed in five grids since:
+From seven full runs on 2026-10-05 (boards in each run folder). The last, `20261005-1934`, passed 70 of 71 supported cases; the one failure, her hair turned pink, is fixed below and passed in six grids since:
 
 - **Reliable:** the request reader (25 of 25 cases), the remix comparison (17 of 17), the notes, words from a request, a style named in words or on a single image, two-style mixes, a photo restyled as pop art or a 70s poster with her likeness kept, a whole-body cartoon style with her own hair or with the style's hair on request, word remixes that keep their design, a remix in words, a remix restyled by the mixer, solid color panels, four images in one call, and the model photo.
 - **Known limits:** three-style mixes (the third style lands in one design instead of all four), a style image's own lettering leaking into new words (GRASH, TRRSH, or TrROH for TRASH; all four designs in two runs of seven, one design in another), and a lion style giving a wolf a lion's mane in about half the designs.
@@ -59,7 +59,7 @@ From seven full runs on 2026-10-05 (boards in each run folder). The last, `20261
   - The notes' hair description flipped between runs until it simply describes the hair shown.
   - "Use the colors from the second image" read the second image as both subject and style, which would have drawn its woman into the design. The request reader now reads an image used only for its colors as a style.
   - At 80/20, the smaller pop-art style showed only as its woman's long pink hair on the raccoon, or not at all. Its notes' signature traits named things the image shows. They now describe ways of drawing (cyan shadows on lavender), and the raccoons came out lavender with cyan shading.
-  - The pop-art style turned the woman's copper hair pink in all four designs in 2 of 8 runs, because its notes say "hot pink hair." The prompt now says each person keeps their own hair color unless the request says otherwise: 5 of 5 grids kept her copper hair, and a new case, "with bright pink hair," made it pink in 4 of 4.
+  - The pop-art style turned the woman's copper hair pink in all four designs in 2 of 8 grids, because its notes say "hot pink hair." The prompt now says each person keeps their own hair color unless the request says otherwise: 6 of 6 grids kept her copper hair, and a new case, "with bright pink hair," made it pink in 4 of 4.
 
 ## Pinned to GPT Image 2.5
 
