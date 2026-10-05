@@ -2,9 +2,9 @@
 
 Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit by hand. How to run the suite: [README.md](README.md).
 
-Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker.
+Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words.
 
-72 cases: 3 words, 6 styles, 4 people, 8 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 23 request reader (gpt-6 luna), 17 remix comparison (gpt-6 luna).
+75 cases: 3 words, 6 styles, 5 people, 8 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 17 remix comparison (gpt-6 luna).
 
 ## Words
 
@@ -82,21 +82,22 @@ A single image named only for its look becomes a style: a new subject drawn its 
 - Request: "A dragon in this style that says FIRE BREATHER"
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: FIRE BREATHER; never KING, BLOCK (4 of 4)
-- Checks: Does the design show a dragon (4 of 4)
-- Checks: not: Is the main creature a lion rather than a dragon (4 of 4)
+- Checks: Does the design show a dragon (3 of 4)
+- Checks: not: Is the main creature a lion rather than a dragon (3 of 4)
 - Checks: Is it drawn in the style of the style image: detailed gold, brown, and black rendering with arched lettering (4 of 4)
 - First tested 2026-10-02
 
 ### `mix-80-20`: Two styles at 80/20
 
-A style at 20% still shows plainly in every design while the 80% style leads.
+A style at 20% still shows plainly in every design while the 80% style leads, through its way of drawing rather than its subject: until 2026-10-05 the pop-art style mostly showed as its woman's long pink hair on the raccoon.
 
 - Style mixer: `grow-slow` at 80, `pop-art` at 20
 - Request: "A raccoon in a tiny crown that says TRASH ROYALTY"
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: TRASH ROYALTY (4 of 4)
 - Checks: Does style A lead the design: its dense, finely detailed psychedelic illustration with mushrooms, swirls, and layered colored outlines (4 of 4)
-- Checks: Does the design also clearly show style B's look somewhere, such as Ben-Day halftone dots, neon pink, or lavender with cyan shading (4 of 4)
+- Checks: Does any part of the design take style B's colors or shading, such as lavender or purple fur with cyan shadows, neon pink, or Ben-Day halftone dots (4 of 4)
+- Checks: not: Does the raccoon have long flowing hair, like a person's (3 of 4)
 - First tested 2026-09-30
 
 ### `mix-50-50`: Two styles at 50/50
@@ -155,6 +156,18 @@ The same with a pop-art portrait: the style's palette and dots, and her own hair
 - Checks: not: Is her hair pink (3 of 4)
 - First tested 2026-10-02
 
+### `photo-pop-art-pink-hair`: A hair color on request
+
+A request can change a person's hair color while the style redraws them and her likeness stays: the prompt keeps each person's own hair color only unless the request says otherwise.
+
+- Images: `person`
+- Style mixer: `pop-art` at 100
+- Request: "Reimagine image 1 in this style, with bright pink hair"
+- Checks: four designs cut from one grid on a transparent background
+- Checks: Is her hair pink (3 of 4)
+- Checks: Is the woman from the photo recognizable, with round glasses and curly hair (4 of 4)
+- First tested 2026-10-05
+
 ### `whole-figure`: A whole-body style, her own hair
 
 A cartoon style redraws a person head to toe (long thin legs, big ears) while she keeps her glasses and her own hair.
@@ -196,7 +209,7 @@ Changing a remixable word (SLOW to LOUD) puts the new word in all four designs a
 - Request: (nothing typed)
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: GROW LOUD; never SLOW (4 of 4)
-- Checks: Apart from its words, which are meant to differ, does it keep the original's design: the same mushrooms, layout, and warped bubble lettering (3 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same subject, layout, and style (4 of 4)
 - First tested 2026-10-04
 
 ### `remix-two-lines`: Remix two of three lines
@@ -208,7 +221,7 @@ Two changed lines at once, with the kept line, the art, and the lettering unchan
 - Request: (nothing typed)
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: UNPLUGGED IS THE NEW FLEX; never OFFLINE, LUXURY (4 of 4)
-- Checks: Apart from its words, which are meant to differ, does it keep the original's design: the same curling wave and vintage lettering style (3 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same subject, layout, and style (4 of 4)
 - First tested 2026-10-04
 
 ### `remix-of-remix`: Remix a remix
@@ -220,7 +233,7 @@ A remix of a remix changes its own words (LOUD to BOLD) the same way.
 - Request: (nothing typed)
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: GROW BOLD; never LOUD (4 of 4)
-- Checks: Apart from its words, which are meant to differ, does it keep the original's design: the same mushrooms, layout, and warped bubble lettering (3 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same subject, layout, and style (4 of 4)
 - First tested 2026-10-04
 
 ### `remix-free-text`: Remix in words, not boxes
@@ -271,7 +284,7 @@ A remix can add words in its request (SINCE 1999) and keep the design's own word
 - Request: "Add the words "SINCE 1999" in small letters under the mushroom."
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: GROW SLOW SINCE 1999 (4 of 4)
-- Checks: Apart from its words, which are meant to differ, does it keep the original's design: the same mushrooms, layout, and warped bubble lettering (3 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same subject, layout, and style (4 of 4)
 - First tested 2026-10-04
 
 ### `remix-longer-and-removed`: Longer words and a removed word
@@ -283,7 +296,7 @@ A box can take much longer words (fitted smaller or over more lines), and an emp
 - Request: (nothing typed)
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: GROW WILD AND FREE; never SLOW (4 of 4)
-- Checks: Apart from its words, which are meant to differ, does it keep the original's design: the same mushrooms and warped bubble lettering (3 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same subject and style (4 of 4)
 - First tested 2026-10-04
 
 ## Grid and layout
@@ -297,7 +310,7 @@ Designs that are solid rectangles still come back on a transparent background, a
 - Request: "A solid rectangular retro gig poster for a band called THE NIGHT OWLS, filling a full panel of color"
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: NIGHT OWLS (4 of 4)
-- Checks: Is the design a solid rectangular poster panel (4 of 4)
+- Checks: Is the design one filled rectangle with straight outer edges, like a printed poster, even if it has a border or a frame inside it (4 of 4)
 - First tested 2026-10-02
 
 ### `four-images`: Four images in one call
@@ -368,7 +381,7 @@ On a newspaper page, the notes list the masthead, headline, and many separate pi
 For a cartoon style, Figure drawing gives proportions in numbers and its Hair line names the style's spiky hair.
 
 - Image: `cartoon-boys`, a cartoon of three tall boys with spiky hair, huge ears, and hoodies
-- Checks: Figure drawing says how many heads tall
+- Checks: Figure drawing says how many heads tall, or the head's share of the height
 - Checks: its Hair line names spikes
 - First tested 2026-10-04
 
@@ -420,6 +433,8 @@ What a request wants from each numbered image, and whether it asks for the style
 | `reader-words-and-mixer` | `grow-slow` | `cartoon-boys` | "change the words to GROW LOUD" | content | 2026-10-04 |
 | `reader-like-lion` | `person`, `lion` |  | "draw her like the lion design" | content/style | 2026-10-02 |
 | `reader-own-colors` | `person` | `pop-art` | "use image 1's colors with the style" | both | 2026-10-02 |
+| `reader-colors-second` | `grow-slow`, `pop-art` |  | "use the colors from the second image" | content/style | 2026-10-05 |
+| `reader-keep-own-colors` | `lion`, `pop-art` |  | "keep the lion's own colors but draw it like image 2" | both/style | 2026-10-05 |
 | `reader-style-hair` | `person` | `cartoon-boys` | "Draw image 1 as a full-body character, head to toe, with the style's hair." | content, style hair | 2026-10-04 |
 | `reader-cartoon-hair` | `person` | `cartoon-boys` | "give her the cartoon's spiky hair" | content, style hair | 2026-10-04 |
 | `reader-hair-like-image-2` | `person`, `cartoon-boys` |  | "draw image 1 in the style of image 2, with hair like image 2" | content/style, style hair | 2026-10-04 |

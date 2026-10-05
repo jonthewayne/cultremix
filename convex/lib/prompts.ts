@@ -51,6 +51,9 @@ export const STYLE_NOTES_PROMPT = [
     "hair on the people or characters shown, without its color, so it could be drawn on anyone, such as \"Hair: tall sharp spikes standing " +
     "straight up, as tall as the face\" or \"Hair: long flowing waves drawn as parallel ribbons\". Write \"Hair: none\" when nobody shown has hair.",
   "Signature traits: the three to five things that most make this style recognizable, most important first, one per line starting with a dash. " +
+    "Write each as a way of drawing that would carry to any other subject, such as a palette, a texture or pattern, a kind of line or shading, " +
+    "or a way of drawing faces and bodies, rather than as something this image shows: \"Ben-Day halftone dots in the shadows\" rather than " +
+    "\"a dotted yellow background\", and \"neon pink and cyan against heavy black outlines\" rather than \"pink hair\". " +
     "If the image draws people or animals in a distinctive way, make that one of them.",
   "",
   "Quote text only under Words. Write plain, short sentences under the other headings, about 350 words for them together, with no introduction. " +
@@ -477,11 +480,16 @@ export function studioPrompt(args: {
       // Tested 2026-10-04 with a cartoon of boys about eight heads tall with huge ears and tall
       // spiked hair: all four designs took its long legs, big head, and big ears and kept her
       // glasses, freckles, earrings, smile, and curls.
+      // The image test suite found the pop-art style turning her copper hair pink in all four designs
+      // in 2 of 8 runs (2026-10-05): its notes say "hot pink hair", and nothing here kept her color.
+      // The last sentence keeps it without mentioning the style's hair, which primes the model to copy
+      // it. With it, 5 of 5 grids kept her copper hair, though the same failing prompt without it also
+      // came back copper once, so it's a safeguard more than a proven fix.
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the recognizable likeness ` +
         `of every person and animal in ${whose}, such as their hair, glasses, freckles, and smile, so someone who knows them would recognize them, ` +
         "while drawing them fully in the style, from head to toe: the style decides their proportions and shapes, such as how tall and stretched the body is " +
-        `and how big the head and ears are.${hairLine}`;
+        `and how big the head and ears are. Unless the request says otherwise, each person keeps their own hair color.${hairLine}`;
     } else {
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the likeness of every person and animal in ${whose} recognizable: face shape, features, skin tone, hair, build, and age. ` +

@@ -1,5 +1,5 @@
-import { CASES } from "./cases";
-import type { Ask, Case, Group, WordsCheck } from "./cases";
+import { CASES, keepsParts } from "./cases";
+import type { Ask, Case, Group, KeepsCheck, WordsCheck } from "./cases";
 import { FIXTURES, fixture } from "./fixtures";
 import { PIN } from "./pin";
 
@@ -23,6 +23,8 @@ const askLine = (ask: Ask, designs: number) =>
   `${ask.expect === false ? "not: " : ""}${ask.ask.replace(/\?$/u, "")} (${ask.min ?? designs} of ${designs})`;
 const wordsLine = (words: WordsCheck, designs: number) =>
   `words read: ${words.has.join(" ")}${words.not?.length ? `; never ${words.not.join(", ")}` : ""} (${words.min ?? designs} of ${designs})`;
+const keepsLine = (keeps: KeepsCheck, designs: number) =>
+  `the remix comparison calls it image 1's design, a variation with the same ${keepsParts(keeps)} (${keeps.min ?? designs} of ${designs})`;
 const names = (ids: Array<string>) => ids.map((id) => `\`${id}\``).join(", ");
 
 function generateLines(c: Extract<Case, { kind: "generate" | "photo" }>) {
@@ -34,6 +36,7 @@ function generateLines(c: Extract<Case, { kind: "generate" | "photo" }>) {
     lines.push(`Request: ${quote(c.request)}`);
     lines.push("Checks: four designs cut from one grid on a transparent background");
     if (c.words) lines.push(`Checks: ${wordsLine(c.words, 4)}`);
+    if (c.keeps) lines.push(`Checks: ${keepsLine(c.keeps, 4)}`);
     for (const ask of c.asks) lines.push(`Checks: ${askLine(ask, 4)}`);
     for (const ask of c.gridAsks ?? []) lines.push(`Checks, whole grid: ${askLine(ask, 1)}`);
   } else {
@@ -50,7 +53,7 @@ export function renderCatalog(cases: Array<Case> = CASES) {
     "",
     "Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit by hand. How to run the suite: [README.md](README.md).",
     "",
-    `Pinned to \`${PIN.name}\`: \`${PIN.imageWithImages}\` with images, \`${PIN.imageTextOnly}\` without, grids ${PIN.gridSize} at ${PIN.gridQuality} quality; \`${PIN.vision}\` for notes, the request reader, the remix comparison, and the checker.`,
+    `Pinned to \`${PIN.name}\`: \`${PIN.imageWithImages}\` with images, \`${PIN.imageTextOnly}\` without, grids ${PIN.gridSize} at ${PIN.gridQuality} quality; \`${PIN.vision}\` for notes, the request reader, the remix comparison, and the checker's questions; \`${PIN.wordReader}\` reads each design's words.`,
     "",
     `${cases.length} cases: ${GROUPS.map((g) => `${cases.filter((c) => c.group === g.group).length} ${g.title.toLowerCase()}`).join(", ")}.`,
     "",

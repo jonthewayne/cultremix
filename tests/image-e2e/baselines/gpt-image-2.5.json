@@ -4,15 +4,16 @@
   "withImages": "openai/gpt-image-2.5-sunburst",
   "textOnly": "openai/gpt-image-2.5-flare",
   "quality": "high",
-  "vision": "openai/gpt-6-luna"
+  "vision": "openai/gpt-6-luna",
+  "words": "google/gemini-3.1-pro-preview"
  },
- "recordedAt": "2026-10-05T09:00:16.491Z",
+ "recordedAt": "2026-10-05T19:57:19.311Z",
  "cases": {
   "words-from-text": {
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "59% clear",
+    "transparent": "52% clear",
     "words": "4/4",
     "desert": "4/4",
     "grid:varied": "1/1"
@@ -22,30 +23,30 @@
    "passed": false,
    "checks": {
     "cut": "4/4",
-    "transparent": "32% clear",
+    "transparent": "31% clear",
     "words": "3/4 (no TRASH)",
     "raccoon": "4/4",
     "style": "4/4"
    }
   },
   "words-change-one-image": {
-   "passed": false,
+   "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "41% clear",
-    "words": "3/4 (no NIGHT, no SHIFT)",
+    "transparent": "37% clear",
+    "words": "4/4",
     "lion": "4/4",
     "lettering": "4/4"
    }
   },
   "style-copy": {
-   "passed": false,
+   "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "38% clear",
+    "transparent": "35% clear",
     "words": "4/4",
     "wolf": "4/4",
-    "no-lion": "2/4 (needs 3)",
+    "no-lion": "4/4",
     "style": "4/4"
    }
   },
@@ -53,7 +54,7 @@
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "26% clear",
+    "transparent": "33% clear",
     "likeness": "4/4",
     "style": "4/4",
     "one-person": "4/4"
@@ -63,7 +64,7 @@
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "40% clear",
+    "transparent": "34% clear",
     "words": "4/4",
     "dragon": "4/4",
     "no-lion": "4/4",
@@ -74,38 +75,39 @@
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "25% clear",
+    "transparent": "29% clear",
     "words": "4/4",
     "lead": "4/4",
-    "accent": "4/4"
+    "accent": "4/4",
+    "no-wig": "4/4"
    }
   },
   "mix-50-50": {
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "24% clear",
+    "transparent": "25% clear",
     "words": "4/4",
     "a": "4/4",
-    "b": "4/4"
+    "b": "3/4"
    }
   },
   "mix-three": {
    "passed": false,
    "checks": {
     "cut": "4/4",
-    "transparent": "21% clear",
+    "transparent": "24% clear",
     "words": "4/4",
-    "a": "4/4",
+    "a": "0/4 (needs 4)",
     "b": "1/4 (needs 4)",
-    "c": "0/4 (needs 4)"
+    "c": "1/4 (needs 4)"
    }
   },
   "photo-70s-poster": {
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "26% clear",
+    "transparent": "32% clear",
     "likeness": "4/4",
     "style": "4/4",
     "faces": "4/4",
@@ -116,7 +118,7 @@
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "35% clear",
+    "transparent": "45% clear",
     "likeness": "4/4",
     "style": "4/4",
     "own-hair-color": "4/4"
@@ -126,7 +128,7 @@
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "81% clear",
+    "transparent": "80% clear",
     "full-body": "4/4",
     "legs": "4/4",
     "ears": "4/4",
@@ -145,13 +147,13 @@
    }
   },
   "remix-words": {
-   "passed": false,
+   "passed": true,
    "checks": {
-    "boxes": "Tagline: SLOW to LOUD",
+    "boxes": "Headline 2: SLOW to LOUD",
     "cut": "4/4",
-    "transparent": "38% clear",
+    "transparent": "34% clear",
     "words": "4/4",
-    "same-design": "2/4 (needs 3)"
+    "keeps": "4/4"
    }
   },
   "remix-two-lines": {
@@ -159,9 +161,9 @@
    "checks": {
     "boxes": "Headline: OFFLINE to UNPLUGGED; Headline 2: LUXURY to FLEX",
     "cut": "4/4",
-    "transparent": "36% clear",
+    "transparent": "39% clear",
     "words": "4/4",
-    "same-design": "4/4"
+    "keeps": "4/4"
    }
   },
   "remix-of-remix": {
@@ -169,28 +171,28 @@
    "checks": {
     "boxes": "Headline 2: LOUD to BOLD",
     "cut": "4/4",
-    "transparent": "40% clear",
+    "transparent": "38% clear",
     "words": "4/4",
-    "same-design": "4/4"
+    "keeps": "4/4"
    }
   },
   "remix-free-text": {
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "34% clear",
+    "transparent": "38% clear",
     "words": "4/4",
     "snail": "4/4",
     "beach": "4/4",
-    "no-night": "3/4"
+    "no-night": "4/4"
    }
   },
   "remix-words-keep-look": {
    "passed": true,
    "checks": {
-    "boxes": "Headline 2: ROYALTY to COUTURE",
+    "boxes": "Tagline 2: ROYALTY to COUTURE",
     "cut": "4/4",
-    "transparent": "49% clear",
+    "transparent": "51% clear",
     "words": "4/4",
     "raccoon": "4/4",
     "look": "4/4"
@@ -199,9 +201,9 @@
   "remix-words-with-style": {
    "passed": true,
    "checks": {
-    "boxes": "Headline 2: ROYALTY to COUTURE",
+    "boxes": "Tagline 2: ROYALTY to COUTURE",
     "cut": "4/4",
-    "transparent": "46% clear",
+    "transparent": "44% clear",
     "words": "4/4",
     "raccoon": "4/4",
     "style": "4/4"
@@ -211,26 +213,26 @@
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "40% clear",
+    "transparent": "39% clear",
     "words": "4/4",
-    "same-design": "3/4"
+    "keeps": "4/4"
    }
   },
   "remix-longer-and-removed": {
-   "passed": false,
+   "passed": true,
    "checks": {
-    "boxes": "Headline: GROW to GROW WILD AND FREE; Tagline: SLOW to (removed)",
+    "boxes": "Headline: GROW to GROW WILD AND FREE; Headline 2: SLOW to (removed)",
     "cut": "4/4",
-    "transparent": "34% clear",
+    "transparent": "32% clear",
     "words": "4/4",
-    "same-design": "2/4 (needs 3)"
+    "keeps": "4/4"
    }
   },
   "color-blocks": {
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "45% clear",
+    "transparent": "44% clear",
     "words": "4/4",
     "panel": "4/4"
    }
@@ -286,22 +288,22 @@
    }
   },
   "notes-photo": {
-   "passed": false,
+   "passed": true,
    "checks": {
     "kind": "yes",
-    "hair": "no"
+    "hair": "yes"
    }
   },
   "notes-hair-portrait": {
-   "passed": false,
+   "passed": true,
    "checks": {
-    "hair": "no"
+    "hair": "yes"
    }
   },
   "notes-hair-poster": {
-   "passed": false,
+   "passed": true,
    "checks": {
-    "hair": "no"
+    "hair": "yes"
    }
   },
   "reader-mixer-plain": {
@@ -530,6 +532,39 @@
    "passed": true,
    "checks": {
     "verdict": "2/2: fork, fork"
+   }
+  },
+  "reader-colors-second": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
+   }
+  },
+  "reader-keep-own-colors": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: both/style, both/style"
+   }
+  },
+  "compare-grow-slow-to-grow-slow-pixel": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-grow-slow-to-grow-slow-cactus": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: fork, fork"
+   }
+  },
+  "photo-pop-art-pink-hair": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "52% clear",
+    "pink": "4/4",
+    "likeness": "4/4"
    }
   }
  }

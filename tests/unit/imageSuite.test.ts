@@ -31,10 +31,13 @@ describe("the image test suite's catalog", () => {
     for (const c of CASES) {
       if (c.kind !== "generate" && c.kind !== "photo") continue;
       const gridAsks = c.kind === "generate" ? (c.gridAsks?.length ?? 0) : 0;
-      expect(c.asks.length + gridAsks + (c.words ? 1 : 0), c.id).toBeGreaterThan(0);
+      const keeps = c.kind === "generate" && c.keeps ? 1 : 0;
+      expect(c.asks.length + gridAsks + keeps + (c.words ? 1 : 0), c.id).toBeGreaterThan(0);
       const askIds = c.asks.map((ask) => ask.id);
       expect(new Set(askIds).size, c.id).toBe(askIds.length);
       if (c.kind === "generate" && c.remix?.words?.length) expect(c.images?.length, c.id).toBeGreaterThan(0);
+      // The keeps check compares each design with image 1.
+      if (c.kind === "generate" && c.keeps) expect(c.images?.length, c.id).toBeGreaterThan(0);
     }
   });
 

@@ -1,12 +1,13 @@
 // The image test suite's runner: reruns the cases in cases.ts against the pinned models (pin.ts),
 // building every prompt with production's own code, and writes a report with a board per case to
-// .tmp/image-e2e/runs/<run>/. It costs money (about $3.50 for every case); see README.md.
+// .tmp/image-e2e/runs/<run>/. It costs money (about $2.70 to run every case); see README.md.
 //   bun run test:image                         every case, against production's models
 //   bun run test:image --group remix,words     some groups
 //   bun run test:image --case remix-words      some cases
 //   bun run test:image --list                  the cases, without running anything
 //   bun run test:image --catalog               rewrite CASES.md
 //   bun run test:image --dry-run               notes and prompts only, no images
+//   bun run test:image --recheck <run>         check an earlier run's images again, without new ones
 //   bun run test:image --image-model <id> --name <name>   another image model
 //   bun run test:image --update-baseline       record this run as its baseline
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,11 +29,11 @@ import type { RemixField } from "../../convex/lib/remixFields";
 import { decodeToRgba, encodePng } from "../../convex/lib/resize";
 import { readRoles } from "../../convex/lib/roleReader";
 import { caseBoard } from "./board";
-import { CASES } from "./cases";
-import type { Ask, Case, CompareCase, GenerateCase, Notes, NotesCase, PhotoCase, ReaderCase, WordsCheck } from "./cases";
+import { CASES, keepsParts } from "./cases";
+import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PhotoCase, ReaderCase, WordsCheck } from "./cases";
 import { renderCatalog } from "./catalog";
 import { fixture, fixturePath } from "./fixtures";
-import { checkImage, rereadWords, wordsMatch } from "./judge";
+import { checkImage, readWords, throttled, wordsMatch } from "./judge";
 import type { Answers } from "./judge";
 import { PIN } from "./pin";
 
@@ -52,6 +53,8 @@ type Args = {
   updateBaseline: boolean;
   name?: string;
   force: boolean;
+  // An earlier run folder whose grids and photos are checked again in place of new images.
+  recheck?: string;
 };
 
 function parseArgs(argv: Array<string>): Args {
@@ -76,6 +79,7 @@ function parseArgs(argv: Array<string>): Args {
     else if (flag === "--update-baseline") args.updateBaseline = true;
     else if (flag === "--name") args.name = value();
     else if (flag === "--force") args.force = true;
+    else if (flag === "--recheck") args.recheck = value();
     else throw new Error(`Unknown option ${flag}. See tests/image-e2e/README.md.`);
   }
   return args;
@@ -152,6 +156,13 @@ function noteFailure(ctx: Context, error: unknown) {
 const code = (text: string) => "`" + text + "`";
 const toBytes = (buffer: Buffer) => new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.length);
 
+// With --recheck, the image an earlier run made for a case (its grid or photo).
+function earlierImage(runDir: string, caseId: string, name: string) {
+  const file = join(runDir, caseId, name);
+  if (!existsSync(file)) throw new Error(`The rechecked run has no ${caseId}/${name}.`);
+  return toBytes(readFileSync(file));
+}
+
 function askChecks(asks: Array<Ask>, answers: Array<Answers | null>, total: number, prefix = ""): Array<Check> {
   return asks.map((ask) => {
     const expect = ask.expect ?? true;
@@ -191,6 +202,72 @@ function designMisses(asks: Array<Ask>, words: WordsCheck | undefined, answer: A
     misses.push(...read.missing.map((w) => `no ${w}`), ...read.unwanted.map((w) => `has ${w}`));
   }
   return misses;
+}
+
+// A second look at whatever a design missed, before it counts as a miss: the questions it missed are
+// asked once more, and its words read once more. The checker misses about one question in 40 that it
+// answers right on another try (2026-10-05). Returns the extra cost.
+async function secondLook(
+  ctx: Context,
+  args: { design: Uint8Array; refs: Array<{ as: string; bytes: Uint8Array }>; asks: Array<Ask>; words?: WordsCheck; answer: Answers | null },
+) {
+  const { design, refs, asks, words, answer } = args;
+  if (!answer) return 0;
+  let cents = 0;
+  const missed = asks.filter((ask) => answer.answers[ask.id] !== (ask.expect ?? true));
+  const wordsMissed = Boolean(words) && !wordsMatch(answer.words, words!).ok;
+  const [again, reread] = await Promise.all([
+    missed.length ? ctx.check({ design, refs, asks: missed, readWords: false }).catch(() => null) : null,
+    wordsMissed ? readWords(PIN.wordReader, design).catch(() => null) : null,
+  ]);
+  if (again) {
+    for (const ask of missed) if (again.answers[ask.id] === (ask.expect ?? true)) answer.answers[ask.id] = again.answers[ask.id];
+    cents += again.costCents ?? 0;
+  }
+  if (reread) {
+    if (wordsMatch(reread.words, words!).ok) answer.words = reread.words;
+    cents += reread.costCents;
+  }
+  return cents;
+}
+
+// The remix comparison, with up to three tries like production's (convex/remixCheck.ts): during a
+// full run, with image calls alongside, some calls ran past its 45-second limit (2026-10-05).
+async function compareWithRetries(original: Uint8Array, remix: Uint8Array) {
+  let lastError: unknown = new Error("no answer");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await throttled(() => compareRemix(original, remix, PIN.vision));
+    } catch (error) {
+      lastError = error;
+      if (STOPPING.test(error instanceof Error ? error.message : String(error))) break;
+    }
+  }
+  throw lastError;
+}
+
+// The comparison on one design against image 1, for a case's keeps check: what it read as changed
+// ("a new design" when it calls the design a fork).
+async function keptParts(original: Uint8Array, design: Uint8Array, keeps: KeepsCheck) {
+  const result = await compareWithRetries(original, design);
+  const misses = keeps.parts.filter((part) => result[part] !== "same").map((part) => `${part} ${result[part] ?? "not judged"}`);
+  if (result.verdict !== "variation") misses.unshift("a new design");
+  return { misses, costCents: result.costCents ?? 0 };
+}
+
+function keepsChecks(keeps: KeepsCheck | undefined, kept: Array<{ misses: Array<string> } | null>, total: number): Array<Check> {
+  if (!keeps) return [];
+  const matched = kept.filter((k) => k && k.misses.length === 0).length;
+  const need = keeps.min ?? total;
+  const notes = [...(matched < need ? [`needs ${need}`] : []), ...new Set(kept.flatMap((k) => k?.misses ?? []))];
+  return [
+    {
+      id: "keeps",
+      label: `the remix comparison calls it image 1's design with the same ${keepsParts(keeps)}`,
+      passed: matched >= need,
+      detail: `${matched}/${total}${notes.length ? ` (${notes.join("; ")})` : ""}`,
+    },
+  ];
 }
 
 // The studio's word boxes for a remix: each edit names the words it changes. A whole box matches
@@ -258,23 +335,30 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
     }
     wordChanges = wordChangeInstruction(fields, edited.checked.changes);
   }
-  const prompt = await batchPrompt({ instruction: c.request, presets: [], attachments, styles, remixOfParent: Boolean(c.remix), wordChanges });
+  // The request reader inside batchPrompt has a 10-second limit, so it waits its turn with the other calls.
+  const prompt = await throttled(() => batchPrompt({ instruction: c.request, presets: [], attachments, styles, remixOfParent: Boolean(c.remix), wordChanges }));
   writeFileSync(join(dir, "prompt.txt"), prompt.text);
   const roles = `read as ${prompt.roles.join("/") || "no images"}${prompt.styleHair ? ", style hair" : ""}${prompt.read ? "" : " (phrases)"}`;
   if (ctx.args.dryRun) {
     return { ...base, passed: true, checks, seconds: (Date.now() - started) / 1000, costCents: 0, note: `dry run; ${roles}; ${prompt.text.length} characters` };
   }
-  const inputs = await Promise.all(order.map((id) => ctx.png(id)));
-  const out = await gatewayImage({
-    text: prompt.text,
-    images: inputs,
-    size: PIN.gridSize,
-    background: "transparent",
-    quality: ctx.args.quality ?? PIN.gridQuality,
-    model: ctx.args.imageModel,
-  });
-  let cost = gatewayCostCents(out.providerMetadata) ?? 0;
-  const grid = stripPngMetadata(out.bytes);
+  let cost = 0;
+  let grid: Uint8Array;
+  if (ctx.args.recheck) {
+    grid = earlierImage(ctx.args.recheck, c.id, "grid.png");
+  } else {
+    const inputs = await Promise.all(order.map((id) => ctx.png(id)));
+    const out = await gatewayImage({
+      text: prompt.text,
+      images: inputs,
+      size: PIN.gridSize,
+      background: "transparent",
+      quality: ctx.args.quality ?? PIN.gridQuality,
+      model: ctx.args.imageModel,
+    });
+    cost = gatewayCostCents(out.providerMetadata) ?? 0;
+    grid = stripPngMetadata(out.bytes);
+  }
   writeFileSync(join(dir, "grid.png"), grid);
   const rgba = await decodeToRgba(grid);
   let clear = 0;
@@ -289,30 +373,37 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
   checks.push({ id: "cut", label: "four designs cut from one grid", passed: cut === 4, detail: `${cut}/4` });
   checks.push({ id: "transparent", label: "a transparent background", passed: clearShare >= 0.15, detail: `${Math.round(clearShare * 100)}% clear` });
   const refs = await Promise.all((c.shows ?? []).map(async (shown) => ({ as: shown.as, bytes: await ctx.png(shown.fixture) })));
-  const answers = await Promise.all(
-    designs.map((design) =>
-      design
-        ? ctx.check({ design, refs, asks: c.asks, readWords: Boolean(c.words) }).catch((error) => {
-            noteFailure(ctx, error);
-            return null;
-          })
-        : Promise.resolve(null),
+  const original = c.keeps ? await ctx.png(numbered[0]) : null;
+  // Why a design went unchecked, for the report.
+  let checkFailure: string | undefined;
+  const [answers, kept] = await Promise.all([
+    Promise.all(
+      designs.map((design) =>
+        design
+          ? ctx.check({ design, refs, asks: c.asks, readWords: Boolean(c.words) }).catch((error) => {
+              checkFailure ??= noteFailure(ctx, error);
+              return null;
+            })
+          : Promise.resolve(null),
+      ),
     ),
+    Promise.all(
+      designs.map((design) =>
+        design && original && c.keeps
+          ? keptParts(original, design, c.keeps).catch((error) => {
+              checkFailure ??= noteFailure(ctx, error);
+              return null;
+            })
+          : Promise.resolve(null),
+      ),
+    ),
+  ]);
+  const unchecked = designs.some((design, i) => design && (!answers[i] || (c.keeps && !kept[i])));
+  const extra = await Promise.all(
+    answers.map((answer, i) => (designs[i] ? secondLook(ctx, { design: designs[i]!, refs, asks: c.asks, words: c.words, answer }) : 0)),
   );
-  const unchecked = designs.some((design, i) => design && !answers[i]);
-  // A design whose words read wrong gets one closer look before it counts as a miss.
-  if (c.words) {
-    await Promise.all(
-      answers.map(async (answer, i) => {
-        const design = designs[i];
-        if (!answer || !design || wordsMatch(answer.words, c.words!).ok) return;
-        const again = await rereadWords(PIN.checker, design).catch(() => null);
-        if (again && wordsMatch(again.words, c.words!).ok) answer.words = again.words;
-        cost += again?.costCents ?? 0;
-      }),
-    );
-  }
-  checks.push(...wordsChecks(c.words, answers, 4), ...askChecks(c.asks, answers, 4));
+  cost += extra.reduce((sum, cents) => sum + cents, 0);
+  checks.push(...wordsChecks(c.words, answers, 4), ...keepsChecks(c.keeps, kept, 4), ...askChecks(c.asks, answers, 4));
   if (c.gridAsks?.length) {
     const gridAnswer = await ctx.check({ design: grid, refs: [], asks: c.gridAsks, readWords: false }).catch((error) => {
       noteFailure(ctx, error);
@@ -321,6 +412,7 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
     checks.push(...askChecks(c.gridAsks, [gridAnswer], 1, "grid:"));
   }
   cost += answers.reduce((sum, a) => sum + (a?.costCents ?? 0), 0);
+  cost += kept.reduce((sum, k) => sum + (k?.costCents ?? 0), 0);
   const board = join(dir, "board.png");
   await caseBoard({
     title: c.title,
@@ -338,7 +430,8 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
       }),
     ),
     designs: designs.map((design, i) => {
-      const misses = design ? designMisses(c.asks, c.words, answers[i]) : ["no design"];
+      const keptMisses = c.keeps ? (kept[i]?.misses ?? ["comparison failed"]) : [];
+      const misses = design ? [...designMisses(c.asks, c.words, answers[i]), ...keptMisses] : ["no design"];
       return { bytes: design, ok: misses.length === 0, misses };
     }),
     out: board,
@@ -351,7 +444,7 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
     costCents: cost,
     board,
     note: roles,
-    error: unchecked ? "The checker didn't answer for every design." : undefined,
+    error: unchecked ? `The checker or the remix comparison didn't answer for every design: ${(checkFailure ?? "no answer").slice(0, 120)}` : undefined,
   };
 }
 
@@ -364,13 +457,22 @@ async function runPhoto(c: PhotoCase, ctx: Context): Promise<CaseResult> {
   const text = photoPrompt(c.shirt, pickLook(`suite:${c.id}`, []));
   writeFileSync(join(dir, "prompt.txt"), text);
   if (ctx.args.dryRun) return { ...base, passed: true, checks: [], seconds: 0, costCents: 0, note: "dry run" };
-  const out = await gatewayImage({ text, images: [art], size: PIN.photoSize, background: "opaque", quality: PIN.photoQuality, model: ctx.args.imageModel });
-  const photo = stripPngMetadata(out.bytes);
+  let photo: Uint8Array;
+  let cents = 0;
+  if (ctx.args.recheck) {
+    photo = earlierImage(ctx.args.recheck, c.id, "photo.png");
+  } else {
+    const out = await gatewayImage({ text, images: [art], size: PIN.photoSize, background: "opaque", quality: PIN.photoQuality, model: ctx.args.imageModel });
+    cents = gatewayCostCents(out.providerMetadata) ?? 0;
+    photo = stripPngMetadata(out.bytes);
+  }
   writeFileSync(join(dir, "photo.png"), photo);
-  const answer = await ctx.check({ design: photo, refs: [{ as: "the design", bytes: art }], asks: c.asks, readWords: Boolean(c.words) }).catch((error) => {
+  const photoRefs = [{ as: "the design", bytes: art }];
+  const answer = await ctx.check({ design: photo, refs: photoRefs, asks: c.asks, readWords: Boolean(c.words) }).catch((error) => {
     noteFailure(ctx, error);
     return null;
   });
+  cents += await secondLook(ctx, { design: photo, refs: photoRefs, asks: c.asks, words: c.words, answer });
   const checks = [...wordsChecks(c.words, [answer], 1), ...askChecks(c.asks, [answer], 1)];
   const board = join(dir, "board.png");
   const misses = designMisses(c.asks, c.words, answer);
@@ -381,7 +483,7 @@ async function runPhoto(c: PhotoCase, ctx: Context): Promise<CaseResult> {
     designs: [{ bytes: photo, ok: misses.length === 0, misses }],
     out: board,
   });
-  const cost = (gatewayCostCents(out.providerMetadata) ?? 0) + (answer?.costCents ?? 0);
+  const cost = cents + (answer?.costCents ?? 0);
   return {
     ...base,
     passed: Boolean(answer) && checks.every((check) => check.passed),
@@ -417,7 +519,7 @@ async function runReader(c: ReaderCase, ctx: Context): Promise<CaseResult> {
   const accepted = new Set(c.roles.flatMap((roles) => (c.styleHair ?? [false]).map((hair) => `${roles.join("/")}${hair ? "+hair" : ""}`)));
   const answers = await Promise.all(
     Array.from({ length: trials }, async () => {
-      const read = await readRoles({ instruction: c.request, images: c.images.map(describe), mixer: (c.mixer ?? []).map(describe), remix: false });
+      const read = await throttled(() => readRoles({ instruction: c.request, images: c.images.map(describe), mixer: (c.mixer ?? []).map(describe), remix: false }));
       return read ? `${read.roles.join("/")}${read.styleHair ? "+hair" : ""}` : "no answer";
     }),
   );
@@ -444,7 +546,7 @@ async function runCompare(c: CompareCase, ctx: Context): Promise<CaseResult> {
   const verdicts = await Promise.all(
     Array.from({ length: trials }, async () => {
       try {
-        const result = await compareRemix(original, remix, PIN.vision);
+        const result = await compareWithRetries(original, remix);
         ctx.spent.cents += result.costCents ?? 0;
         return { verdict: result.verdict as string, reason: result.reason };
       } catch (error) {
@@ -468,7 +570,7 @@ async function runCompare(c: CompareCase, ctx: Context): Promise<CaseResult> {
 
 type Baseline = {
   name: string;
-  models: { withImages: string; textOnly: string; quality: string; vision: string };
+  models: { withImages: string; textOnly: string; quality: string; vision: string; words?: string };
   recordedAt: string;
   cases: Record<string, { passed: boolean; checks: Record<string, string> }>;
 };
@@ -502,22 +604,30 @@ async function main() {
     return;
   }
   if (!loadGatewayKey()) throw new Error("No AI_GATEWAY_API_KEY in the environment or ~/.config/cultremix/gateway.env.");
+  if (args.recheck) {
+    const earlier = [args.recheck, join(REPO_DIR, ".tmp", "image-e2e", "runs", args.recheck)].find((dir) => existsSync(join(dir, "results.json")));
+    if (!earlier) throw new Error(`No earlier run at ${args.recheck}.`);
+    args.recheck = earlier;
+  }
   const name = args.name ?? (args.imageModel ? args.imageModel.replace(/^.*\//u, "") : PIN.name);
   const stamp = new Date().toISOString().replace(/[-:]/gu, "").replace("T", "-").slice(0, 13);
-  const runDir = join(REPO_DIR, ".tmp", "image-e2e", "runs", `${stamp}-${name}`);
+  const runDir = join(REPO_DIR, ".tmp", "image-e2e", "runs", `${stamp}-${name}${args.recheck ? "-recheck" : ""}`);
   mkdirSync(join(runDir, "notes"), { recursive: true });
   const grids = cases.filter((c): c is GenerateCase => c.kind === "generate");
   const quality = qualityOf(args.quality, PIN.gridQuality);
-  const estimate =
-    grids.reduce((sum, c) => sum + gridWorstCaseCents(new Set([...(c.images ?? []), ...(c.mixer ?? []).map((m) => m.fixture)]).size, quality), 0) +
-    cases.filter((c) => c.kind === "photo").length * photoWorstCaseCents();
+  const estimate = args.recheck
+    ? 0
+    : grids.reduce((sum, c) => sum + gridWorstCaseCents(new Set([...(c.images ?? []), ...(c.mixer ?? []).map((m) => m.fixture)]).size, quality), 0) +
+      cases.filter((c) => c.kind === "photo").length * photoWorstCaseCents();
   console.log(
-    `${cases.length} cases against ${args.imageModel ?? `${PIN.imageWithImages} / ${PIN.imageTextOnly}`} (${quality})${args.dryRun ? ", dry run" : `, images up to about $${(estimate / 100).toFixed(2)}`}`,
+    `${cases.length} cases against ${args.imageModel ?? `${PIN.imageWithImages} / ${PIN.imageTextOnly}`} (${quality})${
+      args.dryRun ? ", dry run" : args.recheck ? `, rechecking the images in ${args.recheck}` : `, images up to about $${(estimate / 100).toFixed(2)}`
+    }`,
   );
 
   // The gateway refuses every call once its credit runs out, so a run checks the balance first.
   // The checker and the text calls add about a quarter to the image estimate.
-  const needCents = args.dryRun ? 25 : Math.ceil(estimate * 1.25) + 30;
+  const needCents = args.dryRun || args.recheck ? 25 : Math.ceil(estimate * 1.25) + 30;
   const balance = await gateway
     .getCredits()
     .then((credits) => Number.parseFloat(credits.balance))
@@ -546,7 +656,7 @@ async function main() {
   };
   const spent = { cents: 0 };
   const check: Context["check"] = async (input) => {
-    const answer = await checkImage({ model: PIN.checker, ...input });
+    const answer = await checkImage({ model: PIN.checker, wordModel: PIN.wordReader, ...input });
     return answer;
   };
 
@@ -621,6 +731,7 @@ async function main() {
     textOnly: args.imageModel ?? PIN.imageTextOnly,
     quality,
     vision: PIN.vision,
+    words: PIN.wordReader,
   };
   const summary =
     `${supported.length - failed.length} of ${supported.length} supported cases passed` +
@@ -630,7 +741,7 @@ async function main() {
     `# Image test suite: ${name}`,
     "",
     `${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC, ${minutes.toFixed(1)} min, about $${(cost / 100).toFixed(2)}${args.dryRun ? " (dry run)" : ""}.`,
-    `Images: \`${models.withImages}\` with images, \`${models.textOnly}\` without, ${PIN.gridSize} at ${quality}. Notes, reader, comparison, and checker: \`${PIN.vision}\`.`,
+    `Images: \`${models.withImages}\` with images, \`${models.textOnly}\` without, ${PIN.gridSize} at ${quality}. Notes, reader, comparison, and checker: \`${PIN.vision}\`; words read by \`${PIN.wordReader}\`.${args.recheck ? ` Images from ${args.recheck}, checked again.` : ""}`,
     "",
     `**${summary}.**`,
     "",

@@ -1,8 +1,8 @@
 # Image test suite
 
-A rerunnable record of everything CultRemix's image pipeline aims to do, run against the real models: GPT Image 2.5 makes the images, and GPT-6 Luna writes each image's notes, reads what a request wants from each image, compares a remix with its original, and checks the results. When a prompt changes or a new image model comes along, a run says which capabilities still work.
+A rerunnable record of everything CultRemix's image pipeline aims to do, run against the real models: GPT Image 2.5 makes the images, and GPT-6 Luna writes each image's notes, reads what a request wants from each image, compares a remix with its original, and answers the checks' questions, while Gemini 3.1 Pro reads each design's words letter for letter. When a prompt changes or a new image model comes along, a run says which capabilities still work.
 
-Every case runs through production's own code. Prompts come from `convex/lib/batchPrompt.ts` (the request reader plus `studioPrompt`), remix word boxes from `convex/lib/remixFields.ts`, notes from `convex/lib/notesWriter.ts`, the remix comparison from `convex/lib/remixCompare.ts`, and the image call from `convex/lib/imageCalls.ts`, the same function production calls. The suite cuts each grid with the production cutter, then a checker (GPT-6 Luna) looks at each design and answers the case's questions.
+Every case runs through production's own code. Prompts come from `convex/lib/batchPrompt.ts` (the request reader plus `studioPrompt`), remix word boxes from `convex/lib/remixFields.ts`, notes from `convex/lib/notesWriter.ts`, the remix comparison from `convex/lib/remixCompare.ts`, and the image call from `convex/lib/imageCalls.ts`, the same function production calls. The suite cuts each grid with the production cutter, then checks each design: a checker answers the case's questions, a word reader spells out its lettering, and for a remix that should keep its design, production's own remix comparison looks at it next to the original.
 
 [CASES.md](CASES.md) lists every case: what it supports, its inputs, how it's checked, and when we first tested it. It covers words, styles and style mixes, people, remixes, the grid and layout, the model photo, image notes, the request reader, and the remix comparison.
 
@@ -13,6 +13,7 @@ bun run test:image                      # every case: about 7 minutes and $2.70
 bun run test:image --group remix,words  # some groups
 bun run test:image --case remix-words   # some cases
 bun run test:image --dry-run            # notes and prompts only, no images (a few cents)
+bun run test:image --recheck 20261005-1934-gpt-image-2.5   # check an earlier run's images again (cents)
 bun run test:image --list               # the cases, without running anything
 ```
 
@@ -32,24 +33,37 @@ The suite and production draw on the same CultRemix Gateway credit. A run checks
 ## How a case passes
 
 - **Image cases:** four designs cut from one grid, a transparent background (at least 15% of the grid fully clear), the case's words read on each design (every word it needs, none it mustn't have), and each question answered as expected by at least the case's minimum of the four designs (all four unless the case says otherwise).
+- **Remixes that keep their design:** the app's remix comparison, the same call that decides variation or fork when someone publishes, must call each design the same design as the original, with its subject, layout, and style unchanged (a removed word may move the layout). It replaced a yes/no question that said no to two of four designs that were plainly right; on 66 word-remix designs from earlier runs, the comparison called every one the same design.
 - **Model photo:** the same checks on the one photo.
 - **Notes:** what the notes say about the image, such as quoting its words or describing a style's hair.
 - **Request reader and remix comparison:** two tries each (`--trials` changes it), both answering as expected unless the case allows one miss.
 
-The checker is a vision model and can misread a design, so look at a failing case's board first. Questions that name a reference ("the original," "the style image") are asked with the references in view; every other question, and reading the words, is asked about the design alone, because with a reference in view the checker answered about the reference (it read SLOW on designs that said LOUD). A design whose words read wrong gets one closer reading before it counts as a miss. If the designs are right and the checker is wrong, reword the case's question, never the production prompt, and note why in the case.
+The checker is a vision model and can misread a design, so look at a failing case's board first. Each answer had to be calibrated, and these are the lessons:
+
+- **Questions that name a reference** ("the original," "the style image") are asked with the references in view; every other question is asked about the design alone, because with a reference in view the checker answered about the reference.
+- **The checker sees questions as q1, q2, never their case ids.** An id is a claim: asked "Does the design show a dark night sky or a moon?" under the id `no-night`, it answered yes for sunny beaches 11 times in 12; under `q2`, never.
+- **Words are read by a different model.** GPT-6 Luna reads what a design probably meant: it read the misspelled TRRSH as TRASH and a clear LOUD as SLOW. Gemini 3.1 Pro, at low thinking, read all of them letter for letter (about 0.3¢ a read). No model reliably caught an E missing its bottom bar.
+- **A second look before a miss.** A design that misses a question is asked that question again, and one whose words read wrong is read again. Either counts if it comes back right.
+- **Calls wait their turn.** At most 10 checker, word, comparison, and reader calls run at once. With about 80 at once, calls queued at the gateway ran past their time limits and a whole run's comparisons failed.
+
+If the designs are right and the checker is wrong, reword the case's question, never the production prompt, and note why in the case. To test a new wording for pennies, check an earlier run's images again with `--recheck <run folder>`; it makes no images.
 
 ## Where GPT Image 2.5 stands
 
-From the full runs on 2026-10-05 (boards in each run folder):
+From seven full runs on 2026-10-05 (boards in each run folder). The last, `20261005-1934`, passed 70 of 71 supported cases; the one failure, her hair turned pink, is fixed below and passed in five grids since:
 
-- **Reliable:** the request reader (23 of 23 cases), the remix comparison (15 of 15), the notes, words from a request, a style named in words or on a single image, two-style mixes, a photo restyled as pop art or a 70s poster with her likeness kept, a whole-body cartoon style with her own hair or with the style's hair on request, word remixes that keep the look, a remix restyled by the mixer, solid color panels, four images in one call, and the model photo.
-- **Known limits:** three-style mixes (the third style lands in one design instead of all four), a style image's own lettering leaking into new words (GRASH for TRASH in some designs), and a lion style giving a wolf a lion's mane in about half the designs.
-- **Fixed by the suite:** a grid with a style dropped the request's words from three of four designs until the prompt said every design shows them, and the notes' hair description flipped between runs until it simply describes the hair shown (both 2026-10-05).
-- **Checker caveat:** "Apart from its words, does it keep the original's design" answered no for two of four word-remix designs that look right on the board (remix-words, remix-longer-and-removed). Look at those boards before treating a failure as real; the question may need gentler wording.
+- **Reliable:** the request reader (25 of 25 cases), the remix comparison (17 of 17), the notes, words from a request, a style named in words or on a single image, two-style mixes, a photo restyled as pop art or a 70s poster with her likeness kept, a whole-body cartoon style with her own hair or with the style's hair on request, word remixes that keep their design, a remix in words, a remix restyled by the mixer, solid color panels, four images in one call, and the model photo.
+- **Known limits:** three-style mixes (the third style lands in one design instead of all four), a style image's own lettering leaking into new words (GRASH, TRRSH, or TrROH for TRASH; all four designs in two runs of seven, one design in another), and a lion style giving a wolf a lion's mane in about half the designs.
+- **Fixed by the suite** (2026-10-05):
+  - A grid with a style dropped the request's words from three of four designs until the prompt said every design shows them.
+  - The notes' hair description flipped between runs until it simply describes the hair shown.
+  - "Use the colors from the second image" read the second image as both subject and style, which would have drawn its woman into the design. The request reader now reads an image used only for its colors as a style.
+  - At 80/20, the smaller pop-art style showed only as its woman's long pink hair on the raccoon, or not at all. Its notes' signature traits named things the image shows. They now describe ways of drawing (cyan shadows on lavender), and the raccoons came out lavender with cyan shading.
+  - The pop-art style turned the woman's copper hair pink in all four designs in 2 of 8 runs, because its notes say "hot pink hair." The prompt now says each person keeps their own hair color unless the request says otherwise: 5 of 5 grids kept her copper hair, and a new case, "with bright pink hair," made it pink in 4 of 4.
 
 ## Pinned to GPT Image 2.5
 
-[pin.ts](pin.ts) reads production's models from `convex/lib/models.ts`: `openai/gpt-image-2.5-sunburst` for calls with images, `openai/gpt-image-2.5-flare` for words alone, grids at 1920x1920 and high quality, and `openai/gpt-6-luna` for notes, the reader, the comparison, and the checker. So by default the suite tests exactly what ships. [baselines/gpt-image-2.5.json](baselines/gpt-image-2.5.json) holds each case's result from the last full run (2026-10-05, 61 of 70; a few cases' checks changed after it), and every run reports what changed against it. Refresh it with a full `--update-baseline` run.
+[pin.ts](pin.ts) reads production's models from `convex/lib/models.ts`: `openai/gpt-image-2.5-sunburst` for calls with images, `openai/gpt-image-2.5-flare` for words alone, grids at 1920x1920 and high quality, and `openai/gpt-6-luna` for notes, the reader, the comparison, and the checker's questions. So by default the suite tests exactly what ships. The suite's own word reader, `google/gemini-3.1-pro-preview`, is pinned there too; it's a preview model, so if it's retired, change that line. [baselines/gpt-image-2.5.json](baselines/gpt-image-2.5.json) holds each case's result from the last full run, and every run reports what changed against it. Refresh it with a full `--update-baseline` run.
 
 ## Trying a new model
 
@@ -72,11 +86,11 @@ Fixtures live in [fixtures/](fixtures/) as WebP images at most 1024 px on a side
 
 ## Costs
 
-Measured on 2026-10-05: a full run cost $2.63 to $2.65 and took about 7 minutes.
+Measured on 2026-10-05: a full run cost $2.65 to $2.85 and took 7 to 9 minutes. A `--recheck` of a full run cost about 25¢.
 
 | Kind | Each | In a full run |
 |---|---|---|
 | Image case (one 1920x1920 high grid, cut into four) | about 10-12¢, plus about 1¢ per extra input image | 24 cases |
 | Model photo (1024x1024 medium) | about 3¢ | 1 |
-| Checker, per design | a fraction of a cent | about 100 calls |
+| Checker and word reader, per design | under half a cent | about 200 calls |
 | Notes, reader, comparison | a fraction of a cent per call | about 90 calls |
