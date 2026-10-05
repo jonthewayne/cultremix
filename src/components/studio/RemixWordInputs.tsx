@@ -3,8 +3,9 @@ import { cleanFieldText, length } from "../../../convex/lib/remixWords";
 import { cn } from "~/lib/utils";
 
 // A remix's remixable words (convex/remixFields.ts forWork): one input per switched-on piece of
-// text, prefilled with the parent's words. Only changed ones are sent; the server checks them
-// against the parent's own copy.
+// text, prefilled with the parent's words. Only changed ones are sent, and an emptied box removes
+// its words; the server checks them against the parent's own copy. Anything else goes in the
+// request box below.
 
 export type WordField = { id: string; label: string; text: string; maxLength: number };
 
@@ -16,7 +17,7 @@ export function changedWords(fields: Array<WordField>, values: Record<string, st
   });
 }
 
-// True while a piece is longer than its space allows (the server refuses it too).
+// True while a piece is longer than its box takes (the server refuses it too).
 export function wordsTooLong(fields: Array<WordField>, values: Record<string, string>) {
   return fields.some((field) => length(cleanFieldText(values[field.id] ?? field.text)) > field.maxLength);
 }
@@ -38,6 +39,7 @@ export function RemixWordInputs({
         const lines = value.split("\n").length;
         const over = length(cleanFieldText(value)) > field.maxLength;
         const changed = cleanFieldText(value) !== field.text;
+        const removed = changed && cleanFieldText(value) === "";
         const className = cn(
           "mt-1 w-full resize-none border-b-2 bg-transparent py-1 text-xl font-semibold leading-tight outline-none md:text-2xl",
           changed ? "border-black" : "border-neutral-300 focus:border-black",
@@ -71,9 +73,10 @@ export function RemixWordInputs({
             )}
             {over && (
               <span className="mt-1 block text-sm font-semibold text-red-600">
-                Up to {field.maxLength} characters, so it fits the space.
+                Up to {field.maxLength} characters here. Put longer words under Anything else to change.
               </span>
             )}
+            {removed && <span className="mt-1 block text-sm text-neutral-500">Left empty, these words come out of the design.</span>}
           </div>
         );
       })}

@@ -8,10 +8,12 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { errorMessage } from "~/lib/imagePrep";
 import { cn } from "~/lib/utils";
 
-// Remixable words (convex/remixFields.ts): the creator, or an admin, picks which words people who
-// remix the design can change, and what each one is called.
+// Remixable words (convex/remixFields.ts): the creator, or an admin, picks which words a remix
+// offers as boxes to edit, and what each one is called. A remix that changes only these stays a
+// variation in the family; bigger changes can start a new family that credits the creator.
 
-const COPY = "People who remix this can change these words. Everything else stays as you made it.";
+const COPY =
+  "People who remix this get these words as boxes to edit. A remix that changes only these joins your family as a variation; bigger changes can start a new family, which still credits you.";
 const MAX_LABEL = 40;
 // The notes usually arrive within a minute of publishing; after a few, stop saying so.
 const READING_FOR_MS = 3 * 60_000;
@@ -88,7 +90,7 @@ export function RemixableWords({ workId, tone = "light", editing: alwaysEditing 
         {current.map((field) => (
           <li key={field.id} className="flex items-center gap-3">
             {editing ? (
-              <Switch dark={dark} checked={field.on} label={`Let people change ${field.label}`} onChange={(on) => change(field.id, { on })} disabled={saving} />
+              <Switch dark={dark} checked={field.on} label={`Offer ${field.label} as a box to edit`} onChange={(on) => change(field.id, { on })} disabled={saving} />
             ) : null}
             <div className={cn("min-w-0 flex-1", !field.on && "opacity-50")}>
               {editing ? (
@@ -106,7 +108,7 @@ export function RemixableWords({ workId, tone = "light", editing: alwaysEditing 
               ) : (
                 <p className="text-sm font-bold uppercase tracking-wider">
                   {field.label}
-                  {!field.on && <span className="font-semibold normal-case tracking-normal"> · stays as made</span>}
+                  {!field.on && <span className="font-semibold normal-case tracking-normal"> · no box</span>}
                 </p>
               )}
               <p className="mt-0.5 truncate text-lg font-semibold">{oneLine(field.text)}</p>

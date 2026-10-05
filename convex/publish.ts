@@ -8,7 +8,7 @@ import { isFlagOn } from "./lib/flagState";
 import { formatCr, parseCr } from "./lib/r2";
 import { pickLook } from "./lib/prompts";
 import { enqueueRegisterWork } from "./lib/chain/queue";
-import { publishPlacement } from "./lib/lineage";
+import { publishPlacement, remixChangedOnlyWords } from "./lib/lineage";
 import { recordPublishActivity, recordRemix } from "./lib/social";
 import { inheritOnPublish } from "./remixFields";
 import {
@@ -148,6 +148,12 @@ export const quick = mutation({
     if (session.remixOfWorkId && (!parent || (parent.status !== "published" && parent.status !== "withdrawn"))) {
       throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
     }
+    if (parent && args.remixKind === "fork" && remixChangedOnlyWords(batch, parent.artKey)) {
+      throw new ConvexError({
+        code: "VARIATION_ONLY",
+        message: "This remix changed only the design's remixable words, so it publishes as a variation.",
+      });
+    }
     const placement = publishPlacement(
       parent ? { id: parent._id, family: parent.crFamily } : null,
       args.remixKind ?? "variation",
@@ -221,6 +227,9 @@ export const preview = query({
           parentCr: v.string(),
           variationCr: v.string(),
           summary: v.string(),
+          // Only words changed: a variation, with no fork offered. Otherwise the dialog
+          // pre-selects fork.
+          forkAllowed: v.boolean(),
         }),
       ),
       defaultColors: v.array(v.string()),
@@ -250,6 +259,7 @@ export const preview = query({
         parentCr,
         variationCr: formatCr(parent.crFamily, family ? family.nextExpression : parent.crExpression + 1),
         summary: `A remix of CR ${parentCr}${name}${by}.`,
+        forkAllowed: !remixChangedOnlyWords(batch, parent.artKey),
       };
     }
     return {

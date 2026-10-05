@@ -118,6 +118,27 @@ export function publishPlacement(
   return { kind: "variation", family: parent.family, parentId: parent.id };
 }
 
+// Variation or fork, for a remix being published. A remix that changed only the parent's
+// remixable words (its boxes, or nothing at all) on the parent's own art stays a variation and
+// can't be published as a fork: a fork gives its creator a bigger share (convex/lib/economics.ts),
+// so a word swap can't claim one. Anything more (words in the request, style buttons, more images,
+// a style, or other art as image 1) may start a new family, and the publish dialog suggests it.
+export function remixChangedOnlyWords(
+  batch: {
+    instruction: string;
+    presets: Array<string>;
+    inspirationKey?: string;
+    images?: Array<{ key: string }>;
+    styles?: Array<{ weight: number }>;
+  },
+  parentArtKey: string | undefined,
+) {
+  const onParentArt = Boolean(parentArtKey) && batch.inspirationKey === parentArtKey;
+  const images = batch.images ? batch.images.length : batch.inspirationKey ? 1 : 0;
+  const styled = (batch.styles ?? []).some((style) => style.weight > 0);
+  return onParentArt && images <= 1 && !styled && !batch.instruction.trim() && batch.presets.length === 0;
+}
+
 export type AmendmentRefusal =
   | "not_registered"
   | "no_change"

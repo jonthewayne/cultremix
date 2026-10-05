@@ -7,6 +7,10 @@ export function length(text: string) {
   return [...text].length;
 }
 
+// The most one remixable-words box takes. The image model resets longer words smaller or over more
+// lines; anything longer goes in the request ("Anything else to change?").
+export const MAX_FIELD_LENGTH = 80;
+
 // New text as it's compared and stored: Windows line breaks made plain, ends trimmed.
 export function cleanFieldText(text: string) {
   return text
@@ -17,7 +21,9 @@ export function cleanFieldText(text: string) {
     .trim();
 }
 
-// "GROW SLOW to GROW WILD", for the batch line and the published remix.
+// "GROW SLOW to GROW WILD" (or "removed EST. 1992" for an emptied box), for the batch line and the
+// published remix.
 export function changeSummary(changes: Array<{ from: string; to: string }>) {
-  return changes.map((c) => `${c.from.replace(/\s*\n\s*/gu, " ")} to ${c.to.replace(/\s*\n\s*/gu, " ")}`).join("; ");
+  const flat = (text: string) => text.replace(/\s*\n\s*/gu, " ");
+  return changes.map((c) => (c.to ? `${flat(c.from)} to ${flat(c.to)}` : `removed ${flat(c.from)}`)).join("; ");
 }

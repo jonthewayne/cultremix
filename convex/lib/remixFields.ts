@@ -1,13 +1,14 @@
-// Remixable words (plan R11, R16): the parts of a published design a remixer may change. The image
-// reader's notes list every piece of text (the "Words" section, STYLE_NOTES_PROMPT); each piece
-// becomes a proposed field that the creator switches on or off and labels. A remix changes only
-// switched-on fields and keeps everything else as the creator made it.
+// Remixable words (plan R11, R16): the words of a published design that a remix offers as boxes to
+// edit. The image reader's notes list every piece of text (the "Words" section, STYLE_NOTES_PROMPT);
+// each piece becomes a proposed field that the creator switches on or off and labels. The boxes are
+// shortcuts, not limits: a remixer can ask for anything else in words. A remix that changed only
+// switched-on words stays a variation (convex/lib/lineage.ts remixChangedOnlyWords).
 // Server only, like convex/lib/prompts.ts: the notes and the prompt never reach the browser.
 
 import { noteSections, spellOut } from "./prompts";
-import { changeSummary, cleanFieldText, length } from "./remixWords";
+import { MAX_FIELD_LENGTH, changeSummary, cleanFieldText, length } from "./remixWords";
 
-export { changeSummary, cleanFieldText, length };
+export { MAX_FIELD_LENGTH, changeSummary, cleanFieldText, length };
 
 // kind is "text" for now; people and counts ("how many elves") can join as other kinds later
 // without changing the stored shape.
@@ -21,17 +22,23 @@ export type RemixField = {
 };
 
 // Recorded on a batch: what a remix changed, as the server read it from the parent.
+// An empty `to` removes the piece.
 export type WordChange = { fieldId: string; label: string; from: string; to: string };
 
 // Pieces past this many start switched off; the creator can turn them on.
 export const FIELDS_ON_AT_FIRST = 8;
 // Fields kept per design, so a page of body copy can't bloat the record.
 export const MAX_FIELDS = 24;
-export const MIN_MAX_LENGTH = 12;
 export const MAX_LABEL_LENGTH = 40;
 
+// A box takes up to MAX_FIELD_LENGTH characters, or the piece's own length if that's longer.
 export function maxLengthFor(text: string) {
-  return Math.max(MIN_MAX_LENGTH, Math.ceil(length(text) * 1.5));
+  return Math.max(MAX_FIELD_LENGTH, length(text));
+}
+
+// The limit for a stored field. Fields saved before the looser limit kept a tighter maxLength.
+export function fieldLimit(field: Pick<RemixField, "text" | "maxLength">) {
+  return Math.max(field.maxLength, maxLengthFor(field.text));
 }
 
 // The role words the notes use, in the order they're checked, and the label each gives.
@@ -141,23 +148,25 @@ export function proposeRemixFields(notes: string | undefined): Array<RemixField>
     });
 }
 
-// A remix's own fields: the parent's, same ids, labels, and switches, with the new text.
+// A remix's own fields: the parent's, same ids, labels, and switches, with the new text. A piece
+// the remix removed isn't one of its fields.
 export function inheritRemixFields(parent: Array<RemixField>, changes: Array<{ fieldId: string; to: string }>) {
   const changed = new Map(changes.map((c) => [c.fieldId, c.to]));
-  return parent.map((field) => {
+  return parent.flatMap((field) => {
     const text = changed.get(field.id) ?? field.text;
-    return { ...field, text, maxLength: Math.max(field.maxLength, length(text)) };
+    return text ? [{ ...field, text, maxLength: Math.max(fieldLimit(field), length(text)) }] : [];
   });
 }
 
-export type WordChangeProblem = "UNKNOWN_FIELD" | "FIELD_LOCKED" | "TOO_LONG" | "EMPTY" | "REPEATED";
+export type WordChangeProblem = "UNKNOWN_FIELD" | "FIELD_LOCKED" | "TOO_LONG" | "REPEATED";
 
 // What a remix asks to change, checked against the parent's fields as the server stored them:
-// only switched-on fields, within their length, never empty. Unchanged entries drop out.
+// only the boxes the remix offers (switched-on fields), each within MAX_FIELD_LENGTH. An empty box
+// removes its piece. Unchanged entries drop out.
 export function checkWordChanges(
   fields: Array<RemixField>,
   asked: Array<{ fieldId: string; text: string }>,
-): { ok: true; changes: Array<WordChange> } | { ok: false; problem: WordChangeProblem; label?: string } {
+): { ok: true; changes: Array<WordChange> } | { ok: false; problem: WordChangeProblem; label?: string; limit?: number } {
   const byId = new Map(fields.map((field) => [field.id, field]));
   const ids = new Set<string>();
   const changes: Array<WordChange> = [];
@@ -169,8 +178,7 @@ export function checkWordChanges(
     if (!field.on) return { ok: false, problem: "FIELD_LOCKED", label: field.label };
     const to = cleanFieldText(entry.text);
     if (to === field.text) continue;
-    if (!to) return { ok: false, problem: "EMPTY", label: field.label };
-    if (length(to) > field.maxLength) return { ok: false, problem: "TOO_LONG", label: field.label };
+    if (length(to) > fieldLimit(field)) return { ok: false, problem: "TOO_LONG", label: field.label, limit: fieldLimit(field) };
     changes.push({ fieldId: field.id, label: field.label, from: field.text, to });
   }
   return { ok: true, changes };
@@ -181,21 +189,29 @@ function quoted(text: string) {
   return `"${text.split("\n").join(" / ")}"`;
 }
 
+// New words that fit where the old ones were (the limit before boxes took up to 80 characters).
+function fitsSpace(from: string, to: string) {
+  return length(to) <= Math.max(12, Math.ceil(length(from) * 1.5));
+}
+
 // The remix prompt's word changes (convex/lib/prompts.ts studioPrompt): each changed piece
-// replaced letter for letter in its own size and place, and every other piece kept exactly. How
-// the new words look (image 1's own lettering, or a style from the mixer) is said by studioPrompt,
-// the only place that knows whether a style is in play.
+// replaced letter for letter in its own place (and size, when it fits), each emptied piece
+// removed, and every other piece kept exactly. How the new words look (image 1's own lettering,
+// or a style from the mixer) is said by studioPrompt, the only place that knows whether a style is
+// in play.
 export function wordChangeInstruction(fields: Array<RemixField>, changes: Array<WordChange>) {
   if (changes.length === 0) return "";
   const changed = new Set(changes.map((c) => c.fieldId));
-  const lines = changes.map(
-    (c) =>
-      `- ${c.label}: replace ${quoted(c.from)} with ${quoted(c.to)}, spelled letter for letter: ${spellOut(c.to)}. ` +
-      "Keep this piece's size and placement.",
-  );
+  const lines = changes.map((c) => {
+    if (!c.to) return `- ${c.label}: remove ${quoted(c.from)} completely, and let the rest of the design fill its place so nothing looks missing.`;
+    const fit = fitsSpace(c.from, c.to)
+      ? "Keep this piece's size and placement."
+      : "Put it where this piece is, in the same lettering; it's longer, so fit it by setting it smaller or over more lines.";
+    return `- ${c.label}: replace ${quoted(c.from)} with ${quoted(c.to)}, spelled letter for letter: ${spellOut(c.to)}. ${fit}`;
+  });
   const kept = fields.filter((field) => !changed.has(field.id)).map((field) => `- ${field.label}: ${quoted(field.text)}`);
   const breaks = [...changes.map((c) => c.from + c.to), ...fields.map((f) => f.text)].some((t) => t.includes("\n"));
-  const parts = [`Word changes in image 1 (only these words change):\n${lines.join("\n")}`];
+  const parts = [`Word changes in image 1:\n${lines.join("\n")}`];
   if (kept.length > 0) parts.push(`Keep every other piece of text exactly as it is, letter for letter:\n${kept.join("\n")}`);
   if (breaks) parts.push("A slash in quoted text marks a line break.");
   return parts.join("\n");

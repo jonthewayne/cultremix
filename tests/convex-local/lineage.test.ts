@@ -12,8 +12,14 @@ async function member(t: T, name: string, platformRole?: "super_admin_owner" | "
   return { userId, as: t.withIdentity({ subject: `test|${name}`, issuer: "test" }) };
 }
 
-// A finished studio tile, optionally made while remixing a work.
-async function tile(t: T, ownerId: Id<"users">, remixOfWorkId?: Id<"works">) {
+// A finished studio tile, optionally made while remixing a work. A remix's batch can say what it
+// asked for and which art was image 1.
+async function tile(
+  t: T,
+  ownerId: Id<"users">,
+  remixOfWorkId?: Id<"works">,
+  made: { instruction?: string; inspirationKey?: string } = {},
+) {
   return await t.run(async (ctx) => {
     const sessionId = await ctx.db.insert("creativeSessions", {
       ownerId,
@@ -27,8 +33,9 @@ async function tile(t: T, ownerId: Id<"users">, remixOfWorkId?: Id<"works">) {
     const batchId = await ctx.db.insert("batches", {
       sessionId,
       ownerId,
-      instruction: "x",
+      instruction: made.instruction ?? "x",
       presets: [],
+      inspirationKey: made.inspirationKey,
       backgroundColor: "#ffffff",
       operation: remixOfWorkId ? "remix" : "create",
       model: "test",
@@ -102,6 +109,34 @@ describe("publishing a remix as a variation or a fork", () => {
     // A variation of the fork joins family 102.
     const inFork = await publish(t, alice, fork.workId);
     expect(inFork.cr).toBe("102-002");
+  });
+
+  it("keeps a remix that changed only its remixable words a variation, and offers a fork for more", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const root = await publish(t, alice);
+    const artKey = "works/101/001/original.png";
+    await t.run((ctx) => ctx.db.patch("works", root.workId, { artKey }));
+
+    // Only the boxes changed, on the parent's own art: a variation, never a fork.
+    const wordsOnly = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: artKey });
+    expect((await bob.as.query(api.publish.preview, { generationId: wordsOnly }))?.remix?.forkAllowed).toBe(false);
+    await expect(
+      bob.as.mutation(api.publish.quick, { requestId: "words-fork", generationId: wordsOnly, remixKind: "fork" }),
+    ).rejects.toThrow(/publishes as a variation/);
+    const variation = await bob.as.mutation(api.publish.quick, { requestId: "words-variation", generationId: wordsOnly, remixKind: "variation" });
+    expect(variation.cr).toBe("101-002");
+
+    // Words in the request as well: the remixer may start a new family.
+    const more = await tile(t, bob.userId, root.workId, { instruction: "Add SINCE 1999 under the mushroom", inspirationKey: artKey });
+    expect((await bob.as.query(api.publish.preview, { generationId: more }))?.remix?.forkAllowed).toBe(true);
+    const fork = await bob.as.mutation(api.publish.quick, { requestId: "more-fork", generationId: more, remixKind: "fork" });
+    expect(fork.cr).toBe("102-001");
+
+    // Other art as image 1 counts as more too.
+    const otherArt = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: "members/bob/uploads/x/original.png" });
+    expect((await bob.as.query(api.publish.preview, { generationId: otherArt }))?.remix?.forkAllowed).toBe(true);
   });
 
   it("refuses to publish a remix whose parent is gone", async () => {

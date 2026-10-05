@@ -146,9 +146,9 @@ describe("fields saved when the notes are written", () => {
     await writeNotes(t, parent.workId, NOTES);
     await writeNotes(t, plain.workId, NO_WORDS);
     expect((await workDoc(t, parent.workId))?.remixFields).toEqual([
-      { id: "t1", kind: "text", label: "Headline", text: "GROW SLOW", maxLength: 14, on: true },
-      { id: "t2", kind: "text", label: "Date", text: "EST. 1992", maxLength: 14, on: true },
-      { id: "t3", kind: "text", label: "Tagline", text: "TAKE IT\nEASY", maxLength: 18, on: true },
+      { id: "t1", kind: "text", label: "Headline", text: "GROW SLOW", maxLength: 80, on: true },
+      { id: "t2", kind: "text", label: "Date", text: "EST. 1992", maxLength: 80, on: true },
+      { id: "t3", kind: "text", label: "Tagline", text: "TAKE IT\nEASY", maxLength: 80, on: true },
     ]);
     expect((await workDoc(t, plain.workId))?.remixFields).toEqual([]);
   });
@@ -202,8 +202,8 @@ describe("what the browser sees", () => {
     const view = await t.query(api.remixFields.forWork, { workId });
     expect(view).toEqual({
       fields: [
-        { id: "t1", label: "Headline", text: "GROW SLOW", maxLength: 14 },
-        { id: "t3", label: "Tagline", text: "TAKE IT\nEASY", maxLength: 18 },
+        { id: "t1", label: "Headline", text: "GROW SLOW", maxLength: 80 },
+        { id: "t3", label: "Tagline", text: "TAKE IT\nEASY", maxLength: 80 },
       ],
       changes: [],
     });
@@ -257,21 +257,44 @@ describe("remixing with the words", () => {
     expect(page.page[0].wordChanges).toEqual([{ label: "Headline", from: "GROW SLOW", to: "GROW WILD" }]);
   });
 
-  it("refuses words that are too long, switched off, unknown, or sent by someone without a username", async () => {
+  it("refuses words over a box's 80 characters, without a box, unknown, or sent by someone without a username", async () => {
     const { t, alice, bob, parent } = await setup();
     await alice.as.mutation(api.remixFields.update, { workId: parent.workId, fields: [{ id: "t2", label: "Date", on: false }] });
     const remix = await remixSession(bob.as, parent.cr, parent.artKey);
     const ask = (words: Array<{ fieldId: string; text: string }>) =>
       bob.as.mutation(api.studio.generate, { ...remix, instruction: "", backgroundColor: "#ffffff", words });
-    await expect(ask([{ fieldId: "t1", text: "GROW WILD AND FREE" }])).rejects.toThrow(/WORDS_TOO_LONG/);
+    await expect(ask([{ fieldId: "t1", text: "x".repeat(81) }])).rejects.toThrow(/WORDS_TOO_LONG/);
     await expect(ask([{ fieldId: "t2", text: "EST. 2026" }])).rejects.toThrow(/WORDS_FIELD_LOCKED/);
     await expect(ask([{ fieldId: "t7", text: "HELLO" }])).rejects.toThrow(/WORDS_UNKNOWN_FIELD/);
-    await expect(ask([{ fieldId: "t1", text: "   " }])).rejects.toThrow(/WORDS_EMPTY/);
     const batches = await t.run((ctx) => ctx.db.query("batches").collect());
     expect(batches.filter((b) => b.ownerId === bob.userId)).toHaveLength(0);
 
     const carol = await addUser(t, "carol", { username: false });
     await expect(carol.as.mutation(api.studio.startRemix, { cr: parent.cr, fresh: true })).rejects.toThrow(/username/i);
+  });
+
+  it("takes longer words, and removes the words of an emptied box", async () => {
+    const { t, bob, parent } = await setup();
+    const remix = await remixSession(bob.as, parent.cr, parent.artKey);
+    const result = await bob.as.mutation(api.studio.generate, {
+      ...remix,
+      instruction: "",
+      backgroundColor: "#ffffff",
+      words: [
+        { fieldId: "t1", text: "GROW SLOW AND STEADY ALL SUMMER LONG" },
+        { fieldId: "t2", text: "  " },
+      ],
+    });
+    if ("refused" in result) throw new Error(result.refused);
+    const batch = await t.run((ctx) => ctx.db.get("batches", result.batchId));
+    expect(batch?.wordChanges).toEqual([
+      { fieldId: "t1", label: "Headline", from: "GROW SLOW", to: "GROW SLOW AND STEADY ALL SUMMER LONG" },
+      { fieldId: "t2", label: "Date", from: "EST. 1992", to: "" },
+    ]);
+    const job = await t.query(internal.studio.batchJob, { batchId: result.batchId });
+    expect(job?.wordChanges).toContain("it's longer, so fit it by setting it smaller or over more lines.");
+    expect(job?.wordChanges).toContain('- Date: remove "EST. 1992" completely');
+    expect(job?.wordChanges).toContain('- Tagline: "TAKE IT / EASY"');
   });
 
   it("refuses words once the parent's art isn't image 1", async () => {
@@ -328,9 +351,9 @@ describe("remixing with the words", () => {
     const { workId } = await bob.as.mutation(api.publish.quick, { requestId: "remix-1", generationId });
     await t.mutation(internal.publish.markPublished, { workId, artKey: "cvx:remixart001", contentHash: "abc" });
     expect((await workDoc(t, workId))?.remixFields).toEqual([
-      { id: "t1", kind: "text", label: "Headline", text: "GROW SLOW", maxLength: 14, on: true },
-      { id: "t2", kind: "text", label: "Date", text: "EST. 1992", maxLength: 14, on: true },
-      { id: "t3", kind: "text", label: "Tagline", text: "STAY\nWEIRD", maxLength: 18, on: true },
+      { id: "t1", kind: "text", label: "Headline", text: "GROW SLOW", maxLength: 80, on: true },
+      { id: "t2", kind: "text", label: "Date", text: "EST. 1992", maxLength: 80, on: true },
+      { id: "t3", kind: "text", label: "Tagline", text: "STAY\nWEIRD", maxLength: 80, on: true },
     ]);
     // Its notes arriving later don't replace them, and its creator can still adjust them.
     await writeNotes(t, workId, NOTES.replace("GROW SLOW", "SOMETHING ELSE"));
@@ -338,8 +361,8 @@ describe("remixing with the words", () => {
     await bob.as.mutation(api.remixFields.update, { workId, fields: [{ id: "t1", label: "Headline", on: false }] });
     expect(await t.query(api.remixFields.forWork, { workId })).toEqual({
       fields: [
-        { id: "t2", label: "Date", text: "EST. 1992", maxLength: 14 },
-        { id: "t3", label: "Tagline", text: "STAY\nWEIRD", maxLength: 18 },
+        { id: "t2", label: "Date", text: "EST. 1992", maxLength: 80 },
+        { id: "t3", label: "Tagline", text: "STAY\nWEIRD", maxLength: 80 },
       ],
       changes: [{ label: "Tagline", from: "TAKE IT\nEASY", to: "STAY\nWEIRD" }],
     });

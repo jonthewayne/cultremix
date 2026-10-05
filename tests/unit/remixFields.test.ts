@@ -36,11 +36,11 @@ describe("wordPieces and proposeRemixFields", () => {
     expect(fields.every((f) => f.kind === "text" && f.on)).toBe(true);
   });
 
-  it("caps text at about one and a half times its length, never under 12", () => {
-    expect(maxLengthFor("GROW SLOW")).toBe(14);
-    expect(maxLengthFor("No. 7")).toBe(12);
-    expect(maxLengthFor("A MUCH LONGER HEADLINE HERE")).toBe(41);
-    expect(proposeRemixFields(MUSHROOM)[0].maxLength).toBe(14);
+  it("lets a box take up to 80 characters, or the piece's own length when that's longer", () => {
+    expect(maxLengthFor("GROW SLOW")).toBe(80);
+    expect(maxLengthFor("No. 7")).toBe(80);
+    expect(maxLengthFor("x".repeat(120))).toBe(120);
+    expect(proposeRemixFields(MUSHROOM)[0].maxLength).toBe(80);
   });
 
   it("keeps line breaks written as a slash or \\n", () => {
@@ -115,13 +115,20 @@ describe("checkWordChanges", () => {
     expect(result).toEqual({ ok: true, changes: [{ fieldId: "t1", label: "Headline", from: "GROW SLOW", to: "GROW WILD" }] });
   });
 
-  it("refuses unknown ids, switched-off fields, empty text, repeats, and text over the cap", () => {
+  it("refuses unknown ids, fields without a box, repeats, and text over 80 characters", () => {
     expect(checkWordChanges(FIELDS, [{ fieldId: "t9", text: "X" }])).toMatchObject({ ok: false, problem: "UNKNOWN_FIELD" });
     expect(checkWordChanges(FIELDS, [{ fieldId: "t3", text: "Bad Vibes" }])).toMatchObject({ ok: false, problem: "FIELD_LOCKED" });
-    expect(checkWordChanges(FIELDS, [{ fieldId: "t1", text: "   " }])).toMatchObject({ ok: false, problem: "EMPTY" });
     expect(checkWordChanges(FIELDS, [{ fieldId: "t1", text: "A" }, { fieldId: "t1", text: "B" }])).toMatchObject({ ok: false, problem: "REPEATED" });
-    expect(checkWordChanges(FIELDS, [{ fieldId: "t1", text: "GROW REALLY WILD" }])).toMatchObject({ ok: false, problem: "TOO_LONG", label: "Headline" });
-    expect(checkWordChanges(FIELDS, [{ fieldId: "t1", text: "GROW SO WILD!" }])).toMatchObject({ ok: true });
+    // Stored before the looser limit, the headline's own cap was 14; it now takes 80.
+    expect(checkWordChanges(FIELDS, [{ fieldId: "t1", text: "x".repeat(81) }])).toMatchObject({ ok: false, problem: "TOO_LONG", label: "Headline", limit: 80 });
+    expect(checkWordChanges(FIELDS, [{ fieldId: "t1", text: "GROW REALLY WILD AND FREE ALL SUMMER LONG" }])).toMatchObject({ ok: true });
+  });
+
+  it("reads an emptied box as removing its words", () => {
+    expect(checkWordChanges(FIELDS, [{ fieldId: "t2", text: "   " }])).toEqual({
+      ok: true,
+      changes: [{ fieldId: "t2", label: "Date", from: "EST. 1992", to: "" }],
+    });
   });
 });
 
@@ -150,6 +157,18 @@ describe("wordChangeInstruction", () => {
 
   it("is empty without changes", () => {
     expect(wordChangeInstruction(FIELDS, [])).toBe("");
+  });
+
+  it("removes an emptied piece and fits longer words into a piece's place", () => {
+    const text = wordChangeInstruction(FIELDS, [
+      { fieldId: "t1", label: "Headline", from: "GROW SLOW", to: "GROW SLOW AND STEADY ALL SUMMER" },
+      { fieldId: "t2", label: "Date", from: "EST. 1992", to: "" },
+    ]);
+    expect(text).toContain(
+      '- Headline: replace "GROW SLOW" with "GROW SLOW AND STEADY ALL SUMMER", spelled letter for letter: G-R-O-W S-L-O-W A-N-D S-T-E-A-D-Y A-L-L S-U-M-M-E-R. Put it where this piece is, in the same lettering; it\'s longer, so fit it by setting it smaller or over more lines.',
+    );
+    expect(text).toContain('- Date: remove "EST. 1992" completely, and let the rest of the design fill its place so nothing looks missing.');
+    expect(text).toContain('Keep every other piece of text exactly as it is, letter for letter:\n- Label: "Good Vibes Co."');
   });
 
   it("goes into the remix prompt before the request", () => {
@@ -239,14 +258,20 @@ describe("wordChangeInstruction", () => {
 });
 
 describe("inheritRemixFields and changeSummary", () => {
-  it("keeps the parent's ids, labels, switches, and caps with the new text", () => {
+  it("keeps the parent's ids, labels, and switches with the new text, and drops removed pieces", () => {
     const fields = inheritRemixFields(FIELDS, [{ fieldId: "t1", to: "GROW WILD" }]);
-    expect(fields).toEqual([{ ...FIELDS[0], text: "GROW WILD" }, FIELDS[1], FIELDS[2]]);
+    expect(fields).toEqual([
+      { ...FIELDS[0], text: "GROW WILD", maxLength: 80 },
+      { ...FIELDS[1], maxLength: 80 },
+      { ...FIELDS[2], maxLength: 80 },
+    ]);
+    expect(inheritRemixFields(FIELDS, [{ fieldId: "t2", to: "" }]).map((f) => f.id)).toEqual(["t1", "t3"]);
   });
 
   it("reads as plain words", () => {
     expect(changeSummary([{ from: "GROW SLOW", to: "GROW WILD" }, { from: "TAKE IT\nEASY", to: "STAY\nWEIRD" }])).toBe(
       "GROW SLOW to GROW WILD; TAKE IT EASY to STAY WEIRD",
     );
+    expect(changeSummary([{ from: "EST. 1992", to: "" }])).toBe("removed EST. 1992");
   });
 });

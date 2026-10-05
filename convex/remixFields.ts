@@ -7,6 +7,7 @@ import { requestedWords } from "./lib/prompts";
 import {
   MAX_LABEL_LENGTH,
   checkWordChanges,
+  fieldLimit,
   inheritRemixFields,
   proposeRemixFields,
   wordChangeInstruction,
@@ -18,8 +19,9 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 // Remixable words (plan R11, R16). A published work's fields are proposed from its notes when the
 // notes are written (images.saveWorkNotes), or carried over from the parent when it's a remix
 // (publish.markPublished). The creator, or an admin, switches them on or off and renames them; a
-// remix may change only switched-on fields (studio.generate). The browser gets the fields' labels
-// and texts, never the notes or the prompt.
+// remix shows the switched-on ones as boxes (studio.generate checks them), and a remix that changed
+// only those stays a variation (publish.quick). The browser gets the fields' labels and texts,
+// never the notes or the prompt.
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -28,7 +30,7 @@ const publicField = v.object({ id: v.string(), label: v.string(), text: v.string
 const publicChange = v.object({ label: v.string(), from: v.string(), to: v.string() });
 
 function publicFields(fields: Array<RemixField> | undefined) {
-  return (fields ?? []).filter((f) => f.on).map((f) => ({ id: f.id, label: f.label, text: f.text, maxLength: f.maxLength }));
+  return (fields ?? []).filter((f) => f.on).map((f) => ({ id: f.id, label: f.label, text: f.text, maxLength: fieldLimit(f) }));
 }
 
 // The batch a published work came from.
@@ -75,9 +77,8 @@ export async function proposeOnNotes(ctx: MutationCtx, workId: Id<"works">, note
 
 const PROBLEMS: Record<WordChangeProblem, string> = {
   UNKNOWN_FIELD: "Those words aren't part of this design anymore. Reload and try again.",
-  FIELD_LOCKED: "The creator keeps those words as they are.",
-  TOO_LONG: "That's a little long for the space.",
-  EMPTY: "Add the new words, or leave them as they were.",
+  FIELD_LOCKED: "Those words aren't a box on this design anymore. Reload, or say what to change under Anything else to change.",
+  TOO_LONG: "That's more than a box takes. Put longer words under Anything else to change.",
   REPEATED: "Each piece of text can be changed once.",
 };
 
@@ -96,8 +97,8 @@ export async function checkedWordChanges(
   }
   const result = checkWordChanges(parent.remixFields, asked);
   if (!result.ok) {
-    const message = result.label && result.problem === "TOO_LONG"
-      ? `The ${result.label.toLowerCase()} is a little long for the space.`
+    const message = result.label && result.limit && result.problem === "TOO_LONG"
+      ? `The ${result.label.toLowerCase()} box takes up to ${result.limit} characters. Put longer words under Anything else to change.`
       : PROBLEMS[result.problem];
     throw new ConvexError({ code: `WORDS_${result.problem}`, message });
   }

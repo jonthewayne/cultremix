@@ -37,7 +37,9 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   const preview = useQuery(api.publish.preview, { generationId: tile.generationId });
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [remixKind, setRemixKind] = useState<RemixKind>("variation");
+  // A remix that changed only its remixable words is a variation; one that changed more starts
+  // with fork selected until the member picks (components/cr/RemixKindChoice.tsx).
+  const [pickedKind, setPickedKind] = useState<RemixKind | null>(null);
   const [requestId] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<{ workId: Id<"works">; cr: string; lead: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +79,8 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   const makeLead = (key: string) => setPicked([key, ...selected.filter((k) => k !== key)]);
 
   const isRemix = Boolean(preview?.remix);
+  const forkAllowed = preview?.remix?.forkAllowed ?? false;
+  const remixKind: RemixKind = forkAllowed ? (pickedKind ?? "fork") : "variation";
   const crPreview = preview ? (preview.remix && remixKind === "variation" ? preview.remix.variationCr : preview.newFamilyCr) : null;
   const paused = preview?.publishing === false;
   const lost = selected.filter((key) => visibility.get(key) === "disappears").map((key) => garmentColor(key)!.name);
@@ -318,7 +322,13 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
 
           {isRemix && (
             <div className="-mt-6">
-              <RemixKindChoice generationId={tile.generationId} value={remixKind} onChange={setRemixKind} disabled={saving} />
+              <RemixKindChoice
+                generationId={tile.generationId}
+                value={remixKind}
+                onChange={setPickedKind}
+                forkAllowed={forkAllowed}
+                disabled={saving}
+              />
             </div>
           )}
 
