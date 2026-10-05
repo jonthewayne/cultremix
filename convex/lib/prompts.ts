@@ -37,16 +37,25 @@ export const STYLE_NOTES_PROMPT = [
   "Lettering: the overall lettering approach: letterforms, weight, width, spacing, and case; how the text pieces relate in size and style; " +
     "how they're arranged (arched, stacked, on a banner) and sit with the art; and effects such as outlines, drop shadows, 3D, gradients, or texture. " +
     "Refer to each piece by its role, such as the headline; don't quote it here.",
-  "People and characters: who is in it and what makes each one recognizable: face shape, eyes, nose, mouth, hair, skin tone, " +
-    "freckles or other marks, glasses, facial hair, apparent age, expression, pose, and clothing. Describe the person, not the drawing style. " +
-    "Never name or guess who a real person is.",
-  "Figure drawing: how this image draws people and animals compared with real proportions: head shape and length, face length, chin, nose, " +
-    "eyes (size, and whether they're dots or detailed), neck, limbs, hands, and body shape. Say plainly what is exaggerated or simplified and by " +
-    "how much, using numbers where you can, such as \"heads about twice as long as they are wide, with long pointed chins\". " +
-    "If nothing is exaggerated, write only \"Realistic proportions.\"",
-  "Signature traits: the three to five things that most make this style recognizable, most important first, one per line starting with a dash.",
+  "People and characters: who is in it and what makes each one recognizable, from head to toe: face shape, eyes, nose, mouth, ears, " +
+    "hair (color, length, and texture), skin tone, freckles or other marks, glasses, facial hair, build and height, apparent age, expression, " +
+    "pose, and clothing. Describe the person, not the drawing style. Never name or guess who a real person is.",
+  "Figure drawing: how this image draws people and animals from head to toe, compared with real anatomy. This is how the style turns anyone " +
+    "into one of its own figures, so cover every part the image shows: overall proportions (how many heads tall, and head size against the body); " +
+    "body shape and silhouette (for example elongated, stocky, rubbery, or angular); neck, torso, arms, legs, hands, and feet; the head and face " +
+    "(shape and length, chin, eyes as dots or detailed and their size, nose, mouth, and ears); hair as a shape and texture (for example spiky and " +
+    "standing straight up, one solid block, or flowing ribbons); and posture and gesture. For animals, the same: head, ears, muzzle, body, legs, " +
+    "and tail. Say plainly what is exaggerated or simplified and by how much, using numbers where you can, such as \"figures about nine heads tall " +
+    "with long thin legs\", \"ears half as big as the head\", or \"hair standing straight up, as tall as the face\". " +
+    "If nothing is exaggerated, write \"Realistic proportions.\" End with a line starting \"Hair:\". If this style would redraw any person's hair, " +
+    "even short straight hair, into one particular exaggerated shape that no ordinary haircut has, describe that shape so it could be drawn on " +
+    "anyone, such as \"Hair: tall sharp spikes standing straight up, as tall as the face\" or \"Hair: one smooth solid helmet shape with a single " +
+    "highlight\". One person's curls, waves, or long hair are their own hairstyle, even when drawn big. If the hair here is just the hairstyle " +
+    "of the people shown, or no people are shown, write \"Hair: true to life\".",
+  "Signature traits: the three to five things that most make this style recognizable, most important first, one per line starting with a dash. " +
+    "If the image draws people or animals in a distinctive way, make that one of them.",
   "",
-  "Quote text only under Words. Write plain, short sentences under the other headings, about 300 words for them together, with no introduction. " +
+  "Quote text only under Words. Write plain, short sentences under the other headings, about 350 words for them together, with no introduction. " +
     "The Words list can be as long as the text requires.",
 ].join("\n");
 
@@ -63,8 +72,8 @@ const SECTION_NAMES = [
 ] as const;
 const SECTION =
   /^\s*(?:#+\s*|\*\*)?(Subject and layout|Words|Technique|Colou?r|Line and shading|Lettering|People and characters|Figure drawing|Signature traits)\b\**:?\**\s*(.*)$/iu;
-// How an image looks, used when it's a style. A person's likeness is content; the way an image
-// draws faces and bodies is style.
+// How an image looks, used when it's a style. A person's likeness (face, hair, build) is content;
+// the way an image draws people and animals from head to toe is style.
 const STYLE_SECTIONS = ["Technique", "Color", "Line and shading", "Lettering", "Figure drawing", "Signature traits"];
 // With a style, an image to work on sends only its scene and its words. Its "People and characters"
 // notes describe real faces ("a softly rounded face, small chin"), which held faces back from the
@@ -216,17 +225,18 @@ export type PromptImage = {
 export type PromptStyle = { attachment: number; weight: number };
 
 function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }>) {
-  // The leading style's way of drawing people, stated as a requirement: without it, a photo's
-  // realistic face wins (tested: a poster of elongated faces gave eight realistic portraits).
+  // The leading style's way of drawing people and animals, head to toe, stated as a requirement:
+  // without it, a photo's realistic proportions win (tested: a poster of elongated figures gave
+  // eight realistic portraits).
   const figures = figureDrawing(mix[0].notes);
   const figureLine = figures
-    ? `\nFigure drawing, required for every person and animal: ${figures} Draw people from photos this way too, even though the photos show realistic proportions; a realistic face is wrong here.`
+    ? `\nFigure drawing, required for every person and animal, head to toe: ${figures} Draw people and animals from photos this way too: their heads, faces, hair, ears, bodies, and limbs take these proportions and shapes even though the photos show realistic ones. Realistic proportions are wrong here.`
     : "";
   if (mix.length === 1) {
     const only = mix[0];
     return (
       `Style: image ${only.n} sets the whole look. Study it closely and match it precisely: technique, line work, color, lettering, ` +
-      `and its figure drawing.${figureLine}`
+      `and how it draws people and animals from head to toe.${figureLine}`
     );
   }
   const lead = mix[0].share;
@@ -235,7 +245,7 @@ function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }
     if (i === 0 || sharesLead) {
       const others = mix.filter((other) => other !== style && other.share >= lead - 10);
       const role = others.length > 0 ? `shares the lead with ${others.map((o) => `image ${o.n}`).join(" and ")}` : "leads";
-      return `- Image ${style.n} (${style.share}%): ${role}. It sets the technique, line work, color, lettering, figure drawing (the proportions of faces and bodies), and level of detail.`;
+      return `- Image ${style.n} (${style.share}%): ${role}. It sets the technique, line work, color, lettering, figure drawing (how people and animals are drawn from head to toe), and level of detail.`;
     }
     const traits = signatureTraits(style.notes).slice(0, style.share >= 25 ? 3 : 2);
     const how = traits.length > 0 ? `these traits: ${traits.join("; ")}` : "its most recognizable traits: technique, palette, and texture";
@@ -254,6 +264,16 @@ export function figureDrawing(notes: string | undefined) {
   const text = noteSections(notes).find((s) => s.name === "Figure drawing")?.text.replace(/\s+/gu, " ").trim() ?? "";
   if (!text || /^realistic proportions\b/iu.test(text) || /^no (people|figures|characters)\b/iu.test(text)) return "";
   return text;
+}
+
+// The "Hair:" line that ends the notes' "Figure drawing" section: the hair this style draws on
+// anyone. Empty when the style draws each person's real hairstyle.
+export function hairShape(notes: string | undefined) {
+  if (!notes) return "";
+  const section = noteSections(notes).find((s) => s.name === "Figure drawing")?.text ?? "";
+  const match = /(?:^|\n|[.;]\s+)[\s*•-]*Hair\**:\**\s*([^\n]+)/iu.exec(section);
+  const hair = (match?.[1] ?? "").replace(/\*+/gu, "").trim().replace(/[.;]+$/u, "").trim();
+  return !hair || /^(true to life|realistic|natural|none|no|not|n\/a)\b/iu.test(hair) ? "" : hair;
 }
 
 // ---- Styles named in the request ----
@@ -406,13 +426,20 @@ export function studioPrompt(args: {
     const first = work[0].n;
     const whose = work.length > 1 ? "the images" : `image ${first}`;
     let keep: string;
+    // The leading style's hair, named from its notes; "the style decides the shape the hair takes"
+    // alone kept a photo's curls.
+    const hair = mix.length > 0 ? hairShape(mix[0].notes) : "";
+    const hairLine = hair
+      ? ` Unless the request says otherwise, give everyone the style's hair (${hair}) in their own hair color, whatever hairstyle ${whose} shows.`
+      : "";
     if (args.remix && mix.length > 0) {
       // A style in the mixer restyles a remix. With the remix rules below (keep its lettering,
       // colors, and texture), a style at 100% left no trace on a word remix (tested 2026-10-04).
       keep =
         `Keep: study image ${first} closely. Keep its composition and layout, everything in it (its characters, objects, and words, each in its place), ` +
-        "and the recognizable likeness of any person or animal, but draw all of it fully in the style below: its technique, line work, colors, texture, and lettering. " +
-        `Don't keep image ${first}'s own drawing style, colors, or lettering style.`;
+        "and the recognizable likeness of any person or animal, but draw all of it fully in the style below: its technique, line work, colors, texture, lettering, " +
+        "and the way it draws people and animals from head to toe. " +
+        `Don't keep image ${first}'s own drawing style, colors, lettering style, or figure proportions.${hairLine}`;
     } else if (args.remix) {
       keep = `Keep: study image ${first} closely and keep everything the request doesn't change: its layout, illustration, lettering style, colors, texture, and how any people or characters are drawn, including their likeness.`;
     } else if (mix.length > 0) {
@@ -422,15 +449,20 @@ export function studioPrompt(args: {
       // likeness and style; every wording took the style's face proportions, skin palette, and
       // freckle treatment and kept her glasses, curls, and smile. This is the broad wording with
       // examples. No wording recolored her red hair to the style's pink; a request can ask for that.
+      // Tested 2026-10-04 with a cartoon of boys about eight heads tall with huge ears and tall
+      // spiked hair: with this wording all four designs took its long legs, big head, and big ears
+      // and kept her glasses, freckles, earrings, and smile, but kept her curls until hairLine named
+      // the style's hair; then 4 of 4 had upright spikes in her own hair color.
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the recognizable likeness ` +
-        `of every person and animal in ${whose}, such as their hair, glasses, and freckles, so someone who knows them would recognize them, ` +
-        "while drawing them fully in the style.";
+        `of every person and animal in ${whose}, such as their hair color, glasses, freckles, and smile, so someone who knows them would recognize them, ` +
+        "while drawing them fully in the style, from head to toe: the style decides their proportions and shapes, such as how tall and stretched the body is, " +
+        `how big the head and ears are, and the shape the hair takes.${hairLine}`;
     } else {
       keep =
-        `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the likeness of every person and animal in ${whose} recognizable: face shape, features, skin tone, hair, and age. ` +
+        `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the likeness of every person and animal in ${whose} recognizable: face shape, features, skin tone, hair, build, and age. ` +
         `Keep ${work.length > 1 ? "the images'" : "its"} own look unless the request asks for a different style; if it does, draw everything that way, ` +
-        "people included, and keep them recognizable within it.";
+        "people included from head to toe, and keep them recognizable within it.";
     }
     parts.push(keep);
     for (const image of work) {

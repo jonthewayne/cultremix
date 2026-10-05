@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BATCH_CREDITS, creditsBack } from "../../convex/lib/studioRules";
 import {
+  hairShape,
   namedStyles,
   noteSections,
   parseStyleNotes,
@@ -79,6 +80,18 @@ describe("image notes", () => {
   it("finds words written in capitals or quotes", () => {
     expect(requestedWords('A raccoon that says TRASH ROYALTY and "stay weird"')).toEqual(["stay weird", "TRASH ROYALTY"]);
   });
+
+  it("reads the hair a style draws on anyone", () => {
+    const notes = (hair: string) => `Technique: flat cartoon.\nFigure drawing: Figures about eight heads tall with big ears. ${hair}\nSignature traits:\n- Spiky hair`;
+    expect(hairShape(notes("Hair: tall, jagged spikes rising about as high as the face."))).toBe("tall, jagged spikes rising about as high as the face");
+    expect(hairShape(notes("\n**Hair:** one smooth solid shape with a single highlight."))).toBe("one smooth solid shape with a single highlight");
+    expect(hairShape(notes("Hair: true to life."))).toBe("");
+    expect(hairShape(notes("Hair: not applicable."))).toBe("");
+    expect(hairShape(notes("Hair: No human hair; dense, jagged fur around the head."))).toBe("");
+    // A person's own hair, under "People and characters", is likeness, not the style's hair.
+    expect(hairShape("People and characters:\nHair: curly red, shoulder length.\nFigure drawing: realistic proportions.")).toBe("");
+    expect(hairShape(PHOTO)).toBe("");
+  });
 });
 
 describe("studio prompt", () => {
@@ -102,11 +115,11 @@ describe("studio prompt", () => {
     expect(prompt).toContain("- Image 2: a 70s poster (style only: use its look, never its subjects or words).");
     expect(prompt).toContain("otherwise keep the words from image 1. Never copy words from a style-only image.");
     expect(prompt).toContain(
-      "keep the recognizable likeness of every person and animal in image 1, such as their hair, glasses, and freckles, so someone who knows them would recognize them, while drawing them fully in the style.",
+      "keep the recognizable likeness of every person and animal in image 1, such as their hair color, glasses, freckles, and smile, so someone who knows them would recognize them, while drawing them fully in the style, from head to toe: the style decides their proportions and shapes, such as how tall and stretched the body is, how big the head and ears are, and the shape the hair takes.",
     );
     expect(prompt).toContain("Style: image 2 sets the whole look.");
     // The style's way of drawing people goes in; the photo's realistic rendering stays out.
-    expect(prompt).toContain("Figure drawing, required for every person and animal: Characters have elongated faces and long chins.");
+    expect(prompt).toContain("Figure drawing, required for every person and animal, head to toe: Characters have elongated faces and long chins.");
     expect(prompt).not.toContain("Figure drawing:\nrealistic proportions.");
     // Once a style is chosen, the photo's scene stays in; its look and its description of faces
     // stay out, so the style decides how faces are drawn.
@@ -198,8 +211,30 @@ describe("studio prompt", () => {
       ],
       styles: [{ attachment: 2, weight: 100 }],
     });
-    expect(prompt).toContain("while drawing them fully in the style.");
+    expect(prompt).toContain("while drawing them fully in the style, from head to toe: the style decides their proportions and shapes");
+    // The style redraws whole bodies, not only faces.
+    expect(prompt).toContain("their heads, faces, hair, ears, bodies, and limbs take these proportions");
     expect(prompt).not.toContain("face shape");
+  });
+
+  it("gives everyone the style's hair in their own hair color", () => {
+    const cartoon = "Technique: flat cartoon with bold outlines.\nFigure drawing: Figures about eight heads tall. Hair: tall spikes standing straight up.";
+    const make = (notes: string, remix = false) =>
+      studioPrompt({
+        layout: "grid",
+        instruction: "Draw image 1 as a full-body character",
+        attachments: [
+          { summary: "a photo of a girl on a beach", kind: "photo", notes: PHOTO, styleOnly: false },
+          { summary: "three cartoon boys", kind: "art", notes, styleOnly: true },
+        ],
+        styles: [{ attachment: 2, weight: 100 }],
+        remix,
+      });
+    const hair =
+      "Unless the request says otherwise, give everyone the style's hair (tall spikes standing straight up) in their own hair color, whatever hairstyle image 1 shows.";
+    expect(make(cartoon)).toContain(hair);
+    expect(make(cartoon, true)).toContain(hair);
+    expect(make(cartoon.replace("tall spikes standing straight up", "true to life"))).not.toContain("the style's hair");
   });
 });
 
@@ -223,7 +258,7 @@ describe("styles named in the request", () => {
     });
     expect(typed).toBe(mixer);
     expect(typed).toContain("- Image 2: a 70s poster (style only: use its look, never its subjects or words).");
-    expect(typed).toContain("Figure drawing, required for every person and animal: Characters have elongated faces and long chins.");
+    expect(typed).toContain("Figure drawing, required for every person and animal, head to toe: Characters have elongated faces and long chins.");
     // The poster's people and words stay out, as they do from the mixer.
     expect(typed).not.toContain("patterned dresses");
     expect(typed).not.toContain("TRASH ROYALTY");

@@ -406,12 +406,21 @@ export const runBatch = internalAction({
       }
       if (!job) throw new Error("The batch was removed.");
       const instruction = job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction;
-      // What the request wants from each numbered image, read by GPT-6 Luna (about 1 s); its
-      // phrases decide when the reader can't.
-      const numbered = job.attachments.filter((a) => !a.styleOnly);
+      // What the request wants from each numbered image, read by GPT-6 Luna (about 2.5 s); its
+      // phrases decide when the reader can't. The reader is told what the mixer holds, so "in the
+      // style" means the mixer's style.
+      const attachments = job.attachments;
+      const numbered = attachments.filter((a) => !a.styleOnly);
       const read = await readRoles({
         instruction: job.instruction,
         images: numbered.map((a) => ({ summary: a.analysis === "ready" ? a.summary : undefined, kind: a.kind })),
+        mixer: job.styles
+          .filter((style) => style.weight > 0)
+          .flatMap((style): Array<number | { summary?: string; kind?: "photo" | "art" }> => {
+            const a = attachments[style.attachment - 1];
+            if (!a) return [];
+            return a.styleOnly ? [{ summary: a.analysis === "ready" ? a.summary : undefined, kind: a.kind }] : [style.attachment];
+          }),
         remix: job.remixOfParent,
       });
       const roles = read ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);

@@ -8,43 +8,60 @@ import type { ImageRole } from "./prompts";
 // Tested 2026-10-02 on 16 tricky requests ("make her look like she belongs in the second
 // picture", "a dragon in this style", "swap the lion for my cat"): GPT-6 Luna with reasoning off
 // read 14 as expected, and the other two defensibly; namedStyles' phrases read 8. About 1 s.
+// Retested 2026-10-04 on 17 requests, five of them with a style in the mixer: not knowing about the
+// mixer, it read "the style" in "make her in this style" as the photo's own look and answered
+// "both", which put the photo itself into the style mix at full strength (50 of 68 answers as
+// intended). Told what the mixer holds, it still swapped images in "draw her like the lion design"
+// with reasoning off (55 of 68). With low reasoning: 168 of 170 over two runs, at 2.4 s typical and
+// 4.3 s at most.
 const MODEL = "openai/gpt-6-luna";
 const TIMEOUT_MS = 8_000;
 
 const SYSTEM = [
-  "You read a member's request to a t-shirt design studio. The member attached numbered images. Decide what the request wants from each image:",
+  "You read a member's request to a t-shirt design studio. The member attached numbered images; the studio's style mixer may hold " +
+    "more images, used only for their look. Decide what the request wants from each numbered image:",
   "- content: work on what's in it. Its people, characters, objects, words, or layout carry into the design, possibly changed or restyled.",
   "- style: use only its look (technique, colors, line, texture, lettering style, the way it draws people) for other content. Leave out its subjects and words.",
-  "- both: keep what's in it and also use its look.",
+  "- both: keep what's in it and also use its own look. Only when the request asks for that image's own look, such as " +
+    '"keep image 1\'s look" or "use image 1\'s colors".',
   "An image the request doesn't mention is content. An image is style only when the request uses it for how it looks, in any wording, such as " +
     '"in the style of image 2", "make it look like the second one", "the poster\'s vibe", "drawn like the lion design", or "a dragon in this style". ' +
     'Asking to keep an image\'s own look makes it both. A negated style ("not the style of image 2") is not a style.',
-  'Answer with JSON only: {"roles": [one of "content", "style", "both" for each image, in order]}.',
+  'When the style mixer holds images, a look that doesn\'t point at a numbered image, such as "in the style", "this style", or "like the style", ' +
+    "is the mixer's, and leaves the numbered images as content.",
+  'Answer with JSON only: {"roles": [one of "content", "style", "both" for each numbered image, in order]}.',
 ].join("\n");
 
 const ROLES = new Set<string>(["content", "style", "both"]);
 
+type ReaderImage = { summary?: string; kind?: "photo" | "art" };
+
+function describe(image: ReaderImage) {
+  const kind = image.kind === "photo" ? "a photo" : image.kind === "art" ? "art" : "an image";
+  return `${kind}${image.summary ? `: ${image.summary}` : ""}`;
+}
+
 // Null when there's nothing to read or the reader can't answer; callers fall back to namedStyles.
 export async function readRoles(args: {
   instruction: string;
-  images: Array<{ summary?: string; kind?: "photo" | "art" }>;
+  images: Array<ReaderImage>;
+  // The style mixer's images with a slider above zero: a number for a numbered image, or the
+  // image itself for one added only in the mixer.
+  mixer?: Array<number | ReaderImage>;
   remix: boolean;
 }): Promise<Array<ImageRole> | null> {
   if (!args.instruction.trim() || args.images.length === 0 || !process.env.AI_GATEWAY_API_KEY) return null;
-  const list = args.images
-    .map((image, i) => {
-      const kind = image.kind === "photo" ? "a photo" : image.kind === "art" ? "art" : "an image";
-      return `${i + 1}. ${kind}${image.summary ? `: ${image.summary}` : ""}`;
-    })
-    .join("\n");
+  const list = args.images.map((image, i) => `${i + 1}. ${describe(image)}`).join("\n");
+  const mixer = (args.mixer ?? []).map((entry) => `- ${typeof entry === "number" ? `image ${entry}` : describe(entry)}`);
+  const styles = mixer.length > 0 ? `Style mixer:\n${mixer.join("\n")}` : "Style mixer: empty.";
   const remix = args.remix ? "\nImage 1 is the published design being remixed; it stays content." : "";
   try {
     const started = Date.now();
     const result = await generateText({
       model: gateway(MODEL),
       system: SYSTEM,
-      prompt: `Images:\n${list}${remix}\n\nRequest: ${args.instruction}`,
-      providerOptions: { openai: { reasoningEffort: "none" } },
+      prompt: `Numbered images:\n${list}${remix}\n${styles}\n\nRequest: ${args.instruction}`,
+      providerOptions: { openai: { reasoningEffort: "low" } },
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
     });

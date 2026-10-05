@@ -226,6 +226,25 @@ export const reanalyze = internalMutation({
   },
 });
 
+// Writes every member image's notes again after the notes prompt changes, 200 images per run, a
+// second apart. A failed re-read keeps the notes the image had (saveAnalysis).
+// bunx convex run images:reanalyzeAll   (again with '{"cursor":"..."}' while a cursor comes back)
+export const reanalyzeAll = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  returns: v.object({ scheduled: v.number(), cursor: v.union(v.string(), v.null()) }),
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("userImages").paginate({ numItems: 200, cursor: args.cursor ?? null });
+    let scheduled = 0;
+    for (const image of page.page) {
+      if (image.key.startsWith("fake:")) continue;
+      await ctx.db.patch("userImages", image._id, { analysis: "pending", analysisError: undefined });
+      await ctx.scheduler.runAfter(scheduled * 1000, internal.imageNotes.analyze, { imageId: image._id });
+      scheduled++;
+    }
+    return { scheduled, cursor: page.isDone ? null : page.continueCursor };
+  },
+});
+
 export const analysisJob = internalQuery({
   args: { imageId: v.id("userImages") },
   returns: v.union(v.null(), v.object({ key: v.string(), analysis: analysisState })),
@@ -309,6 +328,11 @@ export const saveAnalysis = internalMutation({
     const image = await ctx.db.get("userImages", args.imageId);
     if (!image) return null;
     if (args.error || !args.notes) {
+      // A failed re-read keeps the notes the image already had.
+      if (image.notes) {
+        await ctx.db.patch("userImages", image._id, { analysis: "ready" });
+        return null;
+      }
       await ctx.db.patch("userImages", image._id, {
         analysis: "failed",
         analysisModel: args.model,
