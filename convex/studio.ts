@@ -26,13 +26,14 @@ import {
   MAX_STYLES,
   creditsBack,
 } from "./lib/studioRules";
+import { IMAGE_MODEL_TEXT_ONLY, IMAGE_MODEL_WITH_IMAGES } from "./lib/models";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 type Ctx = QueryCtx | MutationCtx;
 
-export const MODEL_TEXT = "openai/gpt-image-2.5-flare";
-export const MODEL_EDIT = "openai/gpt-image-2.5-sunburst";
+export const MODEL_TEXT = IMAGE_MODEL_TEXT_ONLY;
+export const MODEL_EDIT = IMAGE_MODEL_WITH_IMAGES;
 const HEX = /^#[0-9a-f]{6}$/iu;
 
 export const tileStatus = v.union(

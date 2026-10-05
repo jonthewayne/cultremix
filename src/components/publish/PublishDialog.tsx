@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import {
   GARMENT_COLORS,
@@ -37,8 +37,9 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   const preview = useQuery(api.publish.preview, { generationId: tile.generationId });
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  // A remix that changed only its remixable words is a variation; one that changed more starts
-  // with fork selected until the member picks (components/cr/RemixKindChoice.tsx).
+  // A remix is a variation unless it reads as a new design, when fork starts selected until the
+  // member picks; if it couldn't be compared, variation starts selected
+  // (components/cr/RemixKindChoice.tsx).
   const [pickedKind, setPickedKind] = useState<RemixKind | null>(null);
   const [requestId] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<{ workId: Id<"works">; cr: string; lead: string } | null>(null);
@@ -79,8 +80,20 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   const makeLead = (key: string) => setPicked([key, ...selected.filter((k) => k !== key)]);
 
   const isRemix = Boolean(preview?.remix);
-  const forkAllowed = preview?.remix?.forkAllowed ?? false;
-  const remixKind: RemixKind = forkAllowed ? (pickedKind ?? "fork") : "variation";
+  const relation = preview?.remix?.relation ?? { status: "words" as const };
+  const forkOpen = relation.status === "fork" || relation.status === "failed";
+  const remixKind: RemixKind = forkOpen ? (pickedKind ?? (relation.status === "fork" ? "fork" : "variation")) : "variation";
+
+  // A remix that changed more than its words is compared with its original when the dialog opens
+  // (convex/publish.ts checkRemix); the answer arrives through the preview.
+  const checkRemix = useMutation(api.publish.checkRemix);
+  const asked = useRef(false);
+  const needsCheck = relation.status === "none" || relation.status === "pending" || relation.status === "failed";
+  useEffect(() => {
+    if (!needsCheck || asked.current) return;
+    asked.current = true;
+    void checkRemix({ generationId: tile.generationId }).catch(() => undefined);
+  }, [needsCheck, checkRemix, tile.generationId]);
   const crPreview = preview ? (preview.remix && remixKind === "variation" ? preview.remix.variationCr : preview.newFamilyCr) : null;
   const paused = preview?.publishing === false;
   const lost = selected.filter((key) => visibility.get(key) === "disappears").map((key) => garmentColor(key)!.name);
@@ -326,7 +339,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
                 generationId={tile.generationId}
                 value={remixKind}
                 onChange={setPickedKind}
-                forkAllowed={forkAllowed}
+                relation={relation}
                 disabled={saving}
               />
             </div>

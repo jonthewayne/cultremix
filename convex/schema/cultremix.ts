@@ -192,6 +192,23 @@ export const cultremixTables = {
     height: v.optional(v.number()),
     hasAlpha: v.optional(v.boolean()),
     error: v.optional(v.string()),
+    // For a remix design: how far it moved from the design it remixes, judged when its creator
+    // opens the publish dialog (convex/remixCheck.ts). A fork needs verdict "fork".
+    remixCheck: v.optional(
+      v.object({
+        status: v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
+        requestedAt: v.number(),
+        attempts: v.number(),
+        finishedAt: v.optional(v.number()),
+        verdict: v.optional(v.union(v.literal("variation"), v.literal("fork"))),
+        reason: v.optional(v.string()),
+        subject: v.optional(v.union(v.literal("same"), v.literal("changed"))),
+        layout: v.optional(v.union(v.literal("same"), v.literal("changed"))),
+        style: v.optional(v.union(v.literal("same"), v.literal("changed"))),
+        model: v.optional(v.string()),
+        error: v.optional(v.string()),
+      }),
+    ),
   })
     .index("by_batch", ["batchId"])
     .index("by_session_favorite", ["sessionId", "favorite", "favoritedAt"])

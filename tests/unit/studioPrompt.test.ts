@@ -199,6 +199,24 @@ describe("studio prompt", () => {
     });
     expect(prompt).toContain("Arrange them in a 2x2 grid");
     expect(prompt).toContain("Keep the same style mix in all four and vary their composition.");
+    expect(prompt).not.toContain("shows the request's words");
+  });
+
+  it("puts a request's words on every design of a grid with images or styles", () => {
+    const withStyle = studioPrompt({
+      layout: "grid",
+      instruction: "A smiling sun that says GOOD DAY",
+      attachments: [{ notes: POSTER, styleOnly: true }],
+      styles: [{ attachment: 1, weight: 100 }],
+    });
+    expect(withStyle).toContain("Every one of the four shows the request's words. Keep the same style mix in all four and vary their composition.");
+    const single = studioPrompt({
+      layout: "single",
+      instruction: "A smiling sun that says GOOD DAY",
+      attachments: [{ notes: POSTER, styleOnly: true }],
+      styles: [{ attachment: 1, weight: 100 }],
+    });
+    expect(single).not.toContain("Every one of the four");
   });
 
   it("leaves how people are drawn to the style, without listing face shapes to keep", () => {

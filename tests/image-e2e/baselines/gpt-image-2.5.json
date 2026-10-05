@@ -1,0 +1,536 @@
+{
+ "name": "gpt-image-2.5",
+ "models": {
+  "withImages": "openai/gpt-image-2.5-sunburst",
+  "textOnly": "openai/gpt-image-2.5-flare",
+  "quality": "high",
+  "vision": "openai/gpt-6-luna"
+ },
+ "recordedAt": "2026-10-05T09:00:16.491Z",
+ "cases": {
+  "words-from-text": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "59% clear",
+    "words": "4/4",
+    "desert": "4/4",
+    "grid:varied": "1/1"
+   }
+  },
+  "words-not-from-style": {
+   "passed": false,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "32% clear",
+    "words": "3/4 (no TRASH)",
+    "raccoon": "4/4",
+    "style": "4/4"
+   }
+  },
+  "words-change-one-image": {
+   "passed": false,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "41% clear",
+    "words": "3/4 (no NIGHT, no SHIFT)",
+    "lion": "4/4",
+    "lettering": "4/4"
+   }
+  },
+  "style-copy": {
+   "passed": false,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "38% clear",
+    "words": "4/4",
+    "wolf": "4/4",
+    "no-lion": "2/4 (needs 3)",
+    "style": "4/4"
+   }
+  },
+  "style-named-in-words": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "26% clear",
+    "likeness": "4/4",
+    "style": "4/4",
+    "one-person": "4/4"
+   }
+  },
+  "style-of-one-image": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "40% clear",
+    "words": "4/4",
+    "dragon": "4/4",
+    "no-lion": "4/4",
+    "style": "4/4"
+   }
+  },
+  "mix-80-20": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "25% clear",
+    "words": "4/4",
+    "lead": "4/4",
+    "accent": "4/4"
+   }
+  },
+  "mix-50-50": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "24% clear",
+    "words": "4/4",
+    "a": "4/4",
+    "b": "4/4"
+   }
+  },
+  "mix-three": {
+   "passed": false,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "21% clear",
+    "words": "4/4",
+    "a": "4/4",
+    "b": "1/4 (needs 4)",
+    "c": "0/4 (needs 4)"
+   }
+  },
+  "photo-70s-poster": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "26% clear",
+    "likeness": "4/4",
+    "style": "4/4",
+    "faces": "4/4",
+    "not-photo": "4/4"
+   }
+  },
+  "photo-pop-art": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "35% clear",
+    "likeness": "4/4",
+    "style": "4/4",
+    "own-hair-color": "4/4"
+   }
+  },
+  "whole-figure": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "81% clear",
+    "full-body": "4/4",
+    "legs": "4/4",
+    "ears": "4/4",
+    "glasses": "4/4",
+    "own-hair": "4/4"
+   }
+  },
+  "style-hair-when-asked": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "80% clear",
+    "spikes": "4/4",
+    "glasses": "4/4",
+    "hair-color": "4/4"
+   }
+  },
+  "remix-words": {
+   "passed": false,
+   "checks": {
+    "boxes": "Tagline: SLOW to LOUD",
+    "cut": "4/4",
+    "transparent": "38% clear",
+    "words": "4/4",
+    "same-design": "2/4 (needs 3)"
+   }
+  },
+  "remix-two-lines": {
+   "passed": true,
+   "checks": {
+    "boxes": "Headline: OFFLINE to UNPLUGGED; Headline 2: LUXURY to FLEX",
+    "cut": "4/4",
+    "transparent": "36% clear",
+    "words": "4/4",
+    "same-design": "4/4"
+   }
+  },
+  "remix-of-remix": {
+   "passed": true,
+   "checks": {
+    "boxes": "Headline 2: LOUD to BOLD",
+    "cut": "4/4",
+    "transparent": "40% clear",
+    "words": "4/4",
+    "same-design": "4/4"
+   }
+  },
+  "remix-free-text": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "34% clear",
+    "words": "4/4",
+    "snail": "4/4",
+    "beach": "4/4",
+    "no-night": "3/4"
+   }
+  },
+  "remix-words-keep-look": {
+   "passed": true,
+   "checks": {
+    "boxes": "Headline 2: ROYALTY to COUTURE",
+    "cut": "4/4",
+    "transparent": "49% clear",
+    "words": "4/4",
+    "raccoon": "4/4",
+    "look": "4/4"
+   }
+  },
+  "remix-words-with-style": {
+   "passed": true,
+   "checks": {
+    "boxes": "Headline 2: ROYALTY to COUTURE",
+    "cut": "4/4",
+    "transparent": "46% clear",
+    "words": "4/4",
+    "raccoon": "4/4",
+    "style": "4/4"
+   }
+  },
+  "remix-add-words": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "40% clear",
+    "words": "4/4",
+    "same-design": "3/4"
+   }
+  },
+  "remix-longer-and-removed": {
+   "passed": false,
+   "checks": {
+    "boxes": "Headline: GROW to GROW WILD AND FREE; Tagline: SLOW to (removed)",
+    "cut": "4/4",
+    "transparent": "34% clear",
+    "words": "4/4",
+    "same-design": "2/4 (needs 3)"
+   }
+  },
+  "color-blocks": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "45% clear",
+    "words": "4/4",
+    "panel": "4/4"
+   }
+  },
+  "four-images": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "29% clear",
+    "grid:all": "1/1"
+   }
+  },
+  "model-photo": {
+   "passed": true,
+   "checks": {
+    "words": "1/1",
+    "worn": "1/1",
+    "faithful": "1/1",
+    "photo": "1/1"
+   }
+  },
+  "notes-words-grow-slow": {
+   "passed": true,
+   "checks": {
+    "words": "yes"
+   }
+  },
+  "notes-words-lines": {
+   "passed": true,
+   "checks": {
+    "words": "yes"
+   }
+  },
+  "notes-words-arched": {
+   "passed": true,
+   "checks": {
+    "words": "yes"
+   }
+  },
+  "notes-newspaper": {
+   "passed": true,
+   "checks": {
+    "masthead": "yes",
+    "headline": "yes",
+    "pieces": "yes"
+   }
+  },
+  "notes-figure": {
+   "passed": true,
+   "checks": {
+    "heads-tall": "yes",
+    "hair": "yes"
+   }
+  },
+  "notes-photo": {
+   "passed": false,
+   "checks": {
+    "kind": "yes",
+    "hair": "no"
+   }
+  },
+  "notes-hair-portrait": {
+   "passed": false,
+   "checks": {
+    "hair": "no"
+   }
+  },
+  "notes-hair-poster": {
+   "passed": false,
+   "checks": {
+    "hair": "no"
+   }
+  },
+  "reader-mixer-plain": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content, content"
+   }
+  },
+  "reader-mixer-hair-words": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content+hair, content+hair"
+   }
+  },
+  "reader-this-style": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content, content"
+   }
+  },
+  "reader-cartoon-no-style": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content, content"
+   }
+  },
+  "reader-style-of-image-2": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
+   }
+  },
+  "reader-belongs": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
+   }
+  },
+  "reader-draws-people": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
+   }
+  },
+  "reader-dragon": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: style, style"
+   }
+  },
+  "reader-colors": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
+   }
+  },
+  "reader-swap": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/content, content/content"
+   }
+  },
+  "reader-into-scene": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/content, content/content"
+   }
+  },
+  "reader-keep-look": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: both, both"
+   }
+  },
+  "reader-negated": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/content, content/content"
+   }
+  },
+  "reader-scene-and-mixer": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/content, content/content"
+   }
+  },
+  "reader-words-and-mixer": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content, content"
+   }
+  },
+  "reader-like-lion": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
+   }
+  },
+  "reader-own-colors": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: both, both"
+   }
+  },
+  "reader-style-hair": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content+hair, content+hair"
+   }
+  },
+  "reader-cartoon-hair": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content+hair, content+hair"
+   }
+  },
+  "reader-hair-like-image-2": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style+hair, content/style+hair"
+   }
+  },
+  "reader-keep-curls": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content, content"
+   }
+  },
+  "reader-pink-hair": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content, content"
+   }
+  },
+  "reader-mohawk": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content, content"
+   }
+  },
+  "compare-grow-slow-to-grow-loud": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-grow-loud-to-grow-bold": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-grow-slow-to-since-1999": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-grow-slow-to-grow-wild-free": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-offline-luxury-to-unplugged-flex": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-trash-royalty-to-trash-couture": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-slow-roll-night-to-slow-roll-beach": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-lion-to-lion-night-shift": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-grow-slow-to-grow-slow": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-trash-royalty-to-trash-couture-pop": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-trash-royalty-to-trash-couture-70s": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: variation, variation"
+   }
+  },
+  "compare-lion-to-dragon": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: fork, fork"
+   }
+  },
+  "compare-person-to-person-cartoon": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: fork, fork"
+   }
+  },
+  "compare-person-to-person-70s": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: fork, fork"
+   }
+  },
+  "compare-grow-slow-to-slow-roll-night": {
+   "passed": true,
+   "checks": {
+    "verdict": "2/2: fork, fork"
+   }
+  }
+ }
+}

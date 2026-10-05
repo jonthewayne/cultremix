@@ -27,6 +27,128 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const PUBLISHING_OFF = "Publishing is paused for now. Your designs are safe here; try again soon.";
 
+// ---- How a remix relates to the design it remixes ----
+
+// What the publish dialog may offer a remix design. A remix that changed only the parent's
+// remixable words is a variation (convex/lib/lineage.ts remixChangedOnlyWords). Anything else is
+// compared with the parent's art (convex/remixCheck.ts): a remix that reads as a new design may be
+// a fork, which the dialog suggests; one that reads as the same design is a variation. If the
+// comparison can't run, the remixer chooses.
+export const relationStatus = v.union(
+  v.literal("words"),
+  v.literal("none"),
+  v.literal("pending"),
+  v.literal("variation"),
+  v.literal("fork"),
+  v.literal("failed"),
+);
+type RelationStatus = "words" | "none" | "pending" | "variation" | "fork" | "failed";
+
+// A pending comparison older than this is started again (its action may have died).
+const CHECK_STALE_MS = 2 * 60_000;
+// A remix design is compared at most this many times.
+const CHECK_ATTEMPTS = 3;
+
+function remixRelation(
+  generation: Doc<"generations">,
+  batch: Doc<"batches">,
+  parent: Doc<"works">,
+): { status: RelationStatus; reason?: string } {
+  if (remixChangedOnlyWords(batch, parent.artKey)) return { status: "words" };
+  const check = generation.remixCheck;
+  if (!check) return { status: "none" };
+  if (check.status === "pending") return { status: "pending" };
+  if (check.status === "failed") return { status: "failed" };
+  return { status: check.verdict === "fork" ? "fork" : "variation", reason: check.reason };
+}
+
+const FORK_REFUSED: Record<Exclude<RelationStatus, "fork" | "failed">, string> = {
+  words: "This remix changed only the design's remixable words, so it publishes as a variation.",
+  variation: "This remix reads as the same design with changes, so it publishes as a variation.",
+  none: "Still comparing it with the original. Try again in a moment.",
+  pending: "Still comparing it with the original. Try again in a moment.",
+};
+
+// The publish dialog starts the comparison when it opens on a remix design that changed more than
+// its words. Nothing happens for other designs, or while a comparison is running or done.
+export const checkRemix = mutation({
+  args: { generationId: v.id("generations") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await requireMember(ctx);
+    const generation = await ctx.db.get("generations", args.generationId);
+    if (!generation || generation.ownerId !== user._id || generation.status !== "succeeded" || !generation.fullKey) return null;
+    const batch = await ctx.db.get("batches", generation.batchId);
+    const session = await ctx.db.get("creativeSessions", generation.sessionId);
+    const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
+    if (!batch || !parent?.artKey || (parent.status !== "published" && parent.status !== "withdrawn")) return null;
+    if (remixChangedOnlyWords(batch, parent.artKey)) return null;
+    const check = generation.remixCheck;
+    const now = Date.now();
+    if (check?.status === "done") return null;
+    if (check?.status === "pending" && now - check.requestedAt < CHECK_STALE_MS) return null;
+    if (check && check.attempts >= CHECK_ATTEMPTS) return null;
+    await ctx.db.patch("generations", generation._id, {
+      remixCheck: { status: "pending", requestedAt: now, attempts: (check?.attempts ?? 0) + 1 },
+    });
+    await ctx.scheduler.runAfter(0, internal.remixCheck.compare, { generationId: generation._id });
+    return null;
+  },
+});
+
+// For convex/remixCheck.ts: the parent's art and the design to compare.
+export const remixCheckJob = internalQuery({
+  args: { generationId: v.id("generations") },
+  returns: v.union(v.null(), v.object({ parentKey: v.string(), designKey: v.string() })),
+  handler: async (ctx, args) => {
+    const generation = await ctx.db.get("generations", args.generationId);
+    if (!generation?.fullKey || generation.remixCheck?.status !== "pending") return null;
+    const session = await ctx.db.get("creativeSessions", generation.sessionId);
+    const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
+    if (!parent?.artKey) return null;
+    return { parentKey: parent.artKey, designKey: generation.fullKey };
+  },
+});
+
+const aspectValue = v.optional(v.union(v.literal("same"), v.literal("changed")));
+
+export const saveRemixCheck = internalMutation({
+  args: {
+    generationId: v.id("generations"),
+    verdict: v.optional(v.union(v.literal("variation"), v.literal("fork"))),
+    reason: v.optional(v.string()),
+    subject: aspectValue,
+    layout: aspectValue,
+    style: aspectValue,
+    model: v.optional(v.string()),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const generation = await ctx.db.get("generations", args.generationId);
+    if (!generation?.remixCheck) return null;
+    const { requestedAt, attempts } = generation.remixCheck;
+    const finishedAt = Date.now();
+    await ctx.db.patch("generations", generation._id, {
+      remixCheck: args.verdict
+        ? {
+            status: "done",
+            requestedAt,
+            attempts,
+            finishedAt,
+            verdict: args.verdict,
+            reason: args.reason?.slice(0, 200),
+            subject: args.subject,
+            layout: args.layout,
+            style: args.style,
+            model: args.model,
+          }
+        : { status: "failed", requestedAt, attempts, finishedAt, error: (args.error ?? "The comparison failed.").slice(0, 200) },
+    });
+    return null;
+  },
+});
+
 const lookValidator = v.object({ casting: v.string(), pose: v.string(), world: v.string() });
 
 // Castings and settings of the most recently updated shoots, newest first.
@@ -148,11 +270,11 @@ export const quick = mutation({
     if (session.remixOfWorkId && (!parent || (parent.status !== "published" && parent.status !== "withdrawn"))) {
       throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
     }
-    if (parent && args.remixKind === "fork" && remixChangedOnlyWords(batch, parent.artKey)) {
-      throw new ConvexError({
-        code: "VARIATION_ONLY",
-        message: "This remix changed only the design's remixable words, so it publishes as a variation.",
-      });
+    if (parent && args.remixKind === "fork") {
+      const relation = remixRelation(generation, batch, parent);
+      if (relation.status !== "fork" && relation.status !== "failed") {
+        throw new ConvexError({ code: "VARIATION_ONLY", message: FORK_REFUSED[relation.status] });
+      }
     }
     const placement = publishPlacement(
       parent ? { id: parent._id, family: parent.crFamily } : null,
@@ -227,9 +349,9 @@ export const preview = query({
           parentCr: v.string(),
           variationCr: v.string(),
           summary: v.string(),
-          // Only words changed: a variation, with no fork offered. Otherwise the dialog
-          // pre-selects fork.
-          forkAllowed: v.boolean(),
+          // How it relates (remixRelation): the dialog offers a fork for "fork" (suggested) and
+          // "failed" (the remixer chooses); otherwise it's a variation.
+          relation: v.object({ status: relationStatus, reason: v.optional(v.string()) }),
         }),
       ),
       defaultColors: v.array(v.string()),
@@ -259,7 +381,7 @@ export const preview = query({
         parentCr,
         variationCr: formatCr(parent.crFamily, family ? family.nextExpression : parent.crExpression + 1),
         summary: `A remix of CR ${parentCr}${name}${by}.`,
-        forkAllowed: !remixChangedOnlyWords(batch, parent.artKey),
+        relation: remixRelation(generation, batch, parent),
       };
     }
     return {

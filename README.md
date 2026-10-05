@@ -61,6 +61,7 @@ bun run test         # unit tests and Convex tests on an in-memory backend
 bun run build        # production build
 bun run test:e2e     # browser smoke test
 bun run test:chain:anvil  # the chain writer against a local Monad node (needs Foundry)
+bun run test:image   # the image pipeline against the real models: ~15 min, ~$3.50 (tests/image-e2e)
 ```
 
 ### Launch scripts

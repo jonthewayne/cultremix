@@ -47,11 +47,9 @@ export const STYLE_NOTES_PROMPT = [
     "line. For animals, the same: head, ears, muzzle, body, legs, " +
     "and tail. Say plainly what is exaggerated or simplified and by how much, using numbers where you can, such as \"figures about nine heads tall " +
     "with long thin legs\" or \"ears half as big as the head\". " +
-    "If nothing is exaggerated, write \"Realistic proportions.\" End with a line starting \"Hair:\". If this style would redraw any person's hair, " +
-    "even short straight hair, into one particular exaggerated shape that no ordinary haircut has, describe that shape so it could be drawn on " +
-    "anyone, such as \"Hair: tall sharp spikes standing straight up, as tall as the face\" or \"Hair: one smooth solid helmet shape with a single " +
-    "highlight\". One person's curls, waves, or long hair are their own hairstyle, even when drawn big. If the hair here is just the hairstyle " +
-    "of the people shown, or no people are shown, write \"Hair: true to life\".",
+    "If nothing is exaggerated, write \"Realistic proportions.\" End with a line starting \"Hair:\" that describes the shape and texture of the " +
+    "hair on the people or characters shown, without its color, so it could be drawn on anyone, such as \"Hair: tall sharp spikes standing " +
+    "straight up, as tall as the face\" or \"Hair: long flowing waves drawn as parallel ribbons\". Write \"Hair: none\" when nobody shown has hair.",
   "Signature traits: the three to five things that most make this style recognizable, most important first, one per line starting with a dash. " +
     "If the image draws people or animals in a distinctive way, make that one of them.",
   "",
@@ -268,8 +266,9 @@ export function figureDrawing(notes: string | undefined) {
   return text;
 }
 
-// The "Hair:" line that ends the notes' "Figure drawing" section: the hair this style would draw
-// on anyone. Empty when the style draws each person's real hairstyle.
+// The "Hair:" line that ends the notes' "Figure drawing" section: the shape and texture of the hair
+// the image shows, without its color, for a request that asks for the style's hair. Empty when
+// nobody shown has hair (older notes also wrote "true to life" for a person's own hairstyle).
 export function hairShape(notes: string | undefined) {
   if (!notes) return "";
   const section = noteSections(notes).find((s) => s.name === "Figure drawing")?.text ?? "";
@@ -547,6 +546,9 @@ export function studioPrompt(args: {
       : work.length > 0
       ? ` If the request gives new words, use exactly those and drop the old ones; otherwise keep the words from ${workNames}.${neverCopy}`
       : " Spell any words exactly as given, and never copy words from a style image.";
+    // A request's words go on every design: varying composition with a style alone dropped them
+    // from 3 of 4 designs (image test suite, mix-50-50, 2026-10-05).
+    const everyDesign = grid && requestedWords(ask).length > 0 && !wordChanges ? " Every one of the four shows the request's words." : "";
     const vary = !grid
       ? ""
       : args.remix
@@ -554,8 +556,8 @@ export function studioPrompt(args: {
           (wordChanges ? " Every one of the four shows the changed words; none of them keeps the old words." : "") +
           " Vary only small details between the four."
         : mix.length > 0
-          ? " Keep the same style mix in all four and vary their composition."
-          : " Vary the composition between the four.";
+          ? `${everyDesign} Keep the same style mix in all four and vary their composition.`
+          : `${everyDesign} Vary the composition between the four.`;
     parts.push(`Request (this wins wherever it conflicts with the images or the style mix): ${ask || fallback}${wordRule}${words}${vary}`);
   }
   return parts.join("\n\n");

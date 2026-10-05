@@ -41,6 +41,11 @@ cd contracts && forge test
 
 `bun run test:chain:anvil` starts a private anvil node posing as Monad testnet (chain 10143), deploys the real registry bytecode, and runs the Convex chain writer against it end to end: registrations, remixes waiting for their parent, Backs with their onchain order, lineage amendments, and the economics config. It needs Foundry's `anvil` (`~/.foundry/bin/anvil` or `ANVIL_BIN`), so it stays out of `bun run test`, and it never reaches a public network.
 
+## Image Pipeline
+
+`bun run test:image` reruns every capability the image pipeline aims to support against the real models: GPT Image 2.5 with our prompts (words, styles and style mixes, people, remixes, the grid, the model photo) and the GPT-6 Luna steps around it (image notes, the request reader, and the remix comparison that decides when a remix may be a fork). Every prompt is built by production's own code, a vision model checks each design, and each run writes a report and a review board per case to `.tmp/image-e2e/runs/`. A full run takes about 15 minutes and costs about $3.50 of gateway credit, so it stays out of `bun run test`. Run it before changing a prompt or an image model, and add a case whenever something new is tested by hand. The cases are listed in `tests/image-e2e/CASES.md`; how to run, read, and extend the suite, and how to try a new model against the GPT Image 2.5 baseline, is in `tests/image-e2e/README.md`. `tests/unit/imageSuite.test.ts` keeps the catalog sound without calling any model.
+
+
 ## Convex Integration
 
 ```bash

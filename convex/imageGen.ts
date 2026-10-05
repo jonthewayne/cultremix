@@ -1,20 +1,21 @@
 "use node";
 
-import { gateway } from "@ai-sdk/gateway";
-import { generateImage } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
+import { batchPrompt } from "./lib/batchPrompt";
 import { cutGrid } from "./lib/gridCut";
+import { gatewayImage } from "./lib/imageCalls";
 import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY } from "./lib/imageErrors";
+import { mimeOf } from "./lib/mime";
+import { DEFAULT_QUALITY, DESIGN_SIZE, GRID_SIZE, PHOTO_SIZE } from "./lib/models";
 import { stripPngMetadata } from "./lib/pngMeta";
-import { photoPrompt, pickLook, rolesFromWords, studioPrompt } from "./lib/prompts";
+import { photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { callFailure } from "./lib/paidAttempts";
 import type { Spend } from "./lib/paidAttempts";
 import { gatewayCostCents } from "./lib/pricing";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
-import { readRoles } from "./lib/roleReader";
 import { decodeToRgba, encodePng } from "./lib/resize";
 import { randomCode } from "./lib/codes";
 import { designKey, gridKey as gridFileKey, photoNumberOf, testImageKey, uploadKey, workArtKey, workPhotoKey } from "./lib/sizes";
@@ -69,11 +70,7 @@ function liveGeneration() {
   return imageProvider() !== null && storageMode() !== null;
 }
 
-export function mimeOf(bytes: Uint8Array) {
-  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
-  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[8] === 0x57 && bytes[9] === 0x45) return "image/webp";
-  return "image/png";
-}
+export { mimeOf };
 
 // The Codex backend's image_generation tool, billed to the ChatGPT login.
 // The image is the base64 result of the image_generation_call output item.
@@ -170,27 +167,21 @@ async function chatgptImage(args: {
   throw new Error(said ? `${NO_IMAGE_REPLY} ${said}` : "The image service returned no image.");
 }
 
-// One transparent 1024x1536 design. Gateway: Sunburst edit with images, Flare for text only.
+// One transparent 1024x1536 design. Gateway: Sunburst edit with images, Flare for text only
+// (convex/lib/models.ts).
 async function designImage(text: string, images: Array<Uint8Array>, provider: Provider | null = imageProvider()) {
   if (provider === "chatgpt") {
     return clean(await chatgptImage({ text, images, background: "transparent", size: "1024x1536" }));
   }
-  const model = images.length > 0 ? "openai/gpt-image-2.5-sunburst" : "openai/gpt-image-2.5-flare";
-  const result = await generateImage({
-    model: gateway.image(model),
-    prompt: images.length > 0 ? { images, text } : text,
-    size: "1024x1536",
-    providerOptions: {
-      openai: {
-        background: "transparent",
-        output_format: "png",
-        quality: process.env.IMAGE_QUALITY ?? "medium",
-      },
-    },
-    maxRetries: 0,
-    abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
-  });
-  return clean({ bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata });
+  return clean(
+    await gatewayImage({
+      text,
+      images,
+      size: DESIGN_SIZE,
+      background: "transparent",
+      quality: process.env.IMAGE_QUALITY ?? DEFAULT_QUALITY.design,
+    }),
+  );
 }
 
 // The model's PNG without its metadata: the C2PA content credential, text, and timestamps. The
@@ -202,24 +193,18 @@ function clean<T extends { bytes: Uint8Array }>(out: T): T {
 
 // Four transparent designs in one 2x2 grid, which convex/lib/gridCut.ts cuts apart. 1920x1920 is
 // the largest square GPT Image 2.5 makes without experimental sizes. GRID_QUALITY defaults to high,
-// which looks clearly better on illustrations (docs/image-generation/README.md).
+// which looks clearly better on illustrations (docs/image-generation/README.md). The image test
+// suite makes the same call (tests/image-e2e).
 async function gridImage(text: string, images: Array<Uint8Array>) {
-  const model = images.length > 0 ? "openai/gpt-image-2.5-sunburst" : "openai/gpt-image-2.5-flare";
-  const result = await generateImage({
-    model: gateway.image(model),
-    prompt: images.length > 0 ? { images, text } : text,
-    size: "1920x1920",
-    providerOptions: {
-      openai: {
-        background: "transparent",
-        output_format: "png",
-        quality: process.env.GRID_QUALITY ?? "high",
-      },
-    },
-    maxRetries: 0,
-    abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
-  });
-  return clean({ bytes: result.image.uint8Array, providerMetadata: result.providerMetadata });
+  return clean(
+    await gatewayImage({
+      text,
+      images,
+      size: GRID_SIZE,
+      background: "transparent",
+      quality: process.env.GRID_QUALITY ?? DEFAULT_QUALITY.grid,
+    }),
+  );
 }
 
 // Runs one paid call and says what it spent: the reported cost when it answers, and when it fails,
@@ -268,21 +253,15 @@ async function photoImage(
       size: "1024x1024",
     }));
   }
-  const result = await generateImage({
-    model: gateway.image("openai/gpt-image-2.5-sunburst"),
-    prompt: { images: [art], text: photoPrompt(backgroundColor, look) },
-    size: "1024x1024",
-    providerOptions: {
-      openai: {
-        background: "opaque",
-        output_format: "png",
-        quality: process.env.PHOTO_QUALITY ?? "medium",
-      },
-    },
-    maxRetries: 0,
-    abortSignal: AbortSignal.timeout(DESIGN_TIMEOUT_MS),
-  });
-  return clean({ bytes: result.image.uint8Array, warnings: result.warnings, providerMetadata: result.providerMetadata });
+  return clean(
+    await gatewayImage({
+      text: photoPrompt(backgroundColor, look),
+      images: [art],
+      size: PHOTO_SIZE,
+      background: "opaque",
+      quality: process.env.PHOTO_QUALITY ?? DEFAULT_QUALITY.photo,
+    }),
+  );
 }
 
 export const runTile = internalAction({
@@ -405,40 +384,9 @@ export const runBatch = internalAction({
         job = await ctx.runQuery(internal.studio.batchJob, { batchId });
       }
       if (!job) throw new Error("The batch was removed.");
-      const instruction = job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction;
-      // What the request wants from each numbered image, read by GPT-6 Luna (about 2.5 s); its
-      // phrases decide when the reader can't. The reader is told what the mixer holds, so "in the
-      // style" means the mixer's style.
-      const attachments = job.attachments;
-      const numbered = attachments.filter((a) => !a.styleOnly);
-      const read = await readRoles({
-        instruction: job.instruction,
-        images: numbered.map((a) => ({ summary: a.analysis === "ready" ? a.summary : undefined, kind: a.kind })),
-        mixer: job.styles
-          .filter((style) => style.weight > 0)
-          .flatMap((style): Array<number | { summary?: string; kind?: "photo" | "art" }> => {
-            const a = attachments[style.attachment - 1];
-            if (!a) return [];
-            return a.styleOnly ? [{ summary: a.analysis === "ready" ? a.summary : undefined, kind: a.kind }] : [style.attachment];
-          }),
-        remix: job.remixOfParent,
-      });
-      const roles = read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);
-      const text = studioPrompt({
-        layout: "grid",
-        instruction,
-        attachments: job.attachments.map((a) => ({
-          summary: a.analysis === "ready" ? a.summary : undefined,
-          kind: a.kind,
-          notes: a.analysis === "ready" ? a.notes : undefined,
-          styleOnly: a.styleOnly,
-        })),
-        styles: job.styles,
-        remix: job.remixOfParent,
-        roles,
-        styleHair: read?.styleHair ?? false,
-        wordChanges: job.wordChanges,
-      });
+      // What the request wants from each numbered image (GPT-6 Luna, about 2.5 s) and the prompt
+      // itself, built the way the image test suite builds it (convex/lib/batchPrompt.ts).
+      const { text, roles, read } = await batchPrompt(job);
       const keys = job.attachments.map((a) => a.key);
       const started = Date.now();
       // The inputs are only needed for the call; letting them go keeps memory for the cut.

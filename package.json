@@ -27,6 +27,7 @@
     "test:watch": "vitest",
     "test:convex": "vitest run tests/convex --config vitest.convex.config.ts",
     "test:e2e": "bash tests/e2e/run-e2e.sh",
+    "test:image": "bun tests/image-e2e/run.ts",
     "test:chain:anvil": "vitest run --config vitest.chain-e2e.config.ts",
     "chain:deploy:testnet": "bun run scripts/chain/deploy-testnet.ts",
     "setup": "bun run scripts/setup.ts",

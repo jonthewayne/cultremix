@@ -2,6 +2,7 @@
 
 import { gateway } from "@ai-sdk/gateway";
 import { generateText } from "ai";
+import { VISION_MODEL } from "./models";
 import type { ImageRole } from "./prompts";
 
 // Reads what a request wants from each numbered image: what's in it, only its look, or both.
@@ -14,7 +15,7 @@ import type { ImageRole } from "./prompts";
 // intended). Told what the mixer holds, it still swapped images in "draw her like the lion design"
 // with reasoning off (55 of 68). With low reasoning: 168 of 170 over two runs, at 2.4 s typical and
 // 4.3 s at most.
-const MODEL = "openai/gpt-6-luna";
+const MODEL = VISION_MODEL;
 const TIMEOUT_MS = 10_000;
 
 const SYSTEM = [

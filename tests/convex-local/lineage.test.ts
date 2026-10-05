@@ -59,7 +59,8 @@ async function tile(
 
 let requestCounter = 0;
 
-// Publishes a tile and marks it published (the asset copy can't run here).
+// Publishes a tile and marks it published (the asset copy can't run here). A fork needs the
+// comparison's "new design" verdict first (convex/remixCheck.ts), so one is recorded for it.
 async function publish(
   t: T,
   who: Awaited<ReturnType<typeof member>>,
@@ -67,6 +68,13 @@ async function publish(
   remixKind?: "variation" | "fork",
 ) {
   const generationId = await tile(t, who.userId, remixOf);
+  if (remixKind === "fork") {
+    await t.run((ctx) =>
+      ctx.db.patch("generations", generationId, {
+        remixCheck: { status: "done", requestedAt: Date.now(), attempts: 1, verdict: "fork", reason: "A new design." },
+      }),
+    );
+  }
   const result = await who.as.mutation(api.publish.quick, {
     requestId: `req-${(requestCounter += 1)}`,
     generationId,
@@ -111,32 +119,74 @@ describe("publishing a remix as a variation or a fork", () => {
     expect(inFork.cr).toBe("102-002");
   });
 
-  it("keeps a remix that changed only its remixable words a variation, and offers a fork for more", async () => {
+  it("keeps a words-only remix a variation and allows a fork only once the remix reads as a new design", async () => {
     const t = newTest();
     const alice = await member(t, "alice");
     const bob = await member(t, "bob");
     const root = await publish(t, alice);
     const artKey = "works/101/001/original.png";
     await t.run((ctx) => ctx.db.patch("works", root.workId, { artKey }));
+    const relation = async (generationId: Id<"generations">) =>
+      (await bob.as.query(api.publish.preview, { generationId }))?.remix?.relation;
+    const asFork = (generationId: Id<"generations">, requestId: string) =>
+      bob.as.mutation(api.publish.quick, { requestId, generationId, remixKind: "fork" });
+    const check = (generationId: Id<"generations">) =>
+      t.run(async (ctx) => (await ctx.db.get("generations", generationId))?.remixCheck ?? null);
 
-    // Only the boxes changed, on the parent's own art: a variation, never a fork.
+    // Only the boxes changed, on the parent's own art: a variation, never compared, never a fork.
     const wordsOnly = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: artKey });
-    expect((await bob.as.query(api.publish.preview, { generationId: wordsOnly }))?.remix?.forkAllowed).toBe(false);
-    await expect(
-      bob.as.mutation(api.publish.quick, { requestId: "words-fork", generationId: wordsOnly, remixKind: "fork" }),
-    ).rejects.toThrow(/publishes as a variation/);
+    expect(await relation(wordsOnly)).toEqual({ status: "words" });
+    await bob.as.mutation(api.publish.checkRemix, { generationId: wordsOnly });
+    expect(await check(wordsOnly)).toBeNull();
+    await expect(asFork(wordsOnly, "words-fork")).rejects.toThrow(/changed only the design's remixable words/);
     const variation = await bob.as.mutation(api.publish.quick, { requestId: "words-variation", generationId: wordsOnly, remixKind: "variation" });
     expect(variation.cr).toBe("101-002");
 
-    // Words in the request as well: the remixer may start a new family.
-    const more = await tile(t, bob.userId, root.workId, { instruction: "Add SINCE 1999 under the mushroom", inspirationKey: artKey });
-    expect((await bob.as.query(api.publish.preview, { generationId: more }))?.remix?.forkAllowed).toBe(true);
-    const fork = await bob.as.mutation(api.publish.quick, { requestId: "more-fork", generationId: more, remixKind: "fork" });
+    // Words in the request as well: compared first. Until the verdict, no fork.
+    const small = await tile(t, bob.userId, root.workId, { instruction: "Add SINCE 1999 under the mushroom", inspirationKey: artKey });
+    expect(await relation(small)).toEqual({ status: "none" });
+    await expect(asFork(small, "small-early")).rejects.toThrow(/Still comparing/);
+    await bob.as.mutation(api.publish.checkRemix, { generationId: small });
+    expect(await check(small)).toMatchObject({ status: "pending", attempts: 1 });
+    // Asking again while it runs starts nothing new.
+    await bob.as.mutation(api.publish.checkRemix, { generationId: small });
+    expect(await check(small)).toMatchObject({ status: "pending", attempts: 1 });
+    expect(await relation(small)).toEqual({ status: "pending" });
+
+    // It reads as the same design: a variation, and the reason shows.
+    await t.mutation(internal.publish.saveRemixCheck, {
+      generationId: small,
+      verdict: "variation",
+      reason: "The same mushroom design with a new line of words under it.",
+      subject: "same",
+      layout: "same",
+      style: "same",
+    });
+    expect(await relation(small)).toEqual({ status: "variation", reason: "The same mushroom design with a new line of words under it." });
+    await expect(asFork(small, "small-fork")).rejects.toThrow(/reads as the same design/);
+
+    // A remix that reads as a new design may start a new family.
+    const big = await tile(t, bob.userId, root.workId, { instruction: "Redraw it all as a pixel-art arcade poster", inspirationKey: artKey });
+    await bob.as.mutation(api.publish.checkRemix, { generationId: big });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: big, verdict: "fork", reason: "Redrawn as pixel art.", style: "changed" });
+    expect(await relation(big)).toEqual({ status: "fork", reason: "Redrawn as pixel art." });
+    const fork = await asFork(big, "big-fork");
     expect(fork.cr).toBe("102-001");
 
-    // Other art as image 1 counts as more too.
-    const otherArt = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: "members/bob/uploads/x/original.png" });
-    expect((await bob.as.query(api.publish.preview, { generationId: otherArt }))?.remix?.forkAllowed).toBe(true);
+    // When the comparison can't run, the remixer chooses; it's tried at most three times.
+    const unknown = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: "members/bob/uploads/x/original.png" });
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      await bob.as.mutation(api.publish.checkRemix, { generationId: unknown });
+      if (attempt <= 3) await t.mutation(internal.publish.saveRemixCheck, { generationId: unknown, error: "timed out" });
+    }
+    expect(await check(unknown)).toMatchObject({ status: "failed", attempts: 3, error: "timed out" });
+    expect(await relation(unknown)).toEqual({ status: "failed" });
+    expect((await asFork(unknown, "unknown-fork")).cr).toBe("103-001");
+
+    // Only the design's own creator can start a comparison.
+    const other = await tile(t, bob.userId, root.workId, { instruction: "x", inspirationKey: artKey });
+    await alice.as.mutation(api.publish.checkRemix, { generationId: other });
+    expect(await check(other)).toBeNull();
   });
 
   it("refuses to publish a remix whose parent is gone", async () => {
