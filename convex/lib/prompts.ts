@@ -43,10 +43,10 @@ export const STYLE_NOTES_PROMPT = [
   "Figure drawing: how this image draws people and animals from head to toe, compared with real anatomy. This is how the style turns anyone " +
     "into one of its own figures, so cover every part the image shows: overall proportions (how many heads tall, and head size against the body); " +
     "body shape and silhouette (for example elongated, stocky, rubbery, or angular); neck, torso, arms, legs, hands, and feet; the head and face " +
-    "(shape and length, chin, eyes as dots or detailed and their size, nose, mouth, and ears); hair as a shape and texture (for example spiky and " +
-    "standing straight up, one solid block, or flowing ribbons); and posture and gesture. For animals, the same: head, ears, muzzle, body, legs, " +
+    "(shape and length, chin, eyes as dots or detailed and their size, nose, mouth, and ears); and posture and gesture. Leave hair to the last " +
+    "line. For animals, the same: head, ears, muzzle, body, legs, " +
     "and tail. Say plainly what is exaggerated or simplified and by how much, using numbers where you can, such as \"figures about nine heads tall " +
-    "with long thin legs\", \"ears half as big as the head\", or \"hair standing straight up, as tall as the face\". " +
+    "with long thin legs\" or \"ears half as big as the head\". " +
     "If nothing is exaggerated, write \"Realistic proportions.\" End with a line starting \"Hair:\". If this style would redraw any person's hair, " +
     "even short straight hair, into one particular exaggerated shape that no ordinary haircut has, describe that shape so it could be drawn on " +
     "anyone, such as \"Hair: tall sharp spikes standing straight up, as tall as the face\" or \"Hair: one smooth solid helmet shape with a single " +
@@ -230,7 +230,7 @@ function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }
   // eight realistic portraits).
   const figures = figureDrawing(mix[0].notes);
   const figureLine = figures
-    ? `\nFigure drawing, required for every person and animal, head to toe: ${figures} Draw people and animals from photos this way too: their heads, faces, hair, ears, bodies, and limbs take these proportions and shapes even though the photos show realistic ones. Realistic proportions are wrong here.`
+    ? `\nFigure drawing, required for every person and animal, head to toe: ${figures} Draw people and animals from photos this way too: their heads, faces, ears, bodies, and limbs take these proportions and shapes even though the photos show realistic ones. Realistic proportions are wrong here.`
     : "";
   if (mix.length === 1) {
     const only = mix[0];
@@ -258,22 +258,42 @@ function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }
   );
 }
 
-// The notes' "Figure drawing" section, unless it says the proportions are realistic.
+// The notes' "Figure drawing" section, unless it says the proportions are realistic. Its "Hair:"
+// line stays out: people keep their own hair unless the request asks for the style's (hairShape).
 export function figureDrawing(notes: string | undefined) {
   if (!notes) return "";
-  const text = noteSections(notes).find((s) => s.name === "Figure drawing")?.text.replace(/\s+/gu, " ").trim() ?? "";
+  const section = noteSections(notes).find((s) => s.name === "Figure drawing")?.text ?? "";
+  const text = withoutHair(section).replace(/\s+/gu, " ").trim();
   if (!text || /^realistic proportions\b/iu.test(text) || /^no (people|figures|characters)\b/iu.test(text)) return "";
   return text;
 }
 
-// The "Hair:" line that ends the notes' "Figure drawing" section: the hair this style draws on
-// anyone. Empty when the style draws each person's real hairstyle.
+// The "Hair:" line that ends the notes' "Figure drawing" section: the hair this style would draw
+// on anyone. Empty when the style draws each person's real hairstyle.
 export function hairShape(notes: string | undefined) {
   if (!notes) return "";
   const section = noteSections(notes).find((s) => s.name === "Figure drawing")?.text ?? "";
   const match = /(?:^|\n|[.;]\s+)[\s*•-]*Hair\**:\**\s*([^\n]+)/iu.exec(section);
   const hair = (match?.[1] ?? "").replace(/\*+/gu, "").trim().replace(/[.;]+$/u, "").trim();
-  return !hair || /^(true to life|realistic|natural|none|no|not|n\/a)\b/iu.test(hair) ? "" : hair;
+  if (!hair || /^(true to life|realistic|natural|none|no|not|n\/a)\b/iu.test(hair)) return "";
+  return hair.charAt(0).toLowerCase() + hair.slice(1);
+}
+
+function withoutHair(figureNotes: string) {
+  return figureNotes.replace(/(^|\n|[.;]\s+)[\s*•-]*Hair\**:\**[^\n]*/giu, "$1").trim();
+}
+
+// A style's look for the prompt: its style sections, without the figure notes' "Hair:" line.
+function styleDefinition(notes: string | undefined) {
+  if (!notes?.trim()) return "";
+  const sections = noteSections(notes);
+  if (sections.length === 0) return notes.trim();
+  return sections
+    .filter((s) => STYLE_SECTIONS.includes(s.name))
+    .map((s) => ({ name: s.name, text: s.name === "Figure drawing" ? withoutHair(s.text) : s.text }))
+    .filter((s) => s.text)
+    .map((s) => `${s.name}:\n${s.text}`)
+    .join("\n\n");
 }
 
 // ---- Styles named in the request ----
@@ -368,6 +388,9 @@ export function studioPrompt(args: {
   // What the request wants from each numbered image, when the role reader decided; otherwise the
   // request's phrases decide (namedStyles).
   roles?: Array<ImageRole>;
+  // The request asks to give people the style's hair, as the role reader read it. People keep their
+  // own hair otherwise.
+  styleHair?: boolean;
   // A remix's changed words, as convex/lib/remixFields.ts wordChangeInstruction writes them.
   wordChanges?: string;
 }) {
@@ -426,12 +449,15 @@ export function studioPrompt(args: {
     const first = work[0].n;
     const whose = work.length > 1 ? "the images" : `image ${first}`;
     let keep: string;
-    // The leading style's hair, named from its notes; "the style decides the shape the hair takes"
-    // alone kept a photo's curls.
-    const hair = mix.length > 0 ? hairShape(mix[0].notes) : "";
-    const hairLine = hair
-      ? ` Unless the request says otherwise, give everyone the style's hair (${hair}) in their own hair color, whatever hairstyle ${whose} shows.`
-      : "";
+    // People keep their own hair unless the request asks for the style's: one person in a style
+    // image can't show whether their hair is the style's or just their haircut, and hair carries a
+    // lot of a likeness. Tested 2026-10-04 with a photo and a cartoon of spiky-haired boys: any
+    // mention of the style's hair in the prompt, even "if the request asks for the style's hair",
+    // gave her spikes in all four designs; with none, she kept her curls in 4 of 4, and so did a
+    // request for "the style's hair" alone. So the hair is named only when the role reader says the
+    // request asks for it (styleHair), and then in full.
+    const hair = args.styleHair ? (mix.map((style) => hairShape(style.notes)).find(Boolean) ?? "") : "";
+    const hairLine = hair ? ` Give people the style's hair: ${hair}, in their own hair color.` : "";
     if (args.remix && mix.length > 0) {
       // A style in the mixer restyles a remix. With the remix rules below (keep its lettering,
       // colors, and texture), a style at 100% left no trace on a word remix (tested 2026-10-04).
@@ -450,14 +476,13 @@ export function studioPrompt(args: {
       // freckle treatment and kept her glasses, curls, and smile. This is the broad wording with
       // examples. No wording recolored her red hair to the style's pink; a request can ask for that.
       // Tested 2026-10-04 with a cartoon of boys about eight heads tall with huge ears and tall
-      // spiked hair: with this wording all four designs took its long legs, big head, and big ears
-      // and kept her glasses, freckles, earrings, and smile, but kept her curls until hairLine named
-      // the style's hair; then 4 of 4 had upright spikes in her own hair color.
+      // spiked hair: all four designs took its long legs, big head, and big ears and kept her
+      // glasses, freckles, earrings, smile, and curls.
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the recognizable likeness ` +
-        `of every person and animal in ${whose}, such as their hair color, glasses, freckles, and smile, so someone who knows them would recognize them, ` +
-        "while drawing them fully in the style, from head to toe: the style decides their proportions and shapes, such as how tall and stretched the body is, " +
-        `how big the head and ears are, and the shape the hair takes.${hairLine}`;
+        `of every person and animal in ${whose}, such as their hair, glasses, freckles, and smile, so someone who knows them would recognize them, ` +
+        "while drawing them fully in the style, from head to toe: the style decides their proportions and shapes, such as how tall and stretched the body is " +
+        `and how big the head and ears are.${hairLine}`;
     } else {
       keep =
         `Keep: study ${whose} closely. Unless the request changes them, keep image ${first}'s composition and structure, and keep the likeness of every person and animal in ${whose} recognizable: face shape, features, skin tone, hair, build, and age. ` +
@@ -483,7 +508,7 @@ export function studioPrompt(args: {
   if (mix.length > 0) {
     parts.push(styleMixSection(mix));
     const definitions = mix
-      .map((style) => ({ n: style.n, text: pickSections(style.notes, STYLE_SECTIONS) }))
+      .map((style) => ({ n: style.n, text: styleDefinition(style.notes) }))
       .filter((d) => d.text)
       .map((d) => `Image ${d.n}:\n${d.text}`);
     if (definitions.length > 0) {

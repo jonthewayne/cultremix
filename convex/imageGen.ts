@@ -423,7 +423,7 @@ export const runBatch = internalAction({
           }),
         remix: job.remixOfParent,
       });
-      const roles = read ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);
+      const roles = read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);
       const text = studioPrompt({
         layout: "grid",
         instruction,
@@ -436,6 +436,7 @@ export const runBatch = internalAction({
         styles: job.styles,
         remix: job.remixOfParent,
         roles,
+        styleHair: read?.styleHair ?? false,
         wordChanges: job.wordChanges,
       });
       const keys = job.attachments.map((a) => a.key);

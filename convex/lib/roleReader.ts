@@ -15,7 +15,7 @@ import type { ImageRole } from "./prompts";
 // with reasoning off (55 of 68). With low reasoning: 168 of 170 over two runs, at 2.4 s typical and
 // 4.3 s at most.
 const MODEL = "openai/gpt-6-luna";
-const TIMEOUT_MS = 8_000;
+const TIMEOUT_MS = 10_000;
 
 const SYSTEM = [
   "You read a member's request to a t-shirt design studio. The member attached numbered images; the studio's style mixer may hold " +
@@ -29,12 +29,19 @@ const SYSTEM = [
     'Asking to keep an image\'s own look makes it both. A negated style ("not the style of image 2") is not a style.',
   'When the style mixer holds images, a look that doesn\'t point at a numbered image, such as "in the style", "this style", or "like the style", ' +
     "is the mixer's, and leaves the numbered images as content.",
-  'Answer with JSON only: {"roles": [one of "content", "style", "both" for each numbered image, in order]}.',
+  'Also decide "styleHair": true only when the request asks to give people the hair of the style or of a style image (its hairstyle or ' +
+    'hair shape), in any wording, such as "with the style\'s hair", "give her the cartoon\'s spiky hair", or "hair like image 2". Otherwise ' +
+    "false, including when the request describes some other hairstyle or only a hair color.",
+  'Answer with JSON only: {"roles": [one of "content", "style", "both" for each numbered image, in order], "styleHair": true or false}.',
 ].join("\n");
 
 const ROLES = new Set<string>(["content", "style", "both"]);
 
 type ReaderImage = { summary?: string; kind?: "photo" | "art" };
+
+// roles: what the request wants from each numbered image. styleHair: the request asks to give
+// people the style's hair, which studioPrompt then names (people keep their own hair otherwise).
+export type RequestReading = { roles: Array<ImageRole>; styleHair: boolean };
 
 function describe(image: ReaderImage) {
   const kind = image.kind === "photo" ? "a photo" : image.kind === "art" ? "art" : "an image";
@@ -49,7 +56,7 @@ export async function readRoles(args: {
   // image itself for one added only in the mixer.
   mixer?: Array<number | ReaderImage>;
   remix: boolean;
-}): Promise<Array<ImageRole> | null> {
+}): Promise<RequestReading | null> {
   if (!args.instruction.trim() || args.images.length === 0 || !process.env.AI_GATEWAY_API_KEY) return null;
   const list = args.images.map((image, i) => `${i + 1}. ${describe(image)}`).join("\n");
   const mixer = (args.mixer ?? []).map((entry) => `- ${typeof entry === "number" ? `image ${entry}` : describe(entry)}`);
@@ -66,14 +73,15 @@ export async function readRoles(args: {
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const text = result.text;
-    const parsed: { roles?: unknown } = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    const parsed: { roles?: unknown; styleHair?: unknown } = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const roles = parsed.roles;
     if (!Array.isArray(roles) || roles.length !== args.images.length || !roles.every((role) => ROLES.has(String(role)))) {
       console.error("readRoles: unexpected answer", text.slice(0, 200));
       return null;
     }
-    console.log("readRoles ok", Date.now() - started, "ms", roles.join("/"));
-    return roles as Array<ImageRole>;
+    const styleHair = parsed.styleHair === true;
+    console.log("readRoles ok", Date.now() - started, "ms", roles.join("/"), styleHair ? "style hair" : "own hair");
+    return { roles: roles as Array<ImageRole>, styleHair };
   } catch (error) {
     console.error("readRoles failed", error instanceof Error ? error.message : error);
     return null;
