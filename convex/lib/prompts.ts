@@ -54,6 +54,8 @@ export const STYLE_NOTES_PROMPT = [
     "Write each as a way of drawing that would carry to any other subject, such as a palette, a texture or pattern, a kind of line or shading, " +
     "or a way of drawing faces and bodies, rather than as something this image shows: \"Ben-Day halftone dots in the shadows\" rather than " +
     "\"a dotted yellow background\", and \"neon pink and cyan against heavy black outlines\" rather than \"pink hair\". " +
+    "Never name a body part that only the image's own subject has, such as a lion's mane, horns, or wings; a way of exaggerating parts " +
+    "anyone has, such as huge ears or long legs, can be a trait. " +
     "If the image draws people or animals in a distinctive way, make that one of them.",
   "",
   "Quote text only under Words. Write plain, short sentences under the other headings, about 350 words for them together, with no introduction. " +
@@ -225,7 +227,23 @@ export type PromptImage = {
 // attachment: the 1-based number of the image the style comes from.
 export type PromptStyle = { attachment: number; weight: number };
 
-function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }>) {
+// Where each smaller style goes: a part of every design each, the largest first. Asked only to be
+// 'clearly visible in every design', a smaller style came and went: at 80/20 the pop-art style reached
+// all four of a grid's designs in only 2 of 5 grids, and with two smaller styles the model gave each a
+// design of its own and drew its image's woman or picnickers there (7 of 16 designs over four runs).
+// Given a part, it showed every time: the pop-art style colored the raccoon in 8 of 8 designs at 80/20
+// and 16 of 16 in the three-style mix, with no style image's people (2026-10-05, image test suite).
+const ACCENT_PARTS = [
+  { grid: "on the main subject of every design (its coloring, shading, and face)", single: "on the main subject (its coloring, shading, and face)" },
+  {
+    grid: "around the subject in every design (a backdrop, frame, or ornaments, and the print texture)",
+    single: "around the subject (a backdrop, frame, or ornaments, and the print texture)",
+  },
+  { grid: "in the lettering of every design (its colors and effects)", single: "in the lettering (its colors and effects)" },
+  { grid: "in small accents in every design", single: "in small accents" },
+];
+
+function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }>, grid: boolean) {
   // The leading style's way of drawing people and animals, head to toe, stated as a requirement:
   // without it, a photo's realistic proportions win (tested: a poster of elongated figures gave
   // eight realistic portraits).
@@ -241,6 +259,7 @@ function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }
     );
   }
   const lead = mix[0].share;
+  const smaller = mix.filter((style, i) => i > 0 && style.share < lead - 10);
   const lines = mix.map((style, i) => {
     const sharesLead = style.share >= lead - 10;
     if (i === 0 || sharesLead) {
@@ -250,13 +269,14 @@ function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }
     }
     const traits = signatureTraits(style.notes).slice(0, style.share >= 25 ? 3 : 2);
     const how = traits.length > 0 ? `these traits: ${traits.join("; ")}` : "its most recognizable traits: technique, palette, and texture";
-    return `- Image ${style.n} (${style.share}%): clearly visible in every design, not a faint hint, through ${how}.`;
+    const part = ACCENT_PARTS[Math.min(smaller.indexOf(style), ACCENT_PARTS.length - 1)];
+    return `- Image ${style.n} (${style.share}%): ${grid ? part.grid : part.single}, through ${how}.`;
   });
-  return (
-    "Style mix: how much each style shapes the result. Blend them in these proportions; a style with a smaller share still shows plainly.\n" +
-    lines.join("\n") +
-    figureLine
-  );
+  const blend =
+    smaller.length > 0
+      ? `Blend them in these proportions within ${grid ? "every design" : "the design"}, each smaller style in its own part: ${grid ? "each of the four designs shows every style, and no style gets a design of its own" : "the design shows every style"}. A style with a smaller share still shows plainly.`
+      : "Blend them in these proportions; a style with a smaller share still shows plainly.";
+  return `Style mix: how much each style shapes the result. ${blend}\n${lines.join("\n")}${figureLine}`;
 }
 
 // The notes' "Figure drawing" section, unless it says the proportions are realistic. Its "Hair:"
@@ -513,7 +533,7 @@ export function studioPrompt(args: {
   }
 
   if (mix.length > 0) {
-    parts.push(styleMixSection(mix));
+    parts.push(styleMixSection(mix, grid));
     const definitions = mix
       .map((style) => ({ n: style.n, text: styleDefinition(style.notes) }))
       .filter((d) => d.text)

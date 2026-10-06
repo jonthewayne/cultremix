@@ -38,6 +38,9 @@ export const FIXTURES: Array<Fixture> = [
   { id: "person-70s", kind: "art", what: "the woman from the photo drawn as a 1970s poster", origin: "dev studio, 2026-10-02" },
   { id: "grow-slow-pixel", kind: "art", what: "GROW SLOW redrawn as pixel art, same layout and colors", origin: "dev studio, 2026-10-05" },
   { id: "grow-slow-cactus", kind: "art", what: "GROW SLOW's lettering and frame around a desert cactus instead of the mushrooms", origin: "dev studio, 2026-10-05" },
+  // A character swap in the same look (Jon's example: a hand-drawn lion with words, changed to a wolf).
+  { id: "lion-sketch", kind: "art", what: "a pencil sketch of a lion's head under hand-lettered WILD AT HEART", origin: "Flare, 2026-10-05" },
+  { id: "wolf-sketch", kind: "art", what: "the pencil-sketch lion design with a wolf in its place", origin: "remix of lion-sketch, Sunburst, 2026-10-05" },
 ];
 
 export const FIXTURE_DIR = fileURLToPath(new URL("./fixtures", import.meta.url));

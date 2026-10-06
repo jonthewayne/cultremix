@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words.
 
-75 cases: 3 words, 6 styles, 5 people, 8 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 17 remix comparison (gpt-6 luna).
+77 cases: 3 words, 6 styles, 5 people, 9 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
 
 ## Words
 
@@ -23,7 +23,7 @@ A design made from a request alone spells its words exactly, in four clearly dif
 
 ### `words-not-from-style`: The request's words, never the style's (known limit)
 
-With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: on 2026-10-05 three of four designs read GRASH or GROW for TRASH (the style's letterforms leak into new words), so this is tracked, not promised.
+With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: the style's letterforms sometimes leak into the new words, often in all four designs of a grid (GRASH, TrROH, TRROSH in 2 of 7 suite runs on 2026-10-05). A retest of the same prompt gave 20 of 20 designs right, so two candidate fixes (a copy of the style image with its words removed, and an instruction to letter every word fresh) couldn't be told apart from it. Checking each design's spelling after it's made would catch it.
 
 - Style mixer: `grow-slow` at 100
 - Request: "A raccoon in a tiny crown that says TRASH ROYALTY"
@@ -51,7 +51,7 @@ Copying a style, naming a style in words, and mixing styles by their sliders.
 
 ### `style-copy`: A style from the mixer (known limit)
 
-A style image in the mixer sets the whole look for a new subject in all four designs, without its own subject or words. Known limit: with a lion as the style, a wolf takes on a lion's mane in about half the designs (2026-10-05).
+A style image in the mixer sets the whole look for a new subject in all four designs, without its own subject, its subject's body parts, or its words. Known limit: at high quality a wolf drawn in the lion's style takes a lion-like mane in about half the designs (2026-10-05). The notes no longer list the mane as a trait, which cleared it at medium quality (12 of 12 wolves), but at high quality the mane comes from the style image itself: removing every mention of it from the prompt, or forbidding a style subject's body parts (which made it worse), left it in about half.
 
 - Style mixer: `lion` at 100
 - Request: "A wolf that says MOON CLUB"
@@ -59,7 +59,8 @@ A style image in the mixer sets the whole look for a new subject in all four des
 - Checks: words read: MOON CLUB; never KING, BLOCK (4 of 4)
 - Checks: Does the design show a wolf (4 of 4)
 - Checks: not: Is the main animal a lion rather than a wolf (3 of 4)
-- Checks: Is it drawn in the style of the style image: detailed engraved fur in gold, brown, and black, with arched lettering (4 of 4)
+- Checks: not: Does the animal have a lion's mane: a thick ring of long, flowing hair framing its whole face (3 of 4)
+- Checks: Is it drawn in the style of the style image: detailed engraved fur strokes in gold, brown, and black with heavy black outlines and a distressed print texture (4 of 4)
 - First tested 2026-09-30
 
 ### `style-named-in-words`: "In the style of image 2"
@@ -112,17 +113,18 @@ Two styles at equal shares blend, each plainly visible in every design.
 - Checks: Does the design also clearly show style B's look: soft 1970s illustration with grainy texture, airbrushed gradients, or rolling hills and landscape (3 of 4)
 - First tested 2026-09-30
 
-### `mix-three`: Three styles at 50/25/25 (known limit)
+### `mix-three`: Three styles at 50/25/25
 
-Three styles each show in every design. Known limit: the model gives each style about three visible levels, and the third style tends to land in one design instead of blending into each.
+Three styles each show in every design, without the style images' own people. Since 2026-10-05 each smaller style gets a part of every design (the second colors the main subject, the third goes around it); before, the model gave a smaller style a design of its own and drew its image's woman or picnickers there (7 of 16 designs over four runs). With parts, 16 of 16 designs had the pop-art coloring on the raccoon and none had a person.
 
 - Style mixer: `grow-slow` at 100, `pop-art` at 50, `poster-70s` at 50
 - Request: "A raccoon in a tiny crown that says TRASH ROYALTY"
 - Checks: four designs cut from one grid on a transparent background
 - Checks: words read: TRASH ROYALTY (4 of 4)
 - Checks: Is the design mostly in the style of style A: warped bubble lettering with layered colored outlines (4 of 4)
-- Checks: Does the design clearly show style B's look, such as Ben-Day halftone dots, neon pink, or lavender with cyan shading (4 of 4)
-- Checks: Does the design clearly show style C's look: muted 1970s mustard, olive, and rust colors with soft grain (4 of 4)
+- Checks: Is the raccoon's fur lavender or purple (4 of 4)
+- Checks: Is there a 1970s-style landscape or sky in the design, such as mountains, a lake, pine trees, or a big sun with rays or wavy bands (3 of 4)
+- Checks: not: Does the design show a woman or any other person (4 of 4)
 - First tested 2026-09-30
 
 ## People
@@ -299,6 +301,20 @@ A box can take much longer words (fitted smaller or over more lines), and an emp
 - Checks: the remix comparison calls it image 1's design, a variation with the same subject and style (4 of 4)
 - First tested 2026-10-04
 
+### `remix-swap-character`: Swap the character
+
+A remix that swaps the main character (a pencil-sketch lion to a wolf) keeps the sketch style, the layout, and the words, and stays a variation of the original.
+
+- Images: `lion-sketch` (image 1 is the published design being remixed)
+- Request: "Change the lion to a wolf"
+- Checks: four designs cut from one grid on a transparent background
+- Checks: words read: WILD AT HEART (4 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same layout and style (4 of 4)
+- Checks: Does the design show a wolf (4 of 4)
+- Checks: not: Is the animal a lion rather than a wolf (4 of 4)
+- Checks: Is it drawn as a graphite pencil sketch with hatched shading (4 of 4)
+- First tested 2026-10-05
+
 ## Grid and layout
 
 Four designs per call, cut apart cleanly on a transparent background.
@@ -444,7 +460,7 @@ What a request wants from each numbered image, and whether it asks for the style
 
 ## Remix comparison (GPT-6 Luna)
 
-Whether a remix reads as the same design (a variation) or a new one (it may be a fork).
+Whether a remix keeps its original's look and layout (a variation, even with a new subject or words) or restyles or rebuilds it (it may be a fork).
 
 | Case | Original | Remix | Expected | Since |
 |---|---|---|---|---|
@@ -459,9 +475,10 @@ Whether a remix reads as the same design (a variation) or a new one (it may be a
 | Identical | `grow-slow` | `grow-slow` | variation | 2026-10-05 |
 | Restyled with pop art, same layout and lettering | `trash-royalty` | `trash-couture-pop` | either | 2026-10-05 |
 | Restyled with a 70s poster, same layout and lettering | `trash-royalty` | `trash-couture-70s` | either | 2026-10-05 |
-| Redrawn as pixel art, same layout and colors | `grow-slow` | `grow-slow-pixel` | either | 2026-10-05 |
-| The subject replaced | `lion` | `dragon` | fork | 2026-10-05 |
-| The mushrooms replaced by a cactus, same lettering | `grow-slow` | `grow-slow-cactus` | fork | 2026-10-05 |
+| The subject swapped, same look and layout | `lion` | `dragon` | variation | 2026-10-05 |
+| The mushrooms swapped for a cactus, same look and lettering | `grow-slow` | `grow-slow-cactus` | variation | 2026-10-05 |
+| A pencil-sketch lion swapped for a wolf | `lion-sketch` | `wolf-sketch` | variation | 2026-10-05 |
+| Redrawn as pixel art, same layout and colors | `grow-slow` | `grow-slow-pixel` | fork | 2026-10-05 |
 | A photo redrawn as a full-body cartoon | `person` | `person-cartoon` | fork | 2026-10-05 |
 | A photo redrawn as a 70s poster | `person` | `person-70s` | fork | 2026-10-05 |
 | An unrelated design | `grow-slow` | `slow-roll-night` | fork | 2026-10-05 |
@@ -498,3 +515,5 @@ Reference images in [fixtures/](fixtures/), all made by CultRemix's own image ca
 | `person-70s` | the woman from the photo drawn as a 1970s poster | dev studio, 2026-10-02 |
 | `grow-slow-pixel` | GROW SLOW redrawn as pixel art, same layout and colors | dev studio, 2026-10-05 |
 | `grow-slow-cactus` | GROW SLOW's lettering and frame around a desert cactus instead of the mushrooms | dev studio, 2026-10-05 |
+| `lion-sketch` | a pencil sketch of a lion's head under hand-lettered WILD AT HEART | Flare, 2026-10-05 |
+| `wolf-sketch` | the pencil-sketch lion design with a wolf in its place | remix of lion-sketch, Sunburst, 2026-10-05 |

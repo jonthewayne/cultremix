@@ -148,7 +148,7 @@ describe("studio prompt", () => {
     });
     expect(prompt).toContain("- Image 2 (80%): leads.");
     expect(prompt).toContain(
-      "- Image 1 (20%): clearly visible in every design, not a faint hint, through these traits: Holographic glitter on the fills; Glossy chrome lettering.",
+      "- Image 1 (20%): on the main subject (its coloring, shading, and face), through these traits: Holographic glitter on the fills; Glossy chrome lettering.",
     );
     expect(prompt).toContain("T-R-A-S-H R-O-Y-A-L-T-Y");
     expect(prompt).toContain("never copy words from a style image");
@@ -169,6 +169,33 @@ describe("studio prompt", () => {
     });
     expect(prompt).toContain("- Image 1 (50%): shares the lead with image 2.");
     expect(prompt).toContain("- Image 2 (50%): shares the lead with image 1.");
+  });
+
+  it("gives each smaller style a part of every design, the largest first", () => {
+    const attachments = [
+      { summary: "a mushroom poster", notes: POSTER, styleOnly: true },
+      { summary: "a glitter sample", notes: GLITTER, styleOnly: true },
+      { summary: "another poster", notes: POSTER, styleOnly: true },
+    ];
+    const styles = [
+      { attachment: 1, weight: 100 },
+      { attachment: 2, weight: 50 },
+      { attachment: 3, weight: 50 },
+    ];
+    const grid = studioPrompt({ layout: "grid", instruction: "A raccoon", attachments, styles });
+    expect(grid).toContain("each of the four designs shows every style, and no style gets a design of its own");
+    expect(grid).toContain("- Image 1 (50%): leads.");
+    expect(grid).toContain("- Image 2 (25%): on the main subject of every design (its coloring, shading, and face), through these traits:");
+    expect(grid).toContain("- Image 3 (25%): around the subject in every design (a backdrop, frame, or ornaments, and the print texture), through");
+    const single = studioPrompt({ layout: "single", instruction: "A raccoon", attachments, styles });
+    expect(single).toContain("- Image 2 (25%): on the main subject (its coloring, shading, and face), through these traits:");
+    expect(single).not.toContain("four designs");
+    // One smaller style goes on the subject too; two equal styles share the lead with no parts.
+    const two = studioPrompt({ layout: "grid", instruction: "A raccoon", attachments: attachments.slice(0, 2), styles: styles.slice(0, 2) });
+    expect(two).toContain("- Image 2 (33%): on the main subject of every design");
+    const even = studioPrompt({ layout: "grid", instruction: "A raccoon", attachments: attachments.slice(1), styles: [{ attachment: 1, weight: 50 }, { attachment: 2, weight: 50 }] });
+    expect(even).toContain("Blend them in these proportions; a style with a smaller share still shows plainly.");
+    expect(even).not.toContain("its own part");
   });
 
   it("drops styles at zero and keeps the image's own look", () => {

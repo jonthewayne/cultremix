@@ -111,7 +111,8 @@ export const CASES: Array<Case> = [
     group: "words",
     status: "known-limit",
     title: "The request's words, never the style's",
-    supports: "With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: on 2026-10-05 three of four designs read GRASH or GROW for TRASH (the style's letterforms leak into new words), so this is tracked, not promised.",
+    supports:
+      "With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: the style's letterforms sometimes leak into the new words, often in all four designs of a grid (GRASH, TrROH, TRROSH in 2 of 7 suite runs on 2026-10-05). A retest of the same prompt gave 20 of 20 designs right, so two candidate fixes (a copy of the style image with its words removed, and an instruction to letter every word fresh) couldn't be told apart from it. Checking each design's spelling after it's made would catch it.",
     since: "2026-10-01",
     mixer: [{ fixture: "grow-slow", weight: 100 }],
     request: "A raccoon in a tiny crown that says TRASH ROYALTY",
@@ -146,7 +147,8 @@ export const CASES: Array<Case> = [
     group: "styles",
     status: "known-limit",
     title: "A style from the mixer",
-    supports: "A style image in the mixer sets the whole look for a new subject in all four designs, without its own subject or words. Known limit: with a lion as the style, a wolf takes on a lion's mane in about half the designs (2026-10-05).",
+    supports:
+      "A style image in the mixer sets the whole look for a new subject in all four designs, without its own subject, its subject's body parts, or its words. Known limit: at high quality a wolf drawn in the lion's style takes a lion-like mane in about half the designs (2026-10-05). The notes no longer list the mane as a trait, which cleared it at medium quality (12 of 12 wolves), but at high quality the mane comes from the style image itself: removing every mention of it from the prompt, or forbidding a style subject's body parts (which made it worse), left it in about half.",
     since: "2026-09-30",
     mixer: [{ fixture: "lion", weight: 100 }],
     request: "A wolf that says MOON CLUB",
@@ -155,7 +157,10 @@ export const CASES: Array<Case> = [
     asks: [
       { id: "wolf", ask: "Does the design show a wolf?" },
       { id: "no-lion", ask: "Is the main animal a lion rather than a wolf?", expect: false, min: 3 },
-      { id: "style", ask: "Is it drawn in the style of the style image: detailed engraved fur in gold, brown, and black, with arched lettering?" },
+      { id: "no-mane", ask: "Does the animal have a lion's mane: a thick ring of long, flowing hair framing its whole face?", expect: false, min: 3 },
+      // Without "with arched lettering", which failed wolves drawn in the style with their lettering on a
+      // banner below (2026-10-05: 22 of 22 right on saved designs, 15 of 22 before).
+      { id: "style", ask: "Is it drawn in the style of the style image: detailed engraved fur strokes in gold, brown, and black with heavy black outlines and a distressed print texture?" },
     ],
   },
   {
@@ -253,9 +258,9 @@ export const CASES: Array<Case> = [
     kind: "generate",
     id: "mix-three",
     group: "styles",
-    status: "known-limit",
     title: "Three styles at 50/25/25",
-    supports: "Three styles each show in every design. Known limit: the model gives each style about three visible levels, and the third style tends to land in one design instead of blending into each.",
+    supports:
+      "Three styles each show in every design, without the style images' own people. Since 2026-10-05 each smaller style gets a part of every design (the second colors the main subject, the third goes around it); before, the model gave a smaller style a design of its own and drew its image's woman or picnickers there (7 of 16 designs over four runs). With parts, 16 of 16 designs had the pop-art coloring on the raccoon and none had a person.",
     since: "2026-09-30",
     mixer: [
       { fixture: "grow-slow", weight: 100 },
@@ -271,8 +276,12 @@ export const CASES: Array<Case> = [
     words: { has: ["TRASH", "ROYALTY"] },
     asks: [
       { id: "a", ask: "Is the design mostly in the style of style A: warped bubble lettering with layered colored outlines?" },
-      { id: "b", ask: "Does the design clearly show style B's look, such as Ben-Day halftone dots, neon pink, or lavender with cyan shading?" },
-      { id: "c", ask: "Does the design clearly show style C's look: muted 1970s mustard, olive, and rust colors with soft grain?" },
+      // Concrete and asked about the design alone: with three references in view the checker missed
+      // lavender raccoons. Asked alone it matched the boards: lavender on all 16 new designs and on none
+      // of the 16 old ones (2026-10-05).
+      { id: "b", ask: "Is the raccoon's fur lavender or purple?" },
+      { id: "c", ask: "Is there a 1970s-style landscape or sky in the design, such as mountains, a lake, pine trees, or a big sun with rays or wavy bands?", min: 3 },
+      { id: "no-person", ask: "Does the design show a woman or any other person?", expect: false },
     ],
   },
 
@@ -505,6 +514,25 @@ export const CASES: Array<Case> = [
     keeps: { parts: ["subject", "style"] },
     asks: [],
   },
+  {
+    kind: "generate",
+    id: "remix-swap-character",
+    group: "remix",
+    title: "Swap the character",
+    supports:
+      "A remix that swaps the main character (a pencil-sketch lion to a wolf) keeps the sketch style, the layout, and the words, and stays a variation of the original.",
+    since: "2026-10-05",
+    images: ["lion-sketch"],
+    remix: {},
+    request: "Change the lion to a wolf",
+    words: { has: ["WILD", "AT", "HEART"] },
+    keeps: { parts: ["layout", "style"] },
+    asks: [
+      { id: "wolf", ask: "Does the design show a wolf?" },
+      { id: "no-lion", ask: "Is the animal a lion rather than a wolf?", expect: false },
+      { id: "sketch", ask: "Is it drawn as a graphite pencil sketch with hatched shading?" },
+    ],
+  },
 
   // ---- Layout ----
   {
@@ -715,7 +743,8 @@ function readerCases(): Array<ReaderCase> {
   }));
 }
 
-// How far a remix moved from its original (convex/lib/remixJudge.ts), 2026-10-05.
+// How far a remix moved from its original (convex/lib/remixJudge.ts), 2026-10-05. A design is its look
+// and its layout: a swapped subject is a variation, a full restyle a fork (Jon, 2026-10-05).
 function compareCases(): Array<CompareCase> {
   const rows: Array<[string, string, CompareCase["expect"], string]> = [
     ["grow-slow", "grow-loud", "variation", "One word changed"],
@@ -729,9 +758,10 @@ function compareCases(): Array<CompareCase> {
     ["grow-slow", "grow-slow", "variation", "Identical"],
     ["trash-royalty", "trash-couture-pop", "either", "Restyled with pop art, same layout and lettering"],
     ["trash-royalty", "trash-couture-70s", "either", "Restyled with a 70s poster, same layout and lettering"],
-    ["grow-slow", "grow-slow-pixel", "either", "Redrawn as pixel art, same layout and colors"],
-    ["lion", "dragon", "fork", "The subject replaced"],
-    ["grow-slow", "grow-slow-cactus", "fork", "The mushrooms replaced by a cactus, same lettering"],
+    ["lion", "dragon", "variation", "The subject swapped, same look and layout"],
+    ["grow-slow", "grow-slow-cactus", "variation", "The mushrooms swapped for a cactus, same look and lettering"],
+    ["lion-sketch", "wolf-sketch", "variation", "A pencil-sketch lion swapped for a wolf"],
+    ["grow-slow", "grow-slow-pixel", "fork", "Redrawn as pixel art, same layout and colors"],
     ["person", "person-cartoon", "fork", "A photo redrawn as a full-body cartoon"],
     ["person", "person-70s", "fork", "A photo redrawn as a 70s poster"],
     ["grow-slow", "slow-roll-night", "fork", "An unrelated design"],
@@ -741,7 +771,8 @@ function compareCases(): Array<CompareCase> {
     id: `compare-${original}-to-${remix}`,
     group: "compare",
     title,
-    supports: "Comparing a remix with its original: the same design with changes is a variation; a new design (new subject, layout, or style) may be a fork.",
+    supports:
+      "Comparing a remix with its original: a design is its look and its layout, so new words, a swapped subject, new colors, or a new background keep it a variation, while a full restyle or a rebuilt layout may be a fork.",
     since: "2026-10-05",
     original,
     remix,

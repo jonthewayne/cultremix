@@ -15,7 +15,11 @@ const GROUPS: Array<{ group: Group; title: string; about: string }> = [
   { group: "photo", title: "Model photo", about: "The photo of a model wearing a published design." },
   { group: "notes", title: "Image notes (GPT-6 Luna)", about: "What the notes capture from each image: its words, its look, how it draws people." },
   { group: "reader", title: "Request reader (GPT-6 Luna)", about: "What a request wants from each numbered image, and whether it asks for the style's hair." },
-  { group: "compare", title: "Remix comparison (GPT-6 Luna)", about: "Whether a remix reads as the same design (a variation) or a new one (it may be a fork)." },
+  {
+    group: "compare",
+    title: "Remix comparison (GPT-6 Luna)",
+    about: "Whether a remix keeps its original's look and layout (a variation, even with a new subject or words) or restyles or rebuilds it (it may be a fork).",
+  },
 ];
 
 const quote = (text: string) => (text ? `"${text}"` : "(nothing typed)");

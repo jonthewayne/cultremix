@@ -27,8 +27,9 @@ describe("the remix comparison's answer", () => {
     });
   });
 
-  it("tells the model that words alone never make a fork, and to lean to variation", () => {
-    expect(REMIX_JUDGE_SYSTEM).toContain("Changed words alone never make a fork");
+  it("tells the model that words and swapped subjects never make a fork, a full restyle does, and to lean to variation", () => {
+    expect(REMIX_JUDGE_SYSTEM).toContain("Changed words never make a fork, and neither do swapped subjects");
+    expect(REMIX_JUDGE_SYSTEM).toContain("redrawn in a clearly different style or medium");
     expect(REMIX_JUDGE_SYSTEM).toContain("When it's close, answer variation.");
   });
 });
