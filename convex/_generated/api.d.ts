@@ -49,6 +49,7 @@ import type * as lib_chain_ids from "../lib/chain/ids.js";
 import type * as lib_chain_queue from "../lib/chain/queue.js";
 import type * as lib_chain_rpc from "../lib/chain/rpc.js";
 import type * as lib_chain_writes from "../lib/chain/writes.js";
+import type * as lib_chromaKey from "../lib/chromaKey.js";
 import type * as lib_circle from "../lib/circle.js";
 import type * as lib_codes from "../lib/codes.js";
 import type * as lib_colors from "../lib/colors.js";
@@ -198,6 +199,7 @@ declare const fullApi: ApiFromModules<{
   "lib/chain/queue": typeof lib_chain_queue;
   "lib/chain/rpc": typeof lib_chain_rpc;
   "lib/chain/writes": typeof lib_chain_writes;
+  "lib/chromaKey": typeof lib_chromaKey;
   "lib/circle": typeof lib_circle;
   "lib/codes": typeof lib_codes;
   "lib/colors": typeof lib_colors;

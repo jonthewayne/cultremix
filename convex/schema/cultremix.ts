@@ -107,6 +107,8 @@ export const cultremixTables = {
     // A remix's changed words (convex/remixFields.ts): the parent's field, its text as the server
     // read it from the parent, and the new text.
     wordChanges: v.optional(v.array(wordChange)),
+    // The image model an admin picked (convex/lib/studioRules.ts ENGINES); absent means GPT Image 2.5.
+    engine: v.optional(v.union(v.literal("gpt"), v.literal("nano-banana"), v.literal("recraft"), v.literal("mix"))),
   }).index("by_session", ["sessionId"]),
 
   // Every image a member brings into the studio: uploads, their own designs, and remix sources.

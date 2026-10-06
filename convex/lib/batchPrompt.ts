@@ -27,6 +27,10 @@ export async function batchPrompt(job: {
   // Image 1 is the published design being remixed.
   remixOfParent: boolean;
   wordChanges?: string;
+  // One design per call (the separate-call models) instead of a 2x2 grid.
+  layout?: "grid" | "single";
+  // The model takes words only (Recraft V4.1): the images' notes stand in for them.
+  blind?: boolean;
 }): Promise<{ text: string; roles: Array<ImageRole>; read: boolean; styleHair: boolean }> {
   // Style words from the previous studio's buttons, on batches it started.
   const instruction = job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction;
@@ -47,7 +51,7 @@ export async function batchPrompt(job: {
   const roles = read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);
   const styleHair = read?.styleHair ?? false;
   const text = studioPrompt({
-    layout: "grid",
+    layout: job.layout ?? "grid",
     instruction,
     attachments: attachments.map((a) => ({
       summary: summaryOf(a),
@@ -60,6 +64,7 @@ export async function batchPrompt(job: {
     roles,
     styleHair,
     wordChanges: job.wordChanges,
+    blind: job.blind,
   });
   return { text, roles, read: Boolean(read), styleHair };
 }

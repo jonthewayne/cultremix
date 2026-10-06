@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { formatCr } from "../../convex/lib/r2";
-import { gridWorstCaseCents, photoWorstCaseCents, singleWorstCaseCents } from "../../convex/lib/pricing";
+import {
+  NANO_BANANA_WORST_CENTS,
+  RECRAFT_WORST_CENTS,
+  gridWorstCaseCents,
+  photoWorstCaseCents,
+  singleWorstCaseCents,
+} from "../../convex/lib/pricing";
 import { newTest } from "./setup";
 import { addWork } from "./socialFixtures";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -10,7 +16,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 // busy machine.
 vi.setConfig({ testTimeout: 30_000 });
 
-type Role = "user" | "super_admin_owner";
+type Role = "user" | "super_admin_owner" | "super_admin_ops";
 type T = ReturnType<typeof newTest>;
 
 const GRID = gridWorstCaseCents(0, "high");
@@ -572,3 +578,42 @@ describe("admin", () => {
     expect(members.find((m) => m.userId === alice.userId)?.spentTodayCents).toBe(9.9 + GRID);
   });
 });
+
+describe("other image models", () => {
+  it("keeps other models to admins, and gives each design of a mix its own model and reservation", async () => {
+    const t = newTest();
+    await setBudget(t, 1000);
+    const member = await addUser(t, "member");
+    await expect(member.as.mutation(api.studio.generate, { ...BATCH, engine: "nano-banana" })).rejects.toThrow(/admins/);
+    expect(await balance(t, member.userId)).toBe(10);
+
+    const ops = await addUser(t, "ops", "super_admin_ops");
+    const mixed = await ops.as.mutation(api.studio.generate, { ...BATCH, engine: "mix" });
+    if ("refused" in mixed) throw new Error("refused");
+    const made = (await tiles(t, mixed.batchId)).sort((a, b) => a.index - b.index);
+    expect(made.map((g) => g.model)).toEqual([
+      "openai/gpt-image-2.5-flare",
+      "openai/gpt-image-2.5-flare",
+      "google/gemini-nano-banana-2.1",
+      "recraft/recraft-v4.1",
+    ]);
+    // Four separate calls: a credit each, and a reservation each at its own model's worst case.
+    expect(await balance(t, ops.userId)).toBe(6);
+    const held = await Promise.all(made.map((g) => reservation(t, g._id)));
+    expect(held.map((r) => r?.worstCaseCents)).toEqual([
+      singleWorstCaseCents(0, "high") + 1,
+      singleWorstCaseCents(0, "high") + 1,
+      NANO_BANANA_WORST_CENTS + 1,
+      RECRAFT_WORST_CENTS + 1,
+    ]);
+
+    // Nano Banana makes a grid: one reservation for the batch, charged as a batch.
+    const nano = await ops.as.mutation(api.studio.generate, { ...BATCH, engine: "nano-banana" });
+    if ("refused" in nano) throw new Error("refused");
+    expect(await reservation(t, nano.batchId)).toMatchObject({ worstCaseCents: NANO_BANANA_WORST_CENTS + 1 });
+    expect(await balance(t, ops.userId)).toBe(4);
+    const batch = await t.run((ctx) => ctx.db.get("batches", nano.batchId));
+    expect(batch).toMatchObject({ layout: "grid", engine: "nano-banana", model: "google/gemini-nano-banana-2.1" });
+  });
+});
+

@@ -23,3 +23,25 @@ export const BATCH_COUNT_CAP = 100;
 // Compare shows two to four designs side by side.
 export const COMPARE_MIN = 2;
 export const COMPARE_MAX = 4;
+
+// The image models an admin can pick in the studio; members always get the first. A mix makes the
+// four designs with separate calls: two GPT Image 2.5, one Nano Banana 2.1, one Recraft V4.1.
+export const ENGINES = [
+  { key: "gpt", name: "GPT Image 2.5" },
+  { key: "nano-banana", name: "Nano Banana 2.1" },
+  { key: "recraft", name: "Recraft V4.1" },
+  { key: "mix", name: "Mix of all three" },
+] as const;
+export type Engine = (typeof ENGINES)[number]["key"];
+export type SingleEngine = Exclude<Engine, "mix">;
+export const MIX_ENGINES: ReadonlyArray<SingleEngine> = ["gpt", "gpt", "nano-banana", "recraft"];
+
+export function engineName(engine: Engine) {
+  return ENGINES.find((e) => e.key === engine)?.name ?? "GPT Image 2.5";
+}
+
+// GPT Image 2.5 and Nano Banana make a batch in one grid call; Recraft and a mix make four calls,
+// one credit each.
+export function engineMakesGrid(engine: Engine) {
+  return engine === "gpt" || engine === "nano-banana";
+}

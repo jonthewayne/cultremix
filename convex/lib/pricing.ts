@@ -39,6 +39,12 @@ const HEADROOM = 1.25;
 // A grid design comes out near 12 MP (8 cents); a 1024x1536 design is about 25 MP (16 cents).
 export const TOPAZ_CENTS_PER_24MP = 8;
 
+// Nano Banana 2.1 at 2K through the gateway, per call: 5.9-6.6 cents measured with no image or one
+// (2026-10-06). It's priced per image, plus about 0.2 cents per input image; 12 covers eight.
+export const NANO_BANANA_WORST_CENTS = 12;
+// Recraft V4.1: 3.5 cents per image, the gateway's list price and every measured call.
+export const RECRAFT_WORST_CENTS = 5;
+
 export type Quality = "low" | "medium" | "high";
 
 // The quality a call sends: GRID_QUALITY defaults to high, IMAGE_QUALITY and PHOTO_QUALITY to

@@ -19,6 +19,22 @@ Dev normally uses Jon's ChatGPT login (`CHATGPT_ACCESS_TOKEN`), which runs a dif
 
 The model names live in `convex/lib/models.ts`. The image test suite (`tests/image-e2e`, `bun run test:image`) reruns every capability below against them; try a new model there before changing that file.
 
+### Other models, for admins
+
+Admins at the "manage" level (owner and ops) see a **Model** picker beside Generate; members always get GPT Image 2.5, and the server refuses another model from anyone else. Each design shows its model's name, and so does its batch line.
+
+| Choice | How a batch is made | Credits | Measured 2026-10-06 |
+|---|---|---|---|
+| GPT Image 2.5 | One 2x2 grid call, transparent, cut into four | 2 | about 10-11¢ at high |
+| Nano Banana 2.1 (`google/gemini-nano-banana-2.1`) | One 2x2 grid call at 2048x2048 on a flat key color, keyed out, then cut | 2 | 5.9-6.6¢ a call; 22 s from words, 26-31 s with an image |
+| Recraft V4.1 (`recraft/recraft-v4.1`) | Four 1024x1024 calls, each asking for a transparent background | 4 | 3.5¢ and 8-18 s each |
+| Mix of all three | Four separate calls: two GPT Image 2.5 at the grid's quality, one Nano Banana 2.1, one Recraft V4.1 | 4 | about 30¢ |
+
+- **Nano Banana 2.1 can't make a transparent background.** It returns an opaque JPEG; asked for transparency, it painted the background black. Its prompt asks for a flat magenta background instead (green when the prompt leans pink or purple, `keyFor`), and `convex/lib/chromaKey.ts` clears it: the background connected to the image's edge, background showing through holes in the artwork (inside letters, between a crown's points), and the key color mixed into soft edges, so a pencil sketch's gray lines stay gray instead of turning pink. The key color is measured from the image's edge, since the model's magenta isn't always pure: one design's was (254, 27, 254), which left a faint pink panel when the keyer assumed (255, 0, 255). Keying is free and takes about a second, so no second call is needed to remove the background. Shading the model draws as part of the art (a soft gray halo behind a sketch) stays.
+- **Recraft V4.1 takes words only** through the gateway, and only 1024x1024 (1024x1536, 1024x1280, 2048x2048, and others were refused). Its prompt says the images aren't attached and lets their notes stand in, without naming a style image's own subjects or describing its figures (with them, it drew the style images' woman and picnickers). Requests that work from an image suffer most: for "Change the lion to a wolf" on the lion sketch, two of four Recraft designs drew a lion.
+- **First comparison** (the lion sketch, "Change the lion to a wolf", one batch each): Nano Banana kept the sketch look, the arched hand lettering, and the composition in four of four wolves; GPT Image 2.5 did the same in its two; Recraft drew two wolves and two lions in its own cleaner sketch style. Sheets: `.tmp/shots/b2-three.png`, `.tmp/models/sheet1.png`, `.tmp/models/sheet2.png`.
+- The daily budget reserves each choice's own worst case: 12¢ for a Nano Banana call and 5¢ for a Recraft call, plus 1¢ for reading the request (`convex/lib/pricing.ts`). The roles reader and the notes run as they do for GPT Image 2.5.
+
 ## What a call costs
 
 Billed amounts from the gateway's per-generation records (`GET https://ai-gateway.vercel.sh/v1/generation?id=<gen_…>`, `total_cost`). Output tokens cost $30 per million, image input $8 per million, text input $5 per million. Each input image adds about 1.3¢ every time the model reads it.

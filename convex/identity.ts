@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { adminAllows } from "./lib/adminAccess";
 import { validateUsername } from "./lib/username";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -24,6 +25,8 @@ export const viewerValidator = v.object({
   creatorNumber: v.optional(v.number()),
   credits: v.number(),
   unlimited: v.boolean(),
+  // Admins who manage the platform can try other image models in the studio.
+  canPickModel: v.optional(v.boolean()),
 });
 
 export async function getViewerUser(ctx: Ctx): Promise<Doc<"users"> | null> {
@@ -77,6 +80,7 @@ async function toViewer(ctx: Ctx, user: Doc<"users">) {
     creatorNumber: user.creatorNumber,
     credits: await creditBalance(ctx, user._id),
     unlimited: isOwner(user),
+    canPickModel: adminAllows(user.platformRole, "manage"),
   };
 }
 
@@ -158,4 +162,3 @@ export const grantCredits = internalMutation({
     return { username: user.username, credits: await creditBalance(ctx, user._id) };
   },
 });
-

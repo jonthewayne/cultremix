@@ -22,6 +22,8 @@ export type Tile = {
   // The original's size in pixels, when known.
   width?: number;
   height?: number;
+  // The model that made it, on batches an admin made with another model.
+  model?: string;
 };
 
 export const isFinished = (tile: Tile) => tile.status === "succeeded";

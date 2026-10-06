@@ -7,6 +7,7 @@
 // (tests/unit/clientBoundary.test.ts).
 
 import { colorName } from "./colors";
+import type { KeyColor } from "./chromaKey";
 
 // Ends the creator's text as a sentence whether or not they typed the period.
 function sentence(text: string) {
@@ -208,6 +209,26 @@ export const GRID_RULES =
   "of the canvas or its edges. No grid lines, dividers, or boxes around the quarters, and no labels, numbers, " +
   "t-shirts, mockups, models wearing the designs, or background scenes. Print-ready, bold, clean edges.";
 
+// For a model that can't make a transparent background (Nano Banana 2.1 paints it black): the same
+// prompt on a flat key color, which convex/lib/chromaKey.ts clears afterward.
+export function keyedPrompt(text: string, key: KeyColor) {
+  const color = key === "green" ? "pure green (#00FF00)" : "magenta (#FF00FF)";
+  const avoid = key === "green" ? "bright green" : "magenta or hot pink";
+  const keyed = text.replaceAll("on a fully transparent background", `on a perfectly flat, solid ${color} background that fills the whole canvas`);
+  return (
+    `${keyed}\n\nThe ${color} is only the background: one flat color from edge to edge, with no gradient, texture, shadow, glow, or vignette ` +
+    `around the graphics. Never use ${avoid} in the graphics themselves.`
+  );
+}
+
+// The key color for a prompt: magenta, unless the prompt leans pink or purple more than green.
+export function keyFor(text: string): KeyColor {
+  const count = (pattern: RegExp) => text.match(pattern)?.length ?? 0;
+  const pinks = count(/\b(?:pink|magenta|fuchsia|purple|violet|lavender|lilac|mauve|plum)\b/giu);
+  const greens = count(/\b(?:green|lime|chartreuse|mint|emerald|olive|sage|moss|foliage|leaves)\b/giu);
+  return pinks > greens ? "green" : "magenta";
+}
+
 // ---- The studio prompt ----
 
 // Slider values (0-100) as shares of the mix: zeros drop out and two equal values split evenly.
@@ -247,11 +268,12 @@ const ACCENT_PARTS = [
   { grid: "in small accents in every design", single: "in small accents" },
 ];
 
-function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }>, grid: boolean) {
+function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }>, grid: boolean, blind = false) {
   // The leading style's way of drawing people and animals, head to toe, stated as a requirement:
   // without it, a photo's realistic proportions win (tested: a poster of elongated figures gave
-  // eight realistic portraits).
-  const figures = figureDrawing(mix[0].notes);
+  // eight realistic portraits). A model that can't see the images reads it as the style image's own
+  // people and draws them, so it's left out then.
+  const figures = blind ? "" : figureDrawing(mix[0].notes);
   const figureLine = figures
     ? `\nFigure drawing, required for every person and animal, head to toe: ${figures} Draw people and animals from photos this way too: their heads, faces, ears, bodies, and limbs take these proportions and shapes even though the photos show realistic ones. Realistic proportions are wrong here.`
     : "";
@@ -310,12 +332,12 @@ function withoutHair(figureNotes: string) {
 }
 
 // A style's look for the prompt: its style sections, without the figure notes' "Hair:" line.
-function styleDefinition(notes: string | undefined) {
+function styleDefinition(notes: string | undefined, blind = false) {
   if (!notes?.trim()) return "";
   const sections = noteSections(notes);
   if (sections.length === 0) return notes.trim();
   return sections
-    .filter((s) => STYLE_SECTIONS.includes(s.name))
+    .filter((s) => STYLE_SECTIONS.includes(s.name) && !(blind && s.name === "Figure drawing"))
     .map((s) => ({ name: s.name, text: s.name === "Figure drawing" ? withoutHair(s.text) : s.text }))
     .filter((s) => s.text)
     .map((s) => `${s.name}:\n${s.text}`)
@@ -419,8 +441,12 @@ export function studioPrompt(args: {
   styleHair?: boolean;
   // A remix's changed words, as convex/lib/remixFields.ts wordChangeInstruction writes them.
   wordChanges?: string;
+  // The model can't see the attached images (Recraft V4.1 takes words only): their notes stand in,
+  // and nothing names a style image's own subjects.
+  blind?: boolean;
 }) {
   const grid = args.layout === "grid";
+  const blind = args.blind === true;
   const ask = sentence(args.instruction);
   // A style named in the request joins the mix like a mixer style: at full strength, or at its
   // slider's value when the mixer already has it on.
@@ -466,13 +492,20 @@ export function studioPrompt(args: {
       const position = callsStyles ? args.styles.find((s) => s.attachment === n && s.position)?.position : undefined;
       return position ? ` (the request's style ${position})` : "";
     };
-    const legend = images.map((image) => {
+    const legend = images.filter((image) => !(blind && image.styleOnly)).map((image) => {
       // A style image's own words stay out of the prompt, its name included.
       const named = image.styleOnly ? image.summary?.replace(/\s*["“][^"”]*["”]/gu, "").trim() : image.summary;
       const what = named || (image.kind === "photo" ? "a photo" : "an image");
       return `- Image ${image.n}${styleName(image.n)}: ${what}${image.styleOnly ? " (style only: use its look, never its subjects or words)" : ""}.`;
     });
-    parts.push(`Attached images:\n${legend.join("\n")}`);
+    if (blind) {
+      parts.push(
+        "The images named below aren't attached: their notes describe them. Where a step says to study an image, follow its notes closely." +
+          (legend.length > 0 ? `\n${legend.join("\n")}` : ""),
+      );
+    } else {
+      parts.push(`Attached images:\n${legend.join("\n")}`);
+    }
   }
 
   const wordChanges = args.remix && work.length > 0 ? args.wordChanges?.trim() : undefined;
@@ -543,13 +576,14 @@ export function studioPrompt(args: {
   }
 
   if (mix.length > 0) {
-    parts.push(styleMixSection(mix, grid));
+    parts.push(styleMixSection(mix, grid, blind));
     const definitions = mix
-      .map((style) => ({ n: style.n, text: styleDefinition(style.notes) }))
+      .map((style) => ({ n: style.n, text: styleDefinition(style.notes, blind) }))
       .filter((d) => d.text)
       .map((d) => `Image ${d.n}:\n${d.text}`);
     if (definitions.length > 0) {
-      parts.push(`Style definitions (where they differ from the images, follow the images):\n\n${definitions.join("\n\n")}`);
+      const header = blind ? "Style definitions:" : "Style definitions (where they differ from the images, follow the images):";
+      parts.push(`${header}\n\n${definitions.join("\n\n")}`);
     }
   }
 

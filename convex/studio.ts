@@ -12,6 +12,8 @@ import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { styleShares } from "./lib/prompts";
 import type { ImageRole } from "./lib/prompts";
 import { gridWorstCaseCents, qualityOf, singleWorstCaseCents } from "./lib/pricing";
+import { NANO_BANANA_WORST_CENTS, RECRAFT_WORST_CENTS } from "./lib/pricing";
+import { adminAllows } from "./lib/adminAccess";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { MAX_FIELDS } from "./lib/remixFields";
 import { checkedWordChanges, wordChangesPrompt } from "./remixFields";
@@ -24,9 +26,13 @@ import {
   DESIGNS_PER_BATCH,
   MAX_IMAGES,
   MAX_STYLES,
+  MIX_ENGINES,
   creditsBack,
+  engineMakesGrid,
+  engineName,
 } from "./lib/studioRules";
-import { IMAGE_MODEL_TEXT_ONLY, IMAGE_MODEL_WITH_IMAGES } from "./lib/models";
+import type { Engine, SingleEngine } from "./lib/studioRules";
+import { IMAGE_MODEL_TEXT_ONLY, IMAGE_MODEL_WITH_IMAGES, NANO_BANANA_MODEL, RECRAFT_MODEL } from "./lib/models";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -35,6 +41,11 @@ type Ctx = QueryCtx | MutationCtx;
 export const MODEL_TEXT = IMAGE_MODEL_TEXT_ONLY;
 export const MODEL_EDIT = IMAGE_MODEL_WITH_IMAGES;
 const HEX = /^#[0-9a-f]{6}$/iu;
+
+export const engineValidator = v.union(v.literal("gpt"), v.literal("nano-banana"), v.literal("recraft"), v.literal("mix"));
+
+// The roles read before a batch (GPT-6 Luna): under a cent, held as one.
+const ROLES_CENTS = 1;
 
 export const tileStatus = v.union(
   v.literal("queued"),
@@ -68,6 +79,8 @@ const tileView = v.object({
   // The original's size in pixels, when known (Compare draws every design at the same scale).
   width: v.optional(v.number()),
   height: v.optional(v.number()),
+  // The model that made it, on batches an admin made with another model.
+  model: v.optional(v.string()),
 });
 
 const batchView = v.object({
@@ -95,6 +108,8 @@ const batchView = v.object({
   refunded: v.optional(v.number()),
   // A remix's changed words, for "Changed the words: GROW SLOW to GROW WILD".
   wordChanges: v.optional(v.array(v.object({ label: v.string(), from: v.string(), to: v.string() }))),
+  // The image model an admin picked, when it isn't GPT Image 2.5.
+  engine: v.optional(v.string()),
   tiles: v.array(tileView),
 });
 
@@ -179,6 +194,8 @@ async function tileOf(
   urls: ReturnType<typeof imageUrlReader>,
   g: Doc<"generations">,
   backgroundColor: string,
+  // Names the model on each design (a batch an admin made with another model).
+  showModel = false,
 ): Promise<Infer<typeof tileView>> {
   const blocked = g.status === "failed" && isBlockedError(g.error);
   const { url, mediumUrl, thumbUrl } = await urls(g.fullKey);
@@ -205,7 +222,15 @@ async function tileOf(
     publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
     width: g.width,
     height: g.height,
+    model: showModel ? modelLabel(g.model) : undefined,
   };
+}
+
+// A design's model by name.
+function modelLabel(model: string) {
+  if (model === NANO_BANANA_MODEL) return engineName("nano-banana");
+  if (model === RECRAFT_MODEL) return engineName("recraft");
+  return engineName("gpt");
 }
 
 // The member's own finished design that a batch image is (its parent, for a batch made with
@@ -251,7 +276,8 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
     images.push({ url, thumbUrl, design: await designFor(ctx, batch, image.key) });
   }
   const tiles = [];
-  for (const g of generations) tiles.push(await tileOf(ctx, urls, g, batch.backgroundColor));
+  const showModel = batch.engine !== undefined && batch.engine !== "gpt";
+  for (const g of generations) tiles.push(await tileOf(ctx, urls, g, batch.backgroundColor, showModel));
   return {
     batchId: batch._id,
     createdAt: batch._creationTime,
@@ -264,6 +290,7 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
     grid: batch.layout === "grid",
     refunded: batch.refunded,
     wordChanges: batch.wordChanges?.map((c) => ({ label: c.label, from: c.from, to: c.to })),
+    engine: showModel && batch.engine ? engineName(batch.engine) : undefined,
     tiles,
   };
 }
@@ -633,6 +660,8 @@ export const generate = mutation({
     inspirationKey: v.optional(v.string()),
     // A remix's new words for the parent's remixable words (convex/remixFields.ts).
     words: v.optional(v.array(v.object({ fieldId: v.string(), text: v.string() }))),
+    // An admin's choice of image model (convex/lib/studioRules.ts ENGINES); members get GPT Image 2.5.
+    engine: v.optional(engineValidator),
   },
   returns: v.union(
     v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
@@ -642,6 +671,10 @@ export const generate = mutation({
   ),
   handler: async (ctx, args) => {
     const user = await requireMember(ctx);
+    const engine: Engine = args.engine ?? "gpt";
+    if (engine !== "gpt" && !adminAllows(user.platformRole, "manage")) {
+      throw new ConvexError({ code: "FORBIDDEN", message: "Other image models are for admins for now." });
+    }
     const instruction = args.instruction.trim().slice(0, 600);
     const imageIds = args.images ?? [];
     const styleArgs = args.styles ?? [];
@@ -698,23 +731,38 @@ export const generate = mutation({
     const owner = isOwner(user);
     const chatgpt = Boolean(process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID);
     const forced = process.env.IMAGE_PROVIDER;
-    const provider = forced === "gateway" || forced === "chatgpt" ? forced : chatgpt ? "chatgpt" : "gateway";
+    // The other models are only on the gateway.
+    const provider = engine !== "gpt" ? "gateway" : forced === "gateway" || forced === "chatgpt" ? forced : chatgpt ? "chatgpt" : "gateway";
     // A grid (one call cut into four) on the gateway; the ChatGPT path and STUDIO_LAYOUT=single
-    // make four separate designs, charged one credit each.
-    const layout = provider === "gateway" && process.env.STUDIO_LAYOUT !== "single" ? "grid" : "single";
+    // make four separate designs, charged one credit each. Nano Banana makes a grid too; Recraft
+    // and a mix make four separate designs.
+    const layout =
+      engine === "gpt"
+        ? provider === "gateway" && process.env.STUDIO_LAYOUT !== "single" ? "grid" : "single"
+        : engineMakesGrid(engine) ? "grid" : "single";
     const price = layout === "grid" ? BATCH_CREDITS : DESIGNS_PER_BATCH;
     if (!owner && (await creditBalance(ctx, user._id)) < price) {
       return { refused: "NO_CREDITS" as const };
     }
     // The daily budget (convex/lib/budget.ts): the batch's worst case must fit in what's left of
-    // the gateway's UTC day, all four designs or none. The owner counts too.
+    // the gateway's UTC day, all four designs or none. The owner counts too. Each design of a
+    // separate-call batch reserves its own model's worst case.
     const now = Date.now();
-    const designCents = provider === "gateway"
-      ? layout === "grid"
-        ? gridWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high"))
-        : singleWorstCaseCents(attached, qualityOf(process.env.IMAGE_QUALITY, "medium"))
-      : 0;
-    const batchCents = layout === "grid" ? designCents : designCents * DESIGNS_PER_BATCH;
+    const only: SingleEngine = engine === "mix" ? "gpt" : engine;
+    const tileEngines: Array<SingleEngine> = engine === "mix" ? [...MIX_ENGINES] : Array.from({ length: DESIGNS_PER_BATCH }, () => only);
+    const singleCents = (one: SingleEngine) =>
+      one === "nano-banana"
+        ? NANO_BANANA_WORST_CENTS + ROLES_CENTS
+        : one === "recraft"
+          ? RECRAFT_WORST_CENTS + ROLES_CENTS
+          : engine === "mix"
+            ? singleWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high")) + ROLES_CENTS
+            : singleWorstCaseCents(attached, qualityOf(process.env.IMAGE_QUALITY, "medium"));
+    const gridCents =
+      engine === "nano-banana" ? NANO_BANANA_WORST_CENTS + ROLES_CENTS : gridWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high"));
+    const tileCents = tileEngines.map((one) => (provider === "gateway" && layout === "single" ? singleCents(one) : 0));
+    const designCents = provider === "gateway" && layout === "grid" ? gridCents : 0;
+    const batchCents = layout === "grid" ? designCents : tileCents.reduce((sum, cents) => sum + cents, 0);
     if (batchCents > 0 && !(await hasRoom(ctx, "gateway", batchCents, now))) {
       return { refused: "BUDGET" as const };
     }
@@ -745,11 +793,17 @@ export const generate = mutation({
     // The batch's number in its session, which names its folder (batch-01, batch-02, ...).
     const batchNumber = (session.batchCount ?? (await countBatches(ctx, session._id))) + 1;
     const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
-    const model = provider === "chatgpt"
-      ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
-      : attached > 0
-        ? MODEL_EDIT
-        : MODEL_TEXT;
+    const modelOf = (one: SingleEngine) =>
+      one === "nano-banana"
+        ? NANO_BANANA_MODEL
+        : one === "recraft"
+          ? RECRAFT_MODEL
+          : provider === "chatgpt"
+            ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
+            : attached > 0
+              ? MODEL_EDIT
+              : MODEL_TEXT;
+    const model = engine === "mix" ? "mix" : modelOf(only);
     const batchId = await ctx.db.insert("batches", {
       sessionId: session._id,
       ownerId: user._id,
@@ -766,6 +820,7 @@ export const generate = mutation({
       charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
       number: batchNumber,
       wordChanges,
+      engine: engine === "gpt" ? undefined : engine,
     });
     if (layout === "grid" && !owner) {
       await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
@@ -790,14 +845,14 @@ export const generate = mutation({
         kind: operation === "create" ? "concept" : operation,
         status: "queued",
         provider,
-        model,
+        model: layout === "grid" ? model : modelOf(tileEngines[index]),
         // Grid designs are charged with their batch.
         charged: layout === "single" && !owner,
         favorite: false,
       });
       if (layout === "single") {
         if (!owner) await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -1, generationId });
-        if (designCents > 0) {
+        if (tileCents[index] > 0) {
           await openReservation(ctx, {
             attemptKind: "tile",
             attemptId: generationId,
@@ -805,7 +860,7 @@ export const generate = mutation({
             provider: "gateway",
             userId: user._id,
             credits: owner ? 0 : 1,
-            worstCaseCents: designCents,
+            worstCaseCents: tileCents[index],
           }, now);
         }
         await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
@@ -915,6 +970,8 @@ const jobInputs = {
     sessionStartedAt: v.number(),
     batchNumber: v.number(),
   }),
+  // The image model an admin picked; absent means GPT Image 2.5.
+  engine: v.optional(engineValidator),
 };
 
 // What a batch's prompt is built from.
@@ -963,7 +1020,7 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
     sessionStartedAt: session?._creationTime ?? batch._creationTime,
     batchNumber: batch.number ?? (await batchNumberOf(ctx, batch)),
   };
-  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, wordChanges, attachments, styles, place };
+  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, wordChanges, attachments, styles, place, engine: batch.engine };
 }
 
 // A batch's number from its position in its session (for batches made before batches had numbers).

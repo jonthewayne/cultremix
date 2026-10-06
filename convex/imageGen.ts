@@ -4,13 +4,25 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { batchPrompt } from "./lib/batchPrompt";
+import { clearShare, keyOut } from "./lib/chromaKey";
 import { cutGrid } from "./lib/gridCut";
-import { gatewayImage } from "./lib/imageCalls";
+import type { Rgba } from "./lib/gridCut";
+import { gatewayImage, nanoBananaImage, recraftImage } from "./lib/imageCalls";
 import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY } from "./lib/imageErrors";
 import { mimeOf } from "./lib/mime";
-import { DEFAULT_QUALITY, DESIGN_SIZE, GRID_SIZE, PHOTO_SIZE } from "./lib/models";
+import {
+  DEFAULT_QUALITY,
+  DESIGN_SIZE,
+  GRID_SIZE,
+  NANO_BANANA_DESIGN,
+  NANO_BANANA_GRID,
+  NANO_BANANA_MODEL,
+  PHOTO_SIZE,
+  RECRAFT_MODEL,
+  RECRAFT_SIZE,
+} from "./lib/models";
 import { stripPngMetadata } from "./lib/pngMeta";
-import { photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
+import { keyFor, keyedPrompt, photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { callFailure } from "./lib/paidAttempts";
 import type { Spend } from "./lib/paidAttempts";
@@ -168,8 +180,8 @@ async function chatgptImage(args: {
 }
 
 // One transparent 1024x1536 design. Gateway: Sunburst edit with images, Flare for text only
-// (convex/lib/models.ts).
-async function designImage(text: string, images: Array<Uint8Array>, provider: Provider | null = imageProvider()) {
+// (convex/lib/models.ts). quality defaults to IMAGE_QUALITY (medium).
+async function designImage(text: string, images: Array<Uint8Array>, provider: Provider | null = imageProvider(), quality?: string) {
   if (provider === "chatgpt") {
     return clean(await chatgptImage({ text, images, background: "transparent", size: "1024x1536" }));
   }
@@ -179,7 +191,7 @@ async function designImage(text: string, images: Array<Uint8Array>, provider: Pr
       images,
       size: DESIGN_SIZE,
       background: "transparent",
-      quality: process.env.IMAGE_QUALITY ?? DEFAULT_QUALITY.design,
+      quality: quality ?? process.env.IMAGE_QUALITY ?? DEFAULT_QUALITY.design,
     }),
   );
 }
@@ -296,33 +308,73 @@ export const runTile = internalAction({
         job = await ctx.runQuery(internal.studio.tileJob, { generationId });
       }
       if (!job) throw new Error("The design was removed.");
-      const text = studioPrompt({
-        layout: "single",
-        // Style words from the previous studio's buttons, on batches it started.
-        instruction: job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction,
-        attachments: job.attachments.map((a) => ({
-          summary: a.analysis === "ready" ? a.summary : undefined,
-          kind: a.kind,
-          notes: a.analysis === "ready" ? a.notes : undefined,
-          styleOnly: a.styleOnly,
-        })),
-        styles: job.styles,
-        remix: job.remixOfParent,
-        wordChanges: job.wordChanges,
-      });
-      const images = await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
-      const provider = job.provider === "gateway" || job.provider === "chatgpt" ? job.provider : imageProvider();
       const started = Date.now();
-      const paid = await paidCall(() => designImage(text, images, provider));
-      sent = paid.spend;
-      const { bytes } = paid.out;
+      let bytes: Uint8Array = new Uint8Array();
+      let info: { width: number; height: number; hasAlpha: boolean };
+      let text: string;
+      let provider: string | null;
+      let imageCount: number;
+      if (job.engine) {
+        // A design from a batch an admin made with another model, or one of a mix's four. The
+        // prompt is read and built as for a grid batch, as one design.
+        const one = job.model === NANO_BANANA_MODEL ? "nano-banana" : job.model === RECRAFT_MODEL ? "recraft" : "gpt";
+        const blind = one === "recraft";
+        ({ text } = await batchPrompt({ ...job, layout: "single", blind }));
+        const images = blind ? [] : await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
+        imageCount = images.length;
+        provider = "gateway";
+        let pixels: Rgba | null = null;
+        if (one === "nano-banana") {
+          const key = keyFor(text);
+          const paid = await paidCall(() => nanoBananaImage({ text: keyedPrompt(text, key), images, ...NANO_BANANA_DESIGN }));
+          sent = paid.spend;
+          pixels = keyOut(await decodeToRgba(paid.out.bytes), key);
+        } else if (one === "recraft") {
+          const paid = await paidCall(() => recraftImage({ text, size: RECRAFT_SIZE }));
+          sent = paid.spend;
+          pixels = await decodeToRgba(paid.out.bytes);
+        } else {
+          // A mix's GPT designs at the grid's quality, so the models compare like for like.
+          const paid = await paidCall(() => designImage(text, images, "gateway", process.env.GRID_QUALITY ?? DEFAULT_QUALITY.grid));
+          sent = paid.spend;
+          bytes = paid.out.bytes;
+        }
+        if (pixels) {
+          bytes = await encodePng(pixels);
+          info = { width: pixels.width, height: pixels.height, hasAlpha: clearShare(pixels) > 0.01 };
+        } else {
+          info = pngInfo(bytes);
+        }
+      } else {
+        text = studioPrompt({
+          layout: "single",
+          // Style words from the previous studio's buttons, on batches it started.
+          instruction: job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction,
+          attachments: job.attachments.map((a) => ({
+            summary: a.analysis === "ready" ? a.summary : undefined,
+            kind: a.kind,
+            notes: a.analysis === "ready" ? a.notes : undefined,
+            styleOnly: a.styleOnly,
+          })),
+          styles: job.styles,
+          remix: job.remixOfParent,
+          wordChanges: job.wordChanges,
+        });
+        const images = await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
+        imageCount = images.length;
+        const chosen = job.provider === "gateway" || job.provider === "chatgpt" ? job.provider : imageProvider();
+        provider = chosen;
+        const paid = await paidCall(() => designImage(text, images, chosen));
+        sent = paid.spend;
+        bytes = paid.out.bytes;
+        info = pngInfo(bytes);
+      }
       const made = Date.now();
-      const info = pngInfo(bytes);
       // Stores the design with its thumbnail and medium, so pages never load the PNG first.
       const place = job.place;
       const designNumber = job.index + 1;
       const { key, sha256 } = await storeNew(ctx, bytes, "image/png", () => designKey(place, designNumber, randomCode()));
-      console.log("runTile ok", provider, images.length, "images", text.length, "chars", made - started, "ms, stored and sized in", Date.now() - made, "ms", info);
+      console.log("runTile ok", provider, job.model, imageCount, "images", text.length, "chars", made - started, "ms, stored and sized in", Date.now() - made, "ms", info);
       await ctx.runMutation(internal.studio.markSucceeded, {
         generationId,
         fullKey: key,
@@ -387,19 +439,31 @@ export const runBatch = internalAction({
       // What the request wants from each numbered image (GPT-6 Luna, about 2.5 s) and the prompt
       // itself, built the way the image test suite builds it (convex/lib/batchPrompt.ts).
       const { text, roles, read } = await batchPrompt(job);
+      // Nano Banana can't make a transparent background: its grid is drawn on a key color that
+      // chromaKey clears before the cut.
+      const nano = job.engine === "nano-banana";
+      const key = keyFor(text);
       const keys = job.attachments.map((a) => a.key);
       const started = Date.now();
       // The inputs are only needed for the call; letting them go keeps memory for the cut.
       let inputs: Array<Uint8Array> | null = await Promise.all(keys.map((key) => fetchPublicImage(key, ctx)));
-      const paid = await paidCall(() => gridImage(text, inputs!));
+      const paid = await paidCall(
+        async (): Promise<{ bytes: Uint8Array; providerMetadata?: unknown }> =>
+          nano ? await nanoBananaImage({ text: keyedPrompt(text, key), images: inputs!, ...NANO_BANANA_GRID }) : await gridImage(text, inputs!),
+      );
       inputs = null;
       sent = paid.spend;
-      const { bytes } = paid.out;
+      let { bytes } = paid.out;
       const made = Date.now();
       const cpu0 = process.cpuUsage();
       const place = job.place;
+      let pixels = await decodeToRgba(bytes);
+      if (nano) {
+        pixels = keyOut(pixels, key);
+        bytes = await encodePng(pixels);
+      }
       const gridStored = storeObject(ctx, gridFileKey(place, randomCode()), bytes, "image/png");
-      const cells = cutGrid(await decodeToRgba(bytes));
+      const cells = cutGrid(pixels);
       const cut = Date.now();
       const cpu1 = process.cpuUsage(cpu0);
       // Two designs at a time: four at once ran Convex's 512 MB Node runtime short of memory.

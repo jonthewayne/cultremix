@@ -6,7 +6,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
-import { BATCH_CREDITS } from "../../convex/lib/studioRules";
+import { BATCH_CREDITS, DESIGNS_PER_BATCH, ENGINES, engineMakesGrid } from "../../convex/lib/studioRules";
+import type { Engine } from "../../convex/lib/studioRules";
 import { changeSummary } from "../../convex/lib/remixWords";
 import { nearestGarmentColor } from "../../convex/lib/garments";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -117,6 +118,8 @@ function StudioPage() {
   const [styles, setStyles] = useState<Array<StyleSlot>>([]);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  // An admin's choice of image model; members always get GPT Image 2.5.
+  const [engine, setEngine] = useState<Engine>("gpt");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [publishing, setPublishing] = useState<Tile | null>(null);
@@ -414,6 +417,7 @@ function StudioPage() {
         images: images.map((slot) => slot.imageId!),
         styles: styles.map((slot) => ({ imageId: slot.imageId!, weight: slot.weight })),
         ...(askedWords.length > 0 ? { words: askedWords } : {}),
+        ...(viewer?.canPickModel && engine !== "gpt" ? { engine } : {}),
       });
       if ("refused" in result) {
         setError(
@@ -484,7 +488,9 @@ function StudioPage() {
 
   const count = images.length;
   const ink = inkOn(color);
-  const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < BATCH_CREDITS);
+  const picked: Engine = viewer?.canPickModel ? engine : "gpt";
+  const batchCredits = engineMakesGrid(picked) ? BATCH_CREDITS : DESIGNS_PER_BATCH;
+  const outOfCredits = Boolean(viewer && !viewer.unlimited && viewer.credits < batchCredits);
   const loadingSession = Boolean(s && session === undefined);
 
   return (
@@ -634,8 +640,26 @@ function StudioPage() {
                 {outOfCredits ? "Out of credits" : busy ? "Starting…" : uploading ? "Uploading…" : "Generate 4"}
               </button>
               <span className="text-sm text-neutral-600">
-                {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · ${BATCH_CREDITS} per batch`}
+                {viewer?.unlimited ? "Unlimited" : `${viewer?.credits ?? 0} credits · ${batchCredits} per batch`}
               </span>
+              {viewer?.canPickModel && (
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="font-bold">Model</span>
+                  <select
+                    value={engine}
+                    onChange={(e) => setEngine(e.target.value as Engine)}
+                    className="h-10 rounded-xl border-2 border-black bg-white px-2 font-semibold"
+                    aria-label="Image model (admins only)"
+                  >
+                    {ENGINES.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-neutral-500">Admins only</span>
+                </label>
+              )}
             </div>
             {error && (
               <p role="alert" className="text-base font-semibold text-red-600">
@@ -695,6 +719,7 @@ function StudioPage() {
                       <StyleChips items={batch.styles.map((style) => ({ url: style.thumbUrl ?? style.url, share: style.share }))} />
                     </span>
                   )}
+                  {batch.engine && <span className="shrink-0 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-bold">{batch.engine}</span>}
                   {batch.tiles.some((t) => t.status === "queued" || t.status === "dispatched") && (
                     <Elapsed since={batch.createdAt} />
                   )}
@@ -1065,6 +1090,11 @@ function TileCard({
               Publish
             </button>
           ) : null}
+          {tile.model && (
+            <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white md:group-hover:opacity-0">
+              {tile.model}
+            </span>
+          )}
         </>
       )}
       {tile.rejected ? (
