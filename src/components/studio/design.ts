@@ -34,6 +34,9 @@ export function designItems(
   actions: {
     onOpen?: () => void;
     onPublish?: () => void;
+    // A fresh prompt in the same session with this design as image 1 (nothing else carried over).
+    onStartFrom?: () => void;
+    // Adds the design to the images already there.
     onInspire: () => void;
     onStyle: () => void;
     onReject?: () => void;
@@ -45,7 +48,8 @@ export function designItems(
   items.push({ label: isTouchDevice() ? "Save image" : "Download", onSelect: () => saveImage(tile.url, filename) });
   if (tile.url && !tile.url.startsWith("fake:")) items.push({ label: "Open full size", href: tile.url });
   if (tile.key) {
-    items.push({ label: "Use as image", onSelect: actions.onInspire });
+    if (actions.onStartFrom) items.push({ label: "Start from this", onSelect: actions.onStartFrom });
+    items.push({ label: "Add as an image", onSelect: actions.onInspire });
     items.push({ label: "Use as style", onSelect: actions.onStyle });
   }
   if (!tile.publishedCr && actions.onPublish) items.push({ label: "Publish", onSelect: actions.onPublish });

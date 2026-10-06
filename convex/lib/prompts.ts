@@ -225,7 +225,11 @@ export type PromptImage = {
   styleOnly: boolean;
 };
 // attachment: the 1-based number of the image the style comes from.
-export type PromptStyle = { attachment: number; weight: number };
+// position: its row in the studio's mixer, which the member sees as "Style 1", "Style 2", ….
+export type PromptStyle = { attachment: number; weight: number; position?: number };
+
+// The request names a mixer style ("style 2", "Style #1").
+const STYLE_NAME = /\bstyles?\s*#?\s*[1-9]\b/iu;
 
 // Where each smaller style goes: a part of every design each, the largest first. Asked only to be
 // 'clearly visible in every design', a smaller style came and went: at 80/20 the pop-art style reached
@@ -456,11 +460,17 @@ export function studioPrompt(args: {
   parts.push(grid ? GRID_RULES : DESIGN_RULES);
 
   if (images.length > 0) {
+    // When the request names mixer styles ("style 2"), each style image says which name is its own.
+    const callsStyles = STYLE_NAME.test(args.instruction);
+    const styleName = (n: number) => {
+      const position = callsStyles ? args.styles.find((s) => s.attachment === n && s.position)?.position : undefined;
+      return position ? ` (the request's style ${position})` : "";
+    };
     const legend = images.map((image) => {
       // A style image's own words stay out of the prompt, its name included.
       const named = image.styleOnly ? image.summary?.replace(/\s*["“][^"”]*["”]/gu, "").trim() : image.summary;
       const what = named || (image.kind === "photo" ? "a photo" : "an image");
-      return `- Image ${image.n}: ${what}${image.styleOnly ? " (style only: use its look, never its subjects or words)" : ""}.`;
+      return `- Image ${image.n}${styleName(image.n)}: ${what}${image.styleOnly ? " (style only: use its look, never its subjects or words)" : ""}.`;
     });
     parts.push(`Attached images:\n${legend.join("\n")}`);
   }

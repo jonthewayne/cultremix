@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
 import { BATCH_CREDITS } from "../../convex/lib/studioRules";
 import { changeSummary } from "../../convex/lib/remixWords";
+import { nearestGarmentColor } from "../../convex/lib/garments";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
 import type { Tile } from "~/components/studio/design";
@@ -58,6 +59,14 @@ export const Route = createFileRoute("/studio")({
 let slotCounter = 0;
 const newSlotId = () => `slot-${Date.now()}-${slotCounter++}`;
 
+// The studio previews designs on shirt colors: any color it picks by itself snaps to the nearest one.
+const shirtHex = (hex: string) => nearestGarmentColor(hex).hex;
+const START_COLOR = shirtHex(DEFAULT_BG);
+
+// Examples under the request box once there are two or more images. The request reader
+// (convex/lib/roleReader.ts) reads each of these the way it's meant.
+const IMAGE_HINTS = ["Draw image 1 in the style of image 2", "Use the colors of image 2", "Put the people from image 2 into image 1"];
+
 function StudioPage() {
   const search = Route.useSearch();
   const { remix, s } = search;
@@ -96,7 +105,13 @@ function StudioPage() {
   const [instruction, setInstruction] = useState("");
   // A remix's new words, by field id (components/studio/RemixWordInputs.tsx).
   const [words, setWords] = useState<Record<string, string>>({});
-  const [color, setColor] = useState(DEFAULT_BG);
+  const [color, setColor] = useState(START_COLOR);
+  // Set once the member picks a color; until then image 1 suggests one.
+  const colorPicked = useRef(false);
+  const pickColor = (hex: string) => {
+    colorPicked.current = true;
+    setColor(hex);
+  };
   // Numbered images to work on, and the style mix. Nothing joins the mix unless the member adds it.
   const [images, setImages] = useState<Array<Slot>>([]);
   const [styles, setStyles] = useState<Array<StyleSlot>>([]);
@@ -170,7 +185,9 @@ function StudioPage() {
         setMixerOpen(true);
       } else {
         setImages((list) => [...list, ...slots]);
-        if (firstImage) setColor(prepared[0].color);
+        // Image 1's own background suggests the shirt, as the nearest shirt color. Style images and
+        // later images never change it, and neither does anything once the member has picked one.
+        if (firstImage && !colorPicked.current) setColor(shirtHex(prepared[0].color));
       }
       if (files.length > room) setError(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
       await Promise.all(
@@ -231,7 +248,8 @@ function StudioPage() {
     setStyles([]);
     setInstruction("");
     setWords({});
-    setColor(DEFAULT_BG);
+    setColor(START_COLOR);
+    colorPicked.current = false;
     setMixerOpen(false);
     setError(null);
   }, [s]);
@@ -298,9 +316,34 @@ function StudioPage() {
   const useAsImage = (tile: Tile) => {
     const preview = tile.thumbUrl ?? tile.url;
     if (!tile.key || !preview) return;
-    if (imagesRef.current.length === 0) setColor(tile.backgroundColor);
+    if (imagesRef.current.length === 0 && !colorPicked.current) setColor(shirtHex(tile.backgroundColor));
     void addExisting(tile.key, preview, false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  // A fresh prompt in this session, starting from one design: it becomes image 1, and the request,
+  // the other images, and the style mix clear. The design's shirt color comes along.
+  const startFrom = (tile: Tile) => {
+    const preview = tile.thumbUrl ?? tile.url;
+    if (!tile.key || !preview) return;
+    const id = newSlotId();
+    imagesRef.current = [{ id, previewUrl: preview, uploading: true }];
+    stylesRef.current = [];
+    setImages(imagesRef.current);
+    setStyles([]);
+    setMixerOpen(false);
+    setInstruction("");
+    setWords({});
+    setError(null);
+    colorPicked.current = false;
+    setColor(shirtHex(tile.backgroundColor));
+    adopt({ key: tile.key, asStyle: false })
+      .then((imageId) => settle(id, imageId, false))
+      .catch((err) => {
+        dropSlot(id);
+        setError(errorMessage(err));
+      });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.requestAnimationFrame(() => instructionRef.current?.focus({ preventScroll: true }));
   };
   const useAsStyle = (tile: Tile) => {
     const preview = tile.thumbUrl ?? tile.url;
@@ -328,6 +371,16 @@ function StudioPage() {
     setInstruction(idea);
     setError(null);
     setShowIdeas(false);
+  };
+  // A hint joins whatever the request already says.
+  const addHint = (hint: string) => {
+    setInstruction((current) => {
+      const text = current.trim();
+      if (!text) return `${hint}.`;
+      return `${text}${/[.!?]$/u.test(text) ? "" : "."} ${hint}.`;
+    });
+    setError(null);
+    instructionRef.current?.focus({ preventScroll: true });
   };
 
   // A remix of a design with remixable words, while its art is still image 1: its words as inputs.
@@ -478,7 +531,7 @@ function StudioPage() {
               states={states}
               color={color}
               ink={ink}
-              onColor={setColor}
+              onColor={pickColor}
               onFiles={(files) => void addFiles(files, false)}
               onRemove={(id) => setImages((list) => list.filter((slot) => slot.id !== id))}
             />
@@ -512,6 +565,24 @@ function StudioPage() {
                 className="mt-2 w-full resize-none border-b-4 border-black bg-transparent py-2 text-2xl font-semibold leading-tight outline-none placeholder:text-neutral-300 md:text-3xl"
               />
             </label>
+
+            {count >= 2 && wordFields.length === 0 && (
+              <div>
+                <span className="text-sm font-bold uppercase tracking-wider">Try</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {IMAGE_HINTS.map((hint) => (
+                    <button
+                      key={hint}
+                      type="button"
+                      onClick={() => addHint(hint)}
+                      className="rounded-xl bg-neutral-100 px-3 py-1.5 text-left text-sm font-semibold transition-colors hover:bg-black hover:text-white"
+                    >
+                      {hint}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {count === 0 && ideas && (
               <div>
@@ -648,6 +719,7 @@ function StudioPage() {
                         grid={batch.grid}
                         onOpen={() => viewerRoute.open({ view: tile.generationId, scope: "batch" })}
                         onPublish={canPublish ? () => setPublishing(tile) : undefined}
+                        onStartFrom={() => startFrom(tile)}
                         onInspire={() => useAsImage(tile)}
                         onStyle={() => useAsStyle(tile)}
                         onFavorite={(on) => designActions.setFavorite(tile.generationId, on)}
@@ -719,6 +791,10 @@ function StudioPage() {
             onFavorite={(tile, on) => designActions.setFavorite(tile.generationId, on)}
             onReject={reject}
             onBranch={branch}
+            onStartFrom={(tile) => {
+              leaveViewer();
+              startFrom(tile);
+            }}
             onStyle={(tile) => {
               leaveViewer();
               useAsStyle(tile);
@@ -885,6 +961,7 @@ function TileCard({
   grid,
   onOpen,
   onPublish,
+  onStartFrom,
   onInspire,
   onStyle,
   onFavorite,
@@ -896,6 +973,7 @@ function TileCard({
   onOpen: () => void;
   // Absent while publishing is turned off.
   onPublish?: () => void;
+  onStartFrom: () => void;
   onInspire: () => void;
   onStyle: () => void;
   onFavorite: (favorite: boolean) => void;
@@ -948,7 +1026,7 @@ function TileCard({
       {ready && (
         <>
           <DesignMenu
-            items={designItems(tile, { onOpen, onPublish, onInspire, onStyle, onReject: () => onReject(!tile.rejected) })}
+            items={designItems(tile, { onOpen, onPublish, onStartFrom, onInspire, onStyle, onReject: () => onReject(!tile.rejected) })}
             onOpenChange={(open) => {
               setMenuOpen(open);
               if (open) prefetchImage(tile.url);

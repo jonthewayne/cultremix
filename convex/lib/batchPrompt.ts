@@ -22,7 +22,8 @@ export async function batchPrompt(job: {
   presets: Array<string>;
   // Every image sent with the call, in order: the numbered images, then mixer-only styles.
   attachments: Array<BatchAttachment>;
-  styles: Array<{ attachment: number; weight: number }>;
+  // position: the style's row in the mixer ("Style 1", "Style 2", …), when known.
+  styles: Array<{ attachment: number; weight: number; position?: number }>;
   // Image 1 is the published design being remixed.
   remixOfParent: boolean;
   wordChanges?: string;
@@ -32,16 +33,15 @@ export async function batchPrompt(job: {
   const attachments = job.attachments;
   const summaryOf = (a: BatchAttachment) => (a.analysis === "ready" ? a.summary : undefined);
   const numbered = attachments.filter((a) => !a.styleOnly);
+  const mixerStyles = job.styles.filter((style) => style.weight > 0 && attachments[style.attachment - 1]);
   const read = await readRoles({
     instruction: job.instruction,
     images: numbered.map((a) => ({ summary: summaryOf(a), kind: a.kind })),
-    mixer: job.styles
-      .filter((style) => style.weight > 0)
-      .flatMap((style): Array<number | { summary?: string; kind?: "photo" | "art" }> => {
-        const a = attachments[style.attachment - 1];
-        if (!a) return [];
-        return a.styleOnly ? [{ summary: summaryOf(a), kind: a.kind }] : [style.attachment];
-      }),
+    mixer: mixerStyles.map((style): number | { summary?: string; kind?: "photo" | "art" } => {
+      const a = attachments[style.attachment - 1];
+      return a.styleOnly ? { summary: summaryOf(a), kind: a.kind } : style.attachment;
+    }),
+    mixerPositions: mixerStyles.map((style, i) => style.position ?? i + 1),
     remix: job.remixOfParent,
   });
   const roles = read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);

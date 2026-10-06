@@ -906,8 +906,9 @@ const jobInputs = {
   wordChanges: v.optional(v.string()),
   // Every image sent with the call: the numbered images, then images added only as styles.
   attachments: v.array(attachmentView),
-  // Each style's 1-based attachment number and slider value.
-  styles: v.array(v.object({ attachment: v.number(), weight: v.number() })),
+  // Each style's 1-based attachment number and slider value, and its row in the mixer (the
+  // member sees "Style 1", "Style 2", … and can use those names in the request).
+  styles: v.array(v.object({ attachment: v.number(), weight: v.number(), position: v.optional(v.number()) })),
   place: v.object({
     memberId: v.id("users"),
     sessionId: v.id("creativeSessions"),
@@ -939,18 +940,18 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
     };
   };
   const attachments: Array<Infer<typeof attachmentView>> = [];
-  const styles: Array<{ attachment: number; weight: number }> = [];
+  const styles: Array<{ attachment: number; weight: number; position: number }> = [];
   if (batch.images || batch.styles) {
     const workIds = (batch.images ?? []).map((image) => image.imageId);
     for (const image of batch.images ?? []) attachments.push(await describe(image.imageId, image.key, false));
-    for (const style of batch.styles ?? []) {
+    for (const [row, style] of (batch.styles ?? []).entries()) {
       if (style.weight <= 0) continue;
       let index = workIds.indexOf(style.imageId);
       if (index < 0) {
         attachments.push(await describe(style.imageId, style.key, true));
         index = attachments.length - 1;
       }
-      styles.push({ attachment: index + 1, weight: style.weight });
+      styles.push({ attachment: index + 1, weight: style.weight, position: row + 1 });
     }
   } else if (batch.inspirationKey) {
     attachments.push({ key: batch.inspirationKey, styleOnly: false });

@@ -72,7 +72,13 @@ The studio has two inputs, and where an image is added decides its job:
 
 Sliders become shares: two styles at 100 are 50/50, 100 and 50 are 67/33, zero is off. Each row shows its real share.
 
-The prompt placeholder follows the images: "Describe your design…" with none, "Change the words, colors, characters…" with one, and "Refer to them as image 1 and image 2…" with more.
+The prompt placeholder follows the images: "Describe your design…" with none, "Change the words, colors, characters…" with one, and "Refer to them as image 1 and image 2…" with more. With two or more images, three examples sit under the box ("Draw image 1 in the style of image 2", "Use the colors of image 2", "Put the people from image 2 into image 1"); tapping one adds it to the request.
+
+**Style names.** The mixer's rows are labeled Style 1 to Style 4, and with two or more the mixer says "In your request, call them style 1 and style 2." The request reader is told each mixer image's name and that those names point at the mixer. When a request names a style, the prompt tags that mixer image with it ("Image 3 (the request's style 2): …"), so "put style 2 on the lettering" reaches the right picture. Tested 2026-10-06 with four such requests, three reads each: 12 of 12 as intended, and the earlier 27 requests still read 79 of 81 as intended (the two misses were a timeout and one "a dragon in this style" read as content).
+
+**Start from this.** Every finished design's menu, the viewer's main button, and its B key start a fresh prompt in the same session with that design as image 1: the request, the other images, and the mixer clear, and the design's shirt color comes along. "Add as an image" adds a design to the images already there.
+
+**Shirt color.** The swatch beside the images previews designs on a shirt color. Only image 1 suggests one (the nearest shirt color to its own background), and only until the member picks a color; style images and later images never change it.
 
 ## Notes for every image
 
@@ -138,7 +144,7 @@ Unit tests: `tests/unit/studioPrompt.test.ts`.
 
 Nothing the vision model writes about an image, and no prompt, reaches the browser. The browser sends image IDs, slider values, and the creator's own words. `imageGen.runTile`, an internal Convex action, builds the prompt and sends it straight to the image model, and no prompt is stored. A member can still guess a style by looking at the images, but the notes and our wording are never shown.
 
-- `images.status` and `images.library` return an image's URL and whether its notes are pending, ready, or failed, never the notes, summary, or kind. The studio names a style by where it came from ("Image 1's look", "Style image") and shows a mix as thumbnails with their shares.
+- `images.status` and `images.library` return an image's URL and whether its notes are pending, ready, or failed, never the notes, summary, or kind. The studio names a style by its row and where it came from ("Style 1 · image 1's look", "Style 2 · style image") and shows a mix as thumbnails with their shares.
 - A failed design shows one of a few fixed messages (`publicTileError` in `convex/lib/imageErrors.ts`). The raw error stays in `generations.error`, because a provider's error text, or the model's own reply on the ChatGPT path, can quote the prompt.
 - Every public function declares the fields it returns, and Convex refuses to return a field that isn't declared, so a new field on `userImages` can't reach the browser by accident.
 - No browser code imports prompt code. `tests/unit/clientBoundary.test.ts` follows every import from `src/` and fails if it reaches a `convex/` file outside a short list of files that are safe in the browser (`_generated/api.js`, `lib/authz.ts`, `lib/colors.ts`, `lib/username.ts`). The shop page's shirt-color names moved from `prompts.ts` to `lib/colors.ts` for this.

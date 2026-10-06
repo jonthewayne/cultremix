@@ -64,6 +64,7 @@ export function Viewer({
   onFavorite,
   onReject,
   onBranch,
+  onStartFrom,
   onStyle,
   onPublish,
   picks,
@@ -84,7 +85,10 @@ export function Viewer({
   onClose: () => void;
   onFavorite: (tile: Tile, favorite: boolean) => void;
   onReject: (tile: Tile, rejected: boolean) => void;
+  // Adds the design to the studio's images.
   onBranch: (tile: Tile) => void;
+  // Starts a fresh prompt in this session with the design as image 1 (B).
+  onStartFrom: (tile: Tile) => void;
   onStyle: (tile: Tile) => void;
   // Missing while publishing is switched off.
   onPublish?: (tile: Tile) => void;
@@ -211,7 +215,7 @@ export function Viewer({
     close: onClose,
     favorite,
     reject,
-    branch: () => tile?.key && onBranch(tile),
+    branch: () => tile?.key && onStartFrom(tile),
     publish: () => tile && !tile.publishedCr && onPublish?.(tile),
     transparency: () => setChecker((on) => !on),
     compare: pick,
@@ -255,6 +259,7 @@ export function Viewer({
         { label: showRejected ? "Hide dismissed" : "Show dismissed", onSelect: () => onShowRejected(!showRejected) },
         ...designItems(tile, {
           onPublish: onPublish ? () => onPublish(tile) : undefined,
+          onStartFrom: () => onStartFrom(tile),
           onInspire: () => onBranch(tile),
           onStyle: () => onStyle(tile),
         }).filter((item) => item.label !== "Publish"),
@@ -352,8 +357,8 @@ export function Viewer({
           {heart}
           {dismiss}
           {tile?.key && (
-            <button type="button" onClick={() => onBranch(tile)} className={outlined}>
-              Use as image
+            <button type="button" onClick={() => onStartFrom(tile)} className={outlined}>
+              Start from this
             </button>
           )}
           {publish}
@@ -433,7 +438,7 @@ export function Viewer({
       </div>
 
       <p className="hidden pb-4 pt-2 text-center text-xs font-semibold opacity-60 md:block [@media(pointer:coarse)]:hidden">
-        ← → move · F favorite · X dismiss · C compare · B use as image · P publish · T transparency · Esc close
+        ← → move · F favorite · X dismiss · C compare · B start from this · P publish · T transparency · Esc close
       </p>
 
       {/* Phones: everything at the bottom, in reach of a thumb. Swipe sideways to move, down to close. */}

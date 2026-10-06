@@ -38,6 +38,8 @@ const SYSTEM = [
     'Asking to keep an image\'s own look makes it both. A negated style ("not the style of image 2") is not a style.',
   'When the style mixer holds images, a look that doesn\'t point at a numbered image, such as "in the style", "this style", or "like the style", ' +
     "is the mixer's, and leaves the numbered images as content.",
+  'The member sees the mixer\'s images as "Style 1", "Style 2", and so on, and may name them that way ("put style 2 on the lettering"); ' +
+    "those names point at the mixer, never at numbered images.",
   'Also decide "styleHair": true only when the request asks to give people the hair of the style or of a style image (its hairstyle or ' +
     'hair shape), in any wording, such as "with the style\'s hair", "give her the cartoon\'s spiky hair", or "hair like image 2". Otherwise ' +
     "false, including when the request describes some other hairstyle or only a hair color.",
@@ -64,11 +66,15 @@ export async function readRoles(args: {
   // The style mixer's images with a slider above zero: a number for a numbered image, or the
   // image itself for one added only in the mixer.
   mixer?: Array<number | ReaderImage>;
+  // Each mixer image's row as the member sees it ("Style 1", …); defaults to its order.
+  mixerPositions?: Array<number>;
   remix: boolean;
 }): Promise<RequestReading | null> {
   if (!args.instruction.trim() || args.images.length === 0 || !process.env.AI_GATEWAY_API_KEY) return null;
   const list = args.images.map((image, i) => `${i + 1}. ${describe(image)}`).join("\n");
-  const mixer = (args.mixer ?? []).map((entry) => `- ${typeof entry === "number" ? `image ${entry}` : describe(entry)}`);
+  const mixer = (args.mixer ?? []).map(
+    (entry, i) => `- Style ${args.mixerPositions?.[i] ?? i + 1}: ${typeof entry === "number" ? `image ${entry}'s look` : describe(entry)}`,
+  );
   const styles = mixer.length > 0 ? `Style mixer:\n${mixer.join("\n")}` : "Style mixer: empty.";
   const remix = args.remix ? "\nImage 1 is the published design being remixed; it stays content." : "";
   try {

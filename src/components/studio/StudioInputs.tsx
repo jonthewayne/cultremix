@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MAX_IMAGES, MAX_STYLES } from "../../../convex/lib/studioRules";
+import { GARMENT_COLORS, nearestGarmentColor } from "../../../convex/lib/garments";
 import { Art } from "~/components/cr/Art";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { useReturnFocus } from "~/hooks/use-return-focus";
@@ -35,6 +36,13 @@ export function shares(weights: Array<number>) {
 
 export function listNames(count: number) {
   const names = Array.from({ length: count }, (_, i) => `image ${i + 1}`);
+  if (names.length <= 2) return names.join(" and ");
+  return `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}`;
+}
+
+// The mixer's styles by position, as the request can name them ("style 2").
+export function styleNames(count: number) {
+  const names = Array.from({ length: count }, (_, i) => `style ${i + 1}`);
   if (names.length <= 2) return names.join(" and ");
   return `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}`;
 }
@@ -93,7 +101,10 @@ export function ImageTray({
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [colorsOpen, setColorsOpen] = useState(false);
   const room = MAX_IMAGES - images.length;
+  const shirt = nearestGarmentColor(color);
+  const onShirt = shirt.hex.toLowerCase() === color.toLowerCase();
   return (
     <div
       onDragOver={(e) => {
@@ -158,14 +169,45 @@ export function ImageTray({
           {images.length === 0 && <span className="mt-0.5 text-xs text-neutral-600">Drop or click · up to {MAX_IMAGES}</span>}
         </button>
       )}
-      <label
-        className="flex h-28 w-24 cursor-pointer flex-col justify-end rounded-2xl border-2 border-black p-2"
+      <button
+        type="button"
+        onClick={() => setColorsOpen(!colorsOpen)}
+        aria-expanded={colorsOpen}
+        className="flex h-28 w-24 flex-col justify-end rounded-2xl border-2 border-black p-2 text-left"
         style={{ background: color, color: ink }}
       >
-        <span className="text-[10px] font-bold uppercase tracking-wide">Background</span>
-        <span className="font-mono text-xs">{color}</span>
-        <input type="color" value={color} onChange={(e) => onColor(e.target.value)} className="sr-only" aria-label="Background color" />
-      </label>
+        <span className="text-[10px] font-bold uppercase tracking-wide">Shirt</span>
+        <span className="text-xs font-semibold leading-tight">{onShirt ? shirt.name : color}</span>
+      </button>
+      {colorsOpen && (
+        <div className="basis-full rounded-2xl border-2 border-black p-3">
+          <p className="text-sm font-bold">Preview on a shirt color</p>
+          <div role="radiogroup" aria-label="Shirt color" className="mt-2 grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6">
+            {GARMENT_COLORS.map((option) => {
+              const selected = onShirt && option.key === shirt.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    onColor(option.hex);
+                    setColorsOpen(false);
+                  }}
+                  className="flex flex-col items-center gap-1 text-center text-[11px] font-semibold leading-tight"
+                >
+                  <span
+                    className={cn("h-10 w-10 rounded-full border border-black/30", selected && "ring-2 ring-black ring-offset-2")}
+                    style={{ background: option.hex }}
+                  />
+                  {option.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <input
         ref={input}
         type="file"
@@ -228,7 +270,9 @@ function StyleRow({
         <Thumb url={slot.previewUrl} className="max-h-full max-w-full object-contain" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold">{label}</p>
+        <p className="truncate text-sm font-bold">
+          Style {position} <span className="font-normal text-neutral-500">· {label}</span>
+        </p>
         <AnimatePresence mode="wait" initial={false}>
           {!settled || justCaptured ? (
             <motion.p
@@ -251,7 +295,7 @@ function StyleRow({
                 value={slot.weight}
                 onChange={(e) => onWeight(Number(e.target.value))}
                 className="h-2 w-full cursor-pointer accent-black"
-                aria-label={`How much of style ${position}, ${label}`}
+                aria-label={`How much of style ${position} (${label})`}
               />
               <span className="w-9 shrink-0 text-right font-mono text-xs">{slot.weight}</span>
               <span className="w-12 shrink-0 text-right text-sm font-bold">{share > 0 ? `${share}%` : "off"}</span>
@@ -266,7 +310,7 @@ function StyleRow({
         type="button"
         onClick={onRemove}
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-black hover:bg-black hover:text-white"
-        aria-label={`Remove style ${position}, ${label}`}
+        aria-label={`Remove style ${position} (${label})`}
       >
         ×
       </button>
@@ -299,11 +343,12 @@ export function StyleMixer({
 }) {
   const [dragging, setDragging] = useState(false);
   const mix = shares(styles.map((s) => s.weight));
-  // Rows are named by where the image came from; what it was read as stays on the server.
+  // Rows are named Style 1, Style 2, … (the request can use those names), with where the image
+  // came from; what it was read as stays on the server.
   const labelFor = (slot: Slot) => {
     const index = images.findIndex((image) => image.imageId && image.imageId === slot.imageId);
-    if (index >= 0) return `Image ${index + 1}'s look`;
-    return slot.uploading ? "New style image" : "Style image";
+    if (index >= 0) return `image ${index + 1}'s look`;
+    return slot.uploading ? "new style image" : "style image";
   };
   const addable = images.filter((image) => image.imageId && !styles.some((s) => s.imageId === image.imageId));
   const room = MAX_STYLES - styles.length;
@@ -361,6 +406,9 @@ export function StyleMixer({
                     />
                   ))}
                 </div>
+              )}
+              {styles.length >= 2 && (
+                <p className="pt-2 text-xs text-neutral-500">In your request, call them {styleNames(styles.length)}.</p>
               )}
               {styles.length === 0 && (
                 <p className="pt-3 text-sm text-neutral-600">
