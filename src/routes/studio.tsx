@@ -9,7 +9,8 @@ import { api } from "../../convex/_generated/api";
 import { BATCH_CREDITS, DESIGNS_PER_BATCH, ENGINES, engineMakesGrid } from "../../convex/lib/studioRules";
 import type { Engine } from "../../convex/lib/studioRules";
 import { changeSummary } from "../../convex/lib/remixWords";
-import { nearestGarmentColor } from "../../convex/lib/garments";
+import { GARMENT_COLORS, nearestGarmentColor } from "../../convex/lib/garments";
+import type { Palette } from "../../convex/lib/garments";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { ImageState, Slot, StyleSlot } from "~/components/studio/StudioInputs";
 import type { Tile } from "~/components/studio/design";
@@ -65,9 +66,9 @@ export const Route = createFileRoute("/studio")({
 let slotCounter = 0;
 const newSlotId = () => `slot-${Date.now()}-${slotCounter++}`;
 
-// The studio previews designs on shirt colors: any color it picks by itself snaps to the nearest one.
-const shirtHex = (hex: string) => nearestGarmentColor(hex).hex;
-const START_COLOR = shirtHex(DEFAULT_BG);
+// The studio previews designs on shirt colors (the active shirt's, convex/merch.ts palette): any
+// color it picks by itself snaps to the nearest one.
+const START_COLOR = nearestGarmentColor(DEFAULT_BG).hex;
 
 // Examples under the request box once there are two or more images. The request reader
 // (convex/lib/roleReader.ts) reads each of these the way it's meant.
@@ -107,6 +108,10 @@ function StudioPage() {
   const upload = useAction(api.imageGen.uploadInspiration);
   const adopt = useMutation(api.images.adopt);
   const markStyle = useMutation(api.images.markStyle);
+  const palette: Palette = useQuery(convexQuery(api.merch.palette, {})).data?.colors ?? GARMENT_COLORS;
+  const paletteRef = useRef(palette);
+  paletteRef.current = palette;
+  const shirtHex = useCallback((hex: string) => nearestGarmentColor(hex, paletteRef.current).hex, []);
 
   const [instruction, setInstruction] = useState("");
   // A remix's new words, by field id (components/studio/RemixWordInputs.tsx).
@@ -123,6 +128,15 @@ function StudioPage() {
     colorPicked.current = true;
     setColor(hex);
   };
+  // The starting color, and any color the studio picked before the palette loaded, snaps to the
+  // active shirt's nearest color once it arrives (until the member picks one).
+  useEffect(() => {
+    if (colorPicked.current) return;
+    setColor((current) => {
+      const snapped = nearestGarmentColor(current, palette).hex;
+      return snapped === current ? current : snapped;
+    });
+  }, [palette]);
   // Numbered images to work on, and the style mix. Nothing joins the mix unless the member adds it.
   const [images, setImages] = useState<Array<Slot>>([]);
   const [styles, setStyles] = useState<Array<StyleSlot>>([]);
@@ -216,7 +230,7 @@ function StudioPage() {
         }),
       );
     },
-    [upload],
+    [upload, shirtHex],
   );
 
   // A design or a published work's art, brought in as an image or a style.
@@ -338,7 +352,7 @@ function StudioPage() {
   };
   // A fresh prompt in this session, starting from one design: it becomes image 1, and the request,
   // the other images, and the style mix clear. The design's shirt color comes along.
-  const startFrom = (tile: Tile) => {
+  const startFrom = (tile: Tile, next?: { instruction?: string; color?: string }) => {
     const preview = tile.thumbUrl ?? tile.url;
     if (!tile.key || !preview) return;
     const id = newSlotId();
@@ -347,12 +361,12 @@ function StudioPage() {
     setImages(imagesRef.current);
     setStyles([]);
     setMixerOpen(false);
-    setInstruction("");
+    setInstruction(next?.instruction ?? "");
     setWords({});
     setPartValues({});
     setError(null);
-    colorPicked.current = false;
-    setColor(shirtHex(tile.backgroundColor));
+    colorPicked.current = Boolean(next?.color);
+    setColor(next?.color ?? shirtHex(tile.backgroundColor));
     adopt({ key: tile.key, asStyle: false })
       .then((imageId) => settle(id, imageId, false))
       .catch((err) => {
@@ -638,6 +652,7 @@ function StudioPage() {
               states={states}
               color={color}
               ink={ink}
+              palette={palette}
               onColor={pickColor}
               onFiles={(files) => void addFiles(files, false)}
               onRemove={(id) => setImages((list) => list.filter((slot) => slot.id !== id))}
@@ -961,7 +976,24 @@ function StudioPage() {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {publishing && <PublishDialog tile={publishing} onClose={() => setPublishing(null)} />}
+        {publishing && (
+          <PublishDialog
+            tile={publishing}
+            onClose={() => setPublishing(null)}
+            onAdapt={(shirt) => {
+              const tile = publishing;
+              setPublishing(null);
+              // A version for a shirt the design gets lost on, made in this session's thread.
+              // Tried 2026-10-06 on a gray pencil-sketch wolf for Moss: the first wording ("keep the
+              // same design, words, and layout") read clearly in all four but added mountains, pines,
+              // feathers, or a moon behind three of them. Saying "change nothing else" keeps it.
+              startFrom(tile, {
+                instruction: `Make a version of image 1 for a ${shirt.name.toLowerCase()} shirt: keep exactly the same design, words, layout, and drawing, and only recolor or outline the parts that would get lost on ${shirt.name.toLowerCase()}, so every part reads clearly on it. Add nothing new.`,
+                color: shirt.hex,
+              });
+            }}
+          />
+        )}
       </AnimatePresence>
       <AnimatePresence>
         {settingUp && (

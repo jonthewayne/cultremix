@@ -9,6 +9,7 @@ import { printTables } from "./schema/print";
 import { shopTables } from "./schema/shop";
 import { publishTables } from "./schema/publish";
 import { budgetTables } from "./schema/budget";
+import { merchTables } from "./schema/merch";
 
 export const platformRoleValidator = v.union(
   v.literal("user"),
@@ -221,4 +222,5 @@ export default defineSchema({
   ...shopTables,
   ...publishTables,
   ...budgetTables,
+  ...merchTables,
 });

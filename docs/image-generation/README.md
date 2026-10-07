@@ -214,6 +214,16 @@ Without R2 keys, `IMAGE_STORE=convex` keeps images in Convex file storage (`cvx:
 
 **Print files.** A work's print file goes in its work's folder under its own code (`works/<family>/<expression>/print-<code>/print.png`, built in the Print Studio) and is never shown on a page; the printer and the owner's spot check get its link.
 
+## Shirt products and colors
+
+**Products.** `/admin/products` searches Printful's public catalog of shirts, tanks, sweatshirts, and hoodies (no Printful account needed: `GET https://api.printful.com/products` and `/products/<id>`), adds a product with every color it comes in, grouped from its variants (name, Printful's swatch hex, variant ids by size, a photo of the blank, and whether it's in stock), and lets an admin pick which colors are offered and which product is the active shirt (`convex/merch.ts`, table `merchProducts`). Added 2026-10-06: the Comfort Colors 1717 came in with all 50 of its colors; the 12 launch colors it shares started picked. **Refresh from Printful** rereads a product and keeps the picked colors.
+
+**The palette.** The active shirt's offered colors are what the studio previews designs on and what publishing offers and checks (`merch.palette`, `activePalette`); with no active shirt, the launch colors in `convex/lib/garments.ts` stand in. A color's key comes from its catalog name ("True Navy" is `true-navy`), so works published with the launch colors keep their names. Old works show their colors from any product that had them (`colorLookup`).
+
+**The studio's shirt color.** The swatch beside the images opens the palette. Only image 1 suggests a color, as the nearest shirt color to its own background; style images and later images never change it, and neither does anything once the member picks one. Designs show on the chosen color in the studio, the viewer, and the publish dialog.
+
+**A version for a color.** The publish dialog marks colors a design gets lost or faint on (the contrast check), and offers **Make a version for Moss** for up to three of them. It starts a new prompt in the same session with the design as image 1 and the shirt set to that color: "keep exactly the same design, words, layout, and drawing, and only recolor or outline the parts that would get lost on moss … Add nothing new." Tested 2026-10-06 on a gray pencil-sketch wolf: an earlier wording ("keep the same design, words, and layout") read clearly on moss but added mountains, pines, feathers, or a moon behind three of four; this one kept the wolf and words in four of four and changed only their colors, warm browns and darker outlines.
+
 ## Upscaling for print
 
 fal's Topaz Transparent (`topaz/upscale/image/transparent`, https://fal.ai/models/topaz/upscale/image/transparent) always enlarges 4× and keeps the alpha channel, with PNG output. It costs $0.08 per started 24 megapixels of output, so any grid design (about 3,200×3,600 after upscaling, roughly 12 MP) is 8¢, and a 1024×1536 single design (about 25 MP) is 16¢.

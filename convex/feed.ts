@@ -4,6 +4,7 @@ import { query } from "./_generated/server";
 import { getViewerUser } from "./identity";
 import { colorName } from "./lib/colors";
 import { garmentColor } from "./lib/garments";
+import { colorLookup } from "./merch";
 import { imageUrlReader } from "./lib/imageUrls";
 import { DAILY_LIMIT } from "./lib/photoShoots";
 import { formatCr, parseCr } from "./lib/r2";
@@ -272,11 +273,12 @@ export async function followingWindow(
 
 const shopColor = v.object({ key: v.string(), name: v.string(), hex: v.string() });
 
-// The shirt colors a work is offered in, lead first. Works published before colors were chosen
-// have one: their background.
-export function shopColors(work: Doc<"works">) {
+// The shirt colors a work is offered in, lead first, by name and swatch from any shirt's colors
+// (convex/merch.ts colorLookup). Works published before colors were chosen have one: their
+// background.
+export function shopColors(work: Doc<"works">, lookup?: Map<string, { key: string; name: string; hex: string }>) {
   const colors = (work.offeredColors ?? []).flatMap((key) => {
-    const color = garmentColor(key);
+    const color = lookup?.get(key) ?? garmentColor(key);
     return color ? [color] : [];
   });
   if (colors.length > 0) return colors;
@@ -302,7 +304,7 @@ export const byCr = query({
       item: await toFeedItem(ctx, work),
       contentHash: work.contentHash,
       description: work.description,
-      colors: shopColors(work),
+      colors: shopColors(work, await colorLookup(ctx)),
     };
   },
 });

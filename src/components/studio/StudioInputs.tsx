@@ -5,6 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MAX_IMAGES, MAX_STYLES } from "../../../convex/lib/studioRules";
 import { GARMENT_COLORS, nearestGarmentColor } from "../../../convex/lib/garments";
+import type { Palette } from "../../../convex/lib/garments";
 import { Art } from "~/components/cr/Art";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { useReturnFocus } from "~/hooks/use-return-focus";
@@ -87,6 +88,7 @@ export function ImageTray({
   states,
   color,
   ink,
+  palette = GARMENT_COLORS,
   onColor,
   onFiles,
   onRemove,
@@ -95,6 +97,8 @@ export function ImageTray({
   states: Map<string, ImageState>;
   color: string;
   ink: string;
+  // The shirt colors on offer (convex/merch.ts palette).
+  palette?: Palette;
   onColor: (color: string) => void;
   onFiles: (files: Array<File>) => void;
   onRemove: (id: string) => void;
@@ -103,7 +107,7 @@ export function ImageTray({
   const [dragging, setDragging] = useState(false);
   const [colorsOpen, setColorsOpen] = useState(false);
   const room = MAX_IMAGES - images.length;
-  const shirt = nearestGarmentColor(color);
+  const shirt = nearestGarmentColor(color, palette);
   const onShirt = shirt.hex.toLowerCase() === color.toLowerCase();
   return (
     <div
@@ -183,7 +187,7 @@ export function ImageTray({
         <div className="basis-full rounded-2xl border-2 border-black p-3">
           <p className="text-sm font-bold">Preview on a shirt color</p>
           <div role="radiogroup" aria-label="Shirt color" className="mt-2 grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6">
-            {GARMENT_COLORS.map((option) => {
+            {palette.map((option) => {
               const selected = onShirt && option.key === shirt.key;
               return (
                 <button

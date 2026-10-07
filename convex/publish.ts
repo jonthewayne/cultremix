@@ -13,6 +13,7 @@ import { recordPublishActivity, recordRemix } from "./lib/social";
 import { inheritOnPublish } from "./remixFields";
 import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
+import { activePalette } from "./merch";
 import {
   BUDGET_RESTING,
   closeReservation,
@@ -303,10 +304,12 @@ export const quick = mutation({
     if (!batch || !session) throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
     const title = args.title?.trim().slice(0, 80) || undefined;
     const description = args.description?.trim().slice(0, MAX_DESCRIPTION_LENGTH) || undefined;
-    const colors = validateOfferedColors(args.offeredColors ?? defaultOfferedColors(batch.backgroundColor));
+    // The colors on offer are the active shirt's (convex/merch.ts), or the launch colors.
+    const palette = (await activePalette(ctx)).colors;
+    const colors = validateOfferedColors(args.offeredColors ?? defaultOfferedColors(batch.backgroundColor, new Set(), palette), palette);
     if (!colors.ok) throw new ConvexError({ code: "INVALID_COLORS", message: colors.message });
     // The lead color is the work's background: the feed, the model photo and remixes all use it.
-    const backgroundColor = garmentColor(colors.keys[0])!.hex;
+    const backgroundColor = garmentColor(colors.keys[0], palette)!.hex;
 
     // A remix is a variation (the parent's family, next expression) or a fork (a new family,
     // expression 1, crediting the parent). The parent must still have its public record.
@@ -467,7 +470,7 @@ export const preview = query({
       publishing: await isFlagOn(ctx, "publishing"),
       newFamilyCr,
       remix,
-      defaultColors: defaultOfferedColors(batch.backgroundColor),
+      defaultColors: defaultOfferedColors(batch.backgroundColor, new Set(), (await activePalette(ctx)).colors),
     };
   },
 });

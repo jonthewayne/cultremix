@@ -10,7 +10,7 @@ import {
   garmentColor,
   visibilityOn,
 } from "../../../convex/lib/garments";
-import type { Visibility } from "../../../convex/lib/garments";
+import type { Palette, Visibility } from "../../../convex/lib/garments";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
@@ -32,9 +32,22 @@ export type PublishTile = {
 // One sheet: title, a short note, the shirt colors (with a live preview on each and a heads-up
 // where the design would get lost), the CR number it will get, and for a remix how it relates.
 // Only confirming is required.
-export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: () => void }) {
+export function PublishDialog({
+  tile,
+  onClose,
+  onAdapt,
+}: {
+  tile: PublishTile;
+  onClose: () => void;
+  // "Make a version for Black": back to the studio with a new prompt for that shirt color.
+  onAdapt?: (color: { name: string; hex: string }) => void;
+}) {
   const publish = useMutation(api.publish.quick);
   const preview = useQuery(api.publish.preview, { generationId: tile.generationId });
+  // The shirt colors on offer: the active shirt's (convex/merch.ts), or the launch colors.
+  const paletteData = useQuery(api.merch.palette, {});
+  const palette: Palette = paletteData?.colors ?? GARMENT_COLORS;
+  const colorOf = (key: string) => garmentColor(key, palette);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   // A remix is a variation unless it reads as a new design, when fork starts selected until the
@@ -53,21 +66,21 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   const pixels = useDesignPixels(tile.thumbUrl ?? tile.mediumUrl ?? tile.url, tile.backgroundColor);
   const visibility = useMemo(() => {
     const map = new Map<string, Visibility>();
-    if (pixels && pixels.length > 0) for (const color of GARMENT_COLORS) map.set(color.key, visibilityOn(pixels, color.hex));
+    if (pixels && pixels.length > 0) for (const color of palette) map.set(color.key, visibilityOn(pixels, color.hex));
     return map;
-  }, [pixels]);
+  }, [pixels, palette]);
 
   // Starts from the design's own shade plus the defaults, skipping colors it would disappear on,
   // until the member picks for themselves.
   const [picked, setPicked] = useState<Array<string> | null>(null);
   const suggested = useMemo(() => {
     const hidden = new Set([...visibility].filter(([, seen]) => seen === "disappears").map(([key]) => key));
-    return defaultOfferedColors(tile.backgroundColor, hidden);
-  }, [tile.backgroundColor, visibility]);
+    return defaultOfferedColors(tile.backgroundColor, hidden, palette);
+  }, [tile.backgroundColor, visibility, palette]);
   const selected = picked ?? suggested;
   const lead = selected[0];
   const [focus, setFocus] = useState<string | null>(null);
-  const shown = garmentColor(focus ?? lead ?? "") ?? garmentColor(suggested[0])!;
+  const shown = colorOf(focus ?? lead ?? "") ?? colorOf(suggested[0]) ?? palette[0];
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -100,8 +113,8 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   }, [needsCheck, checkRemix, tile.generationId]);
   const crPreview = preview ? (preview.remix && remixKind === "variation" ? preview.remix.variationCr : preview.newFamilyCr) : null;
   const paused = preview?.publishing === false;
-  const lost = selected.filter((key) => visibility.get(key) === "disappears").map((key) => garmentColor(key)!.name);
-  const faint = selected.filter((key) => visibility.get(key) === "faint").map((key) => garmentColor(key)!.name);
+  const lost = selected.filter((key) => visibility.get(key) === "disappears").map((key) => colorOf(key)?.name ?? key);
+  const faint = selected.filter((key) => visibility.get(key) === "faint").map((key) => colorOf(key)?.name ?? key);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -118,7 +131,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
         offeredColors: selected,
         ...(keep ? { keep: "private" as const } : {}),
       });
-      setResult({ workId: published.workId, cr: published.cr, lead: garmentColor(selected[0])!.hex, kept: published.kept });
+      setResult({ workId: published.workId, cr: published.cr, lead: colorOf(selected[0])?.hex ?? tile.backgroundColor, kept: published.kept });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -359,11 +372,11 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
             <legend className="flex w-full items-baseline justify-between text-sm font-bold uppercase tracking-wider">
               Shirt colors
               <span className="text-xs font-semibold normal-case tracking-normal text-neutral-500">
-                {selected.length} picked
+                {selected.length} picked{paletteData?.product ? ` · ${paletteData.product.brand ?? ""} ${paletteData.product.model ?? ""}`.trimEnd() : ""}
               </span>
             </legend>
             <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
-              {GARMENT_COLORS.map((color) => {
+              {palette.map((color) => {
                 const on = selected.includes(color.key);
                 const seen = visibility.get(color.key);
                 return (
@@ -404,12 +417,12 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
                 <p className="font-semibold text-red-600">Pick at least one color.</p>
               ) : (
                 <p className="text-neutral-600">
-                  {garmentColor(lead)!.name} leads: the shop page opens on it and the model photo is shot on it.
+                  {colorOf(lead)?.name} leads: the shop page opens on it and the model photo is shot on it.
                   {focus && focus !== lead && selected.includes(focus) && (
                     <>
                       {" "}
                       <button type="button" onClick={() => makeLead(focus)} className="font-bold text-black underline underline-offset-4">
-                        Lead with {garmentColor(focus)!.name}
+                        Lead with {colorOf(focus)?.name}
                       </button>
                     </>
                   )}
@@ -419,6 +432,26 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
                 <p className="font-semibold text-red-700">The design gets lost on {listOf(lost)}. You can still offer it.</p>
               )}
               {faint.length > 0 && <p className="text-amber-700">It looks faint on {listOf(faint)}.</p>}
+              {onAdapt && (lost.length > 0 || faint.length > 0) && (
+                <p className="flex flex-wrap gap-x-3 gap-y-1">
+                  {selected
+                    .filter((key) => visibility.get(key) === "disappears" || visibility.get(key) === "faint")
+                    .slice(0, 3)
+                    .map((key) => {
+                      const color = colorOf(key);
+                      return color ? (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => onAdapt({ name: color.name, hex: color.hex })}
+                          className="font-bold text-black underline underline-offset-4"
+                        >
+                          Make a version for {color.name}
+                        </button>
+                      ) : null;
+                    })}
+                </p>
+              )}
             </div>
           </fieldset>
 

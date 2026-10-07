@@ -2,7 +2,7 @@ import { paginationOptsValidator, paginationResultValidator } from "convex/serve
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { getViewerUser } from "./identity";
-import { garmentColor } from "./lib/garments";
+import { colorLookup } from "./merch";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { formatCr } from "./lib/r2";
@@ -40,6 +40,7 @@ export const get = query({
     const art = await urls(work.artKey ?? generation?.fullKey);
     const parentWork = work.parentWorkId ? await ctx.db.get("works", work.parentWorkId) : null;
     const parentCreator = parentWork ? await ctx.db.get("users", parentWork.creatorId) : null;
+    const lookup = await colorLookup(ctx);
     return {
       workId: work._id,
       title: work.title,
@@ -48,7 +49,7 @@ export const get = query({
       ...art,
       backgroundColor: work.backgroundColor,
       colors: (work.offeredColors ?? []).flatMap((key) => {
-        const color = garmentColor(key);
+        const color = lookup.get(key);
         return color ? [{ key: color.key, name: color.name, hex: color.hex }] : [];
       }),
       parent:
@@ -86,4 +87,3 @@ export const mine = query({
     return { ...result, page };
   },
 });
-
