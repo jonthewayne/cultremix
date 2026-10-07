@@ -26,6 +26,7 @@ import { photoPrompt, pickLook } from "../../convex/lib/prompts";
 import { compareRemix } from "../../convex/lib/remixCompare";
 import { checkWordChanges, proposeRemixFields, wordChangeInstruction } from "../../convex/lib/remixFields";
 import type { RemixField } from "../../convex/lib/remixFields";
+import { allowedChangesNote, checkPartChanges, partChangeInstruction } from "../../convex/lib/remixParts";
 import { decodeToRgba, encodePng } from "../../convex/lib/resize";
 import { readRoles } from "../../convex/lib/roleReader";
 import { caseBoard } from "./board";
@@ -233,11 +234,11 @@ async function secondLook(
 
 // The remix comparison, with up to three tries like production's (convex/remixCheck.ts): during a
 // full run, with image calls alongside, some calls ran past its 45-second limit (2026-10-05).
-async function compareWithRetries(original: Uint8Array, remix: Uint8Array) {
+async function compareWithRetries(original: Uint8Array, remix: Uint8Array, allowed?: string) {
   let lastError: unknown = new Error("no answer");
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await throttled(() => compareRemix(original, remix, PIN.vision));
+      return await throttled(() => compareRemix(original, remix, PIN.vision, allowed));
     } catch (error) {
       lastError = error;
       if (STOPPING.test(error instanceof Error ? error.message : String(error))) break;
@@ -248,8 +249,8 @@ async function compareWithRetries(original: Uint8Array, remix: Uint8Array) {
 
 // The comparison on one design against image 1, for a case's keeps check: what it read as changed
 // ("a new design" when it calls the design a fork).
-async function keptParts(original: Uint8Array, design: Uint8Array, keeps: KeepsCheck) {
-  const result = await compareWithRetries(original, design);
+async function keptParts(original: Uint8Array, design: Uint8Array, keeps: KeepsCheck, allowed?: string) {
+  const result = await compareWithRetries(original, design, allowed);
   const misses = keeps.parts.filter((part) => result[part] !== "same").map((part) => `${part} ${result[part] ?? "not judged"}`);
   if (result.verdict !== "variation") misses.unshift("a new design");
   return { misses, costCents: result.costCents ?? 0 };
@@ -300,8 +301,14 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
   const dir = join(ctx.runDir, c.id);
   mkdirSync(dir, { recursive: true });
   const numbered = c.images ?? [];
+  // A remix's part photos come right after the numbered images, as production numbers them.
+  const partPhotos = (c.remix?.parts?.fill ?? []).flatMap((f) => (f.photos ?? []).map((id) => ({ id, partId: f.partId })));
   const mixerOnly = (c.mixer ?? []).map((m) => m.fixture).filter((id) => !numbered.includes(id));
-  const order = [...numbered, ...mixerOnly];
+  const order = [...numbered, ...partPhotos.map((p) => p.id), ...mixerOnly];
+  const partLabel = (i: number) => {
+    const photo = i >= numbered.length && i < numbered.length + partPhotos.length ? partPhotos[i - numbered.length] : null;
+    return photo ? c.remix?.parts?.list.find((p) => p.id === photo.partId)?.label : undefined;
+  };
   const attachments = order.map((id, i) => {
     const notes = ctx.notes.get(id);
     return {
@@ -309,7 +316,8 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
       summary: notes?.summary,
       kind: notes?.kind,
       notes: notes?.notes,
-      styleOnly: i >= numbered.length,
+      styleOnly: i >= numbered.length + partPhotos.length,
+      partFor: partLabel(i),
     };
   });
   const styles = (c.mixer ?? []).map((m) => ({ attachment: order.indexOf(m.fixture) + 1, weight: m.weight }));
@@ -335,8 +343,18 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
     }
     wordChanges = wordChangeInstruction(fields, edited.checked.changes);
   }
+  let partChanges: string | undefined;
+  if (c.remix?.parts) {
+    const { list, fill } = c.remix.parts;
+    const checked = checkPartChanges(list, fill.map((f) => ({ partId: f.partId, to: f.to, photos: (f.photos ?? []).map((id) => ({ imageId: id, key: id })) })));
+    checks.push({ id: "parts", label: "the remix's parts pass the creator's rules", passed: checked.ok, detail: checked.ok ? checked.changes.map((ch) => ch.label).join(", ") : checked.problem });
+    if (!checked.ok) return { ...base, passed: false, checks, seconds: (Date.now() - started) / 1000, costCents: 0, error: "The remix's parts didn't pass." };
+    const numbers = new Map<string, Array<number>>();
+    partPhotos.forEach((photo, i) => numbers.set(photo.partId, [...(numbers.get(photo.partId) ?? []), numbered.length + i + 1]));
+    partChanges = partChangeInstruction(list, checked.changes, numbers);
+  }
   // The request reader inside batchPrompt has a 10-second limit, so it waits its turn with the other calls.
-  const prompt = await throttled(() => batchPrompt({ instruction: c.request, presets: [], attachments, styles, remixOfParent: Boolean(c.remix), wordChanges }));
+  const prompt = await throttled(() => batchPrompt({ instruction: c.request, presets: [], attachments, styles, remixOfParent: Boolean(c.remix), wordChanges, partChanges }));
   writeFileSync(join(dir, "prompt.txt"), prompt.text);
   const roles = `read as ${prompt.roles.join("/") || "no images"}${prompt.styleHair ? ", style hair" : ""}${prompt.read ? "" : " (phrases)"}`;
   if (ctx.args.dryRun) {
@@ -390,7 +408,7 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
     Promise.all(
       designs.map((design) =>
         design && original && c.keeps
-          ? keptParts(original, design, c.keeps).catch((error) => {
+          ? keptParts(original, design, c.keeps, c.remix?.parts ? allowedChangesNote(c.remix.parts.list) : undefined).catch((error) => {
               checkFailure ??= noteFailure(ctx, error);
               return null;
             })
@@ -425,7 +443,8 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
     inputs: await Promise.all(
       order.map(async (id, i) => {
         const weight = c.mixer?.find((m) => m.fixture === id)?.weight;
-        const label = i < numbered.length ? `image ${i + 1}${weight ? `, style ${weight}` : ""}` : `style ${weight}`;
+        const part = partLabel(i);
+        const label = i < numbered.length ? `image ${i + 1}${weight ? `, style ${weight}` : ""}` : part ? `image ${i + 1}, ${part}` : `style ${weight}`;
         return { label, bytes: await ctx.png(id) };
       }),
     ),

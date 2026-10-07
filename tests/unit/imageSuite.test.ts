@@ -13,7 +13,8 @@ describe("the image test suite's catalog", () => {
     const used = new Set<string>();
     for (const c of CASES) {
       if (c.kind === "generate") {
-        for (const id of [...(c.images ?? []), ...(c.mixer ?? []).map((m) => m.fixture), ...(c.shows ?? []).map((s) => s.fixture)]) used.add(id);
+        const partPhotos = (c.remix?.parts?.fill ?? []).flatMap((f) => f.photos ?? []);
+        for (const id of [...(c.images ?? []), ...(c.mixer ?? []).map((m) => m.fixture), ...(c.shows ?? []).map((s) => s.fixture), ...partPhotos]) used.add(id);
       }
       if (c.kind === "photo") used.add(c.design);
       if (c.kind === "notes") used.add(c.fixture);

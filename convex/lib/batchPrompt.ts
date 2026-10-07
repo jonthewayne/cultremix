@@ -1,8 +1,9 @@
 "use node";
 
 import { readRoles } from "./roleReader";
-import { rolesFromWords, studioPrompt } from "./prompts";
+import { rolesFromWords, smallerStyles, studioPrompt, styleMixOf } from "./prompts";
 import type { ImageRole } from "./prompts";
+import { chooseStyleParts } from "./styleParts";
 
 // The prompt for a grid batch, exactly as convex/imageGen.ts runBatch sends it: GPT-6 Luna reads
 // what the request wants from each numbered image (convex/lib/roleReader.ts, about 2.5 s; told what
@@ -56,16 +57,21 @@ export async function batchPrompt(job: {
     numbered[i]?.partFor ? "content" : role,
   );
   const styleHair = read?.styleHair ?? false;
+  const promptImages = attachments.map((a) => ({
+    summary: summaryOf(a),
+    kind: a.kind,
+    notes: a.analysis === "ready" ? a.notes : undefined,
+    styleOnly: a.styleOnly,
+    partFor: a.partFor,
+  }));
+  // A mix with smaller styles: GPT-6 Luna places each one where it shows best (about 2 s more).
+  const { mix } = styleMixOf({ instruction, attachments: promptImages, styles: job.styles, remix: job.remixOfParent, roles });
+  const smaller = mix.length > 1 ? smallerStyles(mix) : [];
+  const styleParts = smaller.length > 0 ? await chooseStyleParts({ request: instruction, lead: mix[0], smaller }) : null;
   const text = studioPrompt({
     layout: job.layout ?? "grid",
     instruction,
-    attachments: attachments.map((a) => ({
-      summary: summaryOf(a),
-      kind: a.kind,
-      notes: a.analysis === "ready" ? a.notes : undefined,
-      styleOnly: a.styleOnly,
-      partFor: a.partFor,
-    })),
+    attachments: promptImages,
     styles: job.styles,
     remix: job.remixOfParent,
     roles,
@@ -73,6 +79,7 @@ export async function batchPrompt(job: {
     wordChanges: job.wordChanges,
     partChanges: job.partChanges,
     blind: job.blind,
+    styleParts: styleParts ?? undefined,
   });
   return { text, roles, read: Boolean(read), styleHair };
 }

@@ -1,4 +1,5 @@
 import { hairShape, noteSections } from "../../convex/lib/prompts";
+import type { RemixPart } from "../../convex/lib/remixParts";
 
 // Every capability the image pipeline aims to support, as cases the suite can rerun: the image model
 // with our prompts (generate, photo), and the GPT-6 Luna steps around it (notes, reader, compare).
@@ -49,8 +50,12 @@ export type GenerateCase = Base & {
   mixer?: Array<{ fixture: string; weight: number }>;
   request: string;
   // Image 1 is a published design being remixed; words are edits to its remixable-word boxes
-  // ("to" empty removes the piece).
-  remix?: { words?: Array<{ from: string; to: string }> };
+  // ("to" empty removes the piece). parts are the design's remixable parts as its creator set them
+  // up, and fill is what the remix gives them: photos (fixtures) and, for a character, new words.
+  remix?: {
+    words?: Array<{ from: string; to: string }>;
+    parts?: { list: Array<RemixPart>; fill: Array<{ partId: string; photos?: Array<string>; to?: string }> };
+  };
   shows?: Array<Shown>;
   asks: Array<Ask>;
   // Asked once about the whole grid.
@@ -531,6 +536,69 @@ export const CASES: Array<Case> = [
       { id: "wolf", ask: "Does the design show a wolf?" },
       { id: "no-lion", ask: "Is the animal a lion rather than a wolf?", expect: false },
       { id: "sketch", ask: "Is it drawn as a graphite pencil sketch with hatched shading?" },
+    ],
+  },
+  {
+    kind: "generate",
+    id: "remix-parts-family",
+    group: "remix",
+    title: "A family as Santa, Mrs. Claus, and the elves",
+    supports:
+      "A remix fills a design's remixable people and group with photos: dad becomes Santa, mom Mrs. Claus, and four relatives become the elves where the design has three, each recognizable, in the design's look, and it stays a variation.",
+    since: "2026-10-06",
+    images: ["santa-elves"],
+    remix: {
+      parts: {
+        list: [
+          { id: "p1", kind: "person", label: "Santa", text: "Santa in his red suit", on: true, empty: "keep" },
+          { id: "p2", kind: "person", label: "Mrs. Claus", text: "Mrs. Claus in red", on: true, empty: "keep" },
+          { id: "p3", kind: "group", label: "Elves", text: "elves in green outfits", on: true, count: 3, max: 6 },
+        ],
+        fill: [
+          { partId: "p1", photos: ["family-dad"] },
+          { partId: "p2", photos: ["family-mom"] },
+          { partId: "p3", photos: ["family-girl", "family-boy", "family-toddler", "family-grandma"] },
+        ],
+      },
+    },
+    request: "",
+    words: { has: ["MERRY", "BRIGHT"] },
+    keeps: { parts: ["style"] },
+    asks: [
+      { id: "four-elves", ask: "Are there exactly four elves (characters in green elf outfits and pointed hats), no more and no fewer?" },
+      { id: "santa-dad", ask: "Does Santa have a short dark beard and rectangular glasses, rather than a long white beard?" },
+      { id: "mrs-claus-mom", ask: "Does Mrs. Claus have long curly auburn or red hair?" },
+      { id: "braids", ask: "Is one of the elves a girl with two blond braids?" },
+      { id: "grandma", ask: "Is one of the elves an older woman with short white hair and round glasses?" },
+    ],
+  },
+  {
+    kind: "generate",
+    id: "remix-parts-group-size",
+    group: "remix",
+    title: "More elves, Mrs. Claus left out",
+    supports:
+      "A group takes as many photos as the creator allows (six elves where the design has three), a person with no photo is left out when the creator's rule says so, and the remix still reads as a variation because the creator opened those parts.",
+    since: "2026-10-06",
+    images: ["santa-elves"],
+    remix: {
+      parts: {
+        list: [
+          { id: "p1", kind: "person", label: "Santa", text: "Santa in his red suit", on: true, empty: "keep" },
+          { id: "p2", kind: "person", label: "Mrs. Claus", text: "Mrs. Claus in red", on: true, empty: "omit" },
+          { id: "p3", kind: "group", label: "Elves", text: "elves in green outfits", on: true, count: 3, max: 6 },
+        ],
+        fill: [{ partId: "p3", photos: ["family-dad", "family-mom", "family-girl", "family-boy", "family-toddler", "family-grandma"] }],
+      },
+    },
+    request: "",
+    words: { has: ["MERRY", "BRIGHT"] },
+    keeps: { parts: ["style"] },
+    asks: [
+      { id: "six-elves", ask: "Are there exactly six elves (characters in green elf outfits and pointed hats), no more and no fewer?" },
+      { id: "no-mrs-claus", ask: "Is there a Mrs. Claus, or any woman in a red Santa-style dress who isn't an elf?", expect: false },
+      { id: "santa-kept", ask: "Does Santa have a long white beard?" },
+      { id: "elf-dad", ask: "Is one of the elves a man with a short dark beard and rectangular glasses?" },
     ],
   },
 

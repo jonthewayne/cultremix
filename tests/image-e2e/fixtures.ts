@@ -41,6 +41,15 @@ export const FIXTURES: Array<Fixture> = [
   // A character swap in the same look (Jon's example: a hand-drawn lion with words, changed to a wolf).
   { id: "lion-sketch", kind: "art", what: "a pencil sketch of a lion's head under hand-lettered WILD AT HEART", origin: "Flare, 2026-10-05" },
   { id: "wolf-sketch", kind: "art", what: "the pencil-sketch lion design with a wolf in its place", origin: "remix of lion-sketch, Sunburst, 2026-10-05" },
+  // Remixable parts: a design with Santa, Mrs. Claus, and three elves, and a made-up family whose
+  // photos fill its parts (Jon's example: a family as Santa's elves).
+  { id: "santa-elves", kind: "art", what: "a vintage storybook Santa, Mrs. Claus, and three elves over a MERRY & BRIGHT banner", origin: "dev studio, Sunburst, 2026-10-06" },
+  { id: "family-dad", kind: "photo", what: "a photo of a made-up man in his forties with a short dark beard, rectangular glasses, and a gray hoodie", origin: "Sunburst, 2026-10-06" },
+  { id: "family-mom", kind: "photo", what: "a photo of a made-up woman in her forties with long curly auburn hair and freckles", origin: "Sunburst, 2026-10-06" },
+  { id: "family-girl", kind: "photo", what: "a photo of a made-up girl about eight with two blond braids and a gap-toothed smile", origin: "Sunburst, 2026-10-06" },
+  { id: "family-boy", kind: "photo", what: "a photo of a made-up boy about twelve with short black hair and a red baseball cap", origin: "Sunburst, 2026-10-06" },
+  { id: "family-toddler", kind: "photo", what: "a photo of a made-up toddler with curly brown hair in a blue striped shirt", origin: "Sunburst, 2026-10-06" },
+  { id: "family-grandma", kind: "photo", what: "a photo of a made-up woman in her seventies with short white hair and round glasses", origin: "Sunburst, 2026-10-06" },
 ];
 
 export const FIXTURE_DIR = fileURLToPath(new URL("./fixtures", import.meta.url));

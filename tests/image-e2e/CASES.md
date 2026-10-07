@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words.
 
-77 cases: 3 words, 6 styles, 5 people, 9 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
+79 cases: 3 words, 6 styles, 5 people, 11 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
 
 ## Words
 
@@ -315,6 +315,37 @@ A remix that swaps the main character (a pencil-sketch lion to a wolf) keeps the
 - Checks: Is it drawn as a graphite pencil sketch with hatched shading (4 of 4)
 - First tested 2026-10-05
 
+### `remix-parts-family`: A family as Santa, Mrs. Claus, and the elves
+
+A remix fills a design's remixable people and group with photos: dad becomes Santa, mom Mrs. Claus, and four relatives become the elves where the design has three, each recognizable, in the design's look, and it stays a variation.
+
+- Images: `santa-elves` (image 1 is the published design being remixed)
+- Request: (nothing typed)
+- Checks: four designs cut from one grid on a transparent background
+- Checks: words read: MERRY BRIGHT (4 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same style (4 of 4)
+- Checks: Are there exactly four elves (characters in green elf outfits and pointed hats), no more and no fewer (4 of 4)
+- Checks: Does Santa have a short dark beard and rectangular glasses, rather than a long white beard (4 of 4)
+- Checks: Does Mrs. Claus have long curly auburn or red hair (4 of 4)
+- Checks: Is one of the elves a girl with two blond braids (4 of 4)
+- Checks: Is one of the elves an older woman with short white hair and round glasses (4 of 4)
+- First tested 2026-10-06
+
+### `remix-parts-group-size`: More elves, Mrs. Claus left out
+
+A group takes as many photos as the creator allows (six elves where the design has three), a person with no photo is left out when the creator's rule says so, and the remix still reads as a variation because the creator opened those parts.
+
+- Images: `santa-elves` (image 1 is the published design being remixed)
+- Request: (nothing typed)
+- Checks: four designs cut from one grid on a transparent background
+- Checks: words read: MERRY BRIGHT (4 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same style (4 of 4)
+- Checks: Are there exactly six elves (characters in green elf outfits and pointed hats), no more and no fewer (4 of 4)
+- Checks: not: Is there a Mrs. Claus, or any woman in a red Santa-style dress who isn't an elf (4 of 4)
+- Checks: Does Santa have a long white beard (4 of 4)
+- Checks: Is one of the elves a man with a short dark beard and rectangular glasses (4 of 4)
+- First tested 2026-10-06
+
 ## Grid and layout
 
 Four designs per call, cut apart cleanly on a transparent background.
@@ -517,3 +548,10 @@ Reference images in [fixtures/](fixtures/), all made by CultRemix's own image ca
 | `grow-slow-cactus` | GROW SLOW's lettering and frame around a desert cactus instead of the mushrooms | dev studio, 2026-10-05 |
 | `lion-sketch` | a pencil sketch of a lion's head under hand-lettered WILD AT HEART | Flare, 2026-10-05 |
 | `wolf-sketch` | the pencil-sketch lion design with a wolf in its place | remix of lion-sketch, Sunburst, 2026-10-05 |
+| `santa-elves` | a vintage storybook Santa, Mrs. Claus, and three elves over a MERRY & BRIGHT banner | dev studio, Sunburst, 2026-10-06 |
+| `family-dad` | a photo of a made-up man in his forties with a short dark beard, rectangular glasses, and a gray hoodie | Sunburst, 2026-10-06 |
+| `family-mom` | a photo of a made-up woman in her forties with long curly auburn hair and freckles | Sunburst, 2026-10-06 |
+| `family-girl` | a photo of a made-up girl about eight with two blond braids and a gap-toothed smile | Sunburst, 2026-10-06 |
+| `family-boy` | a photo of a made-up boy about twelve with short black hair and a red baseball cap | Sunburst, 2026-10-06 |
+| `family-toddler` | a photo of a made-up toddler with curly brown hair in a blue striped shirt | Sunburst, 2026-10-06 |
+| `family-grandma` | a photo of a made-up woman in her seventies with short white hair and round glasses | Sunburst, 2026-10-06 |

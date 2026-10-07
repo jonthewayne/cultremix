@@ -7,7 +7,7 @@
   "vision": "openai/gpt-6-luna",
   "words": "google/gemini-3.1-pro-preview"
  },
- "recordedAt": "2026-10-06T04:36:43.982Z",
+ "recordedAt": "2026-10-07T01:18:48.091Z",
  "cases": {
   "words-from-text": {
    "passed": true,
@@ -76,7 +76,7 @@
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "25% clear",
+    "transparent": "29% clear",
     "words": "4/4",
     "lead": "4/4",
     "accent": "4/4",
@@ -90,18 +90,18 @@
     "transparent": "30% clear",
     "words": "4/4",
     "a": "4/4",
-    "b": "3/4"
+    "b": "4/4"
    }
   },
   "mix-three": {
    "passed": true,
    "checks": {
     "cut": "4/4",
-    "transparent": "26% clear",
+    "transparent": "28% clear",
     "words": "4/4",
     "a": "4/4",
     "b": "4/4",
-    "c": "3/4",
+    "c": "4/4",
     "no-person": "4/4"
    }
   },
@@ -585,6 +585,35 @@
    "passed": true,
    "checks": {
     "verdict": "2/2: variation, variation"
+   }
+  },
+  "remix-parts-family": {
+   "passed": true,
+   "checks": {
+    "parts": "Santa, Mrs. Claus, Elves",
+    "cut": "4/4",
+    "transparent": "39% clear",
+    "words": "4/4",
+    "keeps": "4/4",
+    "four-elves": "4/4",
+    "santa-dad": "4/4",
+    "mrs-claus-mom": "4/4",
+    "braids": "4/4",
+    "grandma": "4/4"
+   }
+  },
+  "remix-parts-group-size": {
+   "passed": true,
+   "checks": {
+    "parts": "Elves, Mrs. Claus",
+    "cut": "4/4",
+    "transparent": "37% clear",
+    "words": "4/4",
+    "keeps": "4/4",
+    "six-elves": "4/4",
+    "no-mrs-claus": "4/4",
+    "santa-kept": "4/4",
+    "elf-dad": "4/4"
    }
   }
  }

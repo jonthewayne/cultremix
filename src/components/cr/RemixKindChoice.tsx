@@ -41,7 +41,7 @@ export function RemixKindChoice({
   if (relation.status === "words" || relation.status === "variation") {
     const why =
       relation.status === "words"
-        ? `You changed only its remixable words, so it joins family ${options.family} as its next number.`
+        ? `You changed only what its creator made remixable, so it joins family ${options.family} as its next number.`
         : `${relation.reason ? `${relation.reason} ` : ""}It reads as the same design with changes, so it joins family ${options.family} as its next number.`;
     return (
       <div className="mt-6">

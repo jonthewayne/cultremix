@@ -42,7 +42,9 @@ export const STYLE_NOTES_PROMPT = [
     "hair (color, length, and texture), skin tone, freckles or other marks, glasses, facial hair, build and height, apparent age, expression, " +
     "pose, and clothing. Describe the person, not the drawing style. Never name or guess who a real person is.",
   "Figure drawing: how this image draws people and animals from head to toe, compared with real anatomy. This is how the style turns anyone " +
-    "into one of its own figures, so cover every part the image shows: overall proportions (how many heads tall, and head size against the body); " +
+    "into one of its own figures, so write it as a way of drawing that carries to any figure (\"heads are large against narrow shoulders\"), " +
+    "never about who this image shows (\"the woman\", \"her\") or how this picture crops or poses them. Cover every part the image shows: " +
+    "overall proportions (how many heads tall, and head size against the body); " +
     "body shape and silhouette (for example elongated, stocky, rubbery, or angular); neck, torso, arms, legs, hands, and feet; the head and face " +
     "(shape and length, chin, eyes as dots or detailed and their size, nose, mouth, and ears); and posture and gesture. Leave hair to the last " +
     "line. For animals, the same: head, ears, muzzle, body, legs, " +
@@ -260,17 +262,36 @@ const STYLE_NAME = /\bstyles?\s*#?\s*[1-9]\b/iu;
 // design of its own and drew its image's woman or picnickers there (7 of 16 designs over four runs).
 // Given a part, it showed every time: the pop-art style colored the raccoon in 8 of 8 designs at 80/20
 // and 16 of 16 in the three-style mix, with no style image's people (2026-10-05, image test suite).
-const ACCENT_PARTS = [
-  { grid: "on the main subject of every design (its coloring, shading, and face)", single: "on the main subject (its coloring, shading, and face)" },
-  {
+// The parts a smaller style can take. styleParts (convex/lib/styleParts.ts) has GPT-6 Luna pick each
+// smaller style's part from its notes; without an answer, they go in size order (RANK_ORDER).
+export type StylePart = "subject" | "around" | "lettering" | "accents";
+const STYLE_PARTS: Record<StylePart, { grid: string; single: string }> = {
+  subject: { grid: "on the main subject of every design (its coloring, shading, and face)", single: "on the main subject (its coloring, shading, and face)" },
+  around: {
     grid: "around the subject in every design (a backdrop, frame, or ornaments, and the print texture)",
     single: "around the subject (a backdrop, frame, or ornaments, and the print texture)",
   },
-  { grid: "in the lettering of every design (its colors and effects)", single: "in the lettering (its colors and effects)" },
-  { grid: "in small accents in every design", single: "in small accents" },
-];
+  lettering: {
+    grid: "in the lettering of every design (its letterforms, outlines, colors, and effects)",
+    single: "in the lettering (its letterforms, outlines, colors, and effects)",
+  },
+  accents: { grid: "in small accents in every design", single: "in small accents" },
+};
+const RANK_ORDER: Array<StylePart> = ["subject", "around", "lettering", "accents"];
+// In size order the lettering is a third smaller style's, beside the leader's lettering: only its
+// colors and effects (as before Luna picked parts).
+const RANK_LETTERING = { grid: "in the lettering of every design (its colors and effects)", single: "in the lettering (its colors and effects)" };
 
-function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }>, grid: boolean, blind = false) {
+// A style in the mix: its image number, its share, and its notes.
+export type MixStyle = { n: number; share: number; notes?: string };
+
+// The smaller styles of a mix: the ones more than 10 points below the leader, which get a part each.
+export function smallerStyles(mix: ReadonlyArray<MixStyle>) {
+  const lead = mix[0]?.share ?? 0;
+  return mix.filter((style, i) => i > 0 && style.share < lead - 10);
+}
+
+function styleMixSection(mix: Array<MixStyle>, grid: boolean, blind = false, chosen?: Record<number, StylePart>) {
   // The leading style's way of drawing people and animals, head to toe, stated as a requirement:
   // without it, a photo's realistic proportions win (tested: a poster of elongated figures gave
   // eight realistic portraits). A model that can't see the images reads it as the style image's own
@@ -287,17 +308,25 @@ function styleMixSection(mix: Array<{ n: number; share: number; notes?: string }
     );
   }
   const lead = mix[0].share;
-  const smaller = mix.filter((style, i) => i > 0 && style.share < lead - 10);
+  const smaller = smallerStyles(mix);
+  // Each smaller style's part: Luna's choice when it answered for every one, else size order.
+  const picked = chosen && smaller.every((style) => chosen[style.n]) ? chosen : undefined;
+  const partOf = (style: MixStyle) => picked?.[style.n] ?? RANK_ORDER[Math.min(smaller.indexOf(style), RANK_ORDER.length - 1)];
+  // A smaller style Luna puts on the lettering takes it from the leader (tested 2026-10-06, below).
+  const letteringTaken = Boolean(picked) && smaller.some((style) => partOf(style) === "lettering");
+  const leadSets = letteringTaken
+    ? "technique, line work, color, figure drawing (how people and animals are drawn from head to toe), and level of detail"
+    : "technique, line work, color, lettering, figure drawing (how people and animals are drawn from head to toe), and level of detail";
   const lines = mix.map((style, i) => {
     const sharesLead = style.share >= lead - 10;
     if (i === 0 || sharesLead) {
       const others = mix.filter((other) => other !== style && other.share >= lead - 10);
       const role = others.length > 0 ? `shares the lead with ${others.map((o) => `image ${o.n}`).join(" and ")}` : "leads";
-      return `- Image ${style.n} (${style.share}%): ${role}. It sets the technique, line work, color, lettering, figure drawing (how people and animals are drawn from head to toe), and level of detail.`;
+      return `- Image ${style.n} (${style.share}%): ${role}. It sets the ${leadSets}.`;
     }
     const traits = signatureTraits(style.notes).slice(0, style.share >= 25 ? 3 : 2);
     const how = traits.length > 0 ? `these traits: ${traits.join("; ")}` : "its most recognizable traits: technique, palette, and texture";
-    const part = ACCENT_PARTS[Math.min(smaller.indexOf(style), ACCENT_PARTS.length - 1)];
+    const part = !picked && partOf(style) === "lettering" ? RANK_LETTERING : STYLE_PARTS[partOf(style)];
     return `- Image ${style.n} (${style.share}%): ${grid ? part.grid : part.single}, through ${how}.`;
   });
   const blend =
@@ -426,6 +455,36 @@ export function rolesFromWords(instruction: string, count: number, remix = false
   });
 }
 
+// Which numbered images the request names as styles, and the style mix that results: the mixer's
+// styles plus named ones at full strength (or their slider's value), as shares, largest first.
+export function styleMixOf(args: {
+  instruction: string;
+  attachments: ReadonlyArray<PromptImage>;
+  styles: ReadonlyArray<PromptStyle>;
+  remix?: boolean;
+  roles?: ReadonlyArray<ImageRole>;
+}) {
+  let numbered = 0;
+  while (numbered < args.attachments.length && !args.attachments[numbered].styleOnly) numbered++;
+  const named = args.roles
+    ? args.roles
+        .slice(0, numbered)
+        .flatMap((role, i) => (role === "content" ? [] : [{ n: i + 1, only: role === "style" && !(args.remix && i === 0) }]))
+    : namedStyles(args.instruction, numbered, args.remix);
+  const styleArgs = [...args.styles];
+  for (const { n } of named) {
+    const at = styleArgs.findIndex((s) => s.attachment === n);
+    if (at < 0) styleArgs.push({ attachment: n, weight: 100 });
+    else if (styleArgs[at].weight <= 0) styleArgs[at] = { attachment: n, weight: 100 };
+  }
+  const shares = styleShares(styleArgs.map((s) => s.weight));
+  const mix: Array<MixStyle> = styleArgs
+    .map((s, i) => ({ n: s.attachment, share: shares[i], notes: args.attachments[s.attachment - 1]?.notes }))
+    .filter((s) => s.share > 0 && s.n >= 1 && s.n <= args.attachments.length)
+    .sort((a, b) => b.share - a.share || a.n - b.n);
+  return { named, mix };
+}
+
 // One design (layout "single") or four in a grid. attachments are every image sent with the
 // call, in order: the studio's numbered images first, then images added only in the style mixer.
 export function studioPrompt(args: {
@@ -448,36 +507,21 @@ export function studioPrompt(args: {
   // The model can't see the attached images (Recraft V4.1 takes words only): their notes stand in,
   // and nothing names a style image's own subjects.
   blind?: boolean;
+  // Each smaller style's part, by image number, as GPT-6 Luna chose it (convex/lib/styleParts.ts).
+  styleParts?: Record<number, StylePart>;
 }) {
   const grid = args.layout === "grid";
   const blind = args.blind === true;
   const ask = sentence(args.instruction);
   // A style named in the request joins the mix like a mixer style: at full strength, or at its
   // slider's value when the mixer already has it on.
-  let numbered = 0;
-  while (numbered < args.attachments.length && !args.attachments[numbered].styleOnly) numbered++;
-  const named = args.roles
-    ? args.roles
-        .slice(0, numbered)
-        .flatMap((role, i) => (role === "content" ? [] : [{ n: i + 1, only: role === "style" && !(args.remix && i === 0) }]))
-    : namedStyles(args.instruction, numbered, args.remix);
+  const { named, mix } = styleMixOf(args);
   const images = args.attachments.map((image, i) => ({
     ...image,
     styleOnly: image.styleOnly || named.some((s) => s.n === i + 1 && s.only),
     n: i + 1,
   }));
-  const styleArgs = [...args.styles];
-  for (const { n } of named) {
-    const at = styleArgs.findIndex((s) => s.attachment === n);
-    if (at < 0) styleArgs.push({ attachment: n, weight: 100 });
-    else if (styleArgs[at].weight <= 0) styleArgs[at] = { attachment: n, weight: 100 };
-  }
   const work = images.filter((image) => !image.styleOnly);
-  const shares = styleShares(styleArgs.map((s) => s.weight));
-  const mix = styleArgs
-    .map((s, i) => ({ n: s.attachment, share: shares[i], notes: images[s.attachment - 1]?.notes }))
-    .filter((s) => s.share > 0 && s.n >= 1 && s.n <= images.length)
-    .sort((a, b) => b.share - a.share || a.n - b.n);
   const parts: Array<string> = [];
 
   if (args.remix) {
@@ -594,7 +638,7 @@ export function studioPrompt(args: {
   }
 
   if (mix.length > 0) {
-    parts.push(styleMixSection(mix, grid, blind));
+    parts.push(styleMixSection(mix, grid, blind, args.styleParts));
     const definitions = mix
       .map((style) => ({ n: style.n, text: styleDefinition(style.notes, blind) }))
       .filter((d) => d.text)

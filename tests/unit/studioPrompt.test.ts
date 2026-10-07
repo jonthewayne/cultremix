@@ -9,6 +9,7 @@ import {
   requestedWords,
   rolesFromWords,
   signatureTraits,
+  styleMixOf,
   styleShares,
   studioPrompt,
   withoutWords,
@@ -196,6 +197,32 @@ describe("studio prompt", () => {
     const even = studioPrompt({ layout: "grid", instruction: "A raccoon", attachments: attachments.slice(1), styles: [{ attachment: 1, weight: 50 }, { attachment: 2, weight: 50 }] });
     expect(even).toContain("Blend them in these proportions; a style with a smaller share still shows plainly.");
     expect(even).not.toContain("its own part");
+  });
+
+  it("puts each smaller style where Luna chose, and a lettering style takes the lettering from the leader", () => {
+    const attachments = [
+      { summary: "a pop-art portrait", notes: POSTER, styleOnly: true },
+      { summary: "a psychedelic lettering poster", notes: GLITTER, styleOnly: true },
+      { summary: "a 70s poster", notes: POSTER, styleOnly: true },
+    ];
+    const styles = [
+      { attachment: 1, weight: 100 },
+      { attachment: 2, weight: 60 },
+      { attachment: 3, weight: 40 },
+    ];
+    expect(styleMixOf({ instruction: "A raccoon", attachments, styles }).mix.map((s) => [s.n, s.share])).toEqual([
+      [1, 50],
+      [2, 30],
+      [3, 20],
+    ]);
+    const chosen = studioPrompt({ layout: "grid", instruction: "A raccoon that says HI", attachments, styles, styleParts: { 2: "lettering", 3: "around" } });
+    expect(chosen).toContain("- Image 1 (50%): leads. It sets the technique, line work, color, figure drawing");
+    expect(chosen).toContain("- Image 2 (30%): in the lettering of every design (its letterforms, outlines, colors, and effects), through these traits:");
+    expect(chosen).toContain("- Image 3 (20%): around the subject in every design");
+    // Without an answer for every smaller style, size order, and the leader keeps the lettering.
+    const partial = studioPrompt({ layout: "grid", instruction: "A raccoon that says HI", attachments, styles, styleParts: { 2: "lettering" } });
+    expect(partial).toContain("It sets the technique, line work, color, lettering, figure drawing");
+    expect(partial).toContain("- Image 2 (30%): on the main subject of every design");
   });
 
   it("drops styles at zero and keeps the image's own look", () => {

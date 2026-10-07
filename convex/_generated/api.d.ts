@@ -115,6 +115,7 @@ import type * as lib_sizes from "../lib/sizes.js";
 import type * as lib_social from "../lib/social.js";
 import type * as lib_storage from "../lib/storage.js";
 import type * as lib_studioRules from "../lib/studioRules.js";
+import type * as lib_styleParts from "../lib/styleParts.js";
 import type * as lib_trending from "../lib/trending.js";
 import type * as lib_upscaleFlow from "../lib/upscaleFlow.js";
 import type * as lib_username from "../lib/username.js";
@@ -273,6 +274,7 @@ declare const fullApi: ApiFromModules<{
   "lib/social": typeof lib_social;
   "lib/storage": typeof lib_storage;
   "lib/studioRules": typeof lib_studioRules;
+  "lib/styleParts": typeof lib_styleParts;
   "lib/trending": typeof lib_trending;
   "lib/upscaleFlow": typeof lib_upscaleFlow;
   "lib/username": typeof lib_username;
