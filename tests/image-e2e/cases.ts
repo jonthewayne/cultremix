@@ -289,6 +289,60 @@ export const CASES: Array<Case> = [
       { id: "no-person", ask: "Does the design show a woman or any other person?", expect: false },
     ],
   },
+  {
+    kind: "generate",
+    id: "mix-lettering-second",
+    group: "styles",
+    title: "A lettering style in second place",
+    supports:
+      "A smaller style known for its lettering goes on the lettering, and the leading style's own person stays out. With the pop-art portrait leading (50%), GROW SLOW (30%), and the 70s poster (20%): when parts went in size order, GROW SLOW was told to color the raccoon and its letters showed in 4 of 12 designs; with GPT-6 Luna picking each part, in 12 of 12. The pop-art notes' figure drawing described \"the woman\", and she appeared in 5 to 6 of 12 designs until the notes described figure drawing as a way of drawing: then 0 of 12, with the pop-art coloring on all 12 raccoons (2026-10-06, medium quality, three grids each). At high quality the same evening, Luna again put GROW SLOW on the lettering and the poster around the raccoon: letters in 4 of 4, no person.",
+    since: "2026-10-06",
+    mixer: [
+      { fixture: "pop-art", weight: 100 },
+      { fixture: "grow-slow", weight: 60 },
+      { fixture: "poster-70s", weight: 40 },
+    ],
+    request: "A raccoon in a tiny crown that says TRASH ROYALTY",
+    shows: [
+      { fixture: "pop-art", as: "style A" },
+      { fixture: "grow-slow", as: "style B" },
+      { fixture: "poster-70s", as: "style C" },
+    ],
+    words: { has: ["TRASH", "ROYALTY"] },
+    asks: [
+      { id: "letters", ask: "Are the words drawn as warped, inflated psychedelic bubble letters with several layered colored outlines?", min: 3 },
+      { id: "no-person", ask: "Does the design show a woman or any other person?", expect: false },
+    ],
+  },
+  {
+    kind: "generate",
+    id: "mix-quiet-lead",
+    group: "styles",
+    status: "known-limit",
+    title: "A quieter style leading a louder one",
+    supports:
+      "The style with the largest share sets the look of every design. Known limit: with the pop-art portrait leading at 50% and the busier GROW SLOW design at 30%, a checker asked which style each design is mostly in said GROW SLOW in 7 to 12 of 12 designs for every way of blending we tried, and the pop-art lead in 0 to 3; describing GROW SLOW by its lettering alone didn't change that (12 of 12). The image model seems to follow how strong a style looks more than its share (2026-10-06, medium quality, three grids each). At high quality the same evening, the pop-art drawing reached 1 or 2 of 4 raccoons (two checks of the same grid) and no design was mostly pop-art; the leader's lavender came and went between grids (4 of 4 raccoons in this case's grid, gray with cyan shading in mix-lettering-second's).",
+    since: "2026-10-06",
+    mixer: [
+      { fixture: "pop-art", weight: 100 },
+      { fixture: "grow-slow", weight: 60 },
+      { fixture: "poster-70s", weight: 40 },
+    ],
+    request: "A raccoon in a tiny crown that says TRASH ROYALTY",
+    shows: [
+      { fixture: "pop-art", as: "style A" },
+      { fixture: "grow-slow", as: "style B" },
+      { fixture: "poster-70s", as: "style C" },
+    ],
+    words: { has: ["TRASH", "ROYALTY"] },
+    asks: [
+      { id: "lead", ask: "Is the raccoon drawn in a pop-art comic style, with heavy black outlines, flat saturated colors, and hard-edged shading, like style A?", min: 3 },
+      { id: "mostly", ask: "Is this design mostly in the look of style A (more than of style B or style C)?", min: 3 },
+      // Strict, as in the 2026-10-06 like-for-like rescore: "Is the raccoon's fur lavender or purple?" said yes to
+      // four gray raccoons with cyan shading and a lavender chest (run 20261007-0219, mix-lettering-second).
+      { id: "lavender", ask: "Is the raccoon's fur clearly lavender or purple? Answer no if the fur is gray, brown, or black and white with at most a faint purple tint.", min: 3 },
+    ],
+  },
 
   // ---- People ----
   {

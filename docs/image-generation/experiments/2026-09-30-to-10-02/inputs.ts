@@ -1,0 +1,5 @@
+import { runOne } from './check.ts';
+// Test inputs for the photo-plus-style likeness check (made-up people).
+const job = process.env.GRID_JOB;
+if (job === 'person') await runOne('person', 'openai/gpt-image-2.5-flare', 'A candid realistic photograph of a made-up woman in her thirties with short curly copper-red hair, a round face with freckles, round tortoiseshell glasses, a wide gap-toothed smile, and a mustard sweater, standing in a sunny city park. Waist-up framing, natural light, shallow depth of field.', '1024x1536', false, { quality: 'medium' });
+if (job === 'style70s') await runOne('style70s', 'openai/gpt-image-2.5-flare', 'A 1970s psychedelic illustrated poster of two friends sharing a picnic under a big sun. Muted palette of mustard, olive, rust, and dusty teal with fine grain. The people are drawn as elongated caricatures: very tall narrow heads, long chins, long noses, tiny dot eyes, and stretched necks, with flowing wavy hair rendered as parallel bands. Flat shapes, soft airbrushed gradients, and thin brown outlines.', '1024x1536', false, { quality: 'medium' });

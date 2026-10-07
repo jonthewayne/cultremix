@@ -62,6 +62,10 @@ From seven full runs on 2026-10-05 and targeted reruns after each fix (boards in
   - Three styles: the two smaller styles each got a design of their own, with the style image's woman or picnickers drawn in (7 of 16 designs over four runs). Each smaller style now gets a part of every design (the first colors the main subject, the next goes around it), and in 16 designs every raccoon took the pop-art coloring, 15 had the 70s landscape or sky, and none had a style image's people. The same made the 20% style in an 80/20 mix show in every design.
   - The remix comparison follows Jon's rule (2026-10-05): a design is its look and its layout. A swapped character (a pencil-sketch lion to a wolf), new words, or new colors stay a variation; a redraw in a different style or medium (pixel art), or a rebuilt layout, may be a fork.
   - The pop-art style turned the woman's copper hair pink in all four designs in 2 of 8 grids, because its notes say "hot pink hair." The prompt now says each person keeps their own hair color unless the request says otherwise: 6 of 6 grids kept her copper hair, and a new case, "with bright pink hair," made it pink in 4 of 4.
+- **Added 2026-10-06** (history in [Styles and mixing](../../docs/image-generation/style-mixing.md)):
+  - Santa, Mrs. Claus, and the elves (`remix-parts-family`, `remix-parts-group-size`). People and groups are named by role only, with their looks from the family photos. Both pass at high quality.
+  - A lettering style in second place (`mix-lettering-second`). GPT-6 Luna now picks each smaller style's part, so GROW SLOW goes on the lettering: 4 of 4 at high quality, with no person. The figure notes no longer describe the style image's own person, which had drawn the pop-art woman into 5 to 6 of 12 designs.
+  - A new known limit: a quieter style can't lead a louder one (`mix-quiet-lead`). With the pop-art portrait at 50% and GROW SLOW at 30%, no design was mostly pop-art.
 
 ## Pinned to GPT Image 2.5
 

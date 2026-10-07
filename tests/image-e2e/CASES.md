@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words.
 
-79 cases: 3 words, 6 styles, 5 people, 11 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
+81 cases: 3 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
 
 ## Words
 
@@ -126,6 +126,31 @@ Three styles each show in every design, without the style images' own people. Si
 - Checks: Is there a 1970s-style landscape or sky in the design, such as mountains, a lake, pine trees, or a big sun with rays or wavy bands (3 of 4)
 - Checks: not: Does the design show a woman or any other person (4 of 4)
 - First tested 2026-09-30
+
+### `mix-lettering-second`: A lettering style in second place
+
+A smaller style known for its lettering goes on the lettering, and the leading style's own person stays out. With the pop-art portrait leading (50%), GROW SLOW (30%), and the 70s poster (20%): when parts went in size order, GROW SLOW was told to color the raccoon and its letters showed in 4 of 12 designs; with GPT-6 Luna picking each part, in 12 of 12. The pop-art notes' figure drawing described "the woman", and she appeared in 5 to 6 of 12 designs until the notes described figure drawing as a way of drawing: then 0 of 12, with the pop-art coloring on all 12 raccoons (2026-10-06, medium quality, three grids each). At high quality the same evening, Luna again put GROW SLOW on the lettering and the poster around the raccoon: letters in 4 of 4, no person.
+
+- Style mixer: `pop-art` at 100, `grow-slow` at 60, `poster-70s` at 40
+- Request: "A raccoon in a tiny crown that says TRASH ROYALTY"
+- Checks: four designs cut from one grid on a transparent background
+- Checks: words read: TRASH ROYALTY (4 of 4)
+- Checks: Are the words drawn as warped, inflated psychedelic bubble letters with several layered colored outlines (3 of 4)
+- Checks: not: Does the design show a woman or any other person (4 of 4)
+- First tested 2026-10-06
+
+### `mix-quiet-lead`: A quieter style leading a louder one (known limit)
+
+The style with the largest share sets the look of every design. Known limit: with the pop-art portrait leading at 50% and the busier GROW SLOW design at 30%, a checker asked which style each design is mostly in said GROW SLOW in 7 to 12 of 12 designs for every way of blending we tried, and the pop-art lead in 0 to 3; describing GROW SLOW by its lettering alone didn't change that (12 of 12). The image model seems to follow how strong a style looks more than its share (2026-10-06, medium quality, three grids each). At high quality the same evening, the pop-art drawing reached 1 or 2 of 4 raccoons (two checks of the same grid) and no design was mostly pop-art; the leader's lavender came and went between grids (4 of 4 raccoons in this case's grid, gray with cyan shading in mix-lettering-second's).
+
+- Style mixer: `pop-art` at 100, `grow-slow` at 60, `poster-70s` at 40
+- Request: "A raccoon in a tiny crown that says TRASH ROYALTY"
+- Checks: four designs cut from one grid on a transparent background
+- Checks: words read: TRASH ROYALTY (4 of 4)
+- Checks: Is the raccoon drawn in a pop-art comic style, with heavy black outlines, flat saturated colors, and hard-edged shading, like style A (3 of 4)
+- Checks: Is this design mostly in the look of style A (more than of style B or style C) (3 of 4)
+- Checks: Is the raccoon's fur clearly lavender or purple? Answer no if the fur is gray, brown, or black and white with at most a faint purple tint. (3 of 4)
+- First tested 2026-10-06
 
 ## People
 

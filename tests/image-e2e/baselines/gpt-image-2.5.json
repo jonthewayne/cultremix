@@ -7,7 +7,7 @@
   "vision": "openai/gpt-6-luna",
   "words": "google/gemini-3.1-pro-preview"
  },
- "recordedAt": "2026-10-07T01:18:48.091Z",
+ "recordedAt": "2026-10-07T02:25:48.658Z",
  "cases": {
   "words-from-text": {
    "passed": true,
@@ -614,6 +614,27 @@
     "no-mrs-claus": "4/4",
     "santa-kept": "4/4",
     "elf-dad": "4/4"
+   }
+  },
+  "mix-lettering-second": {
+   "passed": true,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "26% clear",
+    "words": "4/4",
+    "letters": "4/4",
+    "no-person": "4/4"
+   }
+  },
+  "mix-quiet-lead": {
+   "passed": false,
+   "checks": {
+    "cut": "4/4",
+    "transparent": "27% clear",
+    "words": "4/4",
+    "lead": "2/4 (needs 3)",
+    "mostly": "0/4 (needs 3)",
+    "lavender": "4/4"
    }
   }
  }

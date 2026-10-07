@@ -1,0 +1,75 @@
+== high, model decides (6 suite runs)
+20261005-0813/mix-three/design-1.png lavender=false scene=true person=true
+20261005-0813/mix-three/design-2.png lavender=false scene=true person=false
+20261005-0813/mix-three/design-3.png lavender=false scene=true person=true
+20261005-0813/mix-three/design-4.png lavender=false scene=true person=true
+20261005-0825/mix-three/design-1.png lavender=false scene=true person=true
+20261005-0825/mix-three/design-2.png lavender=false scene=true person=true
+20261005-0825/mix-three/design-3.png lavender=false scene=true person=false
+20261005-0825/mix-three/design-4.png lavender=false scene=true person=true
+20261005-0853/mix-three/design-1.png lavender=false scene=true person=true
+20261005-0853/mix-three/design-2.png lavender=false scene=true person=false
+20261005-0853/mix-three/design-3.png lavender=false scene=true person=false
+20261005-0853/mix-three/design-4.png lavender=false scene=true person=true
+20261005-0919/mix-three/design-1.png lavender=false scene=true person=true
+20261005-0919/mix-three/design-2.png lavender=false scene=true person=false
+20261005-0919/mix-three/design-3.png lavender=false scene=true person=false
+20261005-0919/mix-three/design-4.png lavender=false scene=true person=true
+20261005-1756/mix-three/design-1.png lavender=false scene=true person=false
+20261005-1756/mix-three/design-2.png lavender=false scene=true person=false
+20261005-1756/mix-three/design-3.png lavender=false scene=true person=true
+20261005-1756/mix-three/design-4.png lavender=false scene=true person=true
+20261005-1934/mix-three/design-1.png lavender=false scene=true person=false
+20261005-1934/mix-three/design-2.png lavender=false scene=true person=false
+20261005-1934/mix-three/design-3.png lavender=false scene=true person=false
+20261005-1934/mix-three/design-4.png lavender=false scene=false person=true
+== high, written parts (2 grids + 2 suite runs)
+mix-three-high/zones2/grid-1/design-1.png lavender=true scene=true person=false
+mix-three-high/zones2/grid-1/design-2.png lavender=true scene=true person=false
+mix-three-high/zones2/grid-1/design-3.png lavender=true scene=true person=false
+mix-three-high/zones2/grid-1/design-4.png lavender=true scene=true person=false
+mix-three-high/zones2/grid-2/design-1.png lavender=true scene=true person=false
+mix-three-high/zones2/grid-2/design-2.png lavender=true scene=true person=false
+mix-three-high/zones2/grid-2/design-3.png lavender=true scene=true person=false
+mix-three-high/zones2/grid-2/design-4.png lavender=true scene=false person=false
+20261006-0350/mix-three/design-1.png lavender=true scene=true person=false
+20261006-0350/mix-three/design-2.png lavender=true scene=true person=false
+20261006-0350/mix-three/design-3.png lavender=true scene=true person=false
+20261006-0350/mix-three/design-4.png lavender=true scene=true person=false
+20261006-0423/mix-three/design-1.png lavender=true scene=false person=false
+20261006-0423/mix-three/design-2.png lavender=true scene=true person=false
+20261006-0423/mix-three/design-3.png lavender=true scene=true person=false
+20261006-0423/mix-three/design-4.png lavender=true scene=true person=false
+== medium, model decides
+mix-three/control/grid-1/design-1.png lavender=true scene=false person=false
+mix-three/control/grid-1/design-2.png lavender=true scene=true person=false
+mix-three/control/grid-1/design-3.png lavender=true scene=true person=false
+mix-three/control/grid-1/design-4.png lavender=false scene=false person=false
+mix-three/control/grid-2/design-1.png lavender=true scene=false person=false
+mix-three/control/grid-2/design-2.png lavender=true scene=false person=false
+mix-three/control/grid-2/design-3.png lavender=true scene=true person=false
+mix-three/control/grid-2/design-4.png lavender=true scene=false person=false
+== medium, model decides + all three in every design
+mix-three/every-design/grid-1/design-1.png lavender=true scene=false person=false
+mix-three/every-design/grid-1/design-2.png lavender=true scene=true person=false
+mix-three/every-design/grid-1/design-3.png lavender=true scene=true person=false
+mix-three/every-design/grid-1/design-4.png lavender=true scene=true person=false
+mix-three/every-design/grid-2/design-1.png lavender=false scene=true person=true
+mix-three/every-design/grid-2/design-2.png lavender=false scene=true person=false
+mix-three/every-design/grid-2/design-3.png lavender=false scene=false person=false
+mix-three/every-design/grid-2/design-4.png lavender=false scene=true person=false
+== medium, written parts
+mix-three/zones/grid-1/design-1.png lavender=true scene=true person=false
+mix-three/zones/grid-1/design-2.png lavender=true scene=true person=false
+mix-three/zones/grid-1/design-3.png lavender=true scene=true person=false
+mix-three/zones/grid-1/design-4.png lavender=true scene=true person=false
+mix-three/zones/grid-2/design-1.png lavender=true scene=true person=false
+mix-three/zones/grid-2/design-2.png lavender=true scene=true person=false
+mix-three/zones/grid-2/design-3.png lavender=true scene=true person=false
+mix-three/zones/grid-2/design-4.png lavender=true scene=true person=false
+
+high, model decides (6 suite runs): clearly lavender 0/24, 70s scene 23/24, a person 13/24, all three styles and no person 0/24
+high, written parts (2 grids + 2 suite runs): clearly lavender 16/16, 70s scene 14/16, a person 0/16, all three styles and no person 14/16
+medium, model decides: clearly lavender 7/8, 70s scene 3/8, a person 0/8, all three styles and no person 3/8
+medium, model decides + all three in every design: clearly lavender 4/8, 70s scene 6/8, a person 1/8, all three styles and no person 3/8
+medium, written parts: clearly lavender 8/8, 70s scene 8/8, a person 0/8, all three styles and no person 8/8

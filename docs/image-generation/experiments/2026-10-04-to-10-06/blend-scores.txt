@@ -1,0 +1,8 @@
+A rank       designs 12: all three styles and no person 7/12 (psychedelic letters 11, lavender raccoon 8, 70s scene 12, person 2, spelled 12)
+A luna-parts designs 12: all three styles and no person 9/12 (psychedelic letters 10, lavender raccoon 12, 70s scene 11, person 0, spelled 12)
+A luna-blend designs 12: all three styles and no person 0/12 (psychedelic letters 12, lavender raccoon 0, 70s scene 10, person 1, spelled 12)
+A range      designs 12: all three styles and no person 2/12 (psychedelic letters 5, lavender raccoon 5, 70s scene 7, person 0, spelled 12); corners leaning on their style 9/9
+B rank       designs 12: all three styles and no person 0/12 (pop-art raccoon 3, psychedelic letters 4, 70s scene 9, person 6, spelled 12)
+B luna-parts designs 12: all three styles and no person 0/12 (pop-art raccoon 2, psychedelic letters 12, 70s scene 12, person 5, spelled 12)
+B luna-blend designs 12: all three styles and no person 1/12 (pop-art raccoon 1, psychedelic letters 7, 70s scene 9, person 0, spelled 12)
+B range      designs 12: all three styles and no person 0/12 (pop-art raccoon 4, psychedelic letters 5, 70s scene 7, person 0, spelled 12); corners leaning on their style 9/9
