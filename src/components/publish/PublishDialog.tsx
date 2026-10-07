@@ -164,7 +164,7 @@ export function PublishDialog({
           <div>
             {title && <p className="text-3xl font-bold md:text-5xl">{title}</p>}
             <p className="mt-3 max-w-md text-base text-neutral-300">
-              Only you can see it. It's in your kept designs, and you can share it with the world any time.
+              Only you can see it. It's marked Kept in your studio, and you can share it with the world any time.
               {isRemix ? " The original's creator still gets credit." : ""}
             </p>
           </div>
