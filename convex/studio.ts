@@ -16,6 +16,9 @@ import { NANO_BANANA_WORST_CENTS, RECRAFT_WORST_CENTS } from "./lib/pricing";
 import { adminAllows } from "./lib/adminAccess";
 import { formatCr, isDevDeployment, parseCr, publicUrl } from "./lib/r2";
 import { MAX_FIELDS } from "./lib/remixFields";
+import type { RemixField } from "./lib/remixFields";
+import { MAX_PART_PHOTOS, checkPartChanges, partChangeInstruction, partSummary } from "./lib/remixParts";
+import type { PartProblem, RemixPart } from "./lib/remixParts";
 import { checkedWordChanges, wordChangesPrompt } from "./remixFields";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
 import { isImageKey } from "./lib/sizes";
@@ -81,6 +84,8 @@ const tileView = v.object({
   height: v.optional(v.number()),
   // The model that made it, on batches an admin made with another model.
   model: v.optional(v.string()),
+  // Kept just for the member ("Keep it just for you"): its private page, in place of a CR number.
+  keptId: v.optional(v.id("works")),
 });
 
 const batchView = v.object({
@@ -108,6 +113,10 @@ const batchView = v.object({
   refunded: v.optional(v.number()),
   // A remix's changed words, for "Changed the words: GROW SLOW to GROW WILD".
   wordChanges: v.optional(v.array(v.object({ label: v.string(), from: v.string(), to: v.string() }))),
+  // A remix's changed parts, as one line: "Santa from a photo · Elves: 5 from photos".
+  parts: v.optional(v.string()),
+  // Made while the member tried their own design as a remix.
+  tried: v.optional(v.boolean()),
   // The image model an admin picked, when it isn't GPT Image 2.5.
   engine: v.optional(v.string()),
   tiles: v.array(tileView),
@@ -219,7 +228,8 @@ async function tileOf(
     error: blocked ? undefined : publicTileError(g.error),
     blocked,
     backgroundColor,
-    publishedCr: work ? formatCr(work.crFamily, work.crExpression) : undefined,
+    publishedCr: work && work.status !== "private" && work.keep !== "private" ? formatCr(work.crFamily, work.crExpression) : undefined,
+    keptId: work && (work.status === "private" || work.keep === "private") ? work._id : undefined,
     width: g.width,
     height: g.height,
     model: showModel ? modelLabel(g.model) : undefined,
@@ -290,6 +300,8 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
     grid: batch.layout === "grid",
     refunded: batch.refunded,
     wordChanges: batch.wordChanges?.map((c) => ({ label: c.label, from: c.from, to: c.to })),
+    parts: batch.partChanges?.length ? partSummary(batch.partChanges) : undefined,
+    tried: batch.tryDesign ? true : undefined,
     engine: showModel && batch.engine ? engineName(batch.engine) : undefined,
     tiles,
   };
@@ -662,6 +674,13 @@ export const generate = mutation({
     words: v.optional(v.array(v.object({ fieldId: v.string(), text: v.string() }))),
     // An admin's choice of image model (convex/lib/studioRules.ts ENGINES); members get GPT Image 2.5.
     engine: v.optional(engineValidator),
+    // A remix's filled-in parts (convex/remixParts.ts): new words for a character, and photos for a
+    // character, person, or group, as the member's images.
+    parts: v.optional(
+      v.array(v.object({ partId: v.string(), to: v.optional(v.string()), photos: v.array(v.id("userImages")) })),
+    ),
+    // The creator trying their own design's remixable parts before publishing.
+    tryDesign: v.optional(v.id("generations")),
   },
   returns: v.union(
     v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
@@ -702,6 +721,21 @@ export const generate = mutation({
       const image = await load(imageId);
       images.push({ imageId: image._id, key: image.key });
     }
+    // The parts' photos, checked as the member's own and counted with the call's images.
+    const askedParts = [];
+    let partPhotoCount = 0;
+    for (const entry of args.parts ?? []) {
+      const photos = [];
+      for (const imageId of entry.photos) {
+        const photo = await load(imageId);
+        photos.push({ imageId: photo._id as string, key: photo.key });
+      }
+      partPhotoCount += photos.length;
+      askedParts.push({ partId: entry.partId, to: entry.to, photos });
+    }
+    if (partPhotoCount > MAX_PART_PHOTOS) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: `Use up to ${MAX_PART_PHOTOS} photos for the remix's parts.` });
+    }
     const styles = [];
     for (const style of styleArgs) {
       if (!Number.isFinite(style.weight) || style.weight < 0 || style.weight > 100) {
@@ -717,7 +751,7 @@ export const generate = mutation({
       throw new ConvexError({ code: "INVALID_INPUT", message: "That image did not upload." });
     }
     const presets = (args.presets ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 6);
-    const attached = images.length + styleOnly.length + (legacyKey ? 1 : 0);
+    const attached = images.length + styleOnly.length + partPhotoCount + (legacyKey ? 1 : 0);
     if (!instruction && attached === 0) {
       throw new ConvexError({
         code: "INVALID_INPUT",
@@ -789,7 +823,20 @@ export const generate = mutation({
     if ((args.words?.length ?? 0) > MAX_FIELDS || args.words?.some((w) => w.text.length > 400)) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "That's too many words." });
     }
-    const wordChanges = await checkedWordChanges(ctx, session, images[0]?.key, args.words);
+    // What this batch remixes, when image 1 is its art: a published work (a remix session) or the
+    // creator's own design (trying its remixable parts). Its words and parts are the stored ones.
+    const source = await remixSource(ctx, user._id, session, images[0]?.key, args.tryDesign);
+    const wordChanges = checkedWordChanges(source?.fields, args.words);
+    let partChanges;
+    if (source) {
+      const result = checkPartChanges(source.parts, askedParts);
+      if (!result.ok) throw new ConvexError({ code: `PARTS_${result.problem}`, message: partProblem(result.problem, result.label, result.limit) });
+      partChanges = result.changes.length > 0
+        ? result.changes.map((c) => ({ ...c, photos: c.photos.map((p) => ({ imageId: p.imageId as Id<"userImages">, key: p.key })) }))
+        : undefined;
+    } else if (askedParts.length > 0) {
+      throw new ConvexError({ code: "PARTS_NOT_REMIXABLE", message: "These parts can't be changed here." });
+    }
     // The batch's number in its session, which names its folder (batch-01, batch-02, ...).
     const batchNumber = (session.batchCount ?? (await countBatches(ctx, session._id))) + 1;
     const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
@@ -820,6 +867,8 @@ export const generate = mutation({
       charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
       number: batchNumber,
       wordChanges,
+      partChanges,
+      tryDesign: source?.kind === "design" ? source.designId : undefined,
       engine: engine === "gpt" ? undefined : engine,
     });
     if (layout === "grid" && !owner) {
@@ -868,6 +917,9 @@ export const generate = mutation({
     }
     if (layout === "grid") await ctx.scheduler.runAfter(0, internal.imageGen.runBatch, { batchId });
     for (const image of images) await ctx.db.patch("userImages", image.imageId, { usedAt: now });
+    for (const change of partChanges ?? []) {
+      for (const photo of change.photos) await ctx.db.patch("userImages", photo.imageId, { usedAt: now });
+    }
     for (const style of styles) {
       await ctx.db.patch("userImages", style.imageId, { usedAt: now, styleAt: now });
     }
@@ -887,6 +939,50 @@ async function countBatches(ctx: QueryCtx, sessionId: Id<"creativeSessions">) {
     .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
     .collect();
   return batches.length;
+}
+
+type RemixSource =
+  | { kind: "work"; workId: Id<"works">; fields?: Array<RemixField>; parts: Array<RemixPart> }
+  | { kind: "design"; designId: Id<"generations">; fields?: Array<RemixField>; parts: Array<RemixPart> };
+
+// What a batch remixes when image 1 is its art: the creator's own design being tried as a remix,
+// or the published work a remix session started from. Null when image 1 is something else.
+async function remixSource(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  session: Doc<"creativeSessions">,
+  firstKey: string | undefined,
+  tryDesign: Id<"generations"> | undefined,
+): Promise<RemixSource | null> {
+  if (!firstKey) return null;
+  if (tryDesign) {
+    const design = await ctx.db.get("generations", tryDesign);
+    const setup = design?.remixSetup;
+    if (!design || design.ownerId !== userId || setup?.status !== "ready" || design.fullKey !== firstKey) {
+      throw new ConvexError({ code: "PARTS_NOT_REMIXABLE", message: "Set up this design's remixable parts first." });
+    }
+    return { kind: "design", designId: design._id, fields: setup.fields, parts: setup.parts ?? [] };
+  }
+  const parent = session.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
+  if (!parent || parent.status !== "published" || parent.artKey !== firstKey) return null;
+  return { kind: "work", workId: parent._id, fields: parent.remixFields, parts: parent.remixParts ?? [] };
+}
+
+function partProblem(problem: PartProblem, label?: string, limit?: number) {
+  switch (problem) {
+    case "NEEDS_PHOTO":
+      return `Add a photo for ${label ?? "this part"}. The creator asks for one.`;
+    case "TOO_MANY_PHOTOS":
+      return `${label ?? "This part"} takes up to ${limit ?? 1} ${limit === 1 ? "photo" : "photos"}.`;
+    case "TOO_LONG":
+      return `Keep ${label ? label.toLowerCase() : "the swap"} to ${limit ?? 120} characters, or say more under Anything else to change.`;
+    case "PART_LOCKED":
+      return `${label ?? "That part"} isn't remixable anymore. Reload and try again.`;
+    case "REPEATED":
+      return "Each part can be changed once.";
+    default:
+      return "That part isn't on this design anymore. Reload and try again.";
+  }
 }
 
 // The member's own design, or an error.
@@ -949,6 +1045,8 @@ const attachmentView = v.object({
   summary: v.optional(v.string()),
   kind: v.optional(v.union(v.literal("photo"), v.literal("art"))),
   notes: v.optional(v.string()),
+  // A remix part's photo: the part's name ("Santa"); only the likeness in it is used.
+  partFor: v.optional(v.string()),
 });
 
 const jobInputs = {
@@ -959,6 +1057,8 @@ const jobInputs = {
   remixOfParent: v.boolean(),
   // A remix's word changes, written for the prompt (convex/lib/remixFields.ts). Server only.
   wordChanges: v.optional(v.string()),
+  // A remix's part changes, written for the prompt (convex/lib/remixParts.ts). Server only.
+  partChanges: v.optional(v.string()),
   // Every image sent with the call: the numbered images, then images added only as styles.
   attachments: v.array(attachmentView),
   // Each style's 1-based attachment number and slider value, and its row in the mixer (the
@@ -977,14 +1077,23 @@ const jobInputs = {
 // What a batch's prompt is built from.
 async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
   const session = await ctx.db.get("creativeSessions", batch.sessionId);
-  // A remix keeps the parent's look only while the parent is still the reference image.
+  // A remix keeps the parent's look only while the parent is still the reference image. A creator
+  // trying their own design as a remix is treated the same, with the design's own setup.
   let remixOfParent = false;
-  let wordChanges: string | undefined;
-  if (batch.operation === "remix" && batch.inspirationKey) {
+  let fields: Array<RemixField> | undefined;
+  let parts: Array<RemixPart> = [];
+  if (batch.tryDesign && batch.inspirationKey) {
+    const design = await ctx.db.get("generations", batch.tryDesign);
+    remixOfParent = design?.fullKey === batch.inspirationKey;
+    fields = design?.remixSetup?.fields;
+    parts = design?.remixSetup?.parts ?? [];
+  } else if (batch.operation === "remix" && batch.inspirationKey) {
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     remixOfParent = parent?.artKey === batch.inspirationKey;
-    if (remixOfParent) wordChanges = await wordChangesPrompt(ctx, batch, parent?._id);
+    fields = parent?.remixFields;
+    parts = parent?.remixParts ?? [];
   }
+  const wordChanges = remixOfParent ? wordChangesPrompt(batch, fields) : undefined;
   const describe = async (imageId: Id<"userImages">, key: string, styleOnly: boolean) => {
     const image = await ctx.db.get("userImages", imageId);
     return {
@@ -997,10 +1106,22 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
     };
   };
   const attachments: Array<Infer<typeof attachmentView>> = [];
+  const photoNumbers = new Map<string, Array<number>>();
   const styles: Array<{ attachment: number; weight: number; position: number }> = [];
   if (batch.images || batch.styles) {
     const workIds = (batch.images ?? []).map((image) => image.imageId);
     for (const image of batch.images ?? []) attachments.push(await describe(image.imageId, image.key, false));
+    // The parts' photos come right after the member's own images, numbered with them.
+    if (remixOfParent) {
+      for (const change of batch.partChanges ?? []) {
+        const numbers: Array<number> = [];
+        for (const photo of change.photos) {
+          attachments.push({ ...(await describe(photo.imageId, photo.key, false)), partFor: change.label });
+          numbers.push(attachments.length);
+        }
+        photoNumbers.set(change.partId, numbers);
+      }
+    }
     for (const [row, style] of (batch.styles ?? []).entries()) {
       if (style.weight <= 0) continue;
       let index = workIds.indexOf(style.imageId);
@@ -1020,7 +1141,25 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
     sessionStartedAt: session?._creationTime ?? batch._creationTime,
     batchNumber: batch.number ?? (await batchNumberOf(ctx, batch)),
   };
-  return { instruction: batch.instruction, presets: batch.presets, remixOfParent, wordChanges, attachments, styles, place, engine: batch.engine };
+  const partChanges =
+    remixOfParent && batch.partChanges?.length
+      ? partChangeInstruction(
+          parts,
+          batch.partChanges.map((c) => ({ ...c, photos: c.photos.map((p) => ({ imageId: p.imageId as string, key: p.key })) })),
+          photoNumbers,
+        ) || undefined
+      : undefined;
+  return {
+    instruction: batch.instruction,
+    presets: batch.presets,
+    remixOfParent,
+    wordChanges,
+    partChanges,
+    attachments,
+    styles,
+    place,
+    engine: batch.engine,
+  };
 }
 
 // A batch's number from its position in its session (for batches made before batches had numbers).

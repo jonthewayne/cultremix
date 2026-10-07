@@ -65,6 +65,7 @@ export function Viewer({
   onReject,
   onBranch,
   onStartFrom,
+  onRemixable,
   onStyle,
   onPublish,
   picks,
@@ -89,6 +90,8 @@ export function Viewer({
   onBranch: (tile: Tile) => void;
   // Starts a fresh prompt in this session with the design as image 1 (B).
   onStartFrom: (tile: Tile) => void;
+  // "Make it remixable" for the design.
+  onRemixable: (tile: Tile) => void;
   onStyle: (tile: Tile) => void;
   // Missing while publishing is switched off.
   onPublish?: (tile: Tile) => void;
@@ -216,7 +219,7 @@ export function Viewer({
     favorite,
     reject,
     branch: () => tile?.key && onStartFrom(tile),
-    publish: () => tile && !tile.publishedCr && onPublish?.(tile),
+    publish: () => tile && !tile.publishedCr && !tile.keptId && onPublish?.(tile),
     transparency: () => setChecker((on) => !on),
     compare: pick,
   };
@@ -260,6 +263,7 @@ export function Viewer({
         ...designItems(tile, {
           onPublish: onPublish ? () => onPublish(tile) : undefined,
           onStartFrom: () => onStartFrom(tile),
+          onRemixable: () => onRemixable(tile),
           onInspire: () => onBranch(tile),
           onStyle: () => onStyle(tile),
         }).filter((item) => item.label !== "Publish"),
@@ -287,6 +291,10 @@ export function Viewer({
     (tile.publishedCr ? (
       <Link to="/cr/$cr" params={{ cr: tile.publishedCr }} className={cn(button, "font-cr")} style={filled}>
         CR {tile.publishedCr}
+      </Link>
+    ) : tile.keptId ? (
+      <Link to="/keep/$workId" params={{ workId: tile.keptId }} className={button} style={filled}>
+        Kept
       </Link>
     ) : onPublish ? (
       <button type="button" onClick={() => onPublish(tile)} className={button} style={filled}>

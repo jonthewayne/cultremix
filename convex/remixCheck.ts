@@ -24,7 +24,7 @@ export const compare = internalAction({
       try {
         const started = Date.now();
         const [original, remix] = await Promise.all([fetchPublicImage(job.parentKey, ctx), fetchPublicImage(job.designKey, ctx)]);
-        const result = await compareRemix(original, remix);
+        const result = await compareRemix(original, remix, undefined, job.allowed);
         console.log("remixCheck ok", generationId, result.verdict, Date.now() - started, "ms", result.costCents ?? "?", "cents");
         await ctx.runMutation(internal.publish.saveRemixCheck, {
           generationId,

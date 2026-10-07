@@ -15,6 +15,41 @@ export const remixField = v.object({
 
 export const wordChange = v.object({ fieldId: v.string(), label: v.string(), from: v.string(), to: v.string() });
 
+// A remixable character, person, or group of a design (convex/lib/remixParts.ts).
+export const remixPart = v.object({
+  id: v.string(),
+  kind: v.union(v.literal("character"), v.literal("person"), v.literal("group")),
+  label: v.string(),
+  text: v.string(),
+  on: v.boolean(),
+  empty: v.optional(v.union(v.literal("keep"), v.literal("omit"), v.literal("require"))),
+  count: v.optional(v.number()),
+  max: v.optional(v.number()),
+  note: v.optional(v.string()),
+});
+
+// What a remix asked of one part, as the server checked it.
+export const partChange = v.object({
+  partId: v.string(),
+  kind: v.union(v.literal("character"), v.literal("person"), v.literal("group")),
+  label: v.string(),
+  from: v.string(),
+  to: v.optional(v.string()),
+  photos: v.array(v.object({ imageId: v.id("userImages"), key: v.string() })),
+  omit: v.optional(v.boolean()),
+});
+
+// A design's remixable words and parts as its creator sets them up in the studio, before
+// publishing; publishing carries them to the work.
+export const remixSetup = v.object({
+  status: v.union(v.literal("reading"), v.literal("ready"), v.literal("failed")),
+  imageId: v.optional(v.id("userImages")),
+  fields: v.optional(v.array(remixField)),
+  parts: v.optional(v.array(remixPart)),
+  error: v.optional(v.string()),
+  updatedAt: v.number(),
+});
+
 // CultRemix tables for the 2026-09-29 sprint. Names follow the Checkpoint 0
 // plan's "Settled validators"; fields not needed today are optional, and
 // today's additions are noted in docs/hackathon/log.md.
@@ -107,6 +142,10 @@ export const cultremixTables = {
     // A remix's changed words (convex/remixFields.ts): the parent's field, its text as the server
     // read it from the parent, and the new text.
     wordChanges: v.optional(v.array(wordChange)),
+    // A remix's changed parts (convex/remixParts.ts), with the photos it gave them.
+    partChanges: v.optional(v.array(partChange)),
+    // A creator trying their own design's remixable parts before publishing ("Try it as a remix").
+    tryDesign: v.optional(v.id("generations")),
     // The image model an admin picked (convex/lib/studioRules.ts ENGINES); absent means GPT Image 2.5.
     engine: v.optional(v.union(v.literal("gpt"), v.literal("nano-banana"), v.literal("recraft"), v.literal("mix"))),
   }).index("by_session", ["sessionId"]),
@@ -194,6 +233,8 @@ export const cultremixTables = {
     height: v.optional(v.number()),
     hasAlpha: v.optional(v.boolean()),
     error: v.optional(v.string()),
+    // Its remixable words and parts, set up in the studio before publishing.
+    remixSetup: v.optional(remixSetup),
     // For a remix design: how far it moved from the design it remixes, judged when its creator
     // opens the publish dialog (convex/remixCheck.ts). A fork needs verdict "fork".
     remixCheck: v.optional(
@@ -241,12 +282,18 @@ export const cultremixTables = {
     // before colors were chosen; their one color is backgroundColor.
     offeredColors: v.optional(v.array(v.string())),
     backgroundColor: v.string(),
+    // "private": kept just for its creator (publish dialog "Keep it just for you"). Every public
+    // query reads only "published", so a private work stays out of feeds, families, and shops.
     status: v.union(
       v.literal("preparing"),
       v.literal("published"),
       v.literal("withdrawn"),
       v.literal("asset_failed"),
+      v.literal("private"),
     ),
+    // Chosen in the publish dialog: kept just for the creator. Set while preparing, so the art
+    // finishes as "private" instead of "published".
+    keep: v.optional(v.literal("private")),
     assetError: v.optional(v.string()),
     publishedAt: v.optional(v.number()),
     contentHash: v.optional(v.string()),
@@ -260,6 +307,9 @@ export const cultremixTables = {
     // What a remix may change (convex/remixFields.ts), proposed from the notes' words or carried
     // over from the parent, then adjusted by the creator. Empty: the design has no words.
     remixFields: v.optional(v.array(remixField)),
+    // Its remixable characters, people, and groups (convex/remixParts.ts), set up in the studio,
+    // carried over from the parent, or proposed from the notes. Empty: nothing to swap.
+    remixParts: v.optional(v.array(remixPart)),
     // Onchain provenance (convex/chain.ts): the registerWork write and its confirmed transaction.
     provenanceStatus: v.optional(provenanceStatusValidator),
     chainWriteId: v.optional(v.id("chainWrites")),
@@ -275,6 +325,8 @@ export const cultremixTables = {
     .index("by_effectiveParent_status", ["effectiveParentWorkId", "status", "publishedAt"])
     .index("by_requestId", ["requestId"])
     .index("by_creator", ["creatorId"])
+    // A member's kept designs (status "private").
+    .index("by_creator_status", ["creatorId", "status"])
     .index("by_artKey", ["artKey"])
     // The studio marks a design as published (its CR number) one design at a time.
     .index("by_generation", ["generationId"]),

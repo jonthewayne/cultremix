@@ -220,3 +220,44 @@ describe("the shop page signed out", () => {
     expect(page?.description).toBeUndefined();
   });
 });
+
+describe("keep it just for you", () => {
+  it("takes no public number, skips the public steps, stays out of the feed, and shares later as a variation", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const originalTile = await tile(t, alice.userId);
+    const original = await alice.as.mutation(api.publish.quick, { requestId: requestId(), generationId: originalTile });
+    await t.mutation(internal.publish.markPublished, { workId: original.workId, artKey: "fake:original-art", contentHash: "h1" });
+
+    // Bob remixes it for his family and keeps it.
+    const remixTile = await tile(t, bob.userId, "#ffffff", original.workId);
+    const kept = await bob.as.mutation(api.publish.quick, { requestId: requestId(), generationId: remixTile, keep: "private", title: "Our elves" });
+    expect(kept).toEqual({ workId: kept.workId, cr: "", kept: true });
+    // Its art stays at the design's own address.
+    expect(await t.query(internal.publish.assetJob, { workId: kept.workId })).toMatchObject({ crFamily: 0, keep: true });
+    expect(await t.mutation(internal.publish.markPublished, { workId: kept.workId, artKey: "fake:kept-art", contentHash: "h2" })).toBeNull();
+    const work = await t.run((ctx) => ctx.db.get("works", kept.workId));
+    expect(work).toMatchObject({ status: "private", crFamily: 0, parentWorkId: original.workId, kind: "variation" });
+    // No public numbers were used: the original's family still offers its next expression to others.
+    const family = await t.run((ctx) => ctx.db.query("crFamilies").withIndex("by_family", (q) => q.eq("family", 101)).unique());
+    expect(family?.nextExpression).toBe(2);
+    // Nothing public: no feed entry, no remix listed under the original, no notification.
+    const latest = await t.query(api.feed.latest, { paginationOpts: { numItems: 10, cursor: null } });
+    expect(latest.page.map((item) => item.workId)).toEqual([original.workId]);
+    expect(await t.run((ctx) => ctx.db.query("notifications").collect())).toHaveLength(0);
+    // Only Bob can open it.
+    expect(await bob.as.query(api.keeps.get, { workId: kept.workId })).toMatchObject({ title: "Our elves", parent: { cr: "101-001" } });
+    expect(await alice.as.query(api.keeps.get, { workId: kept.workId })).toBeNull();
+    expect(await t.query(api.keeps.get, { workId: kept.workId })).toBeNull();
+    expect((await bob.as.query(api.keeps.mine, { paginationOpts: { numItems: 10, cursor: null } })).page).toHaveLength(1);
+
+    // Shared later: it takes the original's next number as a variation and publishes publicly.
+    await expect(alice.as.mutation(api.publish.shareKeep, { workId: kept.workId })).rejects.toThrow(/kept designs/);
+    const shared = await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId });
+    expect(shared.cr).toBe("101-002");
+    expect(await t.query(internal.publish.assetJob, { workId: kept.workId })).toMatchObject({ crFamily: 101, crExpression: 2 });
+    expect((await t.query(internal.publish.assetJob, { workId: kept.workId }))?.keep).toBeUndefined();
+  });
+});
+

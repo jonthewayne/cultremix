@@ -24,6 +24,8 @@ export type Tile = {
   height?: number;
   // The model that made it, on batches an admin made with another model.
   model?: string;
+  // Kept just for the member: its private page.
+  keptId?: string;
 };
 
 export const isFinished = (tile: Tile) => tile.status === "succeeded";
@@ -38,6 +40,8 @@ export function designItems(
     onPublish?: () => void;
     // A fresh prompt in the same session with this design as image 1 (nothing else carried over).
     onStartFrom?: () => void;
+    // Choose what people who remix it may change, and try it as a remix.
+    onRemixable?: () => void;
     // Adds the design to the images already there.
     onInspire: () => void;
     onStyle: () => void;
@@ -54,7 +58,9 @@ export function designItems(
     items.push({ label: "Add as an image", onSelect: actions.onInspire });
     items.push({ label: "Use as style", onSelect: actions.onStyle });
   }
-  if (!tile.publishedCr && actions.onPublish) items.push({ label: "Publish", onSelect: actions.onPublish });
+  const out = Boolean(tile.publishedCr || tile.keptId);
+  if (!out && actions.onPublish) items.push({ label: "Publish", onSelect: actions.onPublish });
+  if (tile.key && !out && actions.onRemixable) items.push({ label: "Make it remixable", onSelect: actions.onRemixable });
   if (actions.onReject) items.push({ label: tile.rejected ? "Bring back" : "Dismiss", onSelect: actions.onReject });
   return items;
 }

@@ -21,6 +21,9 @@ import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { RemixWordInputs, changedWords, wordsTooLong } from "~/components/studio/RemixWordInputs";
+import { RemixPartInputs, missingPhotos, partEntries } from "~/components/studio/RemixPartInputs";
+import type { PartValue, PublicPart } from "~/components/studio/RemixPartInputs";
+import { RemixSetupSheet } from "~/components/studio/RemixSetupSheet";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
 import { Compare } from "~/components/studio/Compare";
 import { FavoritesTray } from "~/components/studio/FavoritesTray";
@@ -39,19 +42,21 @@ import { parseScope } from "~/lib/viewerNav";
 import { useReturnFocus } from "~/hooks/use-return-focus";
 
 // /studio is always a blank design with the member's sessions below it; /studio?s=<id> opens a
-// session (every batch made in it, newest first); /studio?remix=<CR> starts a new remix session.
+// session (every batch made in it, newest first); /studio?remix=<CR> starts a new remix session;
+// &try=<design> tries the member's own design as a remix with its remixable parts.
 // &view=<design>&scope=<favorites|batch|session> opens the large viewer on a design;
 // &compare=<design>,<design>,… opens Compare on two to four of them.
 export const Route = createFileRoute("/studio")({
   head: () => ({ meta: [{ title: "Studio · CultRemix" }] }),
   validateSearch: (
     search: Record<string, unknown>,
-  ): { remix?: string; s?: string; view?: string; scope?: Scope; compare?: string } => ({
+  ): { remix?: string; s?: string; view?: string; scope?: Scope; compare?: string; try?: string } => ({
     remix: typeof search.remix === "string" ? search.remix : undefined,
     s: typeof search.s === "string" ? search.s : undefined,
     view: typeof search.view === "string" ? search.view : undefined,
     scope: parseScope(search.scope),
     compare: compareParam(parseCompare(search.compare)),
+    try: typeof search.try === "string" ? search.try : undefined,
   }),
   beforeLoad: requireAuthenticatedRoute,
   component: StudioPage,
@@ -106,6 +111,11 @@ function StudioPage() {
   const [instruction, setInstruction] = useState("");
   // A remix's new words, by field id (components/studio/RemixWordInputs.tsx).
   const [words, setWords] = useState<Record<string, string>>({});
+  // A remix's filled-in parts, by part id (components/studio/RemixPartInputs.tsx).
+  const [partValues, setPartValues] = useState<Record<string, PartValue>>({});
+  // The design whose remixable parts are being set up ("Make it remixable"), with its tile when
+  // it came from one (trying it as a remix starts from the tile).
+  const [settingUp, setSettingUp] = useState<{ generationId: Id<"generations">; tile?: Tile } | null>(null);
   const [color, setColor] = useState(START_COLOR);
   // Set once the member picks a color; until then image 1 suggests one.
   const colorPicked = useRef(false);
@@ -136,9 +146,10 @@ function StudioPage() {
   useEffect(() => setIdeas(pickIdeas(3)), []);
 
   // Live state of every image in play: reading, style captured, or failed.
+  const partSlots = useMemo(() => Object.values(partValues).flatMap((value) => value.photos), [partValues]);
   const imageIds = useMemo(
-    () => [...new Set([...images, ...styles].map((slot) => slot.imageId).filter((id): id is Id<"userImages"> => Boolean(id)))],
-    [images, styles],
+    () => [...new Set([...images, ...styles, ...partSlots].map((slot) => slot.imageId).filter((id): id is Id<"userImages"> => Boolean(id)))],
+    [images, styles, partSlots],
   );
   const statusList = useQuery({ ...convexQuery(api.images.status, { imageIds }), placeholderData: keepPreviousData }).data;
   const states = useMemo(
@@ -251,6 +262,7 @@ function StudioPage() {
     setStyles([]);
     setInstruction("");
     setWords({});
+    setPartValues({});
     setColor(START_COLOR);
     colorPicked.current = false;
     setMixerOpen(false);
@@ -303,6 +315,7 @@ function StudioPage() {
         setStyles([]);
         setInstruction("");
         setWords({});
+        setPartValues({});
         setColor(result.backgroundColor);
         const preview = result.artThumbUrl ?? result.artUrl;
         if (result.artKey && preview) void addExisting(result.artKey, preview, false);
@@ -336,6 +349,7 @@ function StudioPage() {
     setMixerOpen(false);
     setInstruction("");
     setWords({});
+    setPartValues({});
     setError(null);
     colorPicked.current = false;
     setColor(shirtHex(tile.backgroundColor));
@@ -386,15 +400,76 @@ function StudioPage() {
     instructionRef.current?.focus({ preventScroll: true });
   };
 
-  // A remix of a design with remixable words, while its art is still image 1: its words as inputs.
+  // A remix of a design, while its art is still image 1: its remixable words and parts as inputs.
+  // The same for the member's own design tried as a remix (&try=).
   const remixInfo = session?.remix;
   const remixWords = useQuery(convexQuery(api.remixFields.forWork, remixInfo ? { workId: remixInfo.workId } : "skip")).data;
+  const remixPartList = useQuery(convexQuery(api.remixParts.forWork, remixInfo ? { workId: remixInfo.workId } : "skip")).data;
+  const tryId = search.try as Id<"generations"> | undefined;
+  const tryInfo = useQuery(convexQuery(api.remixParts.forDesign, tryId ? { generationId: tryId } : "skip")).data;
   const firstKey = statusList?.find((image) => image.imageId === images[0]?.imageId)?.key;
-  const wordFields = remixInfo?.artKey && firstKey === remixInfo.artKey ? (remixWords?.fields ?? []) : [];
+  const onTryArt = Boolean(tryInfo && firstKey === tryInfo.artKey);
+  const onRemixArt = Boolean(remixInfo?.artKey && firstKey === remixInfo.artKey);
+  const wordFields = onTryArt && tryInfo ? tryInfo.fields : onRemixArt ? (remixWords?.fields ?? []) : [];
+  const partList: Array<PublicPart> = onTryArt && tryInfo ? tryInfo.parts : onRemixArt ? (remixPartList?.parts ?? []) : [];
   const askedWords = changedWords(wordFields, words);
-  const nothingToChange = wordFields.length > 0 && askedWords.length === 0 && !instruction.trim();
+  const askedParts = partEntries(partList, partValues);
+  const needPhotos = missingPhotos(partList, partValues);
+  const remixForm = wordFields.length > 0 || partList.length > 0;
+  const nothingToChange = remixForm && askedWords.length === 0 && askedParts.length === 0 && !instruction.trim();
 
-  const uploading = [...images, ...styles].some((slot) => slot.uploading || !slot.imageId);
+  // Photos for a remix's parts: uploaded like any image, kept with their part.
+  const addPartFiles = async (partId: string, files: Array<File>) => {
+    if (files.length === 0) return;
+    setError(null);
+    const prepared: Array<{ id: string } & Awaited<ReturnType<typeof prepareInspiration>>> = [];
+    for (const file of files) {
+      try {
+        prepared.push({ id: newSlotId(), ...(await prepareInspiration(file)) });
+      } catch (err) {
+        setError(errorMessage(err));
+      }
+    }
+    if (prepared.length === 0) return;
+    const edit = (change: (photos: Array<Slot>) => Array<Slot>) =>
+      setPartValues((all) => {
+        const current = all[partId] ?? { to: "", photos: [] };
+        return { ...all, [partId]: { ...current, photos: change(current.photos) } };
+      });
+    edit((photos) => [...photos, ...prepared.map((p) => ({ id: p.id, previewUrl: p.previewUrl, uploading: true }))]);
+    await Promise.all(
+      prepared.map(async (p) => {
+        try {
+          const result = await upload({ bytes: p.bytes, contentType: p.contentType, asStyle: false });
+          // The same photo twice in one part counts once.
+          edit((photos) =>
+            photos.some((slot) => slot.id !== p.id && slot.imageId === result.imageId)
+              ? photos.filter((slot) => slot.id !== p.id)
+              : photos.map((slot) => (slot.id === p.id ? { ...slot, imageId: result.imageId, uploading: false } : slot)),
+          );
+        } catch (err) {
+          edit((photos) => photos.filter((slot) => slot.id !== p.id));
+          setError(errorMessage(err));
+        }
+      }),
+    );
+  };
+  const removePartPhoto = (partId: string, slotId: string) =>
+    setPartValues((all) => {
+      const current = all[partId];
+      return current ? { ...all, [partId]: { ...current, photos: current.photos.filter((slot) => slot.id !== slotId) } } : all;
+    });
+  const setPartTo = (partId: string, to: string) =>
+    setPartValues((all) => ({ ...all, [partId]: { ...(all[partId] ?? { to: "", photos: [] }), to } }));
+
+  // "Make it remixable", then "Try it as a remix": the design becomes image 1 with its parts' form.
+  const tryAsRemix = (tile: Tile) => {
+    setSettingUp(null);
+    startFrom(tile);
+    void navigate({ to: "/studio", search: { s, try: tile.generationId } });
+  };
+
+  const uploading = [...images, ...styles, ...partSlots].some((slot) => slot.uploading || !slot.imageId);
   const submit = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (busy || uploading) return;
@@ -403,7 +478,11 @@ function StudioPage() {
       return;
     }
     if (nothingToChange) {
-      setError("Change some words, or say what else to change.");
+      setError("Change some words or parts, or say what else to change.");
+      return;
+    }
+    if (needPhotos.length > 0) {
+      setError(`Add a photo for ${needPhotos.join(" and ")}.`);
       return;
     }
     if (s && !session) return;
@@ -417,6 +496,8 @@ function StudioPage() {
         images: images.map((slot) => slot.imageId!),
         styles: styles.map((slot) => ({ imageId: slot.imageId!, weight: slot.weight })),
         ...(askedWords.length > 0 ? { words: askedWords } : {}),
+        ...(askedParts.length > 0 ? { parts: askedParts } : {}),
+        ...(onTryArt && tryId ? { tryDesign: tryId } : {}),
         ...(viewer?.canPickModel && engine !== "gpt" ? { engine } : {}),
       });
       if ("refused" in result) {
@@ -525,6 +606,26 @@ function StudioPage() {
                 >
                   + New design
                 </Link>
+                {onTryArt && tryId && (
+                  <div className="rounded-2xl border-2 border-black p-4">
+                    <p className="text-sm font-bold uppercase tracking-wider">Trying it as a remix</p>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      This is the form people get when they remix this design. Fill it in and generate to test your parts.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setSettingUp({ generationId: tryId })}
+                        className="rounded-xl bg-black px-4 py-2 text-sm font-bold text-white"
+                      >
+                        Edit parts
+                      </button>
+                      <Link to="/studio" search={{ s }} className="text-sm font-semibold underline underline-offset-4">
+                        Stop trying
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               !loadingSession && <p className="text-lg text-neutral-600">New design. Your sessions are below.</p>
@@ -545,10 +646,20 @@ function StudioPage() {
             {wordFields.length > 0 && (
               <RemixWordInputs fields={wordFields} values={words} onChange={(id, text) => setWords((current) => ({ ...current, [id]: text }))} />
             )}
+            {partList.length > 0 && (
+              <RemixPartInputs
+                parts={partList}
+                values={partValues}
+                states={states}
+                onTo={setPartTo}
+                onFiles={(id, files) => void addPartFiles(id, files)}
+                onRemovePhoto={removePartPhoto}
+              />
+            )}
 
             <label className="block">
               <span className="text-sm font-bold uppercase tracking-wider">
-                {wordFields.length > 0 ? "Anything else to change? (optional)" : count === 0 ? "What do you want to make?" : "What should change?"}
+                {remixForm ? "Anything else to change? (optional)" : count === 0 ? "What do you want to make?" : "What should change?"}
               </span>
               <textarea
                 ref={instructionRef}
@@ -703,13 +814,19 @@ function StudioPage() {
                     </span>
                   )}
                   <p className="min-w-0 flex-1 truncate text-base font-semibold">
-                    {batch.wordChanges?.length ? (
+                    {batch.wordChanges?.length || batch.parts ? (
                       <>
-                        Changed the words: {changeSummary(batch.wordChanges)}
+                        {batch.tried && <span className="font-normal text-neutral-500">Trying as a remix · </span>}
+                        {batch.wordChanges?.length ? <>Changed the words: {changeSummary(batch.wordChanges)}</> : null}
+                        {batch.wordChanges?.length && batch.parts ? " · " : null}
+                        {batch.parts ? <>{batch.parts}</> : null}
                         {batch.instruction && <span className="font-normal text-neutral-500"> · {batch.instruction}</span>}
                       </>
                     ) : (
-                      batch.instruction || "From your images"
+                      <>
+                        {batch.tried && <span className="font-normal text-neutral-500">Trying as a remix · </span>}
+                        {batch.instruction || "From your images"}
+                      </>
                     )}
                     {batch.presets.length > 0 && <span className="font-normal text-neutral-500"> · {batch.presets.join(", ")}</span>}
                   </p>
@@ -745,6 +862,7 @@ function StudioPage() {
                         onOpen={() => viewerRoute.open({ view: tile.generationId, scope: "batch" })}
                         onPublish={canPublish ? () => setPublishing(tile) : undefined}
                         onStartFrom={() => startFrom(tile)}
+                        onRemixable={() => setSettingUp({ generationId: tile.generationId, tile })}
                         onInspire={() => useAsImage(tile)}
                         onStyle={() => useAsStyle(tile)}
                         onFavorite={(on) => designActions.setFavorite(tile.generationId, on)}
@@ -820,6 +938,10 @@ function StudioPage() {
               leaveViewer();
               startFrom(tile);
             }}
+            onRemixable={(tile) => {
+              leaveViewer();
+              setSettingUp({ generationId: tile.generationId, tile });
+            }}
             onStyle={(tile) => {
               leaveViewer();
               useAsStyle(tile);
@@ -840,6 +962,19 @@ function StudioPage() {
       </AnimatePresence>
       <AnimatePresence>
         {publishing && <PublishDialog tile={publishing} onClose={() => setPublishing(null)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {settingUp && (
+          <RemixSetupSheet
+            generationId={settingUp.generationId}
+            onTry={() => {
+              const tile = settingUp.tile;
+              if (tile && !(tryId === settingUp.generationId && onTryArt)) tryAsRemix(tile);
+              else setSettingUp(null);
+            }}
+            onClose={() => setSettingUp(null)}
+          />
+        )}
       </AnimatePresence>
       <AnimatePresence>
         {showIdeas && <IdeasSheet onPick={applyIdea} onClose={() => setShowIdeas(false)} />}
@@ -987,6 +1122,7 @@ function TileCard({
   onOpen,
   onPublish,
   onStartFrom,
+  onRemixable,
   onInspire,
   onStyle,
   onFavorite,
@@ -999,6 +1135,7 @@ function TileCard({
   // Absent while publishing is turned off.
   onPublish?: () => void;
   onStartFrom: () => void;
+  onRemixable: () => void;
   onInspire: () => void;
   onStyle: () => void;
   onFavorite: (favorite: boolean) => void;
@@ -1051,7 +1188,7 @@ function TileCard({
       {ready && (
         <>
           <DesignMenu
-            items={designItems(tile, { onOpen, onPublish, onStartFrom, onInspire, onStyle, onReject: () => onReject(!tile.rejected) })}
+            items={designItems(tile, { onOpen, onPublish, onStartFrom, onRemixable, onInspire, onStyle, onReject: () => onReject(!tile.rejected) })}
             onOpenChange={(open) => {
               setMenuOpen(open);
               if (open) prefetchImage(tile.url);
@@ -1080,6 +1217,14 @@ function TileCard({
               className="absolute bottom-2 left-2 rounded-lg bg-black px-2 py-1 text-xs font-black text-white"
             >
               CR {tile.publishedCr}
+            </Link>
+          ) : tile.keptId ? (
+            <Link
+              to="/keep/$workId"
+              params={{ workId: tile.keptId }}
+              className="absolute bottom-2 left-2 rounded-lg bg-black px-2 py-1 text-xs font-black text-white"
+            >
+              Kept
             </Link>
           ) : onPublish && !tile.rejected ? (
             <button

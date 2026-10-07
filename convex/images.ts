@@ -90,6 +90,11 @@ async function saveImage(
   return imageId;
 }
 
+// A member's image for a stored key (one of their designs), with its notes started if needed.
+export async function ensureUserImage(ctx: MutationCtx, ownerId: Id<"users">, key: string) {
+  return await saveImage(ctx, ownerId, { key });
+}
+
 // imageGen.uploadInspiration stores the bytes, then records the image here.
 export const recordUpload = internalMutation({
   args: {
@@ -298,6 +303,8 @@ export const saveWorkNotes = internalMutation({
     });
     // The remixable words proposed from the notes' words; the creator adjusts them.
     await proposeOnNotes(ctx, work._id, args.notes);
+    // Its remixable characters, people, and groups, unless it has them from a setup or its parent.
+    if (!work.remixParts) await ctx.scheduler.runAfter(0, internal.remixPartsActions.proposeForWork, { workId: work._id });
     return null;
   },
 });

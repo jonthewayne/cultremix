@@ -244,6 +244,8 @@ export type PromptImage = {
   // Added only in the style mixer: its look is used, never its subjects or words. studioPrompt
   // also treats a numbered image this way when the request names it only for its look.
   styleOnly: boolean;
+  // A remix part's photo ("Santa"): only the likeness of who or what is in it is used.
+  partFor?: string;
 };
 // attachment: the 1-based number of the image the style comes from.
 // position: its row in the studio's mixer, which the member sees as "Style 1", "Style 2", ….
@@ -441,6 +443,8 @@ export function studioPrompt(args: {
   styleHair?: boolean;
   // A remix's changed words, as convex/lib/remixFields.ts wordChangeInstruction writes them.
   wordChanges?: string;
+  // A remix's changed parts, as convex/lib/remixParts.ts partChangeInstruction writes them.
+  partChanges?: string;
   // The model can't see the attached images (Recraft V4.1 takes words only): their notes stand in,
   // and nothing names a style image's own subjects.
   blind?: boolean;
@@ -496,7 +500,12 @@ export function studioPrompt(args: {
       // A style image's own words stay out of the prompt, its name included.
       const named = image.styleOnly ? image.summary?.replace(/\s*["“][^"”]*["”]/gu, "").trim() : image.summary;
       const what = named || (image.kind === "photo" ? "a photo" : "an image");
-      return `- Image ${image.n}${styleName(image.n)}: ${what}${image.styleOnly ? " (style only: use its look, never its subjects or words)" : ""}.`;
+      const use = image.styleOnly
+        ? " (style only: use its look, never its subjects or words)"
+        : image.partFor
+          ? ` (for ${image.partFor}: use only the likeness of who or what is in it, never its background)`
+          : "";
+      return `- Image ${image.n}${styleName(image.n)}: ${what}${use}.`;
     });
     if (blind) {
       parts.push(
@@ -509,6 +518,7 @@ export function studioPrompt(args: {
   }
 
   const wordChanges = args.remix && work.length > 0 ? args.wordChanges?.trim() : undefined;
+  const partChanges = args.remix && work.length > 0 ? args.partChanges?.trim() : undefined;
 
   if (work.length > 0) {
     const first = work[0].n;
@@ -532,7 +542,9 @@ export function studioPrompt(args: {
         "and the way it draws people and animals from head to toe. " +
         `Don't keep image ${first}'s own drawing style, colors, lettering style, or figure proportions.${hairLine}`;
     } else if (args.remix) {
-      keep = `Keep: study image ${first} closely and keep everything the request doesn't change: its layout, illustration, lettering style, colors, texture, and how any people or characters are drawn, including their likeness.`;
+      keep =
+        `Keep: study image ${first} closely and keep everything the request doesn't change: its layout, illustration, lettering style, colors, texture, and how any people or characters are drawn, including their likeness` +
+        (partChanges ? ", except for the character changes below." : ".");
     } else if (mix.length > 0) {
       // Tested 2026-10-02 (a photo in a 70s poster style and in a pop-art style, four wordings,
       // four designs each): listing the traits that identify a person, saying only "recognizable
@@ -561,6 +573,12 @@ export function studioPrompt(args: {
     }
     parts.push(keep);
     for (const image of work) {
+      // A part's photo gives only its likeness: the person's or animal's own notes, not its scene.
+      if (image.partFor) {
+        const likeness = pickSections(image.notes, ["People and characters"]);
+        if (likeness) parts.push(`Notes on image ${image.n}, for ${image.partFor} (a checklist; where they differ from the image, follow the image):\n${likeness}`);
+        continue;
+      }
       // With word changes, the remixed design's own Words notes still list the old words and pulled
       // half of a grid back to them (tested 2026-10-04: GROW SLOW to GROW LOUD kept SLOW in 2 of 4).
       // The word-change block lists every piece of text instead.
@@ -595,14 +613,15 @@ export function studioPrompt(args: {
         : "Each changed piece keeps its typography, color, and effects. Keep the composition, the drawing, the palette, and the transparent background as they are in image 1.";
     parts.push(`${wordChanges}\n${look}`);
   }
+  if (partChanges) parts.push(partChanges);
   if (images.length === 0) {
     const vary = grid ? " Make the four clearly different in composition, lettering, and color." : "";
     parts.push(`Request: ${ask} Spell any words exactly as given.${words}${vary}`);
   } else {
-    const fallback = wordChanges
+    const fallback = wordChanges || partChanges
       ? mix.length > 0
-        ? "Change the words listed above, and draw the whole design in the style mix."
-        : "Change only the words listed above and keep everything else exactly as it is."
+        ? `Change the ${wordChanges && partChanges ? "words and characters" : wordChanges ? "words" : "characters"} listed above, and draw the whole design in the style mix.`
+        : `Change only the ${wordChanges && partChanges ? "words and characters" : wordChanges ? "words" : "characters"} listed above and keep everything else exactly as it is.`
       : args.remix
       ? mix.length > 0
         ? `Redraw image ${work[0]?.n ?? 1} in the style mix, keeping its composition, subjects, and words.`
@@ -626,6 +645,7 @@ export function studioPrompt(args: {
       : args.remix
         ? (mix.length > 0 ? " Keep the same style mix in all four." : "") +
           (wordChanges ? " Every one of the four shows the changed words; none of them keeps the old words." : "") +
+          (partChanges ? " Every one of the four makes the character changes above." : "") +
           " Vary only small details between the four."
         : mix.length > 0
           ? `${everyDesign} Keep the same style mix in all four and vary their composition.`

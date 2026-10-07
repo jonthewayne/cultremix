@@ -11,6 +11,8 @@ import { enqueueRegisterWork } from "./lib/chain/queue";
 import { publishPlacement, remixChangedOnlyWords } from "./lib/lineage";
 import { recordPublishActivity, recordRemix } from "./lib/social";
 import { inheritOnPublish } from "./remixFields";
+import { carrySetup, inheritPartsOnPublish } from "./remixParts";
+import { allowedChangesNote } from "./lib/remixParts";
 import {
   BUDGET_RESTING,
   closeReservation,
@@ -63,7 +65,7 @@ function remixRelation(
 }
 
 const FORK_REFUSED: Record<Exclude<RelationStatus, "fork" | "failed">, string> = {
-  words: "This remix changed only the design's remixable words, so it publishes as a variation.",
+  words: "This remix changed only the design's remixable words and parts, so it publishes as a variation.",
   variation: "This remix reads as the same design with changes, so it publishes as a variation.",
   none: "Still comparing it with the original. Try again in a moment.",
   pending: "Still comparing it with the original. Try again in a moment.",
@@ -99,14 +101,17 @@ export const checkRemix = mutation({
 // For convex/remixCheck.ts: the parent's art and the design to compare.
 export const remixCheckJob = internalQuery({
   args: { generationId: v.id("generations") },
-  returns: v.union(v.null(), v.object({ parentKey: v.string(), designKey: v.string() })),
+  returns: v.union(v.null(), v.object({ parentKey: v.string(), designKey: v.string(), allowed: v.optional(v.string()) })),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation?.fullKey || generation.remixCheck?.status !== "pending") return null;
     const session = await ctx.db.get("creativeSessions", generation.sessionId);
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     if (!parent?.artKey) return null;
-    return { parentKey: parent.artKey, designKey: generation.fullKey };
+    // The parts the parent's creator made remixable, so changing them (five elves where there were
+    // three) doesn't count toward a fork.
+    const allowed = allowedChangesNote(parent.remixParts ?? []) || undefined;
+    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed };
   },
 });
 
@@ -209,6 +214,46 @@ async function nextFamily(ctx: MutationCtx) {
   return counter.next;
 }
 
+// A private keep's number: family 0 (never shown, and no CR string parses to it) and the next
+// keep. It never takes a public number.
+async function nextKeep(ctx: MutationCtx) {
+  const counter = await ctx.db
+    .query("counters")
+    .withIndex("by_name", (q) => q.eq("name", "keptWork"))
+    .unique();
+  if (!counter) {
+    await ctx.db.insert("counters", { name: "keptWork", next: 2 });
+    return 1;
+  }
+  await ctx.db.patch("counters", counter._id, { next: counter.next + 1 });
+  return counter.next;
+}
+
+// A public CR number: a new family for an original or a fork, the family's next expression for a
+// variation.
+async function allocateNumber(ctx: MutationCtx, parent: Doc<"works"> | null, kind: "variation" | "fork") {
+  const placement = publishPlacement(parent ? { id: parent._id, family: parent.crFamily } : null, kind);
+  if (placement.family === "new") return { placement, crFamily: await nextFamily(ctx), crExpression: 1 };
+  const crFamily = placement.family;
+  const family = await ctx.db
+    .query("crFamilies")
+    .withIndex("by_family", (q) => q.eq("family", crFamily))
+    .unique();
+  if (family) {
+    await ctx.db.patch("crFamilies", family._id, { nextExpression: family.nextExpression + 1 });
+    return { placement, crFamily, crExpression: family.nextExpression };
+  }
+  const crExpression = parent!.crExpression + 1;
+  await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: crExpression + 1 });
+  return { placement, crFamily, crExpression };
+}
+
+// What publishing answers: a kept work has no CR number to show.
+function published(work: Pick<Doc<"works">, "_id" | "crFamily" | "crExpression" | "status" | "keep">) {
+  const kept = work.status === "private" || work.keep === "private";
+  return { workId: work._id, cr: kept ? "" : formatCr(work.crFamily, work.crExpression), ...(kept ? { kept: true } : {}) };
+}
+
 // Publishes a tile: allocates the CR number (a new family for an original or a
 // fork, the family's next expression for a variation), inserts the work, and starts the
 // asset copy and model photo. Idempotent by requestId and by generation.
@@ -224,17 +269,18 @@ export const quick = mutation({
     // Shirt color keys (convex/lib/garments.ts), lead color first. Omitted: the design's own
     // shade plus the default colors.
     offeredColors: v.optional(v.array(v.string())),
+    // "Keep it just for you": only its creator sees and orders it. No public number, feed, family,
+    // onchain record, or shop listing; a remix's original still gets credit (its parent is kept).
+    keep: v.optional(v.literal("private")),
   },
-  returns: v.object({ workId: v.id("works"), cr: v.string() }),
+  returns: v.object({ workId: v.id("works"), cr: v.string(), kept: v.optional(v.boolean()) }),
   handler: async (ctx, args) => {
     const user = await requireMember(ctx);
     const byRequest = await ctx.db
       .query("works")
       .withIndex("by_requestId", (q) => q.eq("requestId", args.requestId))
       .unique();
-    if (byRequest) {
-      return { workId: byRequest._id, cr: formatCr(byRequest.crFamily, byRequest.crExpression) };
-    }
+    if (byRequest) return published(byRequest);
     // Off refuses new publishes; ones already started still get their art and photo.
     if (!(await isFlagOn(ctx, "publishing"))) {
       throw new ConvexError({ code: "PUBLISHING_OFF", message: PUBLISHING_OFF });
@@ -251,9 +297,7 @@ export const quick = mutation({
       .withIndex("by_creator", (q) => q.eq("creatorId", user._id))
       .collect();
     const already = mine.find((work) => work.generationId === generation._id);
-    if (already) {
-      return { workId: already._id, cr: formatCr(already.crFamily, already.crExpression) };
-    }
+    if (already) return published(already);
     const batch = await ctx.db.get("batches", generation.batchId);
     const session = await ctx.db.get("creativeSessions", generation.sessionId);
     if (!batch || !session) throw new ConvexError({ code: "NOT_FOUND", message: "Tile not found." });
@@ -270,37 +314,26 @@ export const quick = mutation({
     if (session.remixOfWorkId && (!parent || (parent.status !== "published" && parent.status !== "withdrawn"))) {
       throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
     }
-    if (parent && args.remixKind === "fork") {
+    const keep = args.keep === "private";
+    if (parent && args.remixKind === "fork" && !keep) {
       const relation = remixRelation(generation, batch, parent);
       if (relation.status !== "fork" && relation.status !== "failed") {
         throw new ConvexError({ code: "VARIATION_ONLY", message: FORK_REFUSED[relation.status] });
       }
     }
-    const placement = publishPlacement(
-      parent ? { id: parent._id, family: parent.crFamily } : null,
-      args.remixKind ?? "variation",
-    );
     let crFamily: number;
     let crExpression: number;
-    if (placement.family !== "new") {
-      crFamily = placement.family;
-      const family = await ctx.db
-        .query("crFamilies")
-        .withIndex("by_family", (q) => q.eq("family", crFamily))
-        .unique();
-      if (family) {
-        crExpression = family.nextExpression;
-        await ctx.db.patch("crFamilies", family._id, { nextExpression: crExpression + 1 });
-      } else {
-        crExpression = parent!.crExpression + 1;
-        await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: crExpression + 1 });
-      }
+    let placement: ReturnType<typeof publishPlacement>;
+    if (keep) {
+      // A keep's kind is what it would publish as; its number is family 0, never shown.
+      placement = publishPlacement(parent ? { id: parent._id, family: parent.crFamily } : null, "variation");
+      crFamily = 0;
+      crExpression = await nextKeep(ctx);
     } else {
-      crFamily = await nextFamily(ctx);
-      crExpression = 1;
+      ({ placement, crFamily, crExpression } = await allocateNumber(ctx, parent, args.remixKind ?? "variation"));
     }
 
-    const startsFamily = placement.family === "new";
+    const startsFamily = placement.family === "new" && !keep;
     const workId = await ctx.db.insert("works", {
       crFamily,
       crExpression,
@@ -309,7 +342,7 @@ export const quick = mutation({
       parentWorkId: parent?._id,
       // Direct remixes are listed by effective parent (convex/lineage.ts).
       effectiveParentWorkId: parent?._id,
-      familyRootId: startsFamily ? undefined : (parent!.familyRootId ?? parent!._id),
+      familyRootId: keep || startsFamily ? undefined : (parent!.familyRootId ?? parent!._id),
       generationId: generation._id,
       requestId: args.requestId,
       title,
@@ -317,13 +350,59 @@ export const quick = mutation({
       offeredColors: colors.keys,
       backgroundColor,
       status: "preparing",
+      ...(keep ? { keep: "private" as const } : {}),
     });
     if (startsFamily) {
       await ctx.db.patch("works", workId, { familyRootId: workId });
       await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: 2, rootWorkId: workId });
     }
+    // Remixable words and parts the creator set up in the studio come along.
+    await carrySetup(ctx, workId, generation);
     await ctx.scheduler.runAfter(0, internal.imageGen.publishAssets, { workId });
-    return { workId, cr: formatCr(crFamily, crExpression) };
+    return keep ? { workId, cr: "", kept: true } : { workId, cr: formatCr(crFamily, crExpression) };
+  },
+});
+
+// "Share with the world" on a kept work: it takes a public CR number (a variation of its
+// original, or a fork when its comparison allows; a new family for an original) and goes through
+// publishing's public steps: its own public folder, the feed, a model photo, the onchain record.
+export const shareKeep = mutation({
+  args: { workId: v.id("works"), remixKind: v.optional(v.union(v.literal("variation"), v.literal("fork"))) },
+  returns: v.object({ workId: v.id("works"), cr: v.string() }),
+  handler: async (ctx, args) => {
+    const user = await requireMember(ctx);
+    const work = await ctx.db.get("works", args.workId);
+    if (!work || work.creatorId !== user._id || work.status !== "private") {
+      throw new ConvexError({ code: "NOT_FOUND", message: "That design isn't one of your kept designs." });
+    }
+    if (!(await isFlagOn(ctx, "publishing"))) {
+      throw new ConvexError({ code: "PUBLISHING_OFF", message: PUBLISHING_OFF });
+    }
+    const parent = work.parentWorkId ? await ctx.db.get("works", work.parentWorkId) : null;
+    if (work.parentWorkId && (!parent || (parent.status !== "published" && parent.status !== "withdrawn"))) {
+      throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
+    }
+    const generation = await ctx.db.get("generations", work.generationId);
+    const batch = generation ? await ctx.db.get("batches", generation.batchId) : null;
+    if (parent && args.remixKind === "fork") {
+      const relation = generation && batch ? remixRelation(generation, batch, parent) : { status: "none" as const };
+      if (relation.status !== "fork" && relation.status !== "failed") {
+        throw new ConvexError({ code: "VARIATION_ONLY", message: FORK_REFUSED[relation.status] });
+      }
+    }
+    const { placement, crFamily, crExpression } = await allocateNumber(ctx, parent, args.remixKind ?? "variation");
+    const startsFamily = placement.family === "new";
+    await ctx.db.patch("works", work._id, {
+      crFamily,
+      crExpression,
+      kind: placement.kind,
+      familyRootId: startsFamily ? work._id : (parent!.familyRootId ?? parent!._id),
+      keep: undefined,
+      status: "preparing",
+    });
+    if (startsFamily) await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: 2, rootWorkId: work._id });
+    await ctx.scheduler.runAfter(0, internal.imageGen.publishAssets, { workId: work._id });
+    return { workId: work._id, cr: formatCr(crFamily, crExpression) };
   },
 });
 
@@ -397,7 +476,14 @@ export const assetJob = internalQuery({
   args: { workId: v.id("works") },
   returns: v.union(
     v.null(),
-    v.object({ fullKey: v.string(), backgroundColor: v.string(), crFamily: v.number(), crExpression: v.number() }),
+    v.object({
+      fullKey: v.string(),
+      backgroundColor: v.string(),
+      crFamily: v.number(),
+      crExpression: v.number(),
+      // Kept just for its creator: its art stays at the design's own unguessable address.
+      keep: v.optional(v.boolean()),
+    }),
   ),
   handler: async (ctx, args) => {
     const work = await ctx.db.get("works", args.workId);
@@ -409,6 +495,7 @@ export const assetJob = internalQuery({
       backgroundColor: work.backgroundColor,
       crFamily: work.crFamily,
       crExpression: work.crExpression,
+      ...(work.keep === "private" ? { keep: true } : {}),
     };
   },
 });
@@ -429,6 +516,14 @@ export const markPublished = internalMutation({
     const work = await ctx.db.get("works", args.workId);
     if (!work || work.status !== "preparing") return null;
     const now = Date.now();
+    if (work.keep === "private") {
+      // Kept just for its creator: none of the public steps (feed, notifications, onchain record,
+      // model photo, shop listing). Its remixable parts come from its parent like any remix.
+      await ctx.db.patch("works", work._id, { status: "private", publishedAt: now, artKey: args.artKey, contentHash: args.contentHash });
+      await inheritOnPublish(ctx, work._id);
+      await inheritPartsOnPublish(ctx, work._id);
+      return null;
+    }
     await ctx.db.patch("works", work._id, {
       status: "published",
       publishedAt: now,
@@ -442,6 +537,7 @@ export const markPublished = internalMutation({
     await recordRemix(ctx, published);
     // A remix's remixable words start from its parent's (convex/remixFields.ts).
     await inheritOnPublish(ctx, work._id);
+    await inheritPartsOnPublish(ctx, work._id);
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
     // Onchain provenance: registered by the relayer, signed by the creator's wallet once it's

@@ -82,20 +82,18 @@ const PROBLEMS: Record<WordChangeProblem, string> = {
   REPEATED: "Each piece of text can be changed once.",
 };
 
-// studio.generate: the word changes a remix asks for, checked against the parent's stored fields
-// (never the browser's copy of the old text). Undefined when nothing changed.
-export async function checkedWordChanges(
-  ctx: MutationCtx,
-  session: Doc<"creativeSessions">,
-  firstImageKey: string | undefined,
+// studio.generate: the word changes a remix asks for, checked against the stored fields of what it
+// remixes (a published work, or the creator's own design being tried as a remix), never the
+// browser's copy of the old text. Undefined when nothing changed.
+export function checkedWordChanges(
+  fields: Array<RemixField> | null | undefined,
   asked: Array<{ fieldId: string; text: string }> | undefined,
-): Promise<Array<WordChange> | undefined> {
+): Array<WordChange> | undefined {
   if (!asked || asked.length === 0) return undefined;
-  const parent = session.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
-  if (!parent || parent.status !== "published" || !parent.remixFields || firstImageKey !== parent.artKey) {
+  if (!fields) {
     throw new ConvexError({ code: "WORDS_NOT_REMIXABLE", message: "These words can't be changed here." });
   }
-  const result = checkWordChanges(parent.remixFields, asked);
+  const result = checkWordChanges(fields, asked);
   if (!result.ok) {
     const message = result.label && result.limit && result.problem === "TOO_LONG"
       ? `The ${result.label.toLowerCase()} box takes up to ${result.limit} characters. Put longer words under Anything else to change.`
@@ -105,12 +103,11 @@ export async function checkedWordChanges(
   return result.changes.length > 0 ? result.changes : undefined;
 }
 
-// studio's batch prompt: the word-change part, from what the batch recorded and the parent's
-// fields for the pieces that stay.
-export async function wordChangesPrompt(ctx: QueryCtx, batch: Doc<"batches">, parentId: Id<"works"> | undefined) {
-  if (!batch.wordChanges?.length || !parentId) return undefined;
-  const parent = await ctx.db.get("works", parentId);
-  return wordChangeInstruction(parent?.remixFields ?? [], batch.wordChanges) || undefined;
+// studio's batch prompt: the word-change part, from what the batch recorded and the remixed
+// design's fields for the pieces that stay.
+export function wordChangesPrompt(batch: Doc<"batches">, fields: Array<RemixField> | undefined) {
+  if (!batch.wordChanges?.length) return undefined;
+  return wordChangeInstruction(fields ?? [], batch.wordChanges) || undefined;
 }
 
 // A published work's remixable words and, for a remix, what it changed. Works signed out.

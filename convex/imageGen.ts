@@ -355,10 +355,12 @@ export const runTile = internalAction({
             kind: a.kind,
             notes: a.analysis === "ready" ? a.notes : undefined,
             styleOnly: a.styleOnly,
+            partFor: a.partFor,
           })),
           styles: job.styles,
           remix: job.remixOfParent,
           wordChanges: job.wordChanges,
+          partChanges: job.partChanges,
         });
         const images = await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
         imageCount = images.length;
@@ -585,8 +587,9 @@ export const publishAssets = internalAction({
         contentHash = sha256Hex(art);
         // Designs get their copies when they're made; this covers older ones.
         await makeSizes(ctx, job.fullKey, art);
-        // The work's own public folder, works/<family>/<expression>/, with the design's copies.
-        artKey = await copyImage(ctx, job.fullKey, workArtKey(job.crFamily, job.crExpression), art);
+        // The work's own public folder, works/<family>/<expression>/, with the design's copies. A
+        // kept work stays at the design's own address, whose folder name can't be guessed.
+        artKey = job.keep ? job.fullKey : await copyImage(ctx, job.fullKey, workArtKey(job.crFamily, job.crExpression), art);
       }
     } catch (error) {
       console.error("publishAssets failed", workId, error);

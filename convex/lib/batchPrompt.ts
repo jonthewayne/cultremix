@@ -15,6 +15,8 @@ export type BatchAttachment = {
   kind?: "photo" | "art";
   notes?: string;
   styleOnly: boolean;
+  // A remix part's photo: the part's name.
+  partFor?: string;
 };
 
 export async function batchPrompt(job: {
@@ -27,6 +29,7 @@ export async function batchPrompt(job: {
   // Image 1 is the published design being remixed.
   remixOfParent: boolean;
   wordChanges?: string;
+  partChanges?: string;
   // One design per call (the separate-call models) instead of a 2x2 grid.
   layout?: "grid" | "single";
   // The model takes words only (Recraft V4.1): the images' notes stand in for them.
@@ -48,7 +51,10 @@ export async function batchPrompt(job: {
     mixerPositions: mixerStyles.map((style, i) => style.position ?? i + 1),
     remix: job.remixOfParent,
   });
-  const roles = read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent);
+  // A part's photo is always worked on (its likeness), whatever the request says about it.
+  const roles = (read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent)).map((role, i) =>
+    numbered[i]?.partFor ? "content" : role,
+  );
   const styleHair = read?.styleHair ?? false;
   const text = studioPrompt({
     layout: job.layout ?? "grid",
@@ -58,12 +64,14 @@ export async function batchPrompt(job: {
       kind: a.kind,
       notes: a.analysis === "ready" ? a.notes : undefined,
       styleOnly: a.styleOnly,
+      partFor: a.partFor,
     })),
     styles: job.styles,
     remix: job.remixOfParent,
     roles,
     styleHair,
     wordChanges: job.wordChanges,
+    partChanges: job.partChanges,
     blind: job.blind,
   });
   return { text, roles, read: Boolean(read), styleHair };

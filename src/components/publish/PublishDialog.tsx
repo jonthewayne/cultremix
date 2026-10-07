@@ -15,7 +15,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { RemixKindChoice } from "~/components/cr/RemixKindChoice";
-import { RemixableWords } from "~/components/cr/RemixableWords";
+import { RemixableParts } from "~/components/cr/RemixableParts";
 import type { RemixKind } from "~/components/cr/RemixKindChoice";
 import { useDesignPixels } from "~/lib/designPixels";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
@@ -41,8 +41,12 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
   // member picks; if it couldn't be compared, variation starts selected
   // (components/cr/RemixKindChoice.tsx).
   const [pickedKind, setPickedKind] = useState<RemixKind | null>(null);
+  // Share with the world (a CR number, the feed, anyone can order or remix it) or keep it just
+  // for the member.
+  const [audience, setAudience] = useState<"world" | "me">("world");
+  const keep = audience === "me";
   const [requestId] = useState(() => crypto.randomUUID());
-  const [result, setResult] = useState<{ workId: Id<"works">; cr: string; lead: string } | null>(null);
+  const [result, setResult] = useState<{ workId: Id<"works">; cr: string; lead: string; kept?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -110,16 +114,59 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
         generationId: tile.generationId,
         title: title || undefined,
         description: description.trim() || undefined,
-        remixKind,
+        remixKind: keep ? undefined : remixKind,
         offeredColors: selected,
+        ...(keep ? { keep: "private" as const } : {}),
       });
-      setResult({ workId: published.workId, cr: published.cr, lead: garmentColor(selected[0])!.hex });
+      setResult({ workId: published.workId, cr: published.cr, lead: garmentColor(selected[0])!.hex, kept: published.kept });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
   };
+
+  if (result?.kept) {
+    return (
+      <motion.div
+        className="fixed inset-0 z-50 flex flex-col justify-between gap-8 overflow-y-auto bg-black p-6 text-white md:p-12"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Kept"
+      >
+        <p className="text-sm font-bold uppercase tracking-[0.3em]">Kept just for you</p>
+        <div className="flex flex-col items-start gap-6 md:flex-row md:items-end">
+          <motion.div
+            className="flex h-56 w-56 shrink-0 items-center justify-center overflow-hidden rounded-3xl p-4 md:h-80 md:w-80"
+            style={{ background: result.lead }}
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 170, damping: 20 }}
+          >
+            <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
+          </motion.div>
+          <div>
+            {title && <p className="text-3xl font-bold md:text-5xl">{title}</p>}
+            <p className="mt-3 max-w-md text-base text-neutral-300">
+              Only you can see it. It's in your kept designs, and you can share it with the world any time.
+              {isRemix ? " The original's creator still gets credit." : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link to="/keep/$workId" params={{ workId: result.workId }} className="rounded-2xl border-2 border-white bg-white px-7 py-4 text-base font-black text-black">
+            View it
+          </Link>
+          <button type="button" onClick={onClose} className="rounded-2xl border-2 border-white px-7 py-4 text-base font-black">
+            Keep creating
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
   if (result) {
     return (
@@ -154,7 +201,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
         </div>
         {/* What people who remix it can change, once the words are read. */}
         <div className="max-w-xl empty:hidden">
-          <RemixableWords workId={result.workId} tone="dark" editing />
+          <RemixableParts target={{ workId: result.workId }} tone="dark" editing />
         </div>
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="flex items-center gap-4">
@@ -212,7 +259,9 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-bold uppercase tracking-wider">Publish</p>
-              {crPreview ? (
+              {keep ? (
+                <p className="mt-2 text-4xl font-black tracking-tight md:text-5xl">Just for you</p>
+              ) : crPreview ? (
                 <p className="mt-2">
                   <span className="font-cr text-4xl md:text-5xl">CR {crPreview}</span>
                 </p>
@@ -220,10 +269,14 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
                 <p className="mt-2 h-10 w-40 animate-pulse rounded-xl bg-neutral-100 md:h-12" />
               )}
               <p className="mt-1 text-sm text-neutral-600">
-                {preview?.remix && remixKind === "variation"
-                  ? `The next number in family ${preview.remix.variationCr.split("-")[0]}.`
-                  : "A new family starts here."}{" "}
-                The number is set when you publish.
+                {keep
+                  ? "No CR number. You can share it with the world later."
+                  : <>
+                      {preview?.remix && remixKind === "variation"
+                        ? `The next number in family ${preview.remix.variationCr.split("-")[0]}.`
+                        : "A new family starts here."}{" "}
+                      The number is set when you publish.
+                    </>}
               </p>
             </div>
             <button
@@ -237,6 +290,42 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
           </div>
 
           {preview?.remix && <p className="-mt-3 text-base font-semibold">{preview.remix.summary}</p>}
+
+          <fieldset disabled={saving}>
+            <legend className="text-sm font-bold uppercase tracking-wider">Who it's for</legend>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {(
+                [
+                  {
+                    value: "world",
+                    name: "Share with the world",
+                    note: "Gets a CR number and a spot in the feed. Anyone can order it or remix it.",
+                  },
+                  {
+                    value: "me",
+                    name: "Keep it just for you",
+                    note: preview?.remix
+                      ? "Only you can see it and order it. The original's creator still gets credit."
+                      : "Only you can see it and order it. Share it later if you like.",
+                  },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setAudience(option.value)}
+                  aria-pressed={audience === option.value}
+                  className={cn(
+                    "rounded-2xl border-2 p-3 text-left transition-colors",
+                    audience === option.value ? "border-black bg-black text-white" : "border-neutral-200 hover:border-black",
+                  )}
+                >
+                  <span className="block text-base font-black">{option.name}</span>
+                  <span className={cn("mt-1 block text-sm", audience === option.value ? "text-neutral-300" : "text-neutral-600")}>{option.note}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           <label className="block">
             <span className="text-sm font-bold uppercase tracking-wider">Title</span>
@@ -333,7 +422,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
             </div>
           </fieldset>
 
-          {isRemix && (
+          {isRemix && !keep && (
             <div className="-mt-6">
               <RemixKindChoice
                 generationId={tile.generationId}
@@ -361,7 +450,7 @@ export function PublishDialog({ tile, onClose }: { tile: PublishTile; onClose: (
               disabled={saving || selected.length === 0 || paused}
               className="h-14 w-full rounded-2xl bg-black px-8 text-lg font-black text-white disabled:opacity-40 md:w-auto md:self-start"
             >
-              {saving ? "Publishing…" : crPreview ? `Publish as CR ${crPreview}` : "Publish"}
+              {keep ? (saving ? "Keeping…" : "Keep it") : saving ? "Publishing…" : crPreview ? `Publish as CR ${crPreview}` : "Publish"}
             </button>
           </div>
         </form>

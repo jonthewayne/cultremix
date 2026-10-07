@@ -21,7 +21,9 @@ async function forVision(bytes: Uint8Array) {
   return new Uint8Array(png.buffer, png.byteOffset, png.length);
 }
 
-export async function compareRemix(original: Uint8Array, remix: Uint8Array, model: string = VISION_MODEL) {
+// allowed: the parts the original's creator lets remixes change (convex/lib/remixParts.ts
+// allowedChangesNote), so a remix that used them isn't read as a new design for that.
+export async function compareRemix(original: Uint8Array, remix: Uint8Array, model: string = VISION_MODEL, allowed?: string) {
   const [first, second] = await Promise.all([forVision(original), forVision(remix)]);
   const result = await generateText({
     model: gateway(model),
@@ -34,6 +36,7 @@ export async function compareRemix(original: Uint8Array, remix: Uint8Array, mode
           { type: "file", data: first, mediaType: "image/png" },
           { type: "text", text: "Image 2, the remix:" },
           { type: "file", data: second, mediaType: "image/png" },
+          ...(allowed ? [{ type: "text" as const, text: allowed }] : []),
         ],
       },
     ],
