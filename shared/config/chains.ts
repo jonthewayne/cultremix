@@ -68,7 +68,9 @@ export const CHAIN_ENVIRONMENTS: Record<DeploymentEnv, ChainEnvironment> = {
   prod: {
     network: MONAD_MAINNET,
     registryAddress: null,
-    relayerAddress: null,
+    // Created 2026-10-07; its key is MONAD_RELAYER_PRIVATE_KEY_PROD in ~/.config/cultremix/chain.env.
+    // It also deploys the registry, so it becomes the admin (lineage corrections, economics rules).
+    relayerAddress: "0x1672581d1B190d045197439039446bD48bd9a74A",
     circleKeyEnvironment: "LIVE",
     circleWalletSetId: null,
   },
@@ -229,13 +231,13 @@ export function assertDeploymentConsistency(env: Env): ChainDeployment {
  */
 export function assertRelayerAddress(deployment: ChainDeployment, relayerAddress: string) {
   const localDev = deployment.env === "dev" && LOCAL_RPC.test(deployment.rpcUrl);
-  if (deployment.relayerAddress && !localDev && !sameAddress(deployment.relayerAddress, relayerAddress)) {
-    throw new DeploymentConfigError(`MONAD_RELAYER_PRIVATE_KEY is not the ${deployment.env} relayer.`);
-  }
   for (const [otherName, other] of Object.entries(CHAIN_ENVIRONMENTS)) {
     if (otherName !== deployment.env && other.relayerAddress && sameAddress(other.relayerAddress, relayerAddress)) {
       throw new DeploymentConfigError(`MONAD_RELAYER_PRIVATE_KEY belongs to the ${otherName} relayer.`);
     }
+  }
+  if (deployment.relayerAddress && !localDev && !sameAddress(deployment.relayerAddress, relayerAddress)) {
+    throw new DeploymentConfigError(`MONAD_RELAYER_PRIVATE_KEY is not the ${deployment.env} relayer.`);
   }
 }
 

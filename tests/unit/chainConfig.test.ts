@@ -104,6 +104,10 @@ describe("assertDeploymentConsistency (KTD-14)", () => {
     expect(() => assertRelayerAddress(dev, devRelayer.toLowerCase())).not.toThrow();
     expect(() => assertRelayerAddress(dev, "0x0000000000000000000000000000000000000001")).toThrow(/not the dev relayer/);
     expect(() => assertRelayerAddress(prod, devRelayer)).toThrow(/belongs to the dev relayer/);
+    const prodRelayer = CHAIN_ENVIRONMENTS.prod.relayerAddress!;
+    expect(() => assertRelayerAddress(prod, prodRelayer.toLowerCase())).not.toThrow();
+    expect(() => assertRelayerAddress(prod, "0x0000000000000000000000000000000000000001")).toThrow(/not the prod relayer/);
+    expect(() => assertRelayerAddress(dev, prodRelayer)).toThrow(/belongs to the prod relayer/);
   });
 
   it("lets dev on a localhost node use that node's account, but never another environment's relayer", () => {
