@@ -7,6 +7,7 @@ import { saleSplits, type LineLedger, type UnitStatus } from "./lib/creatorPool"
 import { crNumber } from "./lib/shopify/productSync";
 import { notifySale } from "./lib/notifications";
 import { disputeEffect } from "./lib/disputes";
+import { openDisputeCheck } from "./lib/openDisputes";
 import { scheduleSaleEmail } from "./saleEmails";
 import { getViewerUser } from "./identity";
 
@@ -493,6 +494,8 @@ export const mine = query({
     if (!viewer) return null;
     const totals = { pendingCents: 0, availableCents: 0, paidCents: 0 };
     const testTotals = { pendingCents: 0, availableCents: 0, paidCents: 0 };
+    // What matured on an order with an open payment dispute waits with the rest, as payouts do.
+    const disputed = openDisputeCheck(ctx);
     for (const state of ["pending", "held", "available", "paid"] as const) {
       const rows = await ctx.db
         .query("earnings")
@@ -500,7 +503,7 @@ export const mine = query({
         .take(BALANCE_SCAN);
       for (const row of rows) {
         const target = row.simulated ? testTotals : totals;
-        if (state === "available") target.availableCents += row.amountCents;
+        if (state === "available" && !(await disputed(row.orderId))) target.availableCents += row.amountCents;
         else if (state === "paid") target.paidCents += row.amountCents;
         else target.pendingCents += row.amountCents;
       }
@@ -522,11 +525,12 @@ export const mine = query({
         }
         work = works.get(item.workId) ?? null;
       }
+      const waits = row.state === "available" && (await disputed(row.orderId));
       entries.push({
         id: row._id,
         createdAt: row.createdAt,
         amountCents: row.amountCents,
-        status: statusOf(row),
+        status: waits ? ("On hold" as const) : statusOf(row),
         kind: row.kind === "sale" ? ("sale" as const) : (row.reason ?? "refund"),
         test: row.simulated,
         cr: work?.cr ?? null,
@@ -535,7 +539,7 @@ export const mine = query({
         privateRemix: work?.privateRemix ?? false,
         roles: row.roles,
         maturesAt: row.kind === "sale" && row.state === "pending" ? (row.maturesAt ?? null) : null,
-        holdReason: row.state === "held" ? (row.holdReason ?? null) : null,
+        holdReason: row.state === "held" ? (row.holdReason ?? null) : waits ? ("dispute" as const) : null,
       });
     }
     return { totals, testTotals, entries };

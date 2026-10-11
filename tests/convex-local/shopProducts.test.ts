@@ -602,6 +602,26 @@ describe("a kept design, printed for its creator alone", () => {
     const all = await t.run((ctx) => ctx.db.query("workVariants").withIndex("by_work", (q) => q.eq("workId", workId)).collect());
     expect(all.some((variant) => variant.shopifyVariantId.includes("/kept"))).toBe(true);
   });
+
+  it("archives a kept product whose sync finishes after its creator shared it", async () => {
+    const { t, admin, workId } = await keptShop();
+    const creator = t.withIdentity(CREATOR);
+    await setFlag(t, "publishing", true);
+    await creator.mutation(api.keeps.requestPrint, { workId });
+    await approveAndPrepare(t, admin, workId);
+    // Shared while its first sync is still running.
+    await creator.mutation(api.publish.shareKeep, { workId });
+    const [row] = await rows(t, workId);
+    await t.mutation(internal.shopify.saveSynced, { listingId: row._id, productId: "gid://shopify/Product/late", variants: [], kept: true });
+    // The listing waits under its public number without the kept product, and Shopify archives it.
+    const after = await t.run((ctx) => ctx.db.get("shopProducts", row._id));
+    expect(after?.status).toBe("paused");
+    expect(after?.shopifyProductId).toBeUndefined();
+    const jobs = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+    expect(jobs.filter((job) => job.name.includes("archiveProducts")).map((job) => job.args[0])).toContainEqual({
+      productIds: ["gid://shopify/Product/late"],
+    });
+  });
 });
 
 describe("Shopify product sync", () => {

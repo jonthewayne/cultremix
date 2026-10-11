@@ -85,6 +85,7 @@ describe("payouts", () => {
         creatorNumber: 2,
         walletAddress: "0x00000000000000000000000000000000000000aa",
         availableCents: 6000,
+        disputedCents: 0,
         pendingCents: 900,
         paidCents: 1200,
         rows: 3,

@@ -25,10 +25,11 @@ const METHODS = [
 
 function csv(creators: Array<Creator>) {
   const cell = (value: string | number | undefined) => `"${String(value ?? "").replace(/"/gu, '""')}"`;
-  const lines = [["username", "email", "creator number", "wallet", "available (USD)", "pending (USD)", "paid (USD)"].map(cell).join(",")];
+  const lines = [["username", "email", "creator number", "wallet", "available (USD)", "held for a dispute (USD)", "pending (USD)", "paid (USD)"].map(cell).join(",")];
   for (const c of creators) {
+    const usd = (cents: number) => (cents / 100).toFixed(2);
     lines.push(
-      [c.username, c.email, c.creatorNumber, c.walletAddress, (c.availableCents / 100).toFixed(2), (c.pendingCents / 100).toFixed(2), (c.paidCents / 100).toFixed(2)]
+      [c.username, c.email, c.creatorNumber, c.walletAddress, usd(c.availableCents), usd(c.disputedCents), usd(c.pendingCents), usd(c.paidCents)]
         .map(cell)
         .join(","),
     );
@@ -63,7 +64,7 @@ function Payouts() {
     <div className="space-y-6">
       <AdminSection
         title="Payouts"
-        description="Creators' earnings become Available 30 days after an order ships. Send the money (USDC on Monad to their wallet, or a bank transfer), then record it here; those earnings become Paid, and a later refund comes off the next payout. Test orders are never paid."
+        description="Creators' earnings become Available 30 days after an order ships. Send the money (USDC on Monad to their wallet, or a bank transfer), then record it here; those earnings become Paid, and a later refund comes off the next payout. Earnings on an order with an open payment dispute wait until it's over. Test orders are never paid."
         action={
           <button type="button" disabled={!balances} onClick={download} className={adminButton}>
             Download CSV
@@ -137,6 +138,11 @@ function CreatorRow({ creator, minimumCents }: { creator: Creator; minimumCents:
         <span>
           Available <span className={cn("font-bold", creator.availableCents > 0 && "text-emerald-600 dark:text-emerald-400")}>{formatCents(creator.availableCents)}</span>
         </span>
+        {creator.disputedCents !== 0 && (
+          <span>
+            Held for a dispute <span className="font-bold">{formatCents(creator.disputedCents)}</span>
+          </span>
+        )}
         <span>
           Pending <span className="font-bold">{formatCents(creator.pendingCents)}</span>
         </span>
@@ -175,6 +181,12 @@ function CreatorRow({ creator, minimumCents }: { creator: Creator; minimumCents:
         </form>
       )}
       {below && <p className="mt-2 text-xs text-muted-foreground">Below the {formatCents(minimumCents)} minimum; it can still be paid.</p>}
+      {creator.disputedCents !== 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {formatCents(creator.disputedCents)} is from orders with an open payment dispute (Admin, Orders). It becomes payable if the store wins;
+          if the buyer wins, it's taken back.
+        </p>
+      )}
       {note && <p className="mt-2 text-sm font-semibold">{note}</p>}
     </AdminSection>
   );

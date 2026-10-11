@@ -76,6 +76,7 @@ import type * as lib_mime from "../lib/mime.js";
 import type * as lib_models from "../lib/models.js";
 import type * as lib_notesWriter from "../lib/notesWriter.js";
 import type * as lib_notifications from "../lib/notifications.js";
+import type * as lib_openDisputes from "../lib/openDisputes.js";
 import type * as lib_otp from "../lib/otp.js";
 import type * as lib_paging from "../lib/paging.js";
 import type * as lib_paidAttempts from "../lib/paidAttempts.js";
@@ -252,6 +253,7 @@ declare const fullApi: ApiFromModules<{
   "lib/models": typeof lib_models;
   "lib/notesWriter": typeof lib_notesWriter;
   "lib/notifications": typeof lib_notifications;
+  "lib/openDisputes": typeof lib_openDisputes;
   "lib/otp": typeof lib_otp;
   "lib/paging": typeof lib_paging;
   "lib/paidAttempts": typeof lib_paidAttempts;

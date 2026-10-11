@@ -603,6 +603,36 @@ describe("chargebacks and inquiries (INV-23)", () => {
     expect(mine?.totals.availableCents).toBe(0);
   });
 
+  it("pays what matured before a dispute only once the store wins it", async () => {
+    const t = newTest();
+    await makeUser(t, { authId: "owner", platformRole: "super_admin_owner" });
+    const { b } = await variationOnSale(t);
+    await paidOrder(t);
+    await pastDue(t);
+    await t.mutation(internal.earnings.matureDue, {});
+    const owner = t.withIdentity({ subject: "owner" });
+    const balance = async () => (await owner.query(api.payouts.balances, {})).creators.find((c) => c.recipientId === b);
+    expect(await balance()).toMatchObject({ availableCents: 270, disputedCents: 0 });
+
+    // Open: it stays Available in the ledger, but payouts skip it and its creator sees it on hold.
+    await deliver(t, { topic: "disputes/create", body: dispute("needs_response") });
+    expect(await balance()).toMatchObject({ availableCents: 0, disputedCents: 270 });
+    await expect(owner.mutation(api.payouts.markPaid, { recipientId: b, expectedCents: 0, method: "usdc", reference: "0x1" })).rejects.toThrow(
+      /Nothing is payable/u,
+    );
+    const mine = await t.withIdentity({ subject: "auth-b" }).query(api.earnings.mine, {});
+    expect(mine?.totals).toMatchObject({ availableCents: 0, pendingCents: 270 });
+    expect(mine?.entries[0]).toMatchObject({ status: "On hold", holdReason: "dispute" });
+
+    // Won: payable again.
+    await deliver(t, { topic: "disputes/update", body: dispute("won") });
+    expect(await balance()).toMatchObject({ availableCents: 270, disputedCents: 0 });
+    expect(await owner.mutation(api.payouts.markPaid, { recipientId: b, expectedCents: 270, method: "usdc", reference: "0x1" })).toMatchObject({
+      amountCents: 270,
+      rows: 1,
+    });
+  });
+
   it("an inquiry holds the earnings but never takes them back, and an older update arriving late changes nothing", async () => {
     const t = newTest();
     const { b } = await variationOnSale(t);

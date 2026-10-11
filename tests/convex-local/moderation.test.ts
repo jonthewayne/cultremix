@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import { newTest } from "./setup";
 import { makeOnSale, makeUser, makeWork, setFlag } from "./shopFixtures";
 
@@ -56,6 +56,28 @@ describe("taking a design down", () => {
     const back = await t.run((ctx) => ctx.db.get("works", workId));
     expect(back).toMatchObject({ status: "published" });
     expect(back?.withdrawReason).toBeUndefined();
+  });
+
+  it("drafts a product whose first sync finishes after the takedown", async () => {
+    const t = newTest();
+    const creator = await makeUser(t, { authId: "auth-creator" });
+    await makeUser(t, { authId: "owner", platformRole: "super_admin_owner" });
+    const workId = await makeWork(t, { creatorId: creator, family: 101, expression: 1, title: "Grow Slow" });
+    const listingId = await makeOnSale(t, workId, "101-001");
+    // Its first sync is still running, so it has no Shopify product the takedown could draft.
+    await t.run((ctx) => ctx.db.patch("shopProducts", listingId, { status: "pending", shopifyProductId: undefined }));
+    await t.withIdentity({ subject: "owner" }).mutation(api.moderation.withdraw, { workId, reason: "Not ours to sell." });
+    const drafts = async () =>
+      (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()))
+        .filter((job) => job.name.includes("draftProducts"))
+        .map((job) => job.args[0]);
+    expect(await drafts()).toEqual([]);
+
+    // The sync finishes: Shopify made the product active, so it's drafted, and the listing stays paused.
+    await t.mutation(internal.shopify.saveSynced, { listingId, productId: "gid://shopify/Product/2000", variants: [] });
+    const row = await t.run((ctx) => ctx.db.get("shopProducts", listingId));
+    expect(row).toMatchObject({ status: "paused", shopifyProductId: "gid://shopify/Product/2000" });
+    expect(await drafts()).toEqual([{ productIds: ["gid://shopify/Product/2000"] }]);
   });
 });
 

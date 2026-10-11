@@ -3,13 +3,16 @@ import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { getViewerUser, isOwner } from "./identity";
+import { openDisputeCheck } from "./lib/openDisputes";
 
 // Paying creators (from mid-November 2026). A creator's payable balance is the sum of their
 // Available earnings, real orders only: matured sales plus any refunds taken after a sale matured
 // (negative rows). The owner sends the money however it's decided (USDC on Monad to the creator's
 // wallet, or a bank transfer), then records it here: the payout notes the amount, method, and
 // reference, and exactly the rows it covered become Paid. A refund after that comes off the next
-// payout. Test earnings (dev and staging orders) are never paid.
+// payout. Test earnings (dev and staging orders) are never paid, and earnings on an order with an
+// open payment dispute wait until it's over (lib/openDisputes.ts): a chargeback the buyer wins takes
+// them back.
 
 export const MIN_PAYOUT_CENTS = 5000;
 const SCAN = 5000;
@@ -27,7 +30,10 @@ async function payableRows(ctx: QueryCtx, recipientId: Id<"users">) {
     .query("earnings")
     .withIndex("by_recipient_state", (q) => q.eq("recipientId", recipientId).eq("state", "available"))
     .take(SCAN);
-  return rows.filter((row) => !row.simulated);
+  const disputed = openDisputeCheck(ctx);
+  const payable = [];
+  for (const row of rows) if (!row.simulated && !(await disputed(row.orderId))) payable.push(row);
+  return payable;
 }
 
 const balanceValidator = v.object({
@@ -36,7 +42,10 @@ const balanceValidator = v.object({
   email: v.optional(v.string()),
   creatorNumber: v.optional(v.number()),
   walletAddress: v.optional(v.string()),
+  // Payable now.
   availableCents: v.number(),
+  // Matured, but on orders with an open payment dispute.
+  disputedCents: v.number(),
   pendingCents: v.number(),
   paidCents: v.number(),
   rows: v.number(),
@@ -48,7 +57,8 @@ export const balances = query({
   returns: v.object({ minimumCents: v.number(), creators: v.array(balanceValidator) }),
   handler: async (ctx) => {
     await requireOwner(ctx);
-    const byRecipient = new Map<Id<"users">, { available: number; pending: number; paid: number; rows: number }>();
+    const byRecipient = new Map<Id<"users">, { available: number; disputed: number; pending: number; paid: number; rows: number }>();
+    const disputed = openDisputeCheck(ctx);
     for (const state of ["available", "pending", "held", "paid"] as const) {
       const rows = await ctx.db
         .query("earnings")
@@ -56,8 +66,9 @@ export const balances = query({
         .take(SCAN);
       for (const row of rows) {
         if (row.simulated) continue;
-        const entry = byRecipient.get(row.recipientId) ?? { available: 0, pending: 0, paid: 0, rows: 0 };
-        if (state === "available") {
+        const entry = byRecipient.get(row.recipientId) ?? { available: 0, disputed: 0, pending: 0, paid: 0, rows: 0 };
+        if (state === "available" && (await disputed(row.orderId))) entry.disputed += row.amountCents;
+        else if (state === "available") {
           entry.available += row.amountCents;
           entry.rows += 1;
         } else if (state === "paid") entry.paid += row.amountCents;
@@ -75,12 +86,13 @@ export const balances = query({
         ...(user?.creatorNumber !== undefined ? { creatorNumber: user.creatorNumber } : {}),
         ...(user?.walletAddress ? { walletAddress: user.walletAddress } : {}),
         availableCents: entry.available,
+        disputedCents: entry.disputed,
         pendingCents: entry.pending,
         paidCents: entry.paid,
         rows: entry.rows,
       });
     }
-    creators.sort((a, b) => b.availableCents - a.availableCents || b.pendingCents - a.pendingCents);
+    creators.sort((a, b) => b.availableCents - a.availableCents || b.disputedCents - a.disputedCents || b.pendingCents - a.pendingCents);
     return { minimumCents: MIN_PAYOUT_CENTS, creators };
   },
 });

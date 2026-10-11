@@ -125,11 +125,19 @@ const syncedVariant = v.object({
 });
 
 export const saveSynced = internalMutation({
-  args: { listingId: v.id("shopProducts"), productId: v.string(), variants: v.array(syncedVariant) },
+  // kept: the sync wrote a kept design's product (unlisted, for its creator alone).
+  args: { listingId: v.id("shopProducts"), productId: v.string(), variants: v.array(syncedVariant), kept: v.optional(v.boolean()) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await ctx.db.get("shopProducts", args.listingId);
     if (!row) return null;
+    const work = await ctx.db.get("works", row.workId);
+    // Shared with the world while its kept product synced (publish.shareKeep): that product was for
+    // its creator alone, so Shopify archives it, and the listing waits under its public number.
+    if (args.kept && work?.status !== "private") {
+      await ctx.scheduler.runAfter(0, internal.shopify.archiveProducts, { productIds: [args.productId] });
+      return null;
+    }
     const existing = await ctx.db
       .query("workVariants")
       .withIndex("by_work", (q) => q.eq("workId", row.workId))
@@ -151,15 +159,19 @@ export const saveSynced = internalMutation({
       else await ctx.db.insert("workVariants", fields);
     }
     const now = Date.now();
+    const withdrawn = work?.status === "withdrawn";
     // Paused while it synced: it stays paused, with its product id kept.
     await ctx.db.patch("shopProducts", row._id, {
-      ...(row.status === "paused" ? {} : { status: "live" as const }),
+      status: row.status === "paused" || withdrawn ? ("paused" as const) : ("live" as const),
       shopifyProductId: args.productId,
       lastError: undefined,
       nextAttemptAt: undefined,
       syncedAt: now,
       updatedAt: now,
     });
+    // Taken down while it synced (convex/moderation.ts): Shopify made this product active after the
+    // takedown drafted the others (a first sync had no product to draft yet), so it's drafted too.
+    if (withdrawn) await ctx.scheduler.runAfter(0, internal.shopify.draftProducts, { productIds: [args.productId] });
     return null;
   },
 });
@@ -223,6 +235,7 @@ export const syncListing = internalAction({
       await ctx.runMutation(internal.shopify.saveSynced, {
         listingId: args.listingId,
         productId: result.productId,
+        kept: job.kept,
         variants: result.variants.map((variant) => ({
           color: variant.color,
           size: variant.size,
