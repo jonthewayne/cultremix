@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { AdminSection, Toggle, adminButton, adminInput, adminQuietButton } from "~/components/admin/AdminSection";
 import { BudgetCard } from "~/components/admin/BudgetCard";
 import { GatewayCredit } from "~/components/admin/GatewayCredit";
+import { Readiness } from "~/components/admin/Readiness";
 import { errorMessage } from "~/lib/imagePrep";
 
 export const Route = createFileRoute("/admin/")({
@@ -16,6 +17,7 @@ function AdminOverview() {
   if (!overview) return <p className="text-muted-foreground">Loading…</p>;
   return (
     <div className="space-y-6">
+      <Readiness />
       <BudgetCard />
       <GatewayCredit />
       <FlagsSection flags={overview.flags} canManage={overview.canManage} />

@@ -128,6 +128,7 @@ bun scripts/e2e-helper.ts role "$EMAIL" super_admin_owner
 go "$BASE_URL/admin"
 wait_text "Switches"
 wait_text "Gateway credit"
+wait_text "Ready to sell"
 a11y
 go "$BASE_URL/admin/products"
 wait_text "Add a product"

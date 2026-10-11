@@ -100,6 +100,7 @@ import type * as lib_printful_webhookVerify from "../lib/printful/webhookVerify.
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_providerConfig from "../lib/providerConfig.js";
 import type * as lib_r2 from "../lib/r2.js";
+import type * as lib_readiness from "../lib/readiness.js";
 import type * as lib_redirect from "../lib/redirect.js";
 import type * as lib_remixCompare from "../lib/remixCompare.js";
 import type * as lib_remixFields from "../lib/remixFields.js";
@@ -286,6 +287,7 @@ declare const fullApi: ApiFromModules<{
   "lib/prompts": typeof lib_prompts;
   "lib/providerConfig": typeof lib_providerConfig;
   "lib/r2": typeof lib_r2;
+  "lib/readiness": typeof lib_readiness;
   "lib/redirect": typeof lib_redirect;
   "lib/remixCompare": typeof lib_remixCompare;
   "lib/remixFields": typeof lib_remixFields;

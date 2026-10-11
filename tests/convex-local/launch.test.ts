@@ -28,6 +28,25 @@ const SETTINGS = {
 };
 
 describe("admin access", () => {
+  it("shows any admin what's left before real orders and Monad records", async () => {
+    const t = newTest();
+    const member = await addUser(t, "alice");
+    const support = await addUser(t, "sam", "super_admin_support");
+    await expect(member.as.query(api.admin.readiness, {})).rejects.toThrow();
+    vi.stubEnv("DEPLOYMENT_ENV", "prod");
+    vi.stubEnv("PRINTFUL_API_TOKEN", "pf");
+    vi.stubEnv("PRINTFUL_STORE_ID", "1");
+    const items = await support.as.query(api.admin.readiness, {});
+    const item = (key: string) => items.find((entry) => entry.key === key);
+    // Printful's keys are set but it isn't connected; nothing is on sale; checkout is off.
+    expect(item("printful")).toMatchObject({ ok: false, detail: "Its keys are set. Press Connect Printful in For sale." });
+    expect(item("products")).toMatchObject({ ok: false });
+    expect(item("onSale")).toMatchObject({ ok: false, detail: "None yet. Approve designs in For sale." });
+    expect(item("confirming")).toMatchObject({ ok: false });
+    expect(item("registry")).toMatchObject({ ok: false, detail: expect.stringMatching(/chain:deploy:mainnet/u) });
+    vi.unstubAllEnvs();
+  });
+
   it("lets only ops and the owner change flags, settings, credits, and creator access", async () => {
     const t = newTest();
     const member = await addUser(t, "alice");

@@ -6,11 +6,20 @@ import { adminAllows, requireAdmin } from "./lib/adminAccess";
 import { memberSpendToday } from "./lib/budget";
 import { isCreator, setCreatorAccess } from "./lib/creators";
 import { FEATURE_FLAGS, flagDefault, flagDefinition } from "./lib/flags";
-import { COMMERCE_FLAG } from "./lib/shopFlags";
+import { isFlagOn } from "./lib/flagState";
+import { printfulConfigFromEnv } from "./lib/printful/client";
+import { readinessItems } from "./lib/readiness";
+import type { ReadinessInput } from "./lib/readiness";
+import { COMMERCE_FLAG, autoConfirmAllowedByEnv, autoConfirmFlagAllows, commerceOpen, deploymentEnv } from "./lib/shopFlags";
+import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
+import { offeredShopProducts } from "./lib/shopProduct";
+import { assertDeploymentConsistency } from "../shared/config/chains";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const MEMBER_RESULTS = 20;
+// Listings on sale the readiness list looks through.
+const LIVE_SCAN = 500;
 
 const flagRow = v.object({
   key: v.string(),
@@ -100,6 +109,55 @@ export const overview = query({
         updatedAt: settings.updatedAt,
       },
     };
+  },
+});
+
+// Admin, Overview's Ready to sell list: what still stands between this deployment and real orders
+// and Monad records (convex/lib/readiness.ts). It says only whether each env value is set.
+export const readiness = query({
+  args: {},
+  returns: v.array(
+    v.object({ key: v.string(), group: v.union(v.literal("shop"), v.literal("monad")), label: v.string(), ok: v.boolean(), detail: v.string() }),
+  ),
+  handler: async (ctx) => {
+    await requireAdmin(ctx, "view");
+    const env = deploymentEnv();
+    const integrations = await ctx.db.query("integrations").take(10);
+    const row = (name: string) => integrations.find((entry) => entry.name === name);
+    const products = await offeredShopProducts(ctx);
+    // Published designs with a product on sale (kept designs sell to their creator alone).
+    const live = await ctx.db
+      .query("shopProducts")
+      .withIndex("by_status_next", (q) => q.eq("status", "live"))
+      .take(LIVE_SCAN);
+    let onSale = 0;
+    for (const workId of new Set(live.map((listing) => listing.workId))) {
+      if ((await ctx.db.get("works", workId))?.status === "published") onSale++;
+    }
+    let chain: ReadinessInput["chain"];
+    const relayerKey = Boolean(process.env.MONAD_RELAYER_PRIVATE_KEY?.trim());
+    const writes = await isFlagOn(ctx, "chain.writes");
+    try {
+      const deployment = assertDeploymentConsistency(process.env);
+      chain = { problem: null, registry: deployment.registryAddress, relayerKey, custody: deployment.custody.mode, writes };
+    } catch (error) {
+      chain = { problem: error instanceof Error ? error.message : String(error), registry: null, relayerKey, custody: "unavailable", writes };
+    }
+    return readinessItems({
+      env,
+      printful: {
+        keys: printfulConfigFromEnv() !== null,
+        connected: row("printful")?.connectedAt !== undefined,
+        signingKey: Boolean(process.env.PRINTFUL_WEBHOOK_SECRET?.trim() || row("printful")?.webhookSecret),
+      },
+      shopify: { keys: shopifyAdminConfigFromEnv() !== null, connected: row("shopify")?.connectedAt !== undefined },
+      products: { names: products.map((product) => product.name), chosen: products.some((product) => product.fromAdmin) },
+      upscale: { flag: await isFlagOn(ctx, "gen.upscale"), falKey: Boolean(process.env.FAL_KEY?.trim()) },
+      onSale,
+      checkout: await commerceOpen(ctx),
+      confirming: { env: autoConfirmAllowedByEnv(), flag: await autoConfirmFlagAllows(ctx) },
+      chain,
+    });
   },
 });
 

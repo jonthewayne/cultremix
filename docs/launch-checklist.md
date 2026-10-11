@@ -55,6 +55,8 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 
 ## Production: go live
 
+Admin, Overview starts with **Ready to sell**: each piece below for real orders and Monad records, ticked once it's in place on that deployment (keys set, Printful and Shopify connected, products picked, print files possible, designs on sale, paid orders sent to print, Checkout, the registry, the relayer key, member wallets, and Monad records), with what each missing one needs. It reads only whether each env value is set.
+
 ### What Jon does first
 
 - [ ] Decide: the launch shirts and prices, $5.95 flat US shipping, and the 15% creator pool.
