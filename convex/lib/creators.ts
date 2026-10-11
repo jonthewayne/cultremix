@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -63,5 +64,7 @@ export async function ensureCreatorNumber(ctx: MutationCtx, user: Doc<"users">):
   if (user.creatorNumber !== undefined) return user.creatorNumber;
   const creatorNumber = await nextCreatorNumber(ctx);
   await ctx.db.patch("users", user._id, { creatorNumber });
+  // Sale shares held for them while they had no creator access become Pending (plan A1).
+  await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: user._id });
   return creatorNumber;
 }

@@ -23,7 +23,7 @@ const notificationItem = v.object({
   // For a remix: your work it was made from. For a sale of someone's remix: your design it came from.
   parent: v.optional(workRef),
   // For a sale: what you earn from the order (before the return window), and whether it was a test.
-  sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean() })),
+  sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean(), held: v.optional(v.boolean()) })),
 });
 
 // The bell: how many are unread, and when the viewer last opened the list. Signed out, nothing.

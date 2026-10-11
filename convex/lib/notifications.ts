@@ -73,6 +73,8 @@ export async function notifySale(
     cents: number;
     units: number;
     test: boolean;
+    // The share waits for the recipient's creator access.
+    held?: boolean;
     at?: number;
   },
 ) {
@@ -96,7 +98,7 @@ export async function notifySale(
     kind: "sale",
     workId: work._id,
     ownWorkId,
-    sale: { cents: args.cents, units: args.units, test: args.test },
+    sale: { cents: args.cents, units: args.units, test: args.test, ...(args.held ? { held: true } : {}) },
     createdAt: args.at ?? Date.now(),
   });
   await bumpUnread(ctx, args.recipientId);

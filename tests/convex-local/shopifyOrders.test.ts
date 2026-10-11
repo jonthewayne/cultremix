@@ -4,6 +4,7 @@ import { api, internal } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { SHOPIFY_WEBHOOK_MAX_BYTES } from "../../shared/config/shopify";
 import { rawOrder, type FixtureLine } from "../fixtures/shopifyOrder";
+import { ensureCreatorNumber } from "../../convex/lib/creators";
 import { newTest } from "./setup";
 import { SHOP_ENV, deliver, fakeShopify, makeOnSale, makeUser, makeWork } from "./shopFixtures";
 
@@ -306,12 +307,22 @@ describe("POST /webhooks/shopify", () => {
     expect(sold.map((r) => r.sale?.test)).toEqual([true, true]);
   });
 
-  it("holds shares for members without creator access until released", async () => {
+  it("holds shares for members without creator access until they get a creator number", async () => {
     const t = newTest();
     const { a } = await variationOnSale(t, { creatorNumbers: false });
     shopify.set(rawOrder({ lines: [line(1)] }));
     await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
     expect((await earningsFor(t, a)).map((r) => [r.state, r.holdReason])).toEqual([["held", "not_creator"]]);
+    const notes = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(notes.find((n) => n.recipientId === a)?.sale).toMatchObject({ held: true });
+
+    // Getting a creator number (an admin grant or a judge account) schedules the release.
+    await t.run(async (ctx) => {
+      const user = await ctx.db.get("users", a);
+      await ensureCreatorNumber(ctx, user!);
+    });
+    const jobs = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+    expect(jobs.some((job) => job.name.includes("releaseCreatorHolds") && (job.args[0] as { userId?: string })?.userId === a)).toBe(true);
     expect(await t.mutation(internal.earnings.releaseCreatorHolds, { userId: a })).toBe(1);
     expect((await earningsFor(t, a))[0].state).toBe("pending");
   });

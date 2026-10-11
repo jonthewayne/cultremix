@@ -108,6 +108,8 @@ function EarningsPage() {
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       {entry.status}
                       {entry.maturesAt ? ` · ${dateText(entry.maturesAt)}` : ""}
+                      {entry.holdReason === "not_creator" ? " · until you get a creator number" : ""}
+                      {entry.holdReason === "refund" ? " · refund in progress" : ""}
                     </p>
                   </div>
                 </li>

@@ -314,7 +314,10 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
   const { items, rows } = await loadOrder(ctx, orderId);
   const fresh = new Set<string>(freshSaleIds);
   const workOf = new Map(items.map((item) => [item._id as string, item.workId]));
-  const totals = new Map<string, { recipientId: Id<"users">; workId: Id<"works">; cents: number; units: number }>();
+  const totals = new Map<
+    string,
+    { recipientId: Id<"users">; workId: Id<"works">; cents: number; units: number; held: boolean }
+  >();
   for (const sale of rows) {
     if (sale.kind !== "sale" || !fresh.has(sale._id)) continue;
     if (sale.state === "reversed" || (sale.state === "held" && sale.holdReason === "refund")) continue;
@@ -332,9 +335,11 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
     const net = sale.amountCents + reversed;
     if (net <= 0) continue;
     const key = `${sale.recipientId}|${workId}`;
-    const total = totals.get(key) ?? { recipientId: sale.recipientId, workId, cents: 0, units: 0 };
+    const total = totals.get(key) ?? { recipientId: sale.recipientId, workId, cents: 0, units: 0, held: true };
     total.cents += net;
     total.units += 1;
+    // Held for a recipient without creator access (refund holds were skipped above).
+    total.held = total.held && sale.state === "held";
     totals.set(key, total);
   }
   const now = Date.now();
@@ -372,8 +377,8 @@ export const matureDue = internalMutation({
   },
 });
 
-// Glue for creator access (A1): when a member's creator access activates, call this so their
-// "not_creator" holds become Pending (and mature on schedule).
+// When a member gets creator access (lib/creators.ts ensureCreatorNumber schedules it), their
+// "not_creator" holds become Pending and mature on schedule (plan A1).
 export const releaseCreatorHolds = internalMutation({
   args: { userId: v.id("users") },
   returns: v.number(),
@@ -402,6 +407,8 @@ const entryValidator = v.object({
   createdAt: v.number(),
   amountCents: v.number(),
   status: v.union(v.literal("Pending"), v.literal("On hold"), v.literal("Available"), v.literal("Paid"), v.literal("Reversed")),
+  // Why it's on hold: a refund in progress, or no creator access yet.
+  holdReason: v.union(v.literal("refund"), v.literal("not_creator"), v.null()),
   kind: v.union(v.literal("sale"), v.literal("refund"), v.literal("cancel")),
   test: v.boolean(),
   cr: v.union(v.string(), v.null()),
@@ -469,6 +476,7 @@ export const mine = query({
         title: work?.title ?? null,
         roles: row.roles,
         maturesAt: row.kind === "sale" && row.state === "pending" ? (row.maturesAt ?? null) : null,
+        holdReason: row.state === "held" ? (row.holdReason ?? null) : null,
       });
     }
     return { totals, testTotals, entries };

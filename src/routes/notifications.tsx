@@ -193,12 +193,12 @@ function Message({ item }: { item: Notification }) {
 function SaleMessage({ item }: { item: Notification }) {
   const units = item.sale?.units ?? 1;
   const bought = units > 1 ? `Someone bought ${units} of ` : "Someone bought ";
-  const earned = item.sale ? (
-    <>
-      {" "}
-      You earn <span className="font-black">{formatCents(item.sale.cents)}</span>.
-    </>
-  ) : null;
+  const amount = item.sale ? <span className="font-black">{formatCents(item.sale.cents)}</span> : null;
+  const earned = !item.sale ? null : item.sale.held ? (
+    <> Your {amount} share is held until you get a creator number.</>
+  ) : (
+    <> You earn {amount}.</>
+  );
   if (!item.work) {
     return <>Someone bought a design you share in.{earned}</>;
   }

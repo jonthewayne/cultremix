@@ -95,7 +95,7 @@ export const socialTables = {
     kind: notificationKindValidator,
     workId: v.optional(v.id("works")),
     ownWorkId: v.optional(v.id("works")),
-    sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean() })),
+    sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean(), held: v.optional(v.boolean()) })),
     createdAt: v.number(),
   })
     .index("by_recipient_created", ["recipientId", "createdAt"])
