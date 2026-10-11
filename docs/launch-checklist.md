@@ -32,6 +32,7 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
   - Its compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) point at `https://<dev convex site>/webhooks/shopify`, set in the app's settings. The order webhooks are subscribed by **Connect Shopify** below.
   - The Headless channel, with a Storefront private token.
   - A $5.95 flat shipping rate for the United States.
+  - Buyers finish on Shopify's order status page, whose "Continue shopping" link goes to the store's own online store. Point it home: in Online Store, Themes, Edit code, add `<script>location.replace("https://cultremix.com")</script>` at the top of `theme.liquid`'s `<head>` (dev: the dev site's address), so anyone who lands on the Shopify storefront ends up on CultRemix.
 - [ ] **Printful**: a store for dev (API) with its token and store id.
 - [ ] **Dev env**: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID` in Convex; `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` for the dev server. Never `PRINTFUL_AUTO_CONFIRM`.
 - [ ] **Connect**: in Admin, For sale, press **Connect Printful** (sets its webhooks and keeps the signing key) and **Connect Shopify** (subscribes the order webhooks, and warns if the Headless channel is missing). Both say what they set up.
