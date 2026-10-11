@@ -137,7 +137,8 @@ export function createPrintful(deps: { config: PrintfulConfig; fetch?: FetchLike
   const doFetch: FetchLike = deps.fetch ?? ((input, init) => fetch(input, init));
   const base = deps.base ?? PRINTFUL_API_BASE;
 
-  async function call<T>(method: string, path: string, body?: unknown, allow404 = false): Promise<T | null> {
+  // v2 answers { data }, v1 (the print-file endpoint) answers { result }.
+  async function call<T>(method: string, path: string, body?: unknown, allow404 = false, envelope: "data" | "result" = "data"): Promise<T | null> {
     let response: Response;
     try {
       response = await doFetch(`${base}${path}`, {
@@ -166,8 +167,8 @@ export function createPrintful(deps: { config: PrintfulConfig; fetch?: FetchLike
       throw new PrintfulError(message, response.status, ambiguous);
     }
     if (!text) return null;
-    const parsed = JSON.parse(text) as { data?: T };
-    return (parsed.data ?? null) as T | null;
+    const parsed = JSON.parse(text) as { data?: T; result?: T };
+    return ((envelope === "result" ? parsed.result : parsed.data) ?? null) as T | null;
   }
 
   return {
@@ -198,8 +199,31 @@ export function createPrintful(deps: { config: PrintfulConfig; fetch?: FetchLike
     async listShipments(orderId: number): Promise<Array<PrintfulShipment>> {
       return (await call<Array<PrintfulShipment>>("GET", `/v2/orders/${orderId}/shipments`, undefined, true)) ?? [];
     },
+    // The store the token and store id reach (a check that both are right).
+    async getStore(): Promise<{ id: number; name?: string; type?: string } | null> {
+      return call<{ id: number; name?: string; type?: string }>("GET", `/v2/stores/${encodeURIComponent(deps.config.storeId)}`, undefined, true);
+    },
+    // A catalog product's print files: each placement's file size and DPI, per variant.
+    async printfiles(productId: number): Promise<PrintfulPrintfiles | null> {
+      return call<PrintfulPrintfiles>("GET", `/mockup-generator/printfiles/${productId}`, undefined, true, "result");
+    },
+    // Sets the store's webhooks (it replaces what was there) and returns the signing key.
+    async setWebhooks(config: PrintfulWebhookConfig): Promise<{ secret_key?: string; events?: Array<{ type: string }> } | null> {
+      return call<{ secret_key?: string; events?: Array<{ type: string }> }>("POST", "/v2/webhooks", config);
+    },
   };
 }
+
+// GET /mockup-generator/printfiles/<product id> (v1): sizes in pixels at dpi, and which file each
+// variant uses on each placement.
+export type PrintfulPrintfiles = {
+  product_id?: number;
+  available_placements?: Record<string, string>;
+  printfiles?: Array<{ printfile_id: number; width: number; height: number; dpi: number }>;
+  variant_printfiles?: Array<{ variant_id: number; placements: Record<string, number> }>;
+};
+
+export type PrintfulWebhookConfig = { default_url: string; events: Array<{ type: string }> };
 
 export type Printful = ReturnType<typeof createPrintful>;
 

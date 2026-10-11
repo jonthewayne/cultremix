@@ -60,6 +60,8 @@ export const merchTables = {
     // The DTG placements Printful's catalog lists for it ("front", "back", "front_large"), with what
     // each adds to Printful's price. A product without "back" sells front prints only.
     placements: v.optional(v.array(v.object({ id: v.string(), extraCents: v.number() }))),
+    // When frontArea and backArea were read from Printful's print files ("Check with Printful").
+    areasCheckedAt: v.optional(v.number()),
   })
     .index("by_provider_product", ["provider", "productId"])
     .index("by_active", ["active"]),

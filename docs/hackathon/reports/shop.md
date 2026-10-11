@@ -1,6 +1,8 @@
 # Shop report (V1 U9 and U10)
 
-> **Changed October 10:** when Printful ships, a Shopify fulfillment with the carrier and tracking is created (`convex/shopifyFulfill.ts`), so Shopify emails the buyer; /admin/orders shows each shipment's tracking and whether Shopify has it. Shopify's privacy webhooks are handled (`convex/privacy.ts`).
+> **Changed October 10:** Admin, For sale has **Connect Printful** (sets the store's seven webhooks to this deployment with `POST /v2/webhooks` and keeps Printful's signing key, so `PRINTFUL_WEBHOOK_SECRET` is optional) and **Connect Shopify** (subscribes `orders/paid`, `orders/cancelled`, and `refunds/create` with `webhookSubscriptionCreate`); Admin, Products has **Check with Printful** (print areas from `GET /mockup-generator/printfiles/<id>`). See `convex/integrations.ts`.
+>
+> **Also October 10:** when Printful ships, a Shopify fulfillment with the carrier and tracking is created (`convex/shopifyFulfill.ts`), so Shopify emails the buyer; /admin/orders shows each shipment's tracking and whether Shopify has it. Shopify's privacy webhooks are handled (`convex/privacy.ts`).
 >
 > **Also changed October 10:** works no longer go on sale at publish. An admin approves each one, and it sells as one Shopify product per product its creator picked (handle `cr-FFF-EEE-<printful id>`), each with its own print file and side. `onPublished`, `syncWork`, and `syncAllPublished` are gone; `sales.approve` and `shopify.syncListing` replace them. See [products.md](products.md).
 

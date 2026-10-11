@@ -60,7 +60,7 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 | `SHOPIFY_API_VERSION` | Convex env, Worker var (optional) | no | no | manual | overrides the API version pinned in `shared/config/shopify.ts` (`2026-07`); leave unset |
 | `PRINTFUL_API_TOKEN` | Convex env | no | yes | manual | Printful v2 orders, shipments, and confirmations |
 | `PRINTFUL_STORE_ID` | Convex env | no | no | manual | the Printful store orders go to; webhooks from other stores are ignored |
-| `PRINTFUL_WEBHOOK_SECRET` | Convex env | no | yes | manual | verifies `x-pf-webhook-signature` on `/webhooks/printful` |
+| `PRINTFUL_WEBHOOK_SECRET` | Convex env | no | yes | optional | verifies `x-pf-webhook-signature` on `/webhooks/printful`. Usually left unset: **Connect Printful** (Admin, For sale) sets the store's webhooks and keeps Printful's signing key itself; a value here wins over the stored one |
 | `PRINTFUL_AUTO_CONFIRM` | Convex env (prod only) | no | no | manual | `true` lets production confirm Printful drafts after the 1-hour hold |
 | `MONAD_RPC_URL` | Convex env (optional) | no | no | manual | chain reads and writes; defaults to the network's public RPC; https only, except a localhost node in dev |
 | `CHAIN_REGISTRY_ADDRESS` | Convex env (dev only, optional) | no | no | manual | a local or fresh dev registry in place of the committed one |
@@ -78,7 +78,8 @@ Each environment has its own Shopify store and Printful store. Set the same name
 
 - Products, orders, and earnings run in Convex: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`. Without them product sync and order hydration wait, and `/webhooks/shopify` answers 503. The same endpoint takes the app's three compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`); set them to it in the app's settings.
 - The cart runs in the Worker: `SHOPIFY_SHOP_DOMAIN` and `SHOPIFY_STOREFRONT_PRIVATE_TOKEN`. Buying is also behind the `commerce.checkout` feature flag; with it off the work page is unchanged.
-- Fulfillment runs in Convex: `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID`, `PRINTFUL_WEBHOOK_SECRET`. Without the first two, paid orders wait and the 30-minute sweep picks them up once they are set. Without the secret, `/webhooks/printful` answers 503.
+- Fulfillment runs in Convex: `PRINTFUL_API_TOKEN` and `PRINTFUL_STORE_ID`. Without them, paid orders wait and the 30-minute sweep picks them up once they are set. Then **Connect Printful** in Admin, For sale sets the store's webhooks and keeps the signing key; until then (or a `PRINTFUL_WEBHOOK_SECRET`), `/webhooks/printful` answers 503. **Check with Printful** in Admin, Products reads each product's print areas from its print files.
+- **Connect Shopify** in Admin, For sale checks the store and its Headless channel and subscribes the order webhooks (`orders/paid`, `orders/cancelled`, `refunds/create`) to this deployment. The three privacy webhooks are set in the app's settings.
 - Print files go to Printful by their public address, so `R2_PUBLIC_URL` must be set wherever orders are fulfilled.
 - Drafts are confirmed only when `DEPLOYMENT_ENV=prod` and `PRINTFUL_AUTO_CONFIRM=true`, and the `fulfillment.autoConfirm` flag isn't turned off (turning it off pauses confirmation). Never set `PRINTFUL_AUTO_CONFIRM` in dev or staging; it has no effect there.
 - Test orders (Shopify `test`) make labeled test earnings and Printful drafts in dev and staging, and nothing at all in production. An unset or unrecognized `DEPLOYMENT_ENV` is treated like production for test orders and never confirms.

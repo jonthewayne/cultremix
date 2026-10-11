@@ -30,6 +30,7 @@ import type * as imageGen from "../imageGen.js";
 import type * as imageNotes from "../imageNotes.js";
 import type * as imageSizes from "../imageSizes.js";
 import type * as images from "../images.js";
+import type * as integrations from "../integrations.js";
 import type * as invites from "../invites.js";
 import type * as judges from "../judges.js";
 import type * as keeps from "../keeps.js";
@@ -87,6 +88,7 @@ import type * as lib_printImage from "../lib/printImage.js";
 import type * as lib_printKeys from "../lib/printKeys.js";
 import type * as lib_printPng from "../lib/printPng.js";
 import type * as lib_printful_client from "../lib/printful/client.js";
+import type * as lib_printful_setup from "../lib/printful/setup.js";
 import type * as lib_printful_webhookRoute from "../lib/printful/webhookRoute.js";
 import type * as lib_printful_webhookVerify from "../lib/printful/webhookVerify.js";
 import type * as lib_prompts from "../lib/prompts.js";
@@ -112,6 +114,7 @@ import type * as lib_shopify_fulfillmentSync from "../lib/shopify/fulfillmentSyn
 import type * as lib_shopify_orderQuery from "../lib/shopify/orderQuery.js";
 import type * as lib_shopify_productSync from "../lib/shopify/productSync.js";
 import type * as lib_shopify_reconcile from "../lib/shopify/reconcile.js";
+import type * as lib_shopify_setup from "../lib/shopify/setup.js";
 import type * as lib_shopify_webhookRoute from "../lib/shopify/webhookRoute.js";
 import type * as lib_shopify_webhookVerify from "../lib/shopify/webhookVerify.js";
 import type * as lib_sizes from "../lib/sizes.js";
@@ -195,6 +198,7 @@ declare const fullApi: ApiFromModules<{
   imageNotes: typeof imageNotes;
   imageSizes: typeof imageSizes;
   images: typeof images;
+  integrations: typeof integrations;
   invites: typeof invites;
   judges: typeof judges;
   keeps: typeof keeps;
@@ -252,6 +256,7 @@ declare const fullApi: ApiFromModules<{
   "lib/printKeys": typeof lib_printKeys;
   "lib/printPng": typeof lib_printPng;
   "lib/printful/client": typeof lib_printful_client;
+  "lib/printful/setup": typeof lib_printful_setup;
   "lib/printful/webhookRoute": typeof lib_printful_webhookRoute;
   "lib/printful/webhookVerify": typeof lib_printful_webhookVerify;
   "lib/prompts": typeof lib_prompts;
@@ -277,6 +282,7 @@ declare const fullApi: ApiFromModules<{
   "lib/shopify/orderQuery": typeof lib_shopify_orderQuery;
   "lib/shopify/productSync": typeof lib_shopify_productSync;
   "lib/shopify/reconcile": typeof lib_shopify_reconcile;
+  "lib/shopify/setup": typeof lib_shopify_setup;
   "lib/shopify/webhookRoute": typeof lib_shopify_webhookRoute;
   "lib/shopify/webhookVerify": typeof lib_shopify_webhookVerify;
   "lib/sizes": typeof lib_sizes;

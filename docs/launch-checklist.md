@@ -29,12 +29,13 @@ There's no staging project. Nothing is copied between the two; each is set up by
 Jon signs in once in a Screen Sharing session on mighteous; the Builder does the rest there.
 
 - [ ] **Shopify development store** (free). In the Dev Dashboard, a custom app with these Admin scopes: `write_products`, `read_products`, `write_publications`, `read_publications`, `read_orders`, `read_merchant_managed_fulfillment_orders`, `write_merchant_managed_fulfillment_orders`.
-  - Its compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) and the order webhooks (`orders/paid`, `orders/cancelled`, `refunds/create`) all point at `https://<dev convex site>/webhooks/shopify`.
+  - Its compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) point at `https://<dev convex site>/webhooks/shopify`, set in the app's settings. The order webhooks are subscribed by **Connect Shopify** below.
   - The Headless channel, with a Storefront private token.
   - A $5.95 flat shipping rate for the United States.
-- [ ] **Printful**: a store for dev (API), its token, store id, and a webhook to `https://<dev convex site>/webhooks/printful` with its secret.
-- [ ] **Dev env**: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID`, `PRINTFUL_WEBHOOK_SECRET` in Convex; `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` for the dev server. Never `PRINTFUL_AUTO_CONFIRM`.
-- [ ] **Products**: in Admin, Products, add the shirts on offer and set each one's name, prices, back-print extra, and print areas. Check the print areas against Printful's print-file endpoint (it needs the token), and correct any that differ.
+- [ ] **Printful**: a store for dev (API) with its token and store id.
+- [ ] **Dev env**: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID` in Convex; `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` for the dev server. Never `PRINTFUL_AUTO_CONFIRM`.
+- [ ] **Connect**: in Admin, For sale, press **Connect Printful** (sets its webhooks and keeps the signing key) and **Connect Shopify** (subscribes the order webhooks, and warns if the Headless channel is missing). Both say what they set up.
+- [ ] **Products**: in Admin, Products, add the shirts on offer and set each one's name, prices, and back-print extra. Press **Check with Printful** on each, so its print areas come from Printful's print files.
 - [ ] **For sale**: turn on Print-size art, approve two designs (one with a back print). Each product gets a print file; open them and check the placement. Their Shopify products appear in the development store.
 - [ ] **A test order**: turn on Checkout on dev, buy with the development store's test payment gateway (Bogus Gateway), and check that /admin/orders shows it paid, Printful has a draft with the right file on the right side, and the creator's earnings show on /me/earnings as Test.
 - [ ] **Placement check in Printful**: open the draft in Printful and confirm the design sits where the preview showed it. This settles whether a whole-area file needs a position. Then delete the draft.
@@ -61,7 +62,8 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 ### Deploy (Ops)
 
 - [ ] Follow the latest Ops message: pull, install, set production's env, `bunx convex deploy`, seed and backfills, `bun run deploy:prod`.
-- [ ] Production's env for the shop: the live store's `SHOPIFY_*` values, Printful's live `PRINTFUL_*` values, and `PRINTFUL_AUTO_CONFIRM=true`. The live store's app has the same scopes and webhooks as dev's, pointed at `https://savory-tiger-504.convex.site/webhooks/shopify` and `/webhooks/printful`.
+- [ ] Production's env for the shop: the live store's `SHOPIFY_*` values, Printful's live `PRINTFUL_API_TOKEN` and `PRINTFUL_STORE_ID`, and `PRINTFUL_AUTO_CONFIRM=true`. The live store's app has the same scopes as dev's, and its privacy webhooks point at `https://savory-tiger-504.convex.site/webhooks/shopify`.
+- [ ] On production's Admin, For sale: **Connect Printful** and **Connect Shopify**. In Admin, Products: **Check with Printful** on each product.
 
 ### Monad mainnet
 

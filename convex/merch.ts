@@ -6,6 +6,8 @@ import { GARMENT_COLORS, colorKey } from "./lib/garments";
 import type { GarmentColor, Palette } from "./lib/garments";
 import { chosenProducts, merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
 import { garmentKindValidator, merchColor, printAreaValidator } from "./schema/merch";
+import { createPrintful, printfulConfigFromEnv } from "./lib/printful/client";
+import { areasFromPrintfiles } from "./lib/printful/setup";
 import { garmentKindOf } from "../shared/config/print-products";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -150,6 +152,79 @@ const productView = v.object({
   }),
   // Printful's DTG placements for it, with what each adds to Printful's price.
   placements: v.optional(v.array(v.object({ id: v.string(), extraCents: v.number() }))),
+  // When its print areas were read from Printful's print files.
+  areasCheckedAt: v.optional(v.number()),
+});
+
+// Whether Printful's keys are in the env, so the page can offer "Check with Printful".
+export const printfulReady = query({
+  args: {},
+  returns: v.boolean(),
+  handler: async (ctx) => {
+    await requireAdmin(ctx, "view");
+    return printfulConfigFromEnv() !== null;
+  },
+});
+
+// Reads a product's print areas from Printful's print files (it needs the store's token): the
+// largest file on each placement, in inches at its DPI. A product Printful prints no back on is
+// then sold front only.
+export const adminCheckAreas = action({
+  args: { productId: v.id("merchProducts") },
+  returns: v.object({ front: v.union(v.null(), printAreaValidator), back: v.union(v.null(), printAreaValidator) }),
+  handler: async (ctx, args): Promise<{ front: { widthIn: number; heightIn: number } | null; back: { widthIn: number; heightIn: number } | null }> => {
+    await ctx.runQuery(internal.merch.checkAdmin, { level: "manage" });
+    const config = printfulConfigFromEnv();
+    if (!config) throw new ConvexError({ code: "NOT_CONFIGURED", message: "Set PRINTFUL_API_TOKEN and PRINTFUL_STORE_ID first." });
+    const product: { catalogId: number } | null = await ctx.runQuery(internal.merch.catalogIdOf, { productId: args.productId });
+    if (!product) throw new ConvexError({ code: "NOT_FOUND", message: "That product isn't here anymore." });
+    let files;
+    try {
+      files = await createPrintful({ config }).printfiles(product.catalogId);
+    } catch (error) {
+      throw new ConvexError({ code: "PRINTFUL", message: `Printful didn't send the print files: ${error instanceof Error ? error.message : String(error)}` });
+    }
+    if (!files) throw new ConvexError({ code: "PRINTFUL", message: "Printful has no print files for that product." });
+    const areas = areasFromPrintfiles(files);
+    if (!areas.front) throw new ConvexError({ code: "PRINTFUL", message: "Printful lists no front print file for that product." });
+    await ctx.runMutation(internal.merch.saveCheckedAreas, {
+      productId: args.productId,
+      front: areas.front,
+      ...(areas.back ? { back: areas.back } : {}),
+      placements: areas.placements,
+    });
+    return { front: areas.front, back: areas.back };
+  },
+});
+
+export const catalogIdOf = internalQuery({
+  args: { productId: v.id("merchProducts") },
+  returns: v.union(v.null(), v.object({ catalogId: v.number() })),
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get("merchProducts", args.productId);
+    return product ? { catalogId: product.productId } : null;
+  },
+});
+
+export const saveCheckedAreas = internalMutation({
+  args: { productId: v.id("merchProducts"), front: printAreaValidator, back: v.optional(printAreaValidator), placements: v.array(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get("merchProducts", args.productId);
+    if (!product) return null;
+    // Keep the catalog's extra prices; the print files say which placements the product really has.
+    const extras = new Map((product.placements ?? []).map((placement) => [placement.id, placement.extraCents]));
+    const placements = ["front", "back", "front_large"]
+      .filter((id) => args.placements.includes(id))
+      .map((id) => ({ id, extraCents: extras.get(id) ?? 0 }));
+    await ctx.db.patch("merchProducts", product._id, {
+      frontArea: args.front,
+      backArea: args.back,
+      placements,
+      areasCheckedAt: Date.now(),
+    });
+    return null;
+  },
 });
 
 export const adminList = query({
@@ -173,6 +248,7 @@ export const adminList = query({
         colors: p.colors.map((c) => ({ key: c.key, name: c.name, hex: c.hex, image: c.image, inStock: c.inStock, offered: c.offered, sizes: c.variants.map((s) => s.size) })),
         sale: saleView(p),
         ...(p.placements ? { placements: p.placements } : {}),
+        ...(p.areasCheckedAt ? { areasCheckedAt: p.areasCheckedAt } : {}),
       }));
   },
 });
@@ -437,14 +513,21 @@ export const adminSetSale = mutation({
       throw new ConvexError({ code: "INVALID_INPUT", message: "A back print can add $0 to $50." });
     }
     const shopName = args.shopName?.trim().slice(0, 60) || undefined;
+    const frontArea = checkedArea(args.frontArea, "front");
+    const backArea = checkedArea(args.backArea, "back");
+    const same = (a?: { widthIn: number; heightIn: number }, b?: { widthIn: number; heightIn: number }) =>
+      a?.widthIn === b?.widthIn && a?.heightIn === b?.heightIn;
+    // Areas typed in by hand are no longer the ones Printful's print files gave.
+    const keepsChecked = same(frontArea, product.frontArea) && same(backArea, product.backArea);
     await ctx.db.patch("merchProducts", product._id, {
       shopName,
       kind: args.kind,
       priceCents,
       largePriceCents,
       backExtraCents,
-      frontArea: checkedArea(args.frontArea, "front"),
-      backArea: checkedArea(args.backArea, "back"),
+      frontArea,
+      backArea,
+      ...(keepsChecked ? {} : { areasCheckedAt: undefined }),
     });
     return null;
   },

@@ -274,6 +274,16 @@ export const shopTables = {
     .index("by_fulfillmentState_updated", ["fulfillmentState", "updatedAt"])
     .index("by_redactRequested", ["redactRequestedAt"]),
 
+  // What the last "Connect Printful" or "Connect Shopify" in Admin found (convex/integrations.ts),
+  // and Printful's webhook signing key from its webhook setup. Internal only: no public function
+  // returns webhookSecret. PRINTFUL_WEBHOOK_SECRET in the env, when set, wins over it.
+  integrations: defineTable({
+    name: v.union(v.literal("printful"), v.literal("shopify")),
+    connectedAt: v.number(),
+    note: v.string(),
+    webhookSecret: v.optional(v.string()),
+  }).index("by_name", ["name"]),
+
   // Shopify's privacy webhooks as received (convex/privacy.ts). No customer email or phone is kept.
   privacyRequests: defineTable({
     webhookId: v.string(),

@@ -31,7 +31,8 @@ export async function handlePrintfulWebhook(ctx: ActionCtx, request: Request): P
   const raw = new Uint8Array(await request.arrayBuffer());
   if (raw.byteLength > PRINTFUL_WEBHOOK_MAX_BYTES) return text("Too large", 413);
 
-  const secret = process.env.PRINTFUL_WEBHOOK_SECRET ?? "";
+  // The env's key, else the one Connect Printful stored (convex/integrations.ts).
+  const secret = process.env.PRINTFUL_WEBHOOK_SECRET?.trim() || ((await ctx.runQuery(internal.integrations.printfulWebhookSecret, {})) ?? "");
   if (!secret) return text("Not configured", 503);
   if (!(await verifyPrintfulWebhook(raw, request.headers.get("x-pf-webhook-signature"), secret))) {
     return text("Unauthorized", 401);

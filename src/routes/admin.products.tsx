@@ -235,6 +235,8 @@ const toCents = (text: string) => Math.round(Number(text) * 100);
 // print areas. Saving sets every field; "Use the defaults" clears them.
 function SaleSettings({ product }: { product: Product }) {
   const save = useMutation(api.merch.adminSetSale);
+  const checkAreas = useAction(api.merch.adminCheckAreas);
+  const printfulReady = useQuery(api.merch.printfulReady, {});
   const sale = product.sale;
   const initial = () => ({
     name: sale.name,
@@ -307,6 +309,31 @@ function SaleSettings({ product }: { product: Product }) {
       {catalogExtras.length > 0 && (
         <p className="mt-1 text-xs text-muted-foreground">Printful charges extra for: {catalogExtras.join(", ")}.</p>
       )}
+      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {product.areasCheckedAt
+          ? `Print areas read from Printful's print files on ${new Date(product.areasCheckedAt).toLocaleDateString()}.`
+          : "Print areas are Printful's published sizes, not yet checked against its print files."}
+        <button
+          type="button"
+          disabled={busy || !printfulReady}
+          title={printfulReady ? undefined : "Needs PRINTFUL_API_TOKEN and PRINTFUL_STORE_ID"}
+          onClick={() => {
+            setBusy(true);
+            setNote("");
+            checkAreas({ productId: product._id as Id<"merchProducts"> })
+              .then((areas) =>
+                setNote(
+                  `Printful's print files: front ${areas.front?.widthIn} × ${areas.front?.heightIn} in${areas.back ? `, back ${areas.back.widthIn} × ${areas.back.heightIn} in` : ", no back"}.`,
+                ),
+              )
+              .catch((err) => setNote(errorMessage(err)))
+              .finally(() => setBusy(false));
+          }}
+          className="font-semibold text-foreground underline underline-offset-4 disabled:opacity-40"
+        >
+          Check with Printful
+        </button>
+      </p>
       {open && (
         <form
           className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4"

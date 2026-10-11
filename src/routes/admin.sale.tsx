@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
@@ -74,6 +74,7 @@ function AdminSale() {
                 </li>
               ))}
             </ul>
+            <Connections />
             <div className="flex flex-wrap items-center gap-3">
               <Link to="/admin/products" className="text-sm font-semibold underline underline-offset-4">
                 Products and prices
@@ -107,6 +108,76 @@ function AdminSale() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// Connect Printful and Connect Shopify (convex/integrations.ts): once their keys are in the env,
+// each sets up its webhooks to this deployment. Safe to run again.
+function Connections() {
+  const status = useQuery(api.integrations.status, {});
+  const connectPrintful = useAction(api.integrations.connectPrintful);
+  const connectShopify = useAction(api.integrations.connectShopify);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  if (!status) return null;
+  const run = async (name: string, work: () => Promise<string>) => {
+    setBusy(name);
+    setNote("");
+    try {
+      setNote(await work());
+    } catch (err) {
+      setNote(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="space-y-2 rounded-xl border-2 border-border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={busy !== null || !status.printful.configured}
+          title={status.printful.configured ? undefined : "Needs PRINTFUL_API_TOKEN and PRINTFUL_STORE_ID"}
+          onClick={() =>
+            void run("printful", async () => {
+              const done = await connectPrintful({});
+              return `Printful: ${done.store}, ${done.events} webhooks to ${done.url}. Signing key stored.`;
+            })
+          }
+          className={adminButton}
+        >
+          {busy === "printful" ? "Connecting…" : status.printful.connectedAt ? "Connect Printful again" : "Connect Printful"}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null || !status.shopify.configured}
+          title={status.shopify.configured ? undefined : "Needs SHOPIFY_SHOP_DOMAIN, SHOPIFY_CLIENT_ID, and SHOPIFY_CLIENT_SECRET"}
+          onClick={() =>
+            void run("shopify", async () => {
+              const done = await connectShopify({});
+              return `Shopify: ${done.shop}. ${done.created.length ? `Subscribed ${done.created.join(", ")}.` : "Order webhooks were already there."}${done.headless ? "" : " Add the Headless sales channel before approving works."}`;
+            })
+          }
+          className={adminButton}
+        >
+          {busy === "shopify" ? "Connecting…" : status.shopify.connectedAt ? "Connect Shopify again" : "Connect Shopify"}
+        </button>
+      </div>
+      {status.printful.note && (
+        <p className="text-muted-foreground">
+          Printful, {new Date(status.printful.connectedAt!).toLocaleString()}: {status.printful.note}
+        </p>
+      )}
+      {status.shopify.note && (
+        <p className="text-muted-foreground">
+          Shopify, {new Date(status.shopify.connectedAt!).toLocaleString()}: {status.shopify.note}
+        </p>
+      )}
+      {status.printful.configured && status.printful.signingKey === "none" && (
+        <p className="font-semibold text-amber-700">Printful's webhooks need connecting before orders can update.</p>
+      )}
+      {note && <p className="font-semibold">{note}</p>}
     </div>
   );
 }
