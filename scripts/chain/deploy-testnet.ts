@@ -1,6 +1,8 @@
-// Deploys the dev CultRemixRegistry to Monad testnet from the dev relayer, which becomes the
-// registry's admin and relayer, then registers economic config v1. The key is read here from
-// ~/.config/cultremix/chain.env (MONAD_RELAYER_PRIVATE_KEY_DEV) and never printed.
+// Deploys an environment's CultRemixRegistry from that environment's relayer, which becomes the
+// registry's admin and relayer, then registers economic config v1. Dev deploys to Monad testnet
+// with MONAD_RELAYER_PRIVATE_KEY_DEV; production deploys to Monad mainnet with
+// MONAD_RELAYER_PRIVATE_KEY_PROD. Keys are read here from ~/.config/cultremix/chain.env and never
+// printed.
 //
 //   bun run chain:deploy:testnet                        read-only: relayer, balance, cost
 //   bun run chain:deploy:testnet --broadcast            deploy, then register config v1
@@ -9,9 +11,12 @@
 //   bun run chain:deploy:testnet --local http://127.0.0.1:8545 [--broadcast]
 //                                                       rehearse on anvil (chain 10143) with its
 //                                                       first account; reads no secrets
+//   bun run chain:deploy:mainnet                        the same for production, on Monad mainnet;
+//   bun run chain:deploy:mainnet --broadcast --confirm-mainnet
+//                                                       spends real MON, so it needs both flags
 //
-// Afterwards, record the address as CHAIN_ENVIRONMENTS.dev.registryAddress in
-// shared/config/chains.ts. Run it while the dev relayer is idle: it uses the relayer's nonces.
+// Afterwards, record the address as CHAIN_ENVIRONMENTS.<env>.registryAddress in
+// shared/config/chains.ts. Run it while that relayer is idle: it uses the relayer's nonces.
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -24,6 +29,7 @@ import {
 } from "../../convex/lib/economics";
 import {
   CHAIN_ENVIRONMENTS,
+  MONAD_MAINNET,
   MONAD_TESTNET,
   explorerAddressUrl,
   explorerTxUrl,
@@ -38,7 +44,7 @@ import type { RegistryTarget } from "./deployRegistry";
 import type { Address, Hex } from "viem";
 
 const KEY_FILE = join(homedir(), ".config", "cultremix", "chain.env");
-const KEY_NAME = "MONAD_RELAYER_PRIVATE_KEY_DEV";
+const KEY_NAMES = { dev: "MONAD_RELAYER_PRIVATE_KEY_DEV", prod: "MONAD_RELAYER_PRIVATE_KEY_PROD" } as const;
 // Anvil's first account: a well-known test key, for --local only.
 const ANVIL_KEY =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -53,12 +59,20 @@ function fail(message: string): never {
 function parseArgs(argv: Array<string>) {
   const args = {
     broadcast: false,
+    confirmMainnet: false,
+    env: "dev" as "dev" | "prod",
     local: null as string | null,
     registry: null as Address | null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--broadcast") args.broadcast = true;
+    else if (arg === "--confirm-mainnet") args.confirmMainnet = true;
+    else if (arg === "--env") {
+      const value = argv[++i];
+      if (value !== "dev" && value !== "prod") fail("--env takes dev or prod.");
+      args.env = value;
+    }
     else if (arg === "--local")
       args.local =
         argv[++i] ??
@@ -75,11 +89,29 @@ function parseArgs(argv: Array<string>) {
     !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/u.test(args.local)
   )
     fail("--local takes a localhost RPC URL.");
+  if (args.local && args.env === "prod") fail("--local rehearses the dev registry only.");
+  if (args.env === "prod" && args.broadcast && !args.confirmMainnet)
+    fail("This spends real MON on Monad mainnet. Add --confirm-mainnet to go ahead.");
   return args;
 }
 
-/** The dev relayer key from chain.env. Error messages never include the value. */
-function relayerKey(): Hex {
+/** A value from chain.env, or null. Error messages never include the value. */
+function chainEnvValue(name: string): string | null {
+  let text: string;
+  try {
+    text = readFileSync(KEY_FILE, "utf8");
+  } catch {
+    return null;
+  }
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*?)\s*$/u.exec(line);
+    if (match && match[1] === name) return match[2].replace(/^(["'])(.*)\1$/u, "$2");
+  }
+  return null;
+}
+
+/** The environment's relayer key from chain.env. Error messages never include the value. */
+function relayerKey(KEY_NAME: string): Hex {
   let text: string;
   try {
     text = readFileSync(KEY_FILE, "utf8");
@@ -100,14 +132,16 @@ function relayerKey(): Hex {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const dev = CHAIN_ENVIRONMENTS.dev;
+  const dev = CHAIN_ENVIRONMENTS[args.env];
+  const network = args.env === "prod" ? MONAD_MAINNET : MONAD_TESTNET;
   const local = args.local !== null;
+  const rpcUrl = args.local ?? (args.env === "prod" ? (chainEnvValue("MONAD_RPC_URL_MAINNET") ?? network.rpcUrl) : network.rpcUrl);
   const target: RegistryTarget = {
-    rpcUrl: args.local ?? MONAD_TESTNET.rpcUrl,
-    chainId: MONAD_TESTNET.chainId,
-    name: local ? "anvil" : MONAD_TESTNET.name,
+    rpcUrl,
+    chainId: network.chainId,
+    name: local ? "anvil" : network.name,
   };
-  const key = local ? (ANVIL_KEY as Hex) : relayerKey();
+  const key = local ? (ANVIL_KEY as Hex) : relayerKey(KEY_NAMES[args.env]);
   const relayer = privateKeyToAccount(key).address;
   if (
     !local &&
@@ -115,18 +149,19 @@ async function main() {
       relayer.toLowerCase() !== dev.relayerAddress.toLowerCase())
   ) {
     fail(
-      `The key in ${KEY_FILE} belongs to ${relayer}, not the dev relayer ${dev.relayerAddress ?? "(none recorded)"}.`,
+      `The key in ${KEY_FILE} belongs to ${relayer}, not the ${args.env} relayer ${dev.relayerAddress ?? "(none recorded)"}.`,
     );
   }
 
   const quote = await deploymentQuote(target, key);
-  if (quote.chainId !== MONAD_TESTNET.chainId)
+  if (quote.chainId !== network.chainId)
     fail(
-      `${target.rpcUrl} reports chain ${quote.chainId}, not Monad testnet (${MONAD_TESTNET.chainId}).`,
+      `The RPC reports chain ${quote.chainId}, not ${network.name} (${network.chainId}).`,
     );
   const needed = quote.cost * HEADROOM;
+  // The RPC URL can carry a provider key, so only its host is shown.
   console.log(
-    `Network     ${target.name} (${quote.chainId}) at ${target.rpcUrl}`,
+    `Network     ${target.name} (${quote.chainId}) at ${new URL(target.rpcUrl).host}`,
   );
   console.log(`Relayer     ${relayer} (admin and relayer of the new registry)`);
   console.log(`Balance     ${formatEther(quote.balance)} MON`);
@@ -140,7 +175,7 @@ async function main() {
   };
   if (!local && dev.registryAddress && !args.registry) {
     fail(
-      `The dev registry is already recorded (${dev.registryAddress}). To register config v1 on it, pass --registry ${dev.registryAddress}.`,
+      `The ${args.env} registry is already recorded (${dev.registryAddress}). To register config v1 on it, pass --registry ${dev.registryAddress}.`,
     );
   }
   if (!args.broadcast) {
@@ -176,7 +211,7 @@ async function main() {
     registry = deployed.address;
     console.log(`Registry    ${registry} (block ${deployed.blockNumber})`);
     console.log(
-      `Deploy tx   ${local ? deployed.txHash : explorerTxUrl(MONAD_TESTNET, deployed.txHash)}`,
+      `Deploy tx   ${local ? deployed.txHash : explorerTxUrl(network, deployed.txHash)}`,
     );
   }
 
@@ -196,7 +231,7 @@ async function main() {
     );
   else
     console.log(
-      `Config tx   ${local ? registered.txHash : explorerTxUrl(MONAD_TESTNET, registered.txHash!)}`,
+      `Config tx   ${local ? registered.txHash : explorerTxUrl(network, registered.txHash!)}`,
     );
 
   console.log("\nNext:");
@@ -206,11 +241,11 @@ async function main() {
     );
   } else {
     console.log(
-      `  1. Set CHAIN_ENVIRONMENTS.dev.registryAddress to "${registry}" in shared/config/chains.ts and commit.`,
+      `  1. Set CHAIN_ENVIRONMENTS.${args.env}.registryAddress to "${registry}" in shared/config/chains.ts and commit.`,
     );
-    console.log(`     ${explorerAddressUrl(MONAD_TESTNET, registry)}`);
+    console.log(`     ${explorerAddressUrl(network, registry)}`);
     console.log(
-      "  2. Deploy Convex dev, turn on chain writes in /admin/chain, and press Register economic config v1:",
+      `  2. Deploy Convex ${args.env}, turn on chain writes in /admin/chain, and press Register economic config v1:`,
     );
     console.log(
       "     its write finds this registration onchain and confirms without sending.",

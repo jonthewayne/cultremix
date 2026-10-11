@@ -37,20 +37,20 @@ As of October 7, 2026, 9 p.m. Pacific. The Monad submission is due **Tuesday, Oc
 
 1. ~~Checkout sells the active shirt from `/admin/products`.~~ Done October 10, for several products: creators pick the products a design comes on and place it once; each product has its own prices, back-print extra, and print areas ([products.md](reports/products.md)).
 2. ~~The owner approves each work for sale.~~ Done October 10: approving makes a print file for each product (upscale, render, print check) and a Shopify product for each.
-3. Shopify's privacy webhooks are in place, and buyer addresses are kept only as long as fulfillment needs them.
-4. When Printful ships, a Shopify fulfillment with tracking is created, so buyers get Shopify's shipping emails.
-5. Store policies (shipping, returns, privacy, and terms) appear as pages on cultremix.com, for Jon to approve.
-6. The order rehearsal runs once the accounts exist.
+3. ~~Shopify's privacy webhooks.~~ Done October 10 (`convex/privacy.ts`): data requests wait on /admin/orders for the owner; removals clear addresses and raw order bodies; addresses also go 30 days after shipping.
+4. ~~Tracking to Shopify.~~ Done October 10 (`convex/shopifyFulfill.ts`): each Printful shipment becomes a Shopify fulfillment with tracking, and Shopify emails the buyer.
+5. ~~Store policies.~~ Drafted October 10 at /policies (shipping, returns, privacy, terms), marked as drafts until Jon approves them.
+6. The order rehearsal runs once the accounts exist ([launch checklist](../launch-checklist.md), "Dev: rehearse each piece").
 
 **Monad:**
 
 7. The testnet registry goes up on dev, then a few designs are published there and the real costs measured.
 8. Circle wallets get tested on dev with test keys, then production switches to live keys.
-9. The mainnet registry and the economics rules go up on production.
+9. The mainnet registry and the economics rules go up on production: `bun run chain:deploy:mainnet --broadcast --confirm-mainnet` once production's relayer has about 0.47 MON (the dry run works now).
 
 **Launch:**
 
-10. The launch checklist is rewritten for the two environments, with an Ops message for each deploy.
+10. ~~The launch checklist.~~ Rewritten October 10 for dev and production ([launch-checklist.md](../launch-checklist.md)).
 11. The submission package:
     - a logo file;
     - README, submission, and judges docs brought up to date;

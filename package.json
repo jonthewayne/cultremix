@@ -30,6 +30,7 @@
     "test:image": "bun tests/image-e2e/run.ts",
     "test:chain:anvil": "vitest run --config vitest.chain-e2e.config.ts",
     "chain:deploy:testnet": "bun run scripts/chain/deploy-testnet.ts",
+    "chain:deploy:mainnet": "bun run scripts/chain/deploy-testnet.ts --env prod",
     "setup": "bun run scripts/setup.ts",
     "new-project": "bun run scripts/create-project.ts",
     "doctor": "bun run scripts/doctor.ts",

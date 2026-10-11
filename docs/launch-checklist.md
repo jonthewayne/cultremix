@@ -1,168 +1,101 @@
 # Launch checklist
 
-Staging is the hackathon build (Monad testnet, test checkout) and stays as the rehearsal for production. Production (`cultremix.com`) runs the same code and schema with its own data. Nothing is ever copied between environments; each one is set up by script.
+CultRemix has two environments in one Convex project:
 
-Tick each box on the day. Values for env vars come from the owner's key store and are never pasted into docs, chat, or commits.
+| | Dev | Production |
+| --- | --- | --- |
+| What it is | The private rehearsal | The live store and the site judges use |
+| Where | mighteous, over the tailnet | cultremix.com |
+| Convex deployment | `vibrant-rook-798` | `savory-tiger-504` |
+| Monad | testnet, relayer `0x7D39bCfd08b206fEaacb4F1E2817aDB22e06f921` | mainnet, relayer `0x1672581d1B190d045197439039446bD48bd9a74A` |
+| Shopify | a free development store | the live store (Basic plan, Shopify Payments, Headless channel) |
+| Printful | a store whose orders stop at drafts | the live store; drafts are confirmed after the 1-hour hold |
+| Circle | test keys | live keys |
+| Who deploys | the Builder, by pushing to `dev` | the Ops thread, from its own clone, when Jon says go |
 
-## Before either environment
+There's no staging project. Nothing is copied between the two; each is set up by its own commands. Secret values come from `~/.config/cultremix/*.env` or the owner's key store and never go into docs, chat, or commits.
 
-- [ ] `bun run typecheck`, `bun run test`, and `bun run build` pass on the commit you're shipping.
-- [ ] The build log (`docs/hackathon/log.md`) lists what this deploy needs (schema changes, jobs to run).
-- [ ] The judge list (`judges.txt`, gitignored) has each judge's email and a username.
+## Every production deploy
 
-## Staging (`staging.cultremix.com`, Monad testnet)
+- [ ] `bun run typecheck`, `bun run test`, `bun run build`, and `bun run test:e2e` pass on the commit.
+- [ ] The Builder's Ops message names the commit, the schema changes, any env to set, and the jobs to run. It replaces earlier messages, so only the latest one is followed.
+- [ ] The build log (`docs/hackathon/log.md`) has an entry for it.
+- [ ] After the deploy: `BASE_URL=https://cultremix.com bun run test:e2e` ends with "E2E smoke complete", and the Ops message's checks pass.
 
-Follow these in order. Each step says exactly what to run or click; nothing here needs a decision. Commands run from a clean checkout of the commit you're shipping, in a login shell (`zsh -lc`), from the repo root. Wherever a step says `<staging key>`, use the staging deploy key from step 1, set only for that command and never saved to a file.
+## Dev: rehearse each piece
 
-### 1. A separate Convex project for staging
+### The shop
 
-Staging gets its own Convex project, so its data, env, and keys can never mix with dev or production.
+Jon signs in once in a Screen Sharing session on mighteous; the Builder does the rest there.
 
-- [ ] In the Convex dashboard, on the same team as production, **Create project** named `cultremix-staging`.
-- [ ] Open the project's **Production** deployment (this is staging; the project has no other use). Note its two URLs from **Settings → URL & deploy key**: `https://<name>.convex.cloud` and `https://<name>.convex.site`.
-- [ ] On the same page, **Generate production deploy key**. Keep it in the owner's key store as `CONVEX_DEPLOY_KEY_STAGING`. Every command below that says `CONVEX_DEPLOY_KEY=<staging key>` reaches staging only.
-- [ ] Never pass `--prod` with the staging key, and never run `bunx convex dev` against it.
+- [ ] **Shopify development store** (free). In the Dev Dashboard, a custom app with these Admin scopes: `write_products`, `read_products`, `write_publications`, `read_publications`, `read_orders`, `read_merchant_managed_fulfillment_orders`, `write_merchant_managed_fulfillment_orders`.
+  - Its compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) and the order webhooks (`orders/paid`, `orders/cancelled`, `refunds/create`) all point at `https://<dev convex site>/webhooks/shopify`.
+  - The Headless channel, with a Storefront private token.
+  - A $5.95 flat shipping rate for the United States.
+- [ ] **Printful**: a store for dev (API), its token, store id, and a webhook to `https://<dev convex site>/webhooks/printful` with its secret.
+- [ ] **Dev env**: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID`, `PRINTFUL_WEBHOOK_SECRET` in Convex; `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` for the dev server. Never `PRINTFUL_AUTO_CONFIRM`.
+- [ ] **Products**: in Admin, Products, add the shirts on offer and set each one's name, prices, back-print extra, and print areas. Check the print areas against Printful's print-file endpoint (it needs the token), and correct any that differ.
+- [ ] **For sale**: turn on Print-size art, approve two designs (one with a back print). Each product gets a print file; open them and check the placement. Their Shopify products appear in the development store.
+- [ ] **A test order**: turn on Checkout on dev, buy with the development store's test payment gateway (Bogus Gateway), and check that /admin/orders shows it paid, Printful has a draft with the right file on the right side, and the creator's earnings show on /me/earnings as Test.
+- [ ] **Placement check in Printful**: open the draft in Printful and confirm the design sits where the preview showed it. This settles whether a whole-area file needs a position. Then delete the draft.
 
-### 2. The R2 bucket
+### Monad
 
-- [ ] Create the bucket: `wrangler r2 bucket create cultremix-staging-public`.
-- [ ] Turn on its public URL: `wrangler r2 bucket dev-url enable cultremix-staging-public`. Note the `https://pub-….r2.dev` address it prints; that's `R2_PUBLIC_URL`.
-- [ ] CORS: copy production's policy (`~/cultremix-ops/r2-cors.json`) to `~/cultremix-ops/r2-cors-staging.json`, set its allowed origins to `https://staging.cultremix.com` and `https://cultremix-staging.jonthewayne.workers.dev` (GET and PUT), then `wrangler r2 bucket cors set cultremix-staging-public --file ~/cultremix-ops/r2-cors-staging.json`. The Print Studio's knockout preview and studio uploads need it.
-- [ ] In the Cloudflare dashboard, **R2 → Manage API tokens → Create API token**: permission **Object Read & Write**, limited to `cultremix-staging-public` only. Save the access key ID and secret in the key store; they're shown once.
-- [ ] `R2_ENDPOINT` is `https://e118a9fae1084226a1733eb812e337b5.r2.cloudflarestorage.com` (the account's S3 endpoint).
+- [ ] Testnet MON for dev's relayer from the faucet.
+- [ ] `bun run chain:deploy:testnet` (a dry run), then `bun run chain:deploy:testnet --broadcast`. Record the address in `shared/config/chains.ts` (`CHAIN_ENVIRONMENTS.dev.registryAddress`) and push.
+- [ ] /admin/chain: turn chain writes on and register economic config v1. Turn on Monad records in /admin, publish two designs, and check each one's record on testnet.monadscan.com and /onchain. Note the real cost per publish.
 
-There is one public bucket per environment and no private bucket: published works live under `works/<family>/<expression>/`, and everything else sits under an unguessable 128-bit code. See [Storage and sizes](image-generation/README.md#storage-and-sizes).
+### Circle
 
-### 3. Keys for staging's own services
+- [ ] A Circle developer account; a test key and entity secret in dev's env (`CIRCLE_API_KEY` and the rest in [Environment variables](environment-variables.md)). New members get a testnet wallet within five minutes.
 
-Each is new for staging, with its own limit, and never copied from production.
+## Production: go live
 
-- [ ] CultRemix Gateway: a staging key with a budget.
-- [ ] fal: a staging key with a spend limit set in fal's dashboard.
-- [ ] Resend: a staging API key for the verified `cultremix.com` domain.
-- [ ] `AUTH_SECRET`: a fresh one, `openssl rand -base64 32`. Store it; don't reuse dev's or production's.
+### What Jon does first
 
-### 4. Convex env (staging)
+- [ ] Decide: the launch shirts and prices, $5.95 flat US shipping, and the 15% creator pool.
+- [ ] Sign up: Shopify Basic with Shopify Payments (as an individual for now; business details can change later), Printful billing, and Circle with a live key.
+- [ ] About 1 MON for production's relayer (deploying the registry needs about 0.47 MON on hand, and each publish costs a few hundredths), and a backup of its key in the password manager.
+- [ ] Approve the store policies at /policies (they say "Draft, under review" until then), and paste the same text into Shopify's Settings, Policies.
 
-Set each with `CONVEX_DEPLOY_KEY=<staging key> bunx convex env set NAME 'value'`. Paste secret values straight from the key store into your terminal; never into docs, chat, or commits. What each one does is in [Environment variables](environment-variables.md).
+### Deploy (Ops)
 
-Which environment this is:
+- [ ] Follow the latest Ops message: pull, install, set production's env, `bunx convex deploy`, seed and backfills, `bun run deploy:prod`.
+- [ ] Production's env for the shop: the live store's `SHOPIFY_*` values, Printful's live `PRINTFUL_*` values, and `PRINTFUL_AUTO_CONFIRM=true`. The live store's app has the same scopes and webhooks as dev's, pointed at `https://savory-tiger-504.convex.site/webhooks/shopify` and `/webhooks/printful`.
 
-- [ ] `DEPLOYMENT_ENV=staging`: shows the **Testnet** badge on CR numbers and the header, and turns off the dev stand-in generator.
+### Monad mainnet
 
-Site and sign-in:
+- [ ] `bun run chain:deploy:mainnet` (a dry run: balance and cost), then `bun run chain:deploy:mainnet --broadcast --confirm-mainnet`.
+- [ ] Record the address as `CHAIN_ENVIRONMENTS.prod.registryAddress`, push, and have Ops deploy.
+- [ ] /admin/chain on production: turn chain writes on and register economic config v1. Then turn on Monad records in /admin.
 
-- [ ] `SITE_URL=https://staging.cultremix.com`
-- [ ] `AUTH_TRUSTED_ORIGINS=https://staging.cultremix.com,https://cultremix-staging.jonthewayne.workers.dev`
-- [ ] `AUTH_SECRET` (from step 3)
-- [ ] `APP_NAME=CultRemix`
-- [ ] `AUTH_EMAIL_PROVIDER=resend`
-- [ ] `AUTH_EMAIL_FROM='CultRemix <heyyo@cultremix.com>'`
-- [ ] `RESEND_API_KEY` (from step 3)
-- [ ] `AUTH_EMAIL_OTP_ENABLED=true`
-- [ ] `AUTH_MAGIC_LINK_ENABLED=false`
-- [ ] `AUTH_PHONE_ENABLED=false`
-- [ ] `AUTH_SMS_PROVIDER=console`
-- [ ] `FIRST_SUPER_ADMIN_EMAIL` (the owner's email, the same as production's)
+### Orders, in four steps
 
-Images and print:
+1. [ ] Products and prices set in Admin, Products; a few designs approved in Admin, For sale, with Shopify products live.
+2. [ ] One order in Shopify Payments' test mode on the live store, end to end: a Printful draft, deleted.
+3. [ ] One real order (Jon buys a shirt). It prints and ships; Shopify emails the tracking, and /admin/orders shows "buyer emailed by Shopify".
+4. [ ] Turn Checkout on in /admin. Work pages show the buy box; "Buying opens soon" goes away.
 
-- [ ] `AI_GATEWAY_API_KEY` (from step 3)
-- [ ] `R2_ENDPOINT`, `R2_BUCKET=cultremix-staging-public`, `R2_PUBLIC_URL` (from step 2)
-- [ ] `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (from step 2)
-- [ ] `FAL_KEY` (from step 3)
+### Judges
 
-Leave these unset (each has a working default): `IMAGE_PROVIDER`, `IMAGE_QUALITY`, `PHOTO_QUALITY`, `STYLE_NOTES_MODEL`, `GRID_QUALITY`, `STUDIO_LAYOUT`, `PHONE_TEMP_EMAIL_DOMAIN`.
+- [ ] `judges.txt` (gitignored): one judge per line, email then username.
+- [ ] `bun run judges:provision -- --prod --dry-run --file judges.txt`, then without `--dry-run`. Send each judge their password privately from `.judges.local.json`, then delete the file.
+- [ ] Sign in as one judge on a phone: the studio opens with their credits.
 
-Must not be set on staging: `TEST_HELPER_SECRET`, `ENABLE_TEST_OTP_STORAGE`, `IMAGE_STORE`, `AUTH_INSTANT_SIGNIN`, `CHATGPT_ACCESS_TOKEN`, `CHATGPT_ACCOUNT_ID`, `TELNYX_API_KEY`, `TELNYX_PHONE_NUMBER`.
+### Smoke test (phone and desktop)
 
-- [ ] Check: `CONVEX_DEPLOY_KEY=<staging key> bunx convex env list` shows exactly the names above, and none from the must-not list.
-
-### 5. Worker env
-
-The staging Worker is `cultremix-staging`, served at `staging.cultremix.com`. Its settings are in two committed, non-secret files; the app's secrets all live in Convex, so the Worker has none.
-
-- [ ] In `wrangler.jsonc` → `env.staging.vars`, replace `REPLACE_WITH_STAGING_DEPLOYMENT` in `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` with the staging deployment's name from step 1. `SITE_URL` is already `https://staging.cultremix.com`. Don't touch `env.production`.
-- [ ] In `.env.staging`, make the same two replacements. The browser bundle takes its Convex address from this file at build time; `wrangler.jsonc` covers the server side.
-- [ ] Commit both files on the release branch.
-- [ ] In the Cloudflare dashboard, make sure `cultremix.com` has no DNS record named `staging`; the deploy creates it. Wrangler's login can't remove one.
-
-### 6. Deploy
-
-- [ ] `bun run typecheck && bun run test && bun run build` pass.
-- [ ] Convex functions and schema: `CONVEX_DEPLOY_KEY=<staging key> bunx convex deploy`. On a fresh project this creates every table, including `photoShootStarts`, the lineage, social, and print tables, and the hourly metrics job.
-- [ ] Worker: `bun run deploy:staging`. It builds with `.env.staging` and `CLOUDFLARE_ENV=staging`, then deploys `cultremix-staging` with the `staging.cultremix.com` custom domain.
-- [ ] `https://staging.cultremix.com` loads with the **Testnet** badge in the header. If the custom domain isn't ready yet, `https://cultremix-staging.jonthewayne.workers.dev` should work already.
-
-### 7. Seed and backfill
-
-- [ ] `CONVEX_DEPLOY_KEY=<staging key> bun run seed:environment`: app settings, every switch at its default, CR counters.
-- [ ] Run it a second time; it says “Already set up. Nothing changed.”
-- [ ] `CONVEX_DEPLOY_KEY=<staging key> bunx convex run activity:backfill`. On a fresh staging there's nothing to fill, and it returns `isDone: true`. It's safe to rerun, and it's needed if any works were published before the deploy.
-- [ ] Sign in with the owner email and claim the owner account in **Settings** (Creator № 1).
-- [ ] In `/admin`, set the switches:
-  - On: **Studio**, **Publishing**, and **Print-size art** (the Print Studio's upscale; it needs `FAL_KEY`).
-  - Off: **Checkout**, **Monad records**, and **Backs**, until each one's builder says it's ready.
-- [ ] Check `/admin` settings: signup credits (24), daily image budget, and **Photo shoots per member per day** (3).
-
-### 8. Judges
-
-- [ ] `judges.txt` (gitignored) has one judge per line: email, then username.
-- [ ] Dry run: `CONVEX_DEPLOY_KEY=<staging key> bun run judges:provision -- --dry-run --file judges.txt`
-- [ ] Provision: `CONVEX_DEPLOY_KEY=<staging key> bun run judges:provision -- --file judges.txt`
-- [ ] Send each judge their password privately from `.judges.local.json`, then delete the file.
-- [ ] Sign in as one judge on a phone with **Have a password? Sign in with it**: the studio opens with 40 credits.
-- [ ] Put the staging link in the [submission](hackathon/submission.md#links).
-
-### 9. Smoke test (phone and desktop)
-
-- [ ] The header shows **Testnet**, and CR numbers on the feed and work pages carry the Testnet badge.
-- [ ] A new member signs in with an email code, picks a username, and gets their starting credits.
-- [ ] Studio: two images and a style in the mixer. Generate gives four designs, and credits drop by 2. Heart one; it shows in the favorites tray. Open it full screen.
-- [ ] Publish one: the CR reveal, the feed row, the model photo arrives, and the work page loads with its fingerprint, Economics panel, and Lineage.
-- [ ] `https://staging.cultremix.com/economics/v1.json` loads, and `curl -s https://staging.cultremix.com/economics/v1.json | shasum -a 256` matches the hash on the Economics panel.
-- [ ] Remix it as a variation: it publishes as the next number in the family. Remix again as a fork: it starts a new family and says “Forked from”.
-- [ ] Photo shoot limit: as a member (not the owner), publish a fourth work in one day. It publishes; its photo says “Photo coming soon”, and its creator sees “You’ve had your photo shoots for today. Try again tomorrow.”
-- [ ] Print Studio: from your own work's page, **Prepare for print**. Knock out, upscale (2 credits), and make the print file; its SHA-256 shows.
-- [ ] Social: follow the remixer and see their work under **Following**. Heart a work; the count goes up. `/u/<username>` loads signed out.
-- [ ] `/admin/lineage`: look up the variation's CR and see its lineage. Don't confirm a test correction unless you mean to keep it.
-- [ ] `/admin/metrics` → **Recount these 7 days** shows today's sign-ups, batches, designs, and works.
-- [ ] Signed out: the feed, a work page, and a profile load; the studio asks to sign in.
-
-## Production (`cultremix.com`, Monad mainnet)
-
-Production has been live since 2026-09-29, so most of this is about the new launch pieces.
-
-### Convex env (production)
-
-- [ ] `DEPLOYMENT_ENV=prod` (shows Early access until Checkout is on)
-- [ ] Every key above with production values (`cultremix-prod-public` bucket, prod gateway key and budget, a prod `FAL_KEY` with its own fal spend limit); nothing copied from staging.
-- [ ] Not set: `TEST_HELPER_SECRET`, `ENABLE_TEST_OTP_STORAGE`. `bun run doctor:deployment` checks this.
-- [ ] `AUTH_INSTANT_SIGNIN` turned off once real email is live (`RESEND_API_KEY`, `AUTH_EMAIL_PROVIDER=resend`, `AUTH_EMAIL_FROM="CultRemix <auth@cultremix.com>"`).
-
-### Deploy and seed
-
-- [ ] Staging smoke passed on the same commit.
-- [ ] Deploy Convex to production, then the Worker (`bun run deploy:prod`).
-- [ ] `bun run seed:environment -- --prod` (asks you to type `production`). It only adds what's missing, so the existing settings and CR numbers stay.
-- [ ] `bunx convex run --prod activity:backfill`, so works published before the social merge show in Following and on profiles. It's safe to rerun.
-- [ ] `bunx convex run --prod lineage:backfillEffectiveParents`, then again with `'{"cursor":"<cursor it returned>"}'` until the cursor is `null`, so older remixes show under **Remixes of this**.
-- [ ] `/admin`: the switches match staging's except where production should differ.
-- [ ] `/admin/metrics` → **Recount these 90 days** once, so the history from before the launch fills in.
-
-### Judges (only if they judge on production)
-
-- [ ] `bun run judges:provision -- --prod --file judges.txt`
-- [ ] Send passwords privately; delete `.judges.local.json`.
-
-### Smoke test
-
-- [ ] The header shows **Early access**, and no Testnet badge appears anywhere.
-- [ ] The staging smoke list above, on a phone, with one real batch.
-- [ ] Turn off creator access for judges after judging (**Admin → Members**).
+- [ ] The header says Early access until Checkout is on, never Testnet.
+- [ ] A new member signs in with an email code, picks a username, and gets starting credits.
+- [ ] Studio: Generate makes four designs together; one opens full screen.
+- [ ] Publish: pick the products it comes on and place it on the drawn shirt; the CR reveal follows, the model photo arrives, and the work page shows its lineage and economics.
+- [ ] Remix it as a variation and as a fork.
+- [ ] With Checkout on: the work page's buy box shows each style, color, and size; an order reaches /admin/orders.
+- [ ] Signed out: the feed, a work page, a profile, /onchain, and the four policies load.
 
 ## After launch
 
-- [ ] Fill in [Launch metrics](launch/metrics.md) each day from `/admin/metrics`.
+- [ ] Fill in [Launch metrics](launch/metrics.md) each day from /admin/metrics.
 - [ ] Keep [Cohort notes](launch/cohort.md) for the first members.
-- [ ] Turn Checkout on only when the store is ready; production's Early access label goes away by itself.
+- [ ] Answer privacy requests on /admin/orders within 30 days.
+- [ ] After judging: turn off judges' creator access (Admin, Members), and start payouts in mid-November.
+
