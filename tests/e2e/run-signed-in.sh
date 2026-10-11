@@ -124,5 +124,11 @@ go "$BASE_URL/admin/metrics"
 wait_text "Metrics"
 agent-browser screenshot body .tmp/screenshots/signed-in-admin-metrics.png >/dev/null
 
+# Every page above was a full load while signed in. React reports a server render that the browser
+# drew differently ("Hydration failed"), as when the live client's first anonymous results replaced
+# what the server sent (fixed by the cr-session meta, src/lib/sessionMeta.ts).
+hydration=$(agent-browser errors --json 2>/dev/null | bun -e 'const text = await new Response(Bun.stdin.stream()).text(); try { const errors = JSON.parse(text).data?.errors ?? []; console.log(errors.filter((e) => /Hydration failed/.test(e.text ?? "")).length); } catch { console.log("unreadable"); }')
+[[ "$hydration" == "0" ]] || fail "Signed-in pages failed to hydrate: $hydration hydration errors"
+
 echo "Signed-in E2E complete for $BASE_URL"
 
