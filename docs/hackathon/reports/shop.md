@@ -1,6 +1,8 @@
 # Shop report (V1 U9 and U10)
 
-> **Changed October 10:** works no longer go on sale at publish. An admin approves each one, and it sells as one Shopify product per product its creator picked (handle `cr-FFF-EEE-<printful id>`), each with its own print file and side. `onPublished`, `syncWork`, and `syncAllPublished` are gone; `sales.approve` and `shopify.syncListing` replace them. See [products.md](products.md).
+> **Changed October 10:** when Printful ships, a Shopify fulfillment with the carrier and tracking is created (`convex/shopifyFulfill.ts`), so Shopify emails the buyer; /admin/orders shows each shipment's tracking and whether Shopify has it. Shopify's privacy webhooks are handled (`convex/privacy.ts`).
+>
+> **Also changed October 10:** works no longer go on sale at publish. An admin approves each one, and it sells as one Shopify product per product its creator picked (handle `cr-FFF-EEE-<printful id>`), each with its own print file and side. `onPublished`, `syncWork`, and `syncAllPublished` are gone; `sales.approve` and `shopify.syncListing` replace them. See [products.md](products.md).
 
 Branch `codex/shop`, on top of `042efbd` (Economics: shared split rules). Not pushed.
 
@@ -261,6 +263,7 @@ Ops owns `wrangler.jsonc` `env.production`; I didn't touch it.
 | Service | Target | Signed with | Topics or events |
 | --- | --- | --- | --- |
 | Shopify (each store) | `https://<convex-site-url>/webhooks/shopify` | `SHOPIFY_CLIENT_SECRET` | `orders/paid`, `orders/cancelled`, `refunds/create`; JSON format, API version `2026-07` |
+| Shopify app, compliance webhooks (added October 10) | the same URL, for all three | `SHOPIFY_CLIENT_SECRET` | `customers/data_request`, `customers/redact`, `shop/redact` (`convex/privacy.ts`): data requests appear on /admin/orders for the owner to answer; removals clear buyer addresses and raw order bodies. Addresses are also removed 30 days after an order ships or is canceled. |
 | Printful (each store) | `https://<convex-site-url>/webhooks/printful` | `PRINTFUL_WEBHOOK_SECRET` | `order_created`, `order_updated`, `order_failed`, `order_canceled`, `order_put_hold`, `order_remove_hold`, `shipment_sent` |
 
 ### What Jon creates
@@ -270,7 +273,7 @@ Ops owns `wrangler.jsonc` `env.production`; I didn't touch it.
 1. **A Headless sales channel.** Product sync publishes to the publication whose name contains "Headless", and fails clearly if there isn't one.
 2. **A Storefront private access token** from that Headless channel, with permission to read product listings and to write carts and checkouts. This becomes `SHOPIFY_STOREFRONT_PRIVATE_TOKEN`.
 3. **A custom app with client-credentials access** (client ID and secret).
-   - Admin scopes: `write_products`, `read_products`, `write_publications`, `read_publications`, `read_orders`.
+   - Admin scopes: `write_products`, `read_products`, `write_publications`, `read_publications`, `read_orders`, and (added October 10, for tracking emails) `read_merchant_managed_fulfillment_orders` and `write_merchant_managed_fulfillment_orders`.
    - Protected customer data access for shipping name and address. Without it, orders arrive `manual_required`.
 4. **Commerce settings:**
    - One flat US shipping rate (KTD-17 proposes $5.95).

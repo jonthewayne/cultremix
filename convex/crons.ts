@@ -16,8 +16,12 @@ crons.hourly("count launch metrics", { minuteUTC: 7 }, internal.metrics.rollupRe
 crons.interval("shopify order reconcile", { minutes: 15 }, internal.orders.reconcile, {});
 crons.interval("shopify product retry", { minutes: 15 }, internal.shopify.retryDueProducts, {});
 crons.interval("printful reconcile", { minutes: 30 }, internal.fulfillment.reconcile, {});
+crons.interval("shopify tracking retry", { minutes: 15 }, internal.shopifyFulfill.retryDue, {});
 crons.interval("earnings maturity", { hours: 1 }, internal.earnings.matureDue, {});
 crons.daily("webhook payload purge", { hourUTC: 9, minuteUTC: 15 }, internal.orders.purgeExpiredPayloads, {});
+// Buyer addresses: removed 30 days after shipping or cancellation, and redactions that waited
+// for Printful (convex/privacy.ts).
+crons.daily("buyer address sweep", { hourUTC: 9, minuteUTC: 30 }, internal.privacy.sweep, {});
 // ---- end Shop ----
 
 // The daily image budget: settle or release reservations left open by actions that died

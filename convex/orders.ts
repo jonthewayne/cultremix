@@ -359,7 +359,8 @@ export const applyHydratedOrder = internalMutation({
         cancelledAt: order.cancelledAt ?? snapshot.cancelledAt ?? undefined,
         totalCents: snapshot.totalCents,
         ref: order.ref ?? snapshot.ref ?? undefined,
-        recipient: snapshot.recipient ?? order.recipient,
+        // A redacted order's recipient stays removed (convex/privacy.ts).
+        recipient: order.redactedAt !== undefined ? undefined : (snapshot.recipient ?? order.recipient),
         updatedAt: now,
       });
       order = (await ctx.db.get("orders", order._id))!;
@@ -564,6 +565,16 @@ const adminOrderValidator = v.object({
     v.object({ cr: v.union(v.string(), v.null()), sku: v.union(v.string(), v.null()), quantity: v.number(), refunded: v.number() }),
   ),
   refunds: v.array(v.object({ status: v.string(), amountCents: v.number() })),
+  // Printful shipments, and whether Shopify has the tracking (and emailed the buyer).
+  shipments: v.array(
+    v.object({
+      carrier: v.union(v.string(), v.null()),
+      trackingNumber: v.union(v.string(), v.null()),
+      trackingUrl: v.union(v.string(), v.null()),
+      shopify: v.string(),
+      shopifyError: v.union(v.string(), v.null()),
+    }),
+  ),
 });
 
 const inboxProblemValidator = v.object({
@@ -585,6 +596,7 @@ export const adminList = query({
     for (const order of orders) {
       const items = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", order._id)).take(100);
       const refunds = await ctx.db.query("refunds").withIndex("by_order", (q) => q.eq("orderId", order._id)).take(50);
+      const shipments = await ctx.db.query("orderShipments").withIndex("by_order", (q) => q.eq("orderId", order._id)).take(20);
       const lines = [];
       for (const item of items) {
         const work = item.workId ? await ctx.db.get("works", item.workId) : null;
@@ -617,6 +629,13 @@ export const adminList = query({
         refunds: refunds.map((r) => ({
           status: r.status,
           amountCents: r.lines.reduce((sum, l) => sum + l.amountCents, 0) + r.shippingCents,
+        })),
+        shipments: shipments.map((s) => ({
+          carrier: s.carrier ?? null,
+          trackingNumber: s.trackingNumber ?? null,
+          trackingUrl: s.trackingUrl ?? null,
+          shopify: s.shopifyState ?? "none",
+          shopifyError: s.shopifyError ?? null,
         })),
       });
     }

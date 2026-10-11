@@ -1,6 +1,6 @@
 import { internal } from "../../_generated/api";
 import type { ActionCtx } from "../../_generated/server";
-import { SHOPIFY_WEBHOOK_MAX_BYTES, SHOPIFY_WEBHOOK_TOPICS } from "../../../shared/config/shopify";
+import { SHOPIFY_PRIVACY_TOPICS, SHOPIFY_WEBHOOK_MAX_BYTES, SHOPIFY_WEBHOOK_TOPICS } from "../../../shared/config/shopify";
 import { verifyShopifyWebhook } from "./webhookVerify";
 
 // POST /webhooks/shopify (KTD-12). Order: size limit, HMAC over the raw body, shop domain, topic,
@@ -38,6 +38,28 @@ export async function handleShopifyWebhook(ctx: ActionCtx, request: Request): Pr
       reason: "other shop",
     });
     return text("Ignored", 200);
+  }
+  // Privacy webhooks (convex/privacy.ts) name a customer and orders, not one order.
+  if ((SHOPIFY_PRIVACY_TOPICS as ReadonlyArray<string>).includes(topic)) {
+    let privacy: { customer?: { id?: unknown }; orders_requested?: unknown; orders_to_redact?: unknown };
+    try {
+      privacy = JSON.parse(new TextDecoder().decode(raw)) as typeof privacy;
+    } catch {
+      return text("Bad JSON", 400);
+    }
+    const ids = (list: unknown) =>
+      (Array.isArray(list) ? list : [])
+        .filter((id): id is number | string => typeof id === "number" || (typeof id === "string" && /^\d+$/u.test(id)))
+        .map(String);
+    const customerId = privacy.customer?.id;
+    const result = await ctx.runMutation(internal.privacy.recordRequest, {
+      webhookId,
+      topic: topic as (typeof SHOPIFY_PRIVACY_TOPICS)[number],
+      shopDomain: shop,
+      ...(typeof customerId === "number" || typeof customerId === "string" ? { customerId: String(customerId) } : {}),
+      orderIds: topic === "customers/data_request" ? ids(privacy.orders_requested) : ids(privacy.orders_to_redact),
+    });
+    return text(result === "duplicate" ? "Duplicate" : "OK", 200);
   }
   if (!(SHOPIFY_WEBHOOK_TOPICS as ReadonlyArray<string>).includes(topic)) {
     await ctx.runMutation(internal.orders.recordIgnoredWebhook, {

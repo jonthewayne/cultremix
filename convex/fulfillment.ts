@@ -626,7 +626,7 @@ async function recordShipment(ctx: MutationCtx, order: Order, shipment: Shipment
     const units = shipmentUnits(already, part.quantity, item.quantity);
     if (units) lines.push({ orderItemId: item._id, ...units });
   }
-  await ctx.db.insert("orderShipments", {
+  const shipmentId = await ctx.db.insert("orderShipments", {
     orderId: order._id,
     printfulShipmentId: shipment.id,
     shippedAt: shipment.shippedAt,
@@ -634,8 +634,13 @@ async function recordShipment(ctx: MutationCtx, order: Order, shipment: Shipment
     carrier: shipment.carrier,
     trackingNumber: shipment.trackingNumber,
     trackingUrl: shipment.trackingUrl,
+    shopifyState: "pending",
+    shopifyAttempts: 0,
+    shopifyNextAt: Date.now(),
   });
   await syncOrderEarnings(ctx, order._id);
+  // Shopify gets the tracking and emails the buyer (convex/shopifyFulfill.ts).
+  await ctx.scheduler.runAfter(0, internal.shopifyFulfill.run, { shipmentId });
   return true;
 }
 

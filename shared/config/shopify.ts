@@ -7,6 +7,10 @@ export const SHOPIFY_API_VERSION = "2026-07";
 export const SHOPIFY_WEBHOOK_TOPICS = ["orders/paid", "orders/cancelled", "refunds/create"] as const;
 export type ShopifyWebhookTopic = (typeof SHOPIFY_WEBHOOK_TOPICS)[number];
 
+// Shopify's privacy webhooks, set in the app's compliance webhook settings to the same endpoint
+// (POST /webhooks/shopify) and handled by convex/privacy.ts.
+export const SHOPIFY_PRIVACY_TOPICS = ["customers/data_request", "customers/redact", "shop/redact"] as const;
+
 // Larger bodies are refused before they are read into a table (Convex documents stop at 1 MiB).
 export const SHOPIFY_WEBHOOK_MAX_BYTES = 512 * 1024;
 

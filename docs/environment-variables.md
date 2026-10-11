@@ -76,7 +76,7 @@ Image settings are explained in `docs/image-generation/README.md`.
 
 Each environment has its own Shopify store and Printful store. Set the same names in dev, staging, and production, with that environment's values.
 
-- Products, orders, and earnings run in Convex: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`. Without them product sync and order hydration wait, and `/webhooks/shopify` answers 503.
+- Products, orders, and earnings run in Convex: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`. Without them product sync and order hydration wait, and `/webhooks/shopify` answers 503. The same endpoint takes the app's three compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`); set them to it in the app's settings.
 - The cart runs in the Worker: `SHOPIFY_SHOP_DOMAIN` and `SHOPIFY_STOREFRONT_PRIVATE_TOKEN`. Buying is also behind the `commerce.checkout` feature flag; with it off the work page is unchanged.
 - Fulfillment runs in Convex: `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID`, `PRINTFUL_WEBHOOK_SECRET`. Without the first two, paid orders wait and the 30-minute sweep picks them up once they are set. Without the secret, `/webhooks/printful` answers 503.
 - Print files go to Printful by their public address, so `R2_PUBLIC_URL` must be set wherever orders are fulfilled.

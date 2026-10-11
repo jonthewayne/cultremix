@@ -261,12 +261,36 @@ export const shopTables = {
     // only looked up by external_id, never created again.
     createAmbiguousSince: v.optional(v.number()),
     confirmedAt: v.optional(v.number()),
+    // Its personal data (recipient, raw webhook bodies) was removed (convex/privacy.ts); a later
+    // Shopify read doesn't bring it back.
+    redactedAt: v.optional(v.number()),
+    // A customer asked for removal while the order still needed its address for Printful.
+    redactRequestedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_shopifyOrderId", ["shopifyOrderId"])
     .index("by_printfulOrderId", ["printfulOrderId"])
-    .index("by_fulfillmentState_updated", ["fulfillmentState", "updatedAt"]),
+    .index("by_fulfillmentState_updated", ["fulfillmentState", "updatedAt"])
+    .index("by_redactRequested", ["redactRequestedAt"]),
+
+  // Shopify's privacy webhooks as received (convex/privacy.ts). No customer email or phone is kept.
+  privacyRequests: defineTable({
+    webhookId: v.string(),
+    topic: v.union(v.literal("customers/data_request"), v.literal("customers/redact"), v.literal("shop/redact")),
+    shopDomain: v.string(),
+    customerId: v.optional(v.string()),
+    // The Shopify order ids it names.
+    orderIds: v.array(v.string()),
+    receivedAt: v.number(),
+    // A data request stays open until the owner sends the customer their data; a redaction is done
+    // when received (its note says what waits for Printful).
+    status: v.union(v.literal("open"), v.literal("done")),
+    doneAt: v.optional(v.number()),
+    note: v.optional(v.string()),
+  })
+    .index("by_webhookId", ["webhookId"])
+    .index("by_status", ["status", "receivedAt"]),
 
   orderItems: defineTable({
     orderId: v.id("orders"),
@@ -326,9 +350,17 @@ export const shopTables = {
     carrier: v.optional(v.string()),
     trackingNumber: v.optional(v.string()),
     trackingUrl: v.optional(v.string()),
+    // The Shopify fulfillment with this tracking (convex/shopifyFulfill.ts), which sends the buyer
+    // Shopify's shipping email. skipped: Shopify had nothing left open (fulfilled by hand).
+    shopifyState: v.optional(v.union(v.literal("pending"), v.literal("done"), v.literal("skipped"), v.literal("failed"))),
+    shopifyFulfillmentId: v.optional(v.string()),
+    shopifyAttempts: v.optional(v.number()),
+    shopifyError: v.optional(v.string()),
+    shopifyNextAt: v.optional(v.number()),
   })
     .index("by_order", ["orderId"])
-    .index("by_printfulShipmentId", ["printfulShipmentId"]),
+    .index("by_printfulShipmentId", ["printfulShipmentId"])
+    .index("by_shopify_next", ["shopifyState", "shopifyNextAt"]),
 
   // One row per (line, unit, recipient) sale, plus negative reversal rows. Balances are sums by
   // state: Pending = pending + held, Available, Paid.
