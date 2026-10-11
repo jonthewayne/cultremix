@@ -50,7 +50,7 @@ export function ProfileSkeleton() {
 // A grid of designs while the first page loads.
 export function ShelfSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4" aria-busy="true" aria-label="Loading">
+    <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4" role="status" aria-busy="true" aria-label="Loading">
       {Array.from({ length: count }, (_, i) => (
         <Block key={i} className="aspect-square" />
       ))}
@@ -61,7 +61,7 @@ export function ShelfSkeleton({ count = 4 }: { count?: number }) {
 // Feed rows on the home page while the first page loads.
 export function FeedSkeleton() {
   return (
-    <div className="space-y-16" aria-busy="true" aria-label="Loading the feed">
+    <div className="space-y-16" role="status" aria-busy="true" aria-label="Loading the feed">
       {[0, 1].map((i) => (
         <div key={i} className="space-y-4">
           <div className="grid grid-cols-2 gap-2 md:gap-4">
