@@ -4,15 +4,14 @@
 
 ## Links
 
-Jon fills these in.
+Jon fills in the ones marked (link).
 
-- Live (staging, Monad testnet): (link)
-- Production: https://cultremix.com
+- Live: https://cultremix.com (production, recording on Monad mainnet)
 - Code: (public GitHub link, shared with metropolis@hackathon.monad.xyz)
-- Demo video (3 minutes or less): (link)
-- Pitch video (2 minutes or less): (link)
-- Logo: (file, JPG/PNG/WEBP, 3 MB or less)
-- Monad registry contract: (explorer link)
+- Demo video (3 minutes or less): (link). Script: [video-scripts.md](video-scripts.md#demo-about-250)
+- Pitch video (2 minutes or less): (link). Script: [video-scripts.md](video-scripts.md#pitch-about-145)
+- Logo: [cultremix-logo.png](cultremix-logo.png) (1024 × 1024 PNG, 28 KB), or [cultremix-logo-wide.png](cultremix-logo-wide.png) (1600 × 900, with the name)
+- Monad registry contract: (explorer link, once `bun run chain:deploy:mainnet` has run)
 - Judge sign-in: each judge gets an email and password privately (see [Judges](../judges.md)). On the sign-in page, tap **Have a password? Sign in with it**.
 
 ## Pitch
@@ -42,11 +41,12 @@ From the [build log](log.md) and the [builder reports](reports/):
 - **Social:** profiles at `/u/<username>` with a bio, follower and following lists, and Works, Remixes, and Backed shelves; a home feed with Latest, Trending (hearts, Backs, and remixes from other members over the last week), and Following, plus a row of creators who just published; hearts and follows on every feed row, work page, and profile; a bell for new follows, hearts, remixes, and Backs; rich link previews for work pages, profiles, and families.
 - **Backs:** a member can Back up to 3 works a week, one per work and never their own, and each Back is recorded on Monad with its place in line; work pages list the earliest backers and Following shows the Backs of people you follow. Built and tested; hidden until the registry is live.
 - **Monad registry (built, deploying to testnet):** the `CultRemixRegistry` contract (55 contract tests) records each work's ID, CR number, parent, kind, fingerprint, and creator wallet, plus lineage corrections, Backs in order, and the economics rules' hash. Publishing queues the registration, signed by the creator's wallet and sent by a relayer that pays the gas, so nobody needs MON or a wallet app. `/admin/chain` shows the queue; the public `/onchain` page explains what's recorded and how to check it. The whole path runs end to end against a local Monad node in the test suite.
-- **Print Studio:** at `/print/<CR number>`, the creator trims the art, knocks out a background, upscales it for print, places it on the shirt, and makes a 300 DPI print file with its own SHA-256. A slider shows the art next to what goes to the printer.
-- **Shop pages:** the colors the creator offered, sizes, and $36, the design's SHA-256 fingerprint, the Economics panel, and the lineage. Shopify checkout, Printful fulfillment, and creator earnings are built against stand-ins and switch on once those accounts exist; until then "Buying opens soon" collects emails.
+- **Products and placement:** when publishing, the creator picks the products a design comes on (a tee, a hoodie, whatever is on offer) and places it once on a drawn shirt at real size: front or back, Small to Full, higher or lower. The same choice fits every product, or any one can be placed separately. The model photo follows it, down to a back print shot from behind.
+- **Print files:** an admin approves each work for sale. CultRemix upscales the art, makes a 300 DPI print file for each product with the design where its creator put it, and lists each one in Shopify. The Print Studio (`/print/<CR number>`) lets the creator trim, knock out a background, and compare the art with what goes to the printer.
+- **Shop pages:** the products, colors, and sizes it's sold in, the design's SHA-256 fingerprint, the Economics panel, and the lineage. Shopify checkout, Printful fulfillment with tracking emails, and creator earnings are built and tested against stand-ins and switch on once those accounts exist; until then "Buying opens soon" collects emails. Store policies are at `/policies`, and buyers' addresses are removed 30 days after their orders ship.
 - **Storage:** every image lives in its own folder with a thumbnail and a medium copy, so pages load fast; a published work's files live under `works/<family>/<expression>/`. Images carry no hidden metadata.
 - **Admin:** switches for each part of the product, app settings, member search with credit grants, launch metrics by day, lineage corrections, and judge accounts.
-- **Labels:** production shows **Early access** until checkout opens; staging shows a **Testnet** badge on every CR number.
+- **Labels:** production shows **Early access** until checkout opens; the private dev rehearsal shows a **Testnet** badge on every CR number.
 - **Live:** cultremix.com since 2026-09-30.
 
 Stack: TanStack Start on Cloudflare Workers, Convex with Better Auth, GPT Image 2.5 through the CultRemix Gateway, fal for print upscaling, Cloudflare R2, Monad.
@@ -77,9 +77,9 @@ Signed out works for all of these unless noted.
 
 ### When the registry is deployed
 
-The registry contract and the chain writer are built and tested: 55 contract tests, and an end-to-end run of the real contract against a local Monad node. Deploying the testnet registry is one command once its relayer has testnet MON. Then, with the **Monad records** switch on:
+The registry contract and the chain writer are built and tested: 55 contract tests, and an end-to-end run of the real contract against a local Monad node. Deploying the mainnet registry is one command (`bun run chain:deploy:mainnet`) once production's relayer has about 0.47 MON. Then, with the **Monad records** switch on:
 
-- Each published work's fingerprint and lineage are recorded on Monad (testnet on staging), signed by the creator's CultRemix-held wallet. The work page links the registration transaction, and the family tree marks every recorded design.
+- Each published work's fingerprint and lineage are recorded on Monad mainnet, signed by the creator's CultRemix-held wallet. The work page links the registration transaction, and the family tree marks every recorded design.
 - The economics rules file's SHA-256 is registered on Monad, and the Economics panel says “These shares are recorded on Monad.”
 - Lineage corrections are recorded on Monad as amendments; the original record stays.
 - With the **Backs** switch on too, members Back works, and each Back's place in line comes from the chain.
@@ -87,40 +87,22 @@ The registry contract and the chain writer are built and tested: 55 contract tes
 
 ## What's next
 
-- The Monad registry on testnet for staging, then mainnet records in production.
-- Checkout and print on demand for every published design, once the Shopify and Printful accounts are set up.
+- The Monad registry on mainnet in production.
+- Checkout and print on demand for every approved design, once the Shopify and Printful accounts are set up.
+- A small second design on the front of a back print, such as the CR mark on the chest.
 - Creator earnings paid out from the 15% creator pool.
 - More remixable parts than words: people and counts too, so anyone can put their crew into a design.
 
-## 90-second demo script
+## Videos
 
-| Time | On screen | Say |
-|---|---|---|
-| 0:00–0:08 | The feed on a phone, scrolling past a family of remixes | “Every great shirt is a remix. CultRemix makes the remix the product, and pays the people it came from.” |
-| 0:08–0:20 | Studio: add a portrait as image 1 and a 70s concert poster as image 2; open the Style mixer and set the poster to 70; type “Draw image 1 as a concert poster that says FAR OUT” | “Add a few images, mix their styles, and say what you want.” |
-| 0:20–0:30 | Press Generate; cut to the four designs filling in together; heart two and swipe through them full screen | “One press, four print-ready designs at once.” |
-| 0:30–0:42 | Pick one, Publish, add a title; the full-screen CR reveal; the work page as the model photo arrives | “Publish, and it gets a permanent number and a photo of someone wearing it.” |
-| 0:42–0:55 | Signed in as a second member: **Remix this**; the design's words appear as fields; change one word, Generate, and publish one as a variation; the next number in the family | “Anyone can remix it: change the words, keep the art. The remix joins the family as the next number, so every shirt carries its lineage.” |
-| 0:55–1:07 | The remix's work page: the family tree, then the Economics panel and its rules file | “Every sale sets aside 15% for the people behind the design: here, the remixer and the family's founder. The rules are public, and anyone can check the math.” |
-| 1:07–1:17 | The Print Studio: knock out the background, then drag the slider between the art and the print file | “And every design becomes a real print file, ready for a shirt.” |
-| 1:17–1:27 | The work's record on the Monad explorer, its fingerprint matching the work page | “Each work's fingerprint and family tree are recorded on Monad, so anyone can see where a design came from.” |
-| 1:27–1:30 | The creator's profile with both works | “Remix culture, get paid. This is CultRemix.” |
-
-Recording notes:
-
-- Generate takes 20–40 seconds. Record the press, then cut to the finished designs.
-- A design's remixable words appear a few seconds after it's published, once CultRemix has read them. Its creator can rename them, or choose which ones appear as boxes, from the work page before you record the remix.
-- Use images you have the rights to. Pick a portrait and a poster with strong, simple shapes.
-- Record on staging, so the Testnet badge shows on the CR numbers and the Monad record is on testnet.
-- Upscaling takes about 90 seconds; if you show it, cut. The **Print-size art** switch must be on.
-- The Monad record needs the registry and the **Monad records** switch. If it isn't ready on recording day, replace 1:17–1:27 with the work page's fingerprint and the rules file's hash, and say “Next, these go on Monad.”
+The demo (3 minutes or less) and pitch (2 minutes or less) scripts, with recording notes, are in [video-scripts.md](video-scripts.md).
 
 ## Event requirements
 
 Jon: paste the event's submission fields here, and check each one.
 
 - [ ] Public GitHub repo, shared with metropolis@hackathon.monad.xyz
-- [ ] Live staging link on Monad testnet, with judge sign-in instructions (checkout labeled as a test payment)
+- [ ] Live link with judge sign-in instructions. Production (cultremix.com) records on Monad mainnet; check that the event accepts a mainnet build, since this line once read "Live staging link on Monad testnet".
 - [ ] Demo video, 3 minutes or less (YouTube, Loom, or Vimeo)
 - [ ] Pitch video, 2 minutes or less
 - [ ] Logo, JPG/JPEG/PNG/WEBP, 3 MB or less

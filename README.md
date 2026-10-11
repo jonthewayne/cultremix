@@ -14,9 +14,10 @@ Built for the Monad hackathon (Social, Attention & Culture track). Live at [cult
 | **Convex** | The database and every server function: studio batches, publishing, lineage, the feed and follows, print files, credits, flags, metrics (`convex/`). Tables are in `convex/schema.ts` and `convex/schema/`. |
 | **Better Auth** (on Convex) | Email code sign-in for everyone; email and password only for accounts an admin made (judges). Public password sign-up is refused. |
 | **CultRemix Gateway** | Image generation (GPT Image 2.5) and the notes we read from style images. Prompts and style notes stay on the server and never reach the browser. |
-| **fal** | "Upscale for print" in the Print Studio (Topaz, keeps transparency). |
+| **fal** | Upscaling for print (Topaz, keeps transparency): in the Print Studio, and before a work's print files are made. |
+| **Shopify and Printful** | Checkout runs on Shopify's Headless channel; Printful prints each order (DTG) from a 300 DPI file per product and ships it, and its tracking goes back to Shopify, which emails the buyer. Built and tested against stand-ins until the accounts exist. |
 | **Cloudflare R2** | One public bucket per environment. Each image lives in its own folder with a thumbnail and a medium copy; a published work's files sit under `works/<family>/<expression>/`, and anything not published sits under an unguessable 128-bit code. The full layout is in [Image generation → Storage and sizes](docs/image-generation/README.md#storage-and-sizes). |
-| **Monad** | Provenance for published designs: each work's fingerprint (SHA-256), its lineage, its Backs, and the economics rules it follows. The registry contract (`contracts/`) and the chain writer (`convex/chain.ts`) are built; the testnet registry deploys once its relayer has testnet MON. See below. |
+| **Monad** | Provenance for published designs: each work's fingerprint (SHA-256), its lineage, its Backs, and the economics rules it follows. The registry contract (`contracts/`) and the chain writer (`convex/chain.ts`) are built; the mainnet registry deploys with `bun run chain:deploy:mainnet` once production's relayer has MON. See below. |
 
 More detail: [Architecture](docs/architecture.md), [Image generation](docs/image-generation/README.md), [Onchain provenance ADR](docs/adr/0001-onchain-provenance.md).
 
@@ -31,8 +32,10 @@ More detail: [Architecture](docs/architecture.md), [Image generation](docs/image
 - **Social.** Profiles at `/u/<username>` with a bio, follower and following lists, and Works, Remixes, and Backed shelves. The home feed has Latest, Trending (hearts, Backs, and remixes from other members over the last week), and, for members, Following. Hearts and follows work everywhere a design or a creator appears, a bell tells you when someone follows you or hearts, remixes, or Backs your work, and work pages and profiles share with a rich preview.
 - **Backs.** A member can Back up to 3 works a week, one Back per work and never their own. Each Back is recorded on Monad with its place in line, and the work page lists the earliest backers. Backs stay hidden until the registry is live and the **Backs** and **Monad records** switches are on.
 - **Monad registry.** Publishing queues each work's registration, signed by the creator's wallet and sent by a relayer that pays the gas, so nobody needs MON or a wallet app. Lineage corrections and the economics rules' hash go through the same registry. `/admin/chain` shows the queue, and the public `/onchain` page explains what's recorded and how to check a design from its fingerprint. Once registrations confirm, work pages link their transactions and family trees mark recorded designs.
-- **Print Studio.** At `/print/<number>`, a work's creator (or the owner) trims the art, knocks out a background, upscales it for print (when the **Print-size art** switch is on), places it on the shirt, and makes the print file: a 300 DPI PNG with its own SHA-256. A slider shows the art beside what goes to the printer.
-- **Shop pages.** The colors the creator offered, sizes, and $36. Shopify checkout, Printful fulfillment, and creator earnings are built against stand-ins and switch on with the **Checkout** switch once those accounts exist; until then "Buying opens soon" collects emails.
+- **Products and placement.** Publishing asks which products a design comes on (the tees, hoodies, and more an admin offers in `/admin/products`, each with its own prices and print areas) and where it sits: front or back, Small to Full, higher or lower, shown on a drawn garment at real size. One placement fits every product, since it's stored as a share of each print area; any product can be placed separately. The model photo follows it.
+- **Going on sale.** An admin approves each work in `/admin/sale`. CultRemix upscales the art, makes a 300 DPI print file for each product with the design where its creator put it, and creates a Shopify product for each. Buyers pick the style, color, and size.
+- **Print Studio.** At `/print/<number>`, a work's creator (or the owner) trims the art, knocks out a background, upscales it for print (when the **Print-size art** switch is on), and places it. A slider shows the art beside what goes to the printer.
+- **Shop pages.** The products, colors, and sizes a design sells in. Shopify checkout, Printful fulfillment with tracking emails, and creator earnings are built against stand-ins and switch on with the **Checkout** switch once those accounts exist; until then "Buying opens soon" collects emails. Store policies are at `/policies`; buyers' addresses are removed 30 days after their orders ship, and Shopify's privacy requests are handled.
 
 ## Running it
 
@@ -72,13 +75,15 @@ bun run seed:environment                        # set up a fresh environment (sa
 bun run judges:provision -- --file judges.txt   # make judge accounts with passwords
 ```
 
-Both target your dev deployment by default, staging when `CONVEX_DEPLOY_KEY` is set for the command, and production with `--prod` (they ask first). Neither ever copies data between environments. See [Judges](docs/judges.md) and the [Launch checklist](docs/launch-checklist.md), which has the full staging setup (`bun run deploy:staging` builds with `.env.staging` and deploys the `staging` Worker).
+Both target your dev deployment by default and production with `--prod` (they ask first). Neither ever copies data between environments. There are two environments: dev, the private rehearsal on Monad testnet, and production, cultremix.com on Monad mainnet. See [Judges](docs/judges.md) and the [Launch checklist](docs/launch-checklist.md).
 
 ## Admin
 
 `/admin` is for the owner and staff:
 
-- **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day). A switch whose feature isn't built yet says so under its name, and so does the daily budget, which nothing enforces yet.
+- **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day).
+- **Products**: search Printful's catalog, add products with their colors and placements, put them on offer, pick the default, and set each one's name, prices, back-print extra, and print areas.
+- **For sale**: approve a published work for sale; follow its print files and Shopify products per product; pause or resume.
 - **Members**: search by username, email, or creator number; give credits; turn creator access on or off.
 - **Metrics**: counts by day and in total (members, members who generated, batches, designs, published works, remixes, families, credits used, model photos).
 - **Lineage**: look up a work by CR number and correct its lineage (owner and ops staff).
@@ -94,9 +99,9 @@ When a design is published, CultRemix records its fingerprint and its place in a
 
 What it does **not** prove: because CultRemix holds the wallet keys for members, the record doesn't independently prove that a person agreed to it, and the limit on Backs is per account, not per human. It does prove the design existed with that exact content at that time, and which design it was remixed from, in a public record no one can quietly rewrite.
 
-Only finalized blocks count. Staging uses Monad testnet (and shows a **Testnet** badge on CR numbers); production uses Monad mainnet. The full reasoning is in [ADR 0001](docs/adr/0001-onchain-provenance.md).
+Only finalized blocks count. Dev uses Monad testnet (and shows a **Testnet** badge on CR numbers); production uses Monad mainnet. The full reasoning is in [ADR 0001](docs/adr/0001-onchain-provenance.md).
 
-> The registry contract ([contracts/](contracts/README.md)) and the chain writer are in this repository: publishing queues each work's registration, Backs and lineage corrections go through the same relayer, and `/admin/chain` shows the queue. The testnet registry isn't deployed yet, so the **Monad records** and **Backs** switches stay off and nothing is written to Monad today. Each work's page already shows its SHA-256 fingerprint and lineage (corrections are confirmed offchain while Monad records is off), and the economics rules file has its hash.
+> The registry contract ([contracts/](contracts/README.md)) and the chain writer are in this repository: publishing queues each work's registration, Backs and lineage corrections go through the same relayer, and `/admin/chain` shows the queue. The registries aren't deployed yet (each needs its relayer funded), so the **Monad records** and **Backs** switches stay off and nothing is written to Monad today. Each work's page already shows its SHA-256 fingerprint and lineage (corrections are confirmed offchain while Monad records is off), and the economics rules file has its hash.
 
 ## More docs
 

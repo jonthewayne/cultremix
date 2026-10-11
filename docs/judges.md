@@ -13,7 +13,7 @@ Everyone else keeps signing in with an email code, exactly as before.
 
 ## How a judge signs in
 
-1. Open `/login` on the site they're judging: staging (the link in the [submission](hackathon/submission.md#links)) or [cultremix.com/login](https://cultremix.com/login).
+1. Open [cultremix.com/login](https://cultremix.com/login).
 2. Tap **Have a password? Sign in with it**.
 3. Enter the email and password we sent. The studio opens.
 
@@ -24,14 +24,14 @@ If the password is wrong, the page says “That email and password don’t match
 The full list, with how to check each claim, is under **Judging evidence** in the [submission](hackathon/submission.md#judging-evidence).
 
 1. **Make designs.** In the studio, add a few images, mix their styles, say what you want, and press Generate: four designs for 2 credits. Heart the good ones and open any of them full screen.
-2. **Publish one.** It gets a CR number and a work page, and a photo of someone wearing it arrives a moment later. Each member gets a few photo shoots a day (judges included); past that, the work still publishes and its photo can be taken the next day from the work page.
+2. **Publish one.** Pick the products it comes on and place it on the drawn shirt (front or back, Small to Full). It gets a CR number and a work page, and a photo of someone wearing it arrives a moment later. Each member gets a few photo shoots a day (judges included); past that, the work still publishes and its photo can be taken the next day from the work page.
 3. **Remix someone's work.** On any work page, **Remix this**. The design's words appear as boxes to edit (the ones its creator offers): change one, or empty it to remove those words, and Generate, and the four designs keep the art while the words change. Anything else, like added words or a new style, goes under **Anything else to change?** The batch says what changed. When publishing, a remix that changed only those words is a variation (the next number in the family); one that changed more starts with fork selected (a new family that credits the original), and you can still choose variation.
 4. **Follow the lineage and the money.** On a remix's page: the **Lineage** trail, **Remixes of this**, the family tree (**See the whole tree** opens `/family/<n>`), and the Economics panel with the rules file `/economics/v1.json` and its SHA-256.
 5. **Prepare a print file.** On your own work's page, **Prepare for print** opens the Print Studio: trim, knock out the background, place it on the shirt, and make the print file.
 6. **Be social.** Hearts and follows on any work, profiles at `/u/<username>` with follower and following lists, and the **Trending** and **Following** tabs on the home page. Judges can follow each other: the bell in the header shows new follows, hearts, and remixes.
 7. **Check the provenance.** `/onchain` explains what CultRemix records on Monad and how to check a design yourself, starting from the fingerprint on its page.
 
-Buying isn't open yet; "Buying opens soon" takes an email. The Monad registry deploys to testnet once its relayer has testnet MON; until then work pages show each design's fingerprint, Backs stay hidden, and `/onchain` says "Not deployed yet". On staging, every CR number carries a **Testnet** badge.
+Until checkout opens, "Buying opens soon" takes an email. The Monad registry deploys to mainnet once production's relayer has MON; until then work pages show each design's fingerprint, Backs stay hidden, and `/onchain` says "Not deployed yet".
 
 ## Making judge accounts
 
@@ -54,8 +54,7 @@ judge2@example.com monad_judge_2
 Then run it against the right deployment:
 
 ```bash
-bun run judges:provision -- --dry-run --file judges.txt          # check the list
-CONVEX_DEPLOY_KEY=<staging key> bun run judges:provision -- --file judges.txt   # staging
+bun run judges:provision -- --prod --dry-run --file judges.txt   # check the list
 bun run judges:provision -- --prod --file judges.txt             # production (asks first)
 ```
 
