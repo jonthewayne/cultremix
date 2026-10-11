@@ -78,7 +78,7 @@ Signed out works for all of these unless noted.
 | It's social | Profiles at `/u/<username>`, follower and following lists, hearts on every work, and the **Trending** tab. Signed in: follow another judge, then open **Following** on the home page; the bell shows their follows, hearts, and remixes of your work. |
 | Provenance is explained and checkable | `/onchain` lists what's recorded on Monad and walks through checking a design from its fingerprint (`workIdAt`, then `getWork` on the explorer). Once the registry is deployed, each work page links its registration transaction and the family tree marks recorded designs. |
 | The studio makes four print-ready designs at once | Signed in as a judge: add images, mix styles, press Generate. Four transparent designs arrive; 2 credits are used. |
-| Designs become print files | Signed in as a judge, publish a design and open **Prepare for print** on its page. Trim, knock out, place, and make the print file; the Print Studio shows its DPI and SHA-256. |
+| Designs become print files | Signed in as a judge, publish a design and open **Prepare for print** on its page. Trim, knock out a flat color or remove any other background, place, and make the print file; the Print Studio shows its DPI and SHA-256. |
 | Prompts stay private | Watch the browser's network tab while generating: the prompt we build from your instruction and the notes we read from your style images never reach the browser. |
 
 ### When the registry is deployed
