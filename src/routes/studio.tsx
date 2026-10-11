@@ -888,7 +888,7 @@ function StudioPage() {
                   {batch.styles.length > 0 && (
                     <span className="flex shrink-0 items-center gap-2 text-sm text-neutral-500">
                       Style
-                      <StyleChips items={batch.styles.map((style) => ({ url: style.thumbUrl ?? style.url, share: style.share }))} />
+                      <StyleChips items={batch.styles.map((style) => ({ url: style.thumbUrl ?? style.url, share: style.share, job: style.job }))} />
                     </span>
                   )}
                   {batch.engine && <span className="shrink-0 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-bold">{batch.engine}</span>}

@@ -10,6 +10,7 @@ import {
   rolesFromWords,
   signatureTraits,
   styleMixOf,
+  styleJobs,
   styleShares,
   studioPrompt,
   withoutWords,
@@ -223,6 +224,12 @@ describe("studio prompt", () => {
     const partial = studioPrompt({ layout: "grid", instruction: "A raccoon that says HI", attachments, styles, styleParts: { 2: "lettering" } });
     expect(partial).toContain("It sets the technique, line work, color, lettering, figure drawing");
     expect(partial).toContain("- Image 2 (30%): on the main subject of every design");
+    // The batch line shows the same jobs the prompt gave (styleJobs).
+    const { mix } = styleMixOf({ instruction: "A raccoon", attachments, styles });
+    expect(styleJobs(mix, { 2: "lettering", 3: "around" })).toEqual({ 1: "lead", 2: "lettering", 3: "around" });
+    expect(styleJobs(mix, { 2: "lettering" })).toEqual({ 1: "lead", 2: "subject", 3: "around" });
+    // Within 10 points of the leader, a style shares the lead.
+    expect(styleJobs([{ n: 1, share: 55 }, { n: 2, share: 45 }])).toEqual({ 1: "lead", 2: "lead" });
   });
 
   it("drops styles at zero and keeps the image's own look", () => {

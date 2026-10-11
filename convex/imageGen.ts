@@ -442,7 +442,7 @@ export const runBatch = internalAction({
       if (!job) throw new Error("The batch was removed.");
       // What the request wants from each numbered image (GPT-6 Luna, about 2.5 s) and the prompt
       // itself, built the way the image test suite builds it (convex/lib/batchPrompt.ts).
-      const { text, roles, read } = await batchPrompt(job);
+      const { text, roles, read, styleJobs } = await batchPrompt(job);
       // Nano Banana can't make a transparent background: its grid is drawn on a key color that
       // chromaKey clears before the cut.
       const nano = job.engine === "nano-banana";
@@ -498,11 +498,17 @@ export const runBatch = internalAction({
         "rss", Math.round(process.memoryUsage().rss / 1048576), "MB",
         "cpu cut", Math.round((cpu1.user + cpu1.system) / 1000), "ms, cpu total", Math.round((cpu2.user + cpu2.system) / 1000), "ms",
       );
+      // Each style's job, by the image it came from, for the batch line ("33% lettering").
+      const jobs = styleJobs.flatMap(({ attachment, job: styleJob }) => {
+        const styleKey = keys[attachment - 1];
+        return styleKey ? [{ key: styleKey, job: styleJob }] : [];
+      });
       await ctx.runMutation(internal.studio.finishBatch, {
         batchId,
         results,
         gridKey,
         roles: roles.length > 0 ? roles : undefined,
+        ...(jobs.length > 0 ? { styleJobs: jobs } : {}),
         spend: sent,
       });
     } catch (error) {

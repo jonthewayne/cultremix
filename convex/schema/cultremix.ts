@@ -151,6 +151,16 @@ export const cultremixTables = {
     retriedAs: v.optional(v.id("batches")),
     // The image model an admin picked (convex/lib/studioRules.ts ENGINES); absent means GPT Image 2.5.
     engine: v.optional(v.union(v.literal("gpt"), v.literal("nano-banana"), v.literal("recraft"), v.literal("mix"))),
+    // What each style of a mix did (convex/lib/prompts.ts styleJobs), by the style image's key: the
+    // studio's batch line says "33% lettering". Absent on batches with one style or none.
+    styleJobs: v.optional(
+      v.array(
+        v.object({
+          key: v.string(),
+          job: v.union(v.literal("lead"), v.literal("subject"), v.literal("around"), v.literal("lettering"), v.literal("accents")),
+        }),
+      ),
+    ),
   }).index("by_session", ["sessionId"]),
 
   // Every image a member brings into the studio: uploads, their own designs, and remix sources.

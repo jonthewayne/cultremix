@@ -300,6 +300,24 @@ export function smallerStyles(mix: ReadonlyArray<MixStyle>) {
   return mix.filter((style, i) => i > 0 && style.share < lead - 10);
 }
 
+// What each style of a mix does, by image number: "lead" for the leader and any style within 10
+// points of it, else its part (Luna's choice when it answered for every smaller style, else size
+// order). styleMixSection writes the prompt from this, and the studio's batch line shows it.
+export type StyleJob = "lead" | StylePart;
+export function styleJobs(mix: ReadonlyArray<MixStyle>, chosen?: Record<number, StylePart>): Record<number, StyleJob> {
+  const jobs: Record<number, StyleJob> = {};
+  const lead = mix[0]?.share ?? 0;
+  const smaller = smallerStyles(mix);
+  const picked = chosen && smaller.every((style) => chosen[style.n]) ? chosen : undefined;
+  for (const [i, style] of mix.entries()) {
+    jobs[style.n] =
+      i === 0 || style.share >= lead - 10
+        ? "lead"
+        : (picked?.[style.n] ?? RANK_ORDER[Math.min(smaller.indexOf(style), RANK_ORDER.length - 1)]);
+  }
+  return jobs;
+}
+
 function styleMixSection(mix: Array<MixStyle>, grid: boolean, blind = false, chosen?: Record<number, StylePart>) {
   // The leading style's way of drawing people and animals, head to toe, stated as a requirement:
   // without it, a photo's realistic proportions win (tested: a poster of elongated figures gave
@@ -320,7 +338,8 @@ function styleMixSection(mix: Array<MixStyle>, grid: boolean, blind = false, cho
   const smaller = smallerStyles(mix);
   // Each smaller style's part: Luna's choice when it answered for every one, else size order.
   const picked = chosen && smaller.every((style) => chosen[style.n]) ? chosen : undefined;
-  const partOf = (style: MixStyle) => picked?.[style.n] ?? RANK_ORDER[Math.min(smaller.indexOf(style), RANK_ORDER.length - 1)];
+  const jobs = styleJobs(mix, chosen);
+  const partOf = (style: MixStyle) => jobs[style.n] as StylePart;
   // A smaller style Luna puts on the lettering takes it from the leader (tested 2026-10-06, below).
   const letteringTaken = Boolean(picked) && smaller.some((style) => partOf(style) === "lettering");
   const leadSets = letteringTaken

@@ -69,15 +69,34 @@ function Dots() {
 }
 
 // A style mix as small thumbnails with their shares: the mixer's closed bar and each batch.
-export function StyleChips({ items, className }: { items: Array<{ url?: string; share: number }>; className?: string }) {
+// What a style did in a batch's mix, in the batch line's words.
+const JOB_WORDS = { lead: "leads", subject: "subject", around: "backdrop", lettering: "lettering", accents: "accents" } as const;
+const JOB_TITLES = {
+  lead: "Leads: sets the technique, line work, color, and figure drawing",
+  subject: "Colors and shades the main subject",
+  around: "The backdrop, frame, ornaments, and print texture around the subject",
+  lettering: "The lettering",
+  accents: "Small accents",
+} as const;
+export type StyleChipJob = keyof typeof JOB_WORDS;
+
+export function StyleChips({
+  items,
+  className,
+}: {
+  items: Array<{ url?: string; share: number; job?: StyleChipJob }>;
+  className?: string;
+}) {
   return (
     <span className={cn("flex shrink-0 items-center gap-2", className)}>
       {items.map((item, i) => (
-        <span key={i} className="flex items-center gap-1">
+        <span key={i} className="flex items-center gap-1" title={item.job ? JOB_TITLES[item.job] : undefined}>
           <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-md border border-black bg-neutral-100">
             {item.url && <Thumb url={item.url} className="max-h-full max-w-full object-contain" />}
           </span>
           <span className="text-xs font-bold tabular-nums text-black">{item.share > 0 ? `${item.share}%` : "off"}</span>
+          {/* Phones have no room on the batch line; the title says it on hover. */}
+          {item.job && <span className="hidden text-xs text-neutral-600 md:inline">{JOB_WORDS[item.job]}</span>}
         </span>
       ))}
     </span>

@@ -1,8 +1,8 @@
 "use node";
 
 import { readRoles } from "./roleReader";
-import { rolesFromWords, smallerStyles, studioPrompt, styleMixOf } from "./prompts";
-import type { ImageRole } from "./prompts";
+import { rolesFromWords, smallerStyles, studioPrompt, styleJobs, styleMixOf } from "./prompts";
+import type { ImageRole, StyleJob } from "./prompts";
 import { chooseStyleParts } from "./styleParts";
 
 // The prompt for a grid batch, exactly as convex/imageGen.ts runBatch sends it: GPT-6 Luna reads
@@ -35,7 +35,14 @@ export async function batchPrompt(job: {
   layout?: "grid" | "single";
   // The model takes words only (Recraft V4.1): the images' notes stand in for them.
   blind?: boolean;
-}): Promise<{ text: string; roles: Array<ImageRole>; read: boolean; styleHair: boolean }> {
+}): Promise<{
+  text: string;
+  roles: Array<ImageRole>;
+  read: boolean;
+  styleHair: boolean;
+  // What each style of a mix of two or more does, by attachment number (prompts.ts styleJobs).
+  styleJobs: Array<{ attachment: number; job: StyleJob }>;
+}> {
   // Style words from the previous studio's buttons, on batches it started.
   const instruction = job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction;
   const attachments = job.attachments;
@@ -81,5 +88,12 @@ export async function batchPrompt(job: {
     blind: job.blind,
     styleParts: styleParts ?? undefined,
   });
-  return { text, roles, read: Boolean(read), styleHair };
+  const jobs = mix.length > 1 ? styleJobs(mix, styleParts ?? undefined) : {};
+  return {
+    text,
+    roles,
+    read: Boolean(read),
+    styleHair,
+    styleJobs: Object.entries(jobs).map(([n, job]) => ({ attachment: Number(n), job })),
+  };
 }

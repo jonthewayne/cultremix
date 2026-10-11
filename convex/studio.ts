@@ -47,6 +47,7 @@ export const MODEL_EDIT = IMAGE_MODEL_WITH_IMAGES;
 const HEX = /^#[0-9a-f]{6}$/iu;
 
 export const engineValidator = v.union(v.literal("gpt"), v.literal("nano-banana"), v.literal("recraft"), v.literal("mix"));
+const styleJobValidator = v.union(v.literal("lead"), v.literal("subject"), v.literal("around"), v.literal("lettering"), v.literal("accents"));
 
 // The roles read before a batch (GPT-6 Luna): under a cent, held as one.
 const ROLES_CENTS = 1;
@@ -110,7 +111,8 @@ const batchView = v.object({
     }),
   ),
   // The style mix as thumbnails and shares; what the styles were read as stays on the server.
-  styles: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), share: v.number() })),
+  // With a mix of two or more, what each style did (convex/lib/prompts.ts styleJobs), once the batch ran.
+  styles: v.array(v.object({ url: v.optional(v.string()), thumbUrl: v.optional(v.string()), share: v.number(), job: v.optional(styleJobValidator) })),
   // A grid batch is charged as a whole; refunded is the credits it gave back for missing designs.
   grid: v.boolean(),
   refunded: v.optional(v.number()),
@@ -284,7 +286,8 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
   for (const [i, style] of mix.entries()) {
     if (shares[i] <= 0) continue;
     const { url, thumbUrl } = await urls(style.key);
-    styles.push({ url, thumbUrl, share: shares[i] });
+    const job = batch.styleJobs?.find((entry) => entry.key === style.key)?.job;
+    styles.push({ url, thumbUrl, share: shares[i], ...(job ? { job } : {}) });
   }
   const images = [];
   for (const image of batch.images ?? []) {
@@ -1317,6 +1320,7 @@ export async function settleBatch(
   extra: {
     gridKey?: string;
     roles?: Array<ImageRole>;
+    styleJobs?: Array<{ key: string; job: Infer<typeof styleJobValidator> }>;
     // What a missing design becomes: failed, or (when the call may have run) unknown_outcome, or
     // (when it never started) expired. Credits come back the same way for all three.
     missingStatus?: "failed" | "unknown_outcome" | "expired";
@@ -1354,6 +1358,7 @@ export async function settleBatch(
     ...(refund > 0 ? { refunded: (batch.refunded ?? 0) + refund } : {}),
     ...(extra.gridKey ? { gridKey: extra.gridKey } : {}),
     ...(extra.roles ? { roles: extra.roles } : {}),
+    ...(extra.styleJobs?.length ? { styleJobs: extra.styleJobs } : {}),
   });
   await scheduleSpellingCheck(ctx, batch, finished);
 }
@@ -1364,6 +1369,8 @@ export const finishBatch = internalMutation({
     results: v.array(designResult),
     gridKey: v.optional(v.string()),
     roles: v.optional(v.array(v.union(v.literal("content"), v.literal("style"), v.literal("both")))),
+    // What each style of the mix did, by its image's key.
+    styleJobs: v.optional(v.array(v.object({ key: v.string(), job: styleJobValidator }))),
     // What the grid call cost (convex/lib/paidAttempts.ts); without it, the batch's reservation
     // settles at its worst case. unknown: the call may have run, so missing designs are unknown_outcome.
     spend: v.optional(spendValidator),
@@ -1374,6 +1381,7 @@ export const finishBatch = internalMutation({
     await settleBatch(ctx, args.batchId, args.results, {
       gridKey: args.gridKey,
       roles: args.roles,
+      styleJobs: args.styleJobs,
       missingStatus: args.unknown ? "unknown_outcome" : undefined,
     });
     await closeReservation(ctx, args.batchId, args.spend ?? { kind: "settle" });

@@ -80,6 +80,43 @@ describe("the studio's spelling check", () => {
     expect(await t.query(internal.spelling.jobs, { generationIds: [bad._id, good._id, unread._id] })).toEqual([]);
   });
 
+  it("shows on the batch line what each style of the mix did", async () => {
+    const t = newTest();
+    const as = await member(t);
+    const owner = await t.run(async (ctx) => (await ctx.db.query("users").first())!._id);
+    const [lead, small] = await t.run(async (ctx) =>
+      Promise.all(
+        ["users/x/style-a.png", "users/x/style-b.png"].map((key) =>
+          ctx.db.insert("userImages", { ownerId: owner, key, analysis: "ready" as const, notes: "Technique: ink.", usedAt: 0 }),
+        ),
+      ),
+    );
+    const result = await as.mutation(api.studio.generate, {
+      instruction: "A raccoon",
+      backgroundColor: "#ffffff",
+      newSession: true,
+      styles: [
+        { imageId: lead, weight: 100 },
+        { imageId: small, weight: 40 },
+      ],
+    });
+    if ("refused" in result) throw new Error(result.refused);
+    await t.mutation(internal.studio.markBatchDispatched, { batchId: result.batchId });
+    await t.mutation(internal.studio.finishBatch, {
+      batchId: result.batchId,
+      results: [0, 1, 2, 3].map((index) => ({ index, design })),
+      styleJobs: [
+        { key: "users/x/style-a.png", job: "lead" },
+        { key: "users/x/style-b.png", job: "lettering" },
+      ],
+    });
+    const page = await as.query(api.studio.sessionBatches, { sessionId: result.sessionId, paginationOpts: { numItems: 5, cursor: null } });
+    expect(page.page[0].styles.map((style) => [style.share, style.job])).toEqual([
+      [71, "lead"],
+      [29, "lettering"],
+    ]);
+  });
+
   it("doesn't read a batch that asked for no words", async () => {
     const t = newTest();
     const as = await member(t);
