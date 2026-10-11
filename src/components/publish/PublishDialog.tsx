@@ -545,6 +545,17 @@ export function PublishDialog({
               colorKeys={selected}
               aspect={aspect}
               disabled={saving}
+              preview={
+                <GarmentPreview
+                  kind={focusedProduct.kind}
+                  hex={shown.hex}
+                  imageUrl={tile.mediumUrl ?? tile.url}
+                  aspect={aspect}
+                  placement={toInches(previewPlacement, aspect, areaOn(focusedProduct, previewPlacement.side))}
+                  area={areaOn(focusedProduct, previewPlacement.side)}
+                  showArea={false}
+                />
+              }
             />
           )}
 

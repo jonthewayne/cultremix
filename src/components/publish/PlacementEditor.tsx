@@ -165,6 +165,17 @@ function EditorDialog({
               colorKeys={colors.map((color) => color.key)}
               aspect={aspect}
               disabled={saving}
+              preview={
+                <GarmentPreview
+                  kind={focused.kind}
+                  hex={lead.hex}
+                  imageUrl={artUrl}
+                  aspect={aspect}
+                  placement={toInches(placement, aspect, areaOn(focused, placement.side))}
+                  area={areaOn(focused, placement.side)}
+                  showArea={false}
+                />
+              }
             />
           )}
           <div className="sticky bottom-0 -mx-5 mt-auto flex flex-col gap-2 border-t border-neutral-200 bg-white px-5 py-4 md:-mx-8 md:px-8">

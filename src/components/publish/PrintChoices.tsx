@@ -47,6 +47,7 @@ export function PrintChoices({
   colorKeys,
   aspect,
   disabled,
+  preview,
 }: {
   products: Array<OfferedProduct>;
   chosen: Array<number>;
@@ -62,6 +63,8 @@ export function PrintChoices({
   colorKeys: Array<string>;
   aspect: number;
   disabled?: boolean;
+  // A small preview shown beside the controls on phones, where the big one has scrolled away.
+  preview?: React.ReactNode;
 }) {
   const current = placementOn(focused, shared, own);
   const area = areaOn(focused, current.side);
@@ -135,6 +138,7 @@ export function PrintChoices({
 
       <fieldset disabled={disabled}>
         <legend className="text-sm font-bold uppercase tracking-wider">On the {called}</legend>
+        {preview && <div className="sticky top-0 z-10 mt-2 h-40 rounded-xl bg-neutral-200 p-1 md:hidden">{preview}</div>}
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Side">
           {(["front", "back"] as const).map((side) => {
             const available = side === "front" || Boolean(focused.back);
