@@ -61,6 +61,7 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 - [ ] Sign up: Shopify Basic with Shopify Payments (as an individual for now; business details can change later), Printful billing, and Circle with a live key.
 - [ ] About 1 MON for production's relayer (deploying the registry needs about 0.47 MON on hand, and each publish costs a few hundredths), and a backup of its key in the password manager.
 - [ ] Approve the store policies at /policies (they say "Draft, under review" until then), and paste the same text into Shopify's Settings, Policies.
+- [ ] Credit on the CultRemix Gateway account for the judging days: about $50. Admin, Overview shows what's left (Gateway credit); every design, note, and model photo is paid from it, about 13¢ a batch, and a judge using all 40 credits spends about $2.60.
 
 ### Deploy (Ops)
 
