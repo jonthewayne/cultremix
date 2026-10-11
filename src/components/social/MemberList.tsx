@@ -22,7 +22,7 @@ export function MemberList({
 }) {
   if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
   if (members.length === 0 && status === "Exhausted") {
-    return <p className="mt-8 text-xl font-semibold text-neutral-400">{empty}</p>;
+    return <p className="mt-8 text-xl font-semibold text-neutral-500">{empty}</p>;
   }
   return (
     <div className="mt-4">

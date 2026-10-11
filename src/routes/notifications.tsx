@@ -58,7 +58,7 @@ function NotificationsPage() {
           <p className="mt-8 text-neutral-500">Loading…</p>
         ) : items.length === 0 ? (
           <div className="mt-8">
-            <p className="text-xl font-semibold text-neutral-400">Nothing yet.</p>
+            <p className="text-xl font-semibold text-neutral-500">Nothing yet.</p>
             <p className="mt-2 text-neutral-600">
               When someone follows you, hearts, remixes, or Backs your work, or buys a design you share in,
               you’ll hear about it here.

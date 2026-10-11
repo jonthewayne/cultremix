@@ -68,6 +68,9 @@ else
   assert_text "SHA-256"
   assert_no_broken_images
   agent-browser screenshot body .tmp/screenshots/work.png
+  # Its fingerprint (under the Fingerprint heading; the economics rules file has a SHA-256 too),
+  # for /onchain's check below.
+  fingerprint=$(agent-browser eval "(() => { const heading = Array.from(document.querySelectorAll('p')).find((p) => p.innerText.trim().toLowerCase() === 'fingerprint'); return ((heading?.nextElementSibling?.textContent ?? '').match(/[0-9a-f]{64}/) || [''])[0]; })()" | tr -d '"')
   profile_path=$(agent-browser eval "document.querySelector('main a[href^=\"/u/\"]')?.getAttribute('href') ?? ''" | tr -d '"')
 
   agent-browser open "$BASE_URL/family/$family"
@@ -103,6 +106,21 @@ agent-browser open "$BASE_URL/onchain"
 agent-browser wait 1500
 assert_text "On Monad"
 agent-browser screenshot body .tmp/screenshots/onchain.png
+
+# Which design is this file? A work's fingerprint pasted in names that work.
+if [[ -n "${fingerprint:-}" ]]; then
+  for _ in $(seq 1 60); do
+    if agent-browser eval "(() => { const el = document.querySelector('input[placeholder^=\"SHA-256\"]'); return Boolean(el) && Object.keys(el).some((key) => key.startsWith('__reactProps')); })()" | grep -q true; then break; fi
+    sleep 0.5
+  done
+  agent-browser find placeholder "SHA-256, 64 characters" fill "$fingerprint" >/dev/null
+  matched=""
+  for _ in $(seq 1 40); do
+    if agent-browser eval "document.body.innerText.includes('It matches CR $cr')" | grep -q true; then matched=yes; break; fi
+    sleep 0.5
+  done
+  [[ -n "$matched" ]] || { echo "/onchain didn't name CR $cr for its fingerprint $fingerprint"; exit 1; }
+fi
 
 # The store policies, linked from the footer.
 for policy in shipping returns privacy terms; do

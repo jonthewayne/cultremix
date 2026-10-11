@@ -116,7 +116,7 @@ export function LineageSection({ cr }: { cr: string }) {
                       </span>
                     ) : (
                       <span>
-                        <Link to="/cr/$cr" params={{ cr: work.cr }} className={work.published ? "hover:underline" : "text-neutral-400"}>
+                        <Link to="/cr/$cr" params={{ cr: work.cr }} className={work.published ? "hover:underline" : "text-neutral-500"}>
                           <CrMark cr={work.cr} className="text-2xl" />
                         </Link>
                         {work.username && (

@@ -103,7 +103,7 @@ function LatestFeed() {
   const { items, status, loadMore } = usePagedQuery(api.feed.latest, {}, PAGE_SIZE);
   return (
     <FeedList items={items} status={status} loadMore={loadMore}>
-      <p className="text-2xl font-semibold text-neutral-400">Nothing published yet. The first one gets CR 101-001.</p>
+      <p className="text-2xl font-semibold text-neutral-500">Nothing published yet. The first one gets CR 101-001.</p>
       <Link to="/studio" className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
         Make it in the studio
       </Link>
@@ -116,7 +116,7 @@ function TrendingFeed() {
   const { items, status, loadMore } = usePagedQuery(api.feed.trending, {}, PAGE_SIZE);
   return (
     <FeedList items={items} status={status} loadMore={loadMore}>
-      <p className="max-w-xl text-2xl font-semibold text-neutral-400">
+      <p className="max-w-xl text-2xl font-semibold text-neutral-500">
         Nothing trending this week yet. Heart or remix something you love.
       </p>
       <Link to="/" search={{}} resetScroll={false} className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
@@ -131,7 +131,7 @@ function FollowingFeed() {
   const { items, status, loadMore } = usePagedQuery(api.feed.following, signedIn ? {} : "skip", PAGE_SIZE);
   return (
     <FeedList items={items} status={status} loadMore={loadMore}>
-      <p className="max-w-xl text-2xl font-semibold text-neutral-400">
+      <p className="max-w-xl text-2xl font-semibold text-neutral-500">
         New designs from the people you follow, and the work they Back, land here.
       </p>
       <Link to="/" search={{}} resetScroll={false} className="mt-4 inline-block text-lg font-bold underline underline-offset-4">

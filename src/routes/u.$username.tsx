@@ -158,7 +158,7 @@ function ProfilePage() {
           isSelf ? (
             <KeptGrid />
           ) : (
-            <p className="mt-8 text-xl font-semibold text-neutral-400">Kept designs are only shown to their creator.</p>
+            <p className="mt-8 text-xl font-semibold text-neutral-500">Kept designs are only shown to their creator.</p>
           )
         ) : shelf === "backed" ? (
           <BackedGrid key={`${username}:backed`} username={username} isSelf={isSelf} />
@@ -177,7 +177,7 @@ function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: "work
     if (shelf === "works") return <NoOriginals username={username} isSelf={isSelf} />;
     return (
       <div className="mt-8">
-        <p className="text-xl font-semibold text-neutral-400">No remixes yet.</p>
+        <p className="text-xl font-semibold text-neutral-500">No remixes yet.</p>
         {isSelf && (
           <Link to="/studio" className="mt-3 inline-block font-bold underline underline-offset-4">
             Make one in the studio
@@ -202,7 +202,7 @@ function NoOriginals({ username, isSelf }: { username: string; isSelf: boolean }
   if (items.length === 0) {
     return (
       <div className="mt-8">
-        <p className="text-xl font-semibold text-neutral-400">No designs published yet.</p>
+        <p className="text-xl font-semibold text-neutral-500">No designs published yet.</p>
         {isSelf && (
           <Link to="/studio" className="mt-3 inline-block font-bold underline underline-offset-4">
             Make one in the studio
@@ -213,7 +213,7 @@ function NoOriginals({ username, isSelf }: { username: string; isSelf: boolean }
   }
   return (
     <div className="mt-8">
-      <p className="text-xl font-semibold text-neutral-400">{isSelf ? "No originals yet. Your remixes:" : "No originals yet. Their remixes:"}</p>
+      <p className="text-xl font-semibold text-neutral-500">{isSelf ? "No originals yet. Your remixes:" : "No originals yet. Their remixes:"}</p>
       <div className="mt-6">
         <WorkGrid items={items} showCreator={false} />
         <LoadMore status={status} loadMore={loadMore} className="mt-12" />
@@ -229,7 +229,7 @@ function KeptGrid() {
   if (items.length === 0 && status === "Exhausted") {
     return (
       <div className="mt-8">
-        <p className="text-xl font-semibold text-neutral-400">Nothing kept yet.</p>
+        <p className="text-xl font-semibold text-neutral-500">Nothing kept yet.</p>
         <p className="mt-2 text-neutral-600">When you publish, choose Keep it just for you, and it waits here, private to you.</p>
       </div>
     );
@@ -260,7 +260,7 @@ function BackedGrid({ username, isSelf }: { username: string; isSelf: boolean })
   if (items.length === 0 && status === "Exhausted") {
     return (
       <div className="mt-8">
-        <p className="text-xl font-semibold text-neutral-400">Nothing Backed yet.</p>
+        <p className="text-xl font-semibold text-neutral-500">Nothing Backed yet.</p>
         {isSelf && <p className="mt-2 text-neutral-600">Back a work you love from its page. You get 3 Backs a week.</p>}
       </div>
     );
