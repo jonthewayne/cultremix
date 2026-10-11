@@ -4,7 +4,7 @@ import { api, internal } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { SHOPIFY_WEBHOOK_MAX_BYTES } from "../../shared/config/shopify";
 import { rawOrder, type FixtureLine } from "../fixtures/shopifyOrder";
-import { ensureCreatorNumber } from "../../convex/lib/creators";
+import { ensureCreatorNumber, setCreatorAccess } from "../../convex/lib/creators";
 import { newTest } from "./setup";
 import { SHOP_ENV, deliver, fakeShopify, makeOnSale, makeUser, makeWork } from "./shopFixtures";
 
@@ -408,6 +408,35 @@ describe("POST /webhooks/shopify", () => {
     expect(jobs.some((job) => job.name.includes("releaseCreatorHolds") && (job.args[0] as { userId?: string })?.userId === a)).toBe(true);
     expect(await t.mutation(internal.earnings.releaseCreatorHolds, { userId: a })).toBe(1);
     expect((await earningsFor(t, a))[0].state).toBe("pending");
+  });
+
+  it("holds shares from orders after creator access is turned off, keeps earlier ones, and releases them when it's back on", async () => {
+    const t = newTest();
+    const { a } = await variationOnSale(t, { creatorNumbers: false });
+    const setAccess = (on: boolean) =>
+      t.run(async (ctx) => {
+        await setCreatorAccess(ctx, (await ctx.db.get("users", a))!, on);
+      });
+    // A gets creator access on Oct 2; an order that day is A's.
+    await setAccess(true);
+    shopify.set(rawOrder({ id: 1, name: "#1001", paidAt: "2026-10-02T01:00:00Z", lines: [line(1)] }));
+    await deliver(t, { topic: "orders/paid", body: { id: 1 } });
+    // Off on Oct 3; an order on Oct 4 waits for A's access, and the earlier order is untouched.
+    vi.setSystemTime(new Date("2026-10-03T00:00:00Z"));
+    await setAccess(false);
+    vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
+    shopify.set(rawOrder({ id: 2, name: "#1002", paidAt: "2026-10-04T12:00:00Z", updatedAt: "2026-10-04T12:00:00Z", lines: [line(1)] }));
+    await deliver(t, { topic: "orders/paid", body: { id: 2 } });
+    expect((await earningsFor(t, a)).map((r) => [r.state, r.holdReason ?? null])).toEqual([
+      ["pending", null],
+      ["held", "not_creator"],
+    ]);
+    // Back on: the release is scheduled, and the held share becomes A's.
+    await setAccess(true);
+    const jobs = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+    expect(jobs.some((job) => job.name.includes("releaseCreatorHolds") && (job.args[0] as { userId?: string })?.userId === a)).toBe(true);
+    expect(await t.mutation(internal.earnings.releaseCreatorHolds, { userId: a })).toBe(1);
+    expect((await earningsFor(t, a)).map((r) => r.state)).toEqual(["pending", "pending"]);
   });
 
   it("matures a shipped unit after 30 days, with its partial reversal", async () => {

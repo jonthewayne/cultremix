@@ -238,7 +238,7 @@ function SaleMessage({ item }: { item: Notification }) {
   const bought = units > 1 ? `Someone bought ${units} of ` : "Someone bought ";
   const amount = item.sale ? <span className="font-black">{formatCents(item.sale.cents)}</span> : null;
   const earned = !item.sale ? null : item.sale.held ? (
-    <> Your {amount} share is held until you get a creator number.</>
+    <> Your {amount} share is held until you have creator access.</>
   ) : (
     <> You earn {amount}.</>
   );

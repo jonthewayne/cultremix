@@ -77,5 +77,5 @@ On October 11 a judge account was made from **Admin → Judges** (`@monad_judge_
 
 - An email that already belongs to a member who signs in with codes is refused. Use a different email for the judge.
 - Passwords are at least 12 characters. Generated ones are longer and random.
-- Judge accounts are marked in `creatorAccess` with the note `judge`, so they're easy to find (and to switch off) after judging: **Admin → Members**, search the username, **Turn off creator access**.
+- Judge accounts are marked in `creatorAccess` with the note `judge`, so they're easy to find (and to switch off) after judging: **Admin → Members**, search the username, **Turn off creator access**. Their designs stay published and can keep selling; a sale after that holds the judge's share until their access is back on, while shares from earlier orders stay theirs.
 - Give extra credits from **Admin → Members → Give credits** if a judge runs out.

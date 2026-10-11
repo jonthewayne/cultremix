@@ -229,7 +229,8 @@ export const grantJudgeAccess = internalMutation({
         note: JUDGE_NOTE,
       });
     } else if (!judgeRow.active) {
-      await ctx.db.patch("creatorAccess", judgeRow._id, { active: true });
+      await ctx.db.patch("creatorAccess", judgeRow._id, { active: true, deactivatedAt: undefined });
+      if (user.creatorNumber !== undefined) await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: user._id });
     }
     const creatorNumber = await ensureCreatorNumber(ctx, user);
 

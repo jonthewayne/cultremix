@@ -10,6 +10,9 @@ export const launchTables = {
     active: v.boolean(),
     grantedBy: v.optional(v.id("users")),
     activatedAt: v.number(),
+    // When it was turned off (lib/creators.ts setCreatorAccess). Orders after this hold the
+    // member's shares (plan A1); orders before it keep them.
+    deactivatedAt: v.optional(v.number()),
     // "judge" for provisioned judge accounts.
     note: v.optional(v.string()),
   }).index("by_user_active", ["userId", "active"]),

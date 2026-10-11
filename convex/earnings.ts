@@ -7,6 +7,7 @@ import { saleSplits, type LineLedger, type UnitStatus } from "./lib/creatorPool"
 import { crNumber } from "./lib/shopify/productSync";
 import { notifySale } from "./lib/notifications";
 import { disputeEffect } from "./lib/disputes";
+import { creatorEligibleAt } from "./lib/creators";
 import { openDisputeCheck } from "./lib/openDisputes";
 import { scheduleSaleEmail } from "./saleEmails";
 import { getViewerUser } from "./identity";
@@ -29,12 +30,9 @@ export function configFor(version: number): EconomicConfig {
   return ECONOMIC_CONFIG_V1;
 }
 
-// Creator access (A1) isn't modeled yet: a member with a creator number, or the owner, has it.
-// Shares owed to anyone else are held ("not_creator") until releaseCreatorHolds runs for them.
-export function hasCreatorAccess(user: Doc<"users"> | null): boolean {
-  if (!user) return false;
-  return user.creatorNumber !== undefined || user.platformRole === "super_admin_owner";
-}
+// Shares owed to someone without creator access when the order happened, and still without it,
+// are held ("not_creator") until releaseCreatorHolds runs for them (lib/creators.ts
+// creatorEligibleAt, plan A1).
 
 type Row = Doc<"earnings">;
 type Group = { sale?: Row; reversals: Array<Row> };
@@ -191,7 +189,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
 
   const access = new Map<string, boolean>();
   const eligible = async (who: Id<"users">) => {
-    if (!access.has(who)) access.set(who, hasCreatorAccess(await ctx.db.get("users", who)));
+    if (!access.has(who)) access.set(who, await creatorEligibleAt(ctx, await ctx.db.get("users", who), order.economicEventAt!));
     return access.get(who)!;
   };
 
@@ -419,7 +417,7 @@ export const matureDue = internalMutation({
   },
 });
 
-// When a member gets creator access (lib/creators.ts ensureCreatorNumber schedules it), their
+// When a member gets creator access, or gets it back (lib/creators.ts schedules this), their
 // "not_creator" holds become Pending and mature on schedule (plan A1).
 export const releaseCreatorHolds = internalMutation({
   args: { userId: v.id("users") },

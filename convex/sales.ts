@@ -3,6 +3,7 @@ import { sameRelative } from "../src/lib/print/shirtPlacement";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAccess";
+import { creatorEligibleAt } from "./lib/creators";
 import { hasRoom, openReservation } from "./lib/budget";
 import { imageUrlReader } from "./lib/imageUrls";
 import { printfulConfigFromEnv } from "./lib/printful/client";
@@ -477,6 +478,8 @@ const rowValidator = v.object({
   approvedAt: v.optional(v.number()),
   // Its creator changed what it comes on or where it sits since it was approved.
   changed: v.boolean(),
+  // Its creator has creator access now; without it, their share of each sale waits (plan A1).
+  creatorAccess: v.boolean(),
   listings: v.array(listingRowValidator),
 });
 
@@ -550,6 +553,7 @@ async function saleRow(
     ...(work.status === "private" ? { kept: true, requestedAt: work.printRequestedAt } : {}),
     picked: choices.map((choice) => choice.product.name),
     changed,
+    creatorAccess: await creatorEligibleAt(ctx, creator, Date.now()),
     step: preparing.length > 0 ? await prepStep(ctx, work._id, preparing) : undefined,
     ...(rows.some((row) => row.approvedAt !== undefined) ? { approvedAt: Math.max(...rows.map((row) => row.approvedAt ?? 0)) } : {}),
     listings: rows.map((row) => {

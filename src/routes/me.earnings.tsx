@@ -114,7 +114,7 @@ function EarningsPage() {
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       {entry.status}
                       {entry.maturesAt ? ` · ${dateText(entry.maturesAt)}` : ""}
-                      {entry.holdReason === "not_creator" ? " · until you get a creator number" : ""}
+                      {entry.holdReason === "not_creator" ? " · until you have creator access" : ""}
                       {entry.holdReason === "refund" ? " · refund in progress" : ""}
                       {entry.holdReason === "dispute" ? " · while the buyer's bank reviews a payment dispute" : ""}
                     </p>

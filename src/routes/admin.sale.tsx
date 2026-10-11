@@ -296,6 +296,12 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
           {row.changed && (
             <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Its creator changed what it comes on or where it sits. Approve again to remake its print files.</p>
           )}
+          {!row.creatorAccess && !row.kept && (
+            <p className="text-sm text-muted-foreground">
+              @{row.creator ?? "Its creator"} doesn't have creator access, so their share of each sale waits until they do (Admin, Members, Make a
+              creator).
+            </p>
+          )}
           {!approved && <p className="text-sm text-muted-foreground">Not approved yet.</p>}
           {row.listings.map((listing) => (
             <div key={listing.productKey} className="flex flex-wrap items-center gap-2 text-sm">

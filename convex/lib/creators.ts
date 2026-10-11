@@ -22,6 +22,23 @@ export async function isCreator(ctx: Ctx, user: Doc<"users">) {
   return (await activeCreatorAccess(ctx, user._id)) !== null;
 }
 
+// Whether a member's share of an order's sale is theirs (plan A1): they have creator access now,
+// or had it when the order happened (revoking access affects only later orders and never touches
+// earned amounts). Access turned off before deactivatedAt was recorded counts as still covering, as
+// it did when a creator number alone decided.
+export async function creatorEligibleAt(ctx: Ctx, user: Doc<"users"> | null, at: number) {
+  if (!user) return false;
+  if (user.platformRole === "super_admin_owner") return true;
+  const rows = await ctx.db
+    .query("creatorAccess")
+    .withIndex("by_user_active", (q) => q.eq("userId", user._id))
+    .take(20);
+  if (rows.length === 0) return user.creatorNumber !== undefined;
+  return rows.some(
+    (row) => row.active || (row.activatedAt <= at && (row.deactivatedAt === undefined || row.deactivatedAt > at)),
+  );
+}
+
 // The next creator number, from the `creatorNumber` counter (seeded at 2).
 export async function nextCreatorNumber(ctx: MutationCtx) {
   const counter = await ctx.db
@@ -46,8 +63,12 @@ export async function setCreatorAccess(
 ): Promise<number | undefined> {
   const current = await activeCreatorAccess(ctx, user._id);
   if (!active) {
-    if (current) await ctx.db.patch("creatorAccess", current._id, { active: false });
+    if (current) await ctx.db.patch("creatorAccess", current._id, { active: false, deactivatedAt: Date.now() });
     return user.creatorNumber;
+  }
+  // Back on for a member who already has a number: shares held while it was off become theirs.
+  if (!current && user.creatorNumber !== undefined) {
+    await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: user._id });
   }
   if (!current) {
     await ctx.db.insert("creatorAccess", {
