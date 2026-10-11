@@ -84,6 +84,7 @@ import type * as lib_phone from "../lib/phone.js";
 import type * as lib_photoShoots from "../lib/photoShoots.js";
 import type * as lib_pngMeta from "../lib/pngMeta.js";
 import type * as lib_pricing from "../lib/pricing.js";
+import type * as lib_printFingerprint from "../lib/printFingerprint.js";
 import type * as lib_printImage from "../lib/printImage.js";
 import type * as lib_printKeys from "../lib/printKeys.js";
 import type * as lib_printPng from "../lib/printPng.js";
@@ -256,6 +257,7 @@ declare const fullApi: ApiFromModules<{
   "lib/photoShoots": typeof lib_photoShoots;
   "lib/pngMeta": typeof lib_pngMeta;
   "lib/pricing": typeof lib_pricing;
+  "lib/printFingerprint": typeof lib_printFingerprint;
   "lib/printImage": typeof lib_printImage;
   "lib/printKeys": typeof lib_printKeys;
   "lib/printPng": typeof lib_printPng;
