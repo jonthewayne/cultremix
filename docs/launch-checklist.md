@@ -43,6 +43,7 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 
 ### Monad
 
+- [x] Dev's Convex has its relayer key: `MONAD_RELAYER_PRIVATE_KEY`, set October 11 from `MONAD_RELAYER_PRIVATE_KEY_DEV` without printing it. /admin/chain shows the relayer's address and balance (it said "MONAD_RELAYER_PRIVATE_KEY is not set" before).
 - [ ] Testnet MON for dev's relayer from the faucet.
 - [ ] `bun run chain:deploy:testnet` (a dry run), then `bun run chain:deploy:testnet --broadcast`. Record the address in `shared/config/chains.ts` (`CHAIN_ENVIRONMENTS.dev.registryAddress`) and push.
 - [ ] /admin/chain: turn chain writes on and register economic config v1. Turn on Monad records in /admin, publish two designs, and check each one's record on testnet.monadscan.com and /onchain. Note the real cost per publish.
@@ -68,6 +69,7 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 
 ### Monad mainnet
 
+- [ ] Ops sets production's relayer key: `MONAD_RELAYER_PRIVATE_KEY` on production's Convex, from `MONAD_RELAYER_PRIVATE_KEY_PROD` in `~/.config/cultremix/chain.env`, never printed. /admin/chain on production then shows the relayer `0x1672…a74A` and its MON. Nothing is sent while chain writes are off.
 - [ ] `bun run chain:deploy:mainnet` (a dry run: balance and cost), then `bun run chain:deploy:mainnet --broadcast --confirm-mainnet`.
 - [ ] Record the address as `CHAIN_ENVIRONMENTS.prod.registryAddress`, push, and have Ops deploy.
 - [ ] /admin/chain on production: turn chain writes on and register economic config v1. Then turn on Monad records in /admin.
