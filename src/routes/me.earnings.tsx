@@ -90,6 +90,12 @@ function EarningsPage() {
                         <Link to="/cr/$cr" params={{ cr: entry.cr }}>
                           <CrMark cr={entry.cr} className="text-2xl" />
                         </Link>
+                      ) : entry.keptId ? (
+                        <Link to="/keep/$workId" params={{ workId: entry.keptId }} className="text-2xl font-black underline-offset-4 hover:underline">
+                          {entry.title ? `Kept: ${entry.title}` : "Kept design"}
+                        </Link>
+                      ) : entry.privateRemix ? (
+                        <span className="text-2xl font-black">A private remix</span>
                       ) : (
                         <span className="text-2xl font-black">—</span>
                       )}

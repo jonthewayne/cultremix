@@ -265,6 +265,35 @@ describe("POST /webhooks/shopify", () => {
     expect(notes.map((n) => n.recipientId)).toEqual([a]);
   });
 
+  it("never names a kept design to anyone else it pays: not in the notification, the email, or Earnings", async () => {
+    const t = newTest();
+    const { a, work } = await variationOnSale(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch("works", work, { status: "private", keep: "private", title: "Our Family" });
+      await ctx.db.insert("featureFlags", { key: "email.sales", enabled: true });
+      await ctx.db.patch("users", a, { email: "a@example.com", authId: "auth-a" });
+    });
+    shopify.set(rawOrder({ lines: [line(1)] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+
+    const original = t.withIdentity({ subject: "auth-a" });
+    const list = await original.query(api.notifications.list, { paginationOpts: { numItems: 10, cursor: null } });
+    expect(list.page).toHaveLength(1);
+    expect(list.page[0]).toMatchObject({ kind: "sale", privateRemix: true, parent: { cr: "101-001" } });
+    expect(list.page[0].work).toBeUndefined();
+    const email = (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).find((job) => job.name.includes("saleEmails"));
+    expect((email?.args[0] as { lines: Array<Record<string, unknown>> }).lines).toEqual([
+      expect.objectContaining({ from: expect.objectContaining({ cr: "101-001" }) }),
+    ]);
+    expect(JSON.stringify(email?.args)).not.toContain("Our Family");
+    expect(JSON.stringify(email?.args)).not.toContain("101-002");
+    const earned = await original.query(api.earnings.mine, {});
+    expect(earned?.entries[0]).toMatchObject({ cr: null, title: null, keptId: null, privateRemix: true });
+    // Its own creator sees it by name, linked to its private page.
+    const kept = await t.withIdentity({ subject: "auth-b" }).query(api.earnings.mine, {});
+    expect(kept?.entries[0]).toMatchObject({ cr: null, title: "Our Family", keptId: work, privateRemix: false });
+  });
+
   it("handles refund before paid, reversing only the refunded unit", async () => {
     const t = newTest();
     const { a, b } = await variationOnSale(t);

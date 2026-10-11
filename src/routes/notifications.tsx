@@ -200,6 +200,14 @@ function SaleMessage({ item }: { item: Notification }) {
     <> You earn {amount}.</>
   );
   if (!item.work) {
+    // A kept design is never named: "Someone bought a private remix of your Grow Slow CR 101-001."
+    if (item.privateRemix && item.parent) {
+      return (
+        <>
+          {bought}a private remix of your <Cr work={item.parent} />.{earned}
+        </>
+      );
+    }
     return <>Someone bought a design you share in.{earned}</>;
   }
   return (

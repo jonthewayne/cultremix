@@ -3,8 +3,9 @@
 // link to turn these off in Settings. Pure, so it's tested without sending anything.
 
 export type SoldLine = {
+  // Absent for a design that isn't public (kept just for its creator): it's never named.
   title?: string;
-  cr: string;
+  cr?: string;
   cents: number;
   units: number;
   // The recipient's own design it was remixed from, when the design sold is someone else's remix.
@@ -23,11 +24,19 @@ function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// What sold: its title and number, or for a kept design (no public number), only that it's a
+// private remix of the recipient's design.
+function what(line: SoldLine) {
+  if (line.cr) {
+    const design = name({ title: line.title, cr: line.cr });
+    return line.from ? design + ", a remix of your " + name(line.from) : design;
+  }
+  return line.from ? "a private remix of your " + name(line.from) : "a private design you share in";
+}
+
 function sentence(line: SoldLine) {
   const count = line.units > 1 ? line.units + " of " : "";
-  const sold = "Someone bought " + count + name(line);
-  const remix = line.from ? ", a remix of your " + name(line.from) : "";
-  return sold + remix + ". You earn " + money(line.cents) + ".";
+  return "Someone bought " + count + what(line) + ". You earn " + money(line.cents) + ".";
 }
 
 export function saleEmailContent(args: { lines: Array<SoldLine>; siteUrl: string }) {
@@ -36,7 +45,7 @@ export function saleEmailContent(args: { lines: Array<SoldLine>; siteUrl: string
   const first = args.lines[0];
   const subject =
     args.lines.length === 1 && first
-      ? "Someone bought " + name(first)
+      ? "Someone bought " + (first.cr ? name({ title: first.title, cr: first.cr }) : what(first))
       : "Someone bought designs you share in";
   const sentences = args.lines.map(sentence);
   const after =

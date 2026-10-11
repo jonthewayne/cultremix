@@ -427,11 +427,27 @@ const entryValidator = v.object({
   test: v.boolean(),
   cr: v.union(v.string(), v.null()),
   title: v.union(v.string(), v.null()),
+  // A kept design (no public number): its private page for its own creator, and only "a private
+  // remix" for anyone else it pays, never its title.
+  keptId: v.union(v.id("works"), v.null()),
+  privateRemix: v.boolean(),
   roles: v.array(v.string()),
   maturesAt: v.union(v.number(), v.null()),
 });
 
 const totalsValidator = v.object({ pendingCents: v.number(), availableCents: v.number(), paidCents: v.number() });
+
+type EntryWork = { cr: string | null; title: string | null; keptId: Id<"works"> | null; privateRemix: boolean };
+
+// How an earnings entry names its design: by its CR number, or for a kept design, by a link to its
+// private page for its creator and as "a private remix" for anyone else.
+function entryWork(doc: Doc<"works">, viewerId: Id<"users">): EntryWork {
+  if (doc.status !== "private") {
+    return { cr: crNumber(doc.crFamily, doc.crExpression), title: doc.title ?? null, keptId: null, privateRemix: false };
+  }
+  if (doc.creatorId === viewerId) return { cr: null, title: doc.title ?? null, keptId: doc._id, privateRemix: false };
+  return { cr: null, title: null, keptId: null, privateRemix: true };
+}
 
 function statusOf(row: Row) {
   if (row.state === "held") return "On hold" as const;
@@ -467,15 +483,15 @@ export const mine = query({
       .withIndex("by_recipient_created", (q) => q.eq("recipientId", viewer._id))
       .order("desc")
       .take(60);
-    const works = new Map<string, { cr: string; title: string | null } | null>();
+    const works = new Map<string, EntryWork | null>();
     const entries = [];
     for (const row of recent) {
       const item = await ctx.db.get("orderItems", row.orderItemId);
-      let work: { cr: string; title: string | null } | null = null;
+      let work: EntryWork | null = null;
       if (item?.workId) {
         if (!works.has(item.workId)) {
           const doc = await ctx.db.get("works", item.workId);
-          works.set(item.workId, doc ? { cr: crNumber(doc.crFamily, doc.crExpression), title: doc.title ?? null } : null);
+          works.set(item.workId, doc ? entryWork(doc, viewer._id) : null);
         }
         work = works.get(item.workId) ?? null;
       }
@@ -488,6 +504,8 @@ export const mine = query({
         test: row.simulated,
         cr: work?.cr ?? null,
         title: work?.title ?? null,
+        keptId: work?.keptId ?? null,
+        privateRemix: work?.privateRemix ?? false,
         roles: row.roles,
         maturesAt: row.kind === "sale" && row.state === "pending" ? (row.maturesAt ?? null) : null,
         holdReason: row.state === "held" ? (row.holdReason ?? null) : null,

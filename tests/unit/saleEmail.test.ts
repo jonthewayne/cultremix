@@ -28,6 +28,16 @@ describe("the sale email", () => {
     expect(email.text).toContain("In all, you earn $8.10 from this order.");
   });
 
+  it("never names a kept design: it's a private remix of the recipient's own design", () => {
+    const email = saleEmailContent({
+      lines: [{ cents: 270, units: 3, from: { title: "Grow Slow", cr: "101-001" } }],
+      siteUrl: "https://cultremix.com",
+    });
+    expect(email.subject).toBe("Someone bought a private remix of your Grow Slow (CR 101-001)");
+    expect(email.text).toContain("Someone bought 3 of a private remix of your Grow Slow (CR 101-001). You earn $2.70.");
+    expect(email.text).not.toContain("undefined");
+  });
+
   it("escapes titles in the HTML", () => {
     const email = saleEmailContent({ lines: [{ title: "<b>Hi</b> & bye", cr: "101-001", cents: 100, units: 1 }], siteUrl: "https://x.test" });
     expect(email.html).toContain("&lt;b&gt;Hi&lt;/b&gt; &amp; bye");

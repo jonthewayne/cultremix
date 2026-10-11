@@ -47,14 +47,22 @@ export async function saleLines(ctx: MutationCtx, recipientId: Id<"users">, tota
         parentId = parent.parentWorkId;
       }
     }
-    lines.push({ title: work.title, cr: formatCr(work.crFamily, work.crExpression), cents: total.cents, units: total.units, from });
+    // A kept design (just for its creator) is never named to anyone else it pays: no title, and its
+    // family-0 number isn't a CR number.
+    const shown = work.status !== "private";
+    lines.push({
+      ...(shown ? { title: work.title, cr: formatCr(work.crFamily, work.crExpression) } : {}),
+      cents: total.cents,
+      units: total.units,
+      from,
+    });
   }
   return lines;
 }
 
 const lineValidator = v.object({
   title: v.optional(v.string()),
-  cr: v.string(),
+  cr: v.optional(v.string()),
   cents: v.number(),
   units: v.number(),
   from: v.optional(v.object({ title: v.optional(v.string()), cr: v.string() })),
