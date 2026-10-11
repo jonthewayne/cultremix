@@ -69,6 +69,10 @@ Running it again is safe. A judge who already exists keeps their password, credi
 
 Either way the old password stops working at once and the new one shows (or is saved) once.
 
+## Rehearsed on dev
+
+On October 11 a judge account was made from **Admin → Judges** (`@monad_judge_dev`, Creator № 2, 40 credits). Signing in at /login with **Have a password? Sign in with it** landed straight in the studio, and **Admin → Members → Turn off creator access** turned its creator access off afterward. The command line's `--dry-run` listed the accounts it would make.
+
 ## Things to know
 
 - An email that already belongs to a member who signs in with codes is refused. Use a different email for the judge.
