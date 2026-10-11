@@ -5,6 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import { NotFoundPage } from "~/components/app/not-found";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { ProfileSkeleton, ShelfSkeleton } from "~/components/cr/PageSkeletons";
 import { Avatar } from "~/components/social/Avatar";
 import { FollowButton } from "~/components/social/FollowButton";
 import { LoadMore } from "~/components/social/LoadMore";
@@ -71,6 +72,7 @@ function ProfilePage() {
     return (
       <div className="min-h-svh bg-white text-black">
         <SiteHeader />
+        <ProfileSkeleton />
       </div>
     );
   }
@@ -170,7 +172,7 @@ function ProfilePage() {
 
 function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: "works" | "remixes"; isSelf: boolean }) {
   const { items, status, loadMore } = usePagedQuery(api.social.works, { username, shelf }, PAGE_SIZE);
-  if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
+  if (status === "LoadingFirstPage") return <ShelfSkeleton />;
   if (items.length === 0 && status === "Exhausted") {
     if (shelf === "works") return <NoOriginals username={username} isSelf={isSelf} />;
     return (
@@ -196,7 +198,7 @@ function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: "work
 // "nothing published".
 function NoOriginals({ username, isSelf }: { username: string; isSelf: boolean }) {
   const { items, status, loadMore } = usePagedQuery(api.social.works, { username, shelf: "remixes" }, PAGE_SIZE);
-  if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
+  if (status === "LoadingFirstPage") return <ShelfSkeleton />;
   if (items.length === 0) {
     return (
       <div className="mt-8">
@@ -223,7 +225,7 @@ function NoOriginals({ username, isSelf }: { username: string; isSelf: boolean }
 // Your kept designs ("Keep it just for you"), newest first. Only you see this shelf.
 function KeptGrid() {
   const { items, status, loadMore } = usePagedQuery(api.keeps.mine, {}, PAGE_SIZE);
-  if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
+  if (status === "LoadingFirstPage") return <ShelfSkeleton />;
   if (items.length === 0 && status === "Exhausted") {
     return (
       <div className="mt-8">
@@ -254,7 +256,7 @@ function KeptGrid() {
 // The works this member has Backed, newest first, each with their backer number.
 function BackedGrid({ username, isSelf }: { username: string; isSelf: boolean }) {
   const { items, status, loadMore } = usePagedQuery(api.social.backed, { username }, PAGE_SIZE);
-  if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
+  if (status === "LoadingFirstPage") return <ShelfSkeleton />;
   if (items.length === 0 && status === "Exhausted") {
     return (
       <div className="mt-8">

@@ -6,6 +6,7 @@ import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { FeedSkeleton } from "~/components/cr/PageSkeletons";
 import { ACTIVE_CREATORS_PAGE_SIZE, ActiveCreators } from "~/components/social/ActiveCreators";
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
@@ -151,7 +152,7 @@ function FeedList({
   loadMore: () => void;
   children: ReactNode;
 }) {
-  if (status === "LoadingFirstPage") return <p className="text-neutral-500">Loading…</p>;
+  if (status === "LoadingFirstPage") return <FeedSkeleton />;
   if (items.length === 0 && status === "Exhausted") return <div>{children}</div>;
   // Trending reorders as hearts come in, so a work can move from one page to the next; show it once.
   const seen = new Set<string>();

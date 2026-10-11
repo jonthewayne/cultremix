@@ -19,6 +19,7 @@ import { WordChangesNote } from "~/components/cr/RemixableWords";
 import { PartChangesNote, RemixableParts } from "~/components/cr/RemixableParts";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { WorkPageSkeleton } from "~/components/cr/PageSkeletons";
 import { Backers } from "~/components/work/Backers";
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
@@ -79,6 +80,7 @@ function ShopPage() {
     return (
       <div className="min-h-svh bg-white text-black">
         <SiteHeader />
+        <WorkPageSkeleton />
       </div>
     );
   }
