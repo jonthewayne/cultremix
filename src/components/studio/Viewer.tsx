@@ -17,6 +17,7 @@ import { DesignMenu } from "~/components/studio/StudioSessions";
 import { inkOn } from "~/lib/imagePrep";
 import { preloadImage } from "~/lib/imagePreload";
 import { isTouchDevice, prefetchImage } from "~/lib/saveImage";
+import { spellingNote } from "~/lib/spelling";
 import { cn } from "~/lib/utils";
 import {
   SCOPES,
@@ -65,6 +66,7 @@ export function Viewer({
   onReject,
   onBranch,
   onStartFrom,
+  onFixSpelling,
   onRemixable,
   onStyle,
   onPublish,
@@ -90,6 +92,8 @@ export function Viewer({
   onBranch: (tile: Tile) => void;
   // Starts a fresh prompt in this session with the design as image 1 (B).
   onStartFrom: (tile: Tile) => void;
+  // The same, asking to fix the words it misspelled.
+  onFixSpelling: (tile: Tile) => void;
   // "Make it remixable" for the design.
   onRemixable: (tile: Tile) => void;
   onStyle: (tile: Tile) => void;
@@ -263,6 +267,7 @@ export function Viewer({
         ...designItems(tile, {
           onPublish: onPublish ? () => onPublish(tile) : undefined,
           onStartFrom: () => onStartFrom(tile),
+          onFixSpelling: () => onFixSpelling(tile),
           onRemixable: () => onRemixable(tile),
           onInspire: () => onBranch(tile),
           onStyle: () => onStyle(tile),
@@ -376,6 +381,15 @@ export function Viewer({
           </button>
         </div>
       </div>
+
+      {tile?.spelling && tile.spelling.length > 0 && finished(tile) && (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 pb-1 text-center text-sm font-semibold">
+          <span className="rounded-lg bg-amber-300 px-2 py-1 text-black">{spellingNote(tile.spelling)}</span>
+          <button type="button" onClick={() => onFixSpelling(tile)} className="h-10 font-bold underline underline-offset-4">
+            Fix the spelling
+          </button>
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 md:px-20">
         {tile && finished(tile) ? (

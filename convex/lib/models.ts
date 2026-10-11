@@ -11,6 +11,15 @@ export const IMAGE_MODEL_TEXT_ONLY = "openai/gpt-image-2.5-flare";
 // and how far a remix moved from its original.
 export const VISION_MODEL = "openai/gpt-6-luna";
 
+// Gemini 3.1 Pro reads a design's lettering letter for letter: the studio's spelling check
+// (convex/spelling.ts) and the image suite's word reader. OpenAI's models read what a design
+// probably meant: on five hard designs, three reads each, GPT-6 Luna read TRRSH as TRASH and a clear
+// LOUD as SLOW (6 of 15 wrong), and GPT-6 and 6.1 Sol read TRRSH as TRASH every time. Gemini 3.1 Pro
+// read all 15 letter for letter, at its default thinking (about 1¢ a read) and at low thinking (about
+// 0.3¢, 7 to 18 s). No model reliably caught an E missing its bottom bar (FIRF): 1 read in 10 did
+// (2026-10-05). It's a preview model; if it's retired, pick another here.
+export const WORD_READER_MODEL = "google/gemini-3.1-pro-preview";
+
 export function imageModelFor(imageCount: number) {
   return imageCount > 0 ? IMAGE_MODEL_WITH_IMAGES : IMAGE_MODEL_TEXT_ONLY;
 }

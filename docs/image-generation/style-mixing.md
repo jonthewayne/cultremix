@@ -201,7 +201,7 @@ The suite (`511ba12`, `008fe02`) runs every case through production's prompt cod
    - Label each mixer row by its job ("Leads," "Colors the subject," "Around it," "Lettering") so members know what a slider does, and let them choose the leader directly.
    - Offer "Show me the range" as its own button.
 2. **A lion style still gives wolves a ruff at high quality.** A style image whose subject has a strong silhouette passes that silhouette to new subjects. A style sheet would show the style apart from any one subject: the same style drawn on several subjects, like the Style Of contact sheets. The quick test is a crop of the style image that shows its texture without its subject.
-3. **Lettering leak.** It comes and goes. A spelling check after each batch could flag or remake a misspelled design, using the suite's word reader (Gemini 3.1 Pro, about 0.3¢ a design).
+3. **Lettering leak.** It comes and goes. Since 2026-10-11 the studio's spelling check reads every design of a batch that asked for words, using the suite's word reader (Gemini 3.1 Pro, about 0.3¢ a design), marks one whose words came out a letter or two off, and offers **Fix the spelling** ([README](README.md), "The spelling check").
 4. **Not tested yet:**
    - four styles in the mixer;
    - a mix whose request has no words (Luna is told not to use the lettering then);

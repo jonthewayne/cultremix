@@ -236,6 +236,18 @@ export const cultremixTables = {
     height: v.optional(v.number()),
     hasAlpha: v.optional(v.boolean()),
     error: v.optional(v.string()),
+    // Its batch's asked-for words read back from it (convex/spelling.ts): the ones it drew a letter or
+    // two off. Absent until read, and on designs whose batch asked for no words.
+    spelling: v.optional(
+      v.object({
+        status: v.union(v.literal("checked"), v.literal("failed")),
+        misses: v.array(v.object({ asked: v.string(), read: v.string() })),
+        // What the reader saw, to explain a warning.
+        read: v.optional(v.array(v.string())),
+        error: v.optional(v.string()),
+        checkedAt: v.number(),
+      }),
+    ),
     // Its remixable words and parts, set up in the studio before publishing.
     remixSetup: v.optional(remixSetup),
     // For a remix design: how far it moved from the design it remixes, judged when its creator

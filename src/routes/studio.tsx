@@ -47,6 +47,7 @@ import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/image
 import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { prefetchImage } from "~/lib/saveImage";
+import { fixSpellingRequest, spellingNote } from "~/lib/spelling";
 import { COMPARE_MAX, canCompare, compareParam, parseCompare, togglePick } from "~/lib/compare";
 import { cn } from "~/lib/utils";
 import { parseScope } from "~/lib/viewerNav";
@@ -392,6 +393,10 @@ function StudioPage() {
       });
     window.scrollTo({ top: 0, behavior: "smooth" });
     window.requestAnimationFrame(() => instructionRef.current?.focus({ preventScroll: true }));
+  };
+  // A fresh request on a design whose words came out misspelled, fixing only its lettering.
+  const fixSpelling = (tile: Tile) => {
+    if (tile.spelling?.length) startFrom(tile, { instruction: fixSpellingRequest(tile.spelling) });
   };
   const useAsStyle = (tile: Tile) => {
     const preview = tile.thumbUrl ?? tile.url;
@@ -927,6 +932,7 @@ function StudioPage() {
                         onOpen={() => viewerRoute.open({ view: tile.generationId, scope: "batch" })}
                         onPublish={canPublish ? () => setPublishing(tile) : undefined}
                         onStartFrom={() => startFrom(tile)}
+                        onFixSpelling={() => fixSpelling(tile)}
                         onRemixable={() => setSettingUp({ generationId: tile.generationId, tile })}
                         onInspire={() => useAsImage(tile)}
                         onStyle={() => useAsStyle(tile)}
@@ -1003,6 +1009,10 @@ function StudioPage() {
               leaveViewer();
               startFrom(tile);
             }}
+            onFixSpelling={(tile) => {
+              leaveViewer();
+              fixSpelling(tile);
+            }}
             onRemixable={(tile) => {
               leaveViewer();
               setSettingUp({ generationId: tile.generationId, tile });
@@ -1030,6 +1040,11 @@ function StudioPage() {
           <PublishDialog
             tile={publishing}
             onClose={() => setPublishing(null)}
+            onFixSpelling={() => {
+              const tile = publishing;
+              setPublishing(null);
+              fixSpelling(tile);
+            }}
             onAdapt={(shirt) => {
               const tile = publishing;
               setPublishing(null);
@@ -1211,6 +1226,7 @@ function TileCard({
   onOpen,
   onPublish,
   onStartFrom,
+  onFixSpelling,
   onRemixable,
   onInspire,
   onStyle,
@@ -1224,6 +1240,7 @@ function TileCard({
   // Absent while publishing is turned off.
   onPublish?: () => void;
   onStartFrom: () => void;
+  onFixSpelling: () => void;
   onRemixable: () => void;
   onInspire: () => void;
   onStyle: () => void;
@@ -1294,7 +1311,16 @@ function TileCard({
       {ready && (
         <>
           <DesignMenu
-            items={designItems(tile, { onOpen, onPublish, onStartFrom, onRemixable, onInspire, onStyle, onReject: () => onReject(!tile.rejected) })}
+            items={designItems(tile, {
+              onOpen,
+              onPublish,
+              onStartFrom,
+              onFixSpelling,
+              onRemixable,
+              onInspire,
+              onStyle,
+              onReject: () => onReject(!tile.rejected),
+            })}
             onOpenChange={(open) => {
               setMenuOpen(open);
               if (open) prefetchImage(tile.url);
@@ -1341,6 +1367,17 @@ function TileCard({
               Publish
             </button>
           ) : null}
+          {tile.spelling && tile.spelling.length > 0 && !tile.publishedCr && !tile.keptId && (
+            <button
+              type="button"
+              onClick={onOpen}
+              title={spellingNote(tile.spelling)}
+              aria-label={`Check the spelling. ${spellingNote(tile.spelling)}`}
+              className="absolute left-1/2 top-2 flex h-10 -translate-x-1/2 items-center whitespace-nowrap rounded-lg bg-amber-300 px-2 text-xs font-black text-black"
+            >
+              Spelling?
+            </button>
+          )}
           {tile.model && (
             <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white md:group-hover:opacity-0">
               {tile.model}

@@ -20,6 +20,7 @@ import type { RemixField } from "./lib/remixFields";
 import { MAX_PART_PHOTOS, checkPartChanges, partChangeInstruction, partSummary } from "./lib/remixParts";
 import type { PartProblem, RemixPart } from "./lib/remixParts";
 import { checkedWordChanges, wordChangesPrompt } from "./remixFields";
+import { scheduleSpellingCheck } from "./spelling";
 import { SESSION_TITLE_MAX, sessionName } from "./lib/sessions";
 import { isImageKey } from "./lib/sizes";
 import {
@@ -86,6 +87,8 @@ const tileView = v.object({
   model: v.optional(v.string()),
   // Kept just for the member ("Keep it just for you"): its private page, in place of a CR number.
   keptId: v.optional(v.id("works")),
+  // Asked-for words it drew a letter or two off (convex/spelling.ts), with what it reads instead.
+  spelling: v.optional(v.array(v.object({ asked: v.string(), read: v.string() }))),
 });
 
 const batchView = v.object({
@@ -235,6 +238,7 @@ async function tileOf(
     width: g.width,
     height: g.height,
     model: showModel ? modelLabel(g.model) : undefined,
+    spelling: g.spelling?.status === "checked" && g.spelling.misses.length > 0 ? g.spelling.misses : undefined,
   };
 }
 
@@ -1326,11 +1330,13 @@ export async function settleBatch(
     .collect();
   const now = Date.now();
   let missing = 0;
+  const finished: Array<Id<"generations">> = [];
   for (const g of generations) {
     if (g.status !== "dispatched" && g.status !== "queued") continue;
     const result = results.find((r) => r.index === g.index);
     if (result?.design) {
       await ctx.db.patch("generations", g._id, { status: "succeeded", finishedAt: now, ...result.design });
+      finished.push(g._id);
     } else {
       missing++;
       await ctx.db.patch("generations", g._id, {
@@ -1349,6 +1355,7 @@ export async function settleBatch(
     ...(extra.gridKey ? { gridKey: extra.gridKey } : {}),
     ...(extra.roles ? { roles: extra.roles } : {}),
   });
+  await scheduleSpellingCheck(ctx, batch, finished);
 }
 
 export const finishBatch = internalMutation({
@@ -1420,6 +1427,8 @@ export const markSucceeded = internalMutation({
       height: args.height,
       hasAlpha: args.hasAlpha,
     });
+    const batch = await ctx.db.get("batches", generation.batchId);
+    if (batch) await scheduleSpellingCheck(ctx, batch, [generation._id]);
     return null;
   },
 });

@@ -19,6 +19,8 @@ import { RemixableParts } from "~/components/cr/RemixableParts";
 import type { RemixKind } from "~/components/cr/RemixKindChoice";
 import { useDesignPixels } from "~/lib/designPixels";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
+import { spellingNote } from "~/lib/spelling";
+import type { SpellingMiss } from "~/lib/spelling";
 import { garmentTones } from "~/lib/print/garmentMockup";
 import { DEFAULT_PLACEMENT, toInches } from "~/lib/print/shirtPlacement";
 import type { RelativePlacement } from "~/lib/print/shirtPlacement";
@@ -32,6 +34,8 @@ export type PublishTile = {
   mediumUrl?: string;
   thumbUrl?: string;
   backgroundColor: string;
+  // Asked-for words it drew a letter or two off (convex/spelling.ts).
+  spelling?: Array<SpellingMiss>;
 };
 
 // One sheet: title, a short note, the shirt colors (with a live preview on each and a heads-up
@@ -42,9 +46,12 @@ export function PublishDialog({
   tile,
   onClose,
   onAdapt,
+  onFixSpelling,
 }: {
   tile: PublishTile;
   onClose: () => void;
+  // Back to the studio with a request that fixes its misspelled words.
+  onFixSpelling?: () => void;
   // "Make a version for Black": back to the studio with a new prompt for that shirt color.
   onAdapt?: (color: { name: string; hex: string }) => void;
 }) {
@@ -394,6 +401,17 @@ export function PublishDialog({
           </div>
 
           {preview?.remix && <p className="-mt-3 text-base font-semibold">{preview.remix.summary}</p>}
+
+          {tile.spelling && tile.spelling.length > 0 && (
+            <div className="-mt-3 rounded-xl bg-amber-100 px-4 py-3 text-sm text-amber-950">
+              <p className="font-semibold">{spellingNote(tile.spelling)} You can still publish it as it is.</p>
+              {onFixSpelling && (
+                <button type="button" onClick={onFixSpelling} className="mt-1 h-10 font-bold underline underline-offset-4">
+                  Fix the spelling
+                </button>
+              )}
+            </div>
+          )}
 
           <fieldset disabled={saving}>
             <legend className="text-sm font-bold uppercase tracking-wider">Who it's for</legend>

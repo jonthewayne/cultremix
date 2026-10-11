@@ -1,6 +1,7 @@
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { MenuItem } from "~/components/studio/StudioSessions";
 import { designFilename, isTouchDevice, saveImage } from "~/lib/saveImage";
+import type { SpellingMiss } from "~/lib/spelling";
 
 // One design in a batch, as the studio shows it.
 export type Tile = {
@@ -26,6 +27,8 @@ export type Tile = {
   model?: string;
   // Kept just for the member: its private page.
   keptId?: string;
+  // Asked-for words it drew a letter or two off (convex/spelling.ts).
+  spelling?: Array<SpellingMiss>;
 };
 
 export const isFinished = (tile: Tile) => tile.status === "succeeded";
@@ -40,6 +43,8 @@ export function designItems(
     onPublish?: () => void;
     // A fresh prompt in the same session with this design as image 1 (nothing else carried over).
     onStartFrom?: () => void;
+    // The same, with a request that fixes its misspelled words (shown only when it has some).
+    onFixSpelling?: () => void;
     // Choose what people who remix it may change, and try it as a remix.
     onRemixable?: () => void;
     // Adds the design to the images already there.
@@ -55,6 +60,7 @@ export function designItems(
   if (tile.url && !tile.url.startsWith("fake:")) items.push({ label: "Open full size", href: tile.url });
   if (tile.key) {
     if (actions.onStartFrom) items.push({ label: "Start from this", onSelect: actions.onStartFrom });
+    if (tile.spelling?.length && actions.onFixSpelling) items.push({ label: "Fix the spelling", onSelect: actions.onFixSpelling });
     items.push({ label: "Add as an image", onSelect: actions.onInspire });
     items.push({ label: "Use as style", onSelect: actions.onStyle });
   }
