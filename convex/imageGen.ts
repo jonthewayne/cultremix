@@ -9,7 +9,7 @@ import { cutGrid } from "./lib/gridCut";
 import type { Rgba } from "./lib/gridCut";
 import { gatewayImage, nanoBananaImage, recraftImage } from "./lib/imageCalls";
 import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY } from "./lib/imageErrors";
-import { mimeOf } from "./lib/mime";
+import { imageTypeOf, mimeOf } from "./lib/mime";
 import {
   DEFAULT_QUALITY,
   DESIGN_SIZE,
@@ -528,14 +528,16 @@ export const uploadInspiration = action({
   handler: async (ctx, args): Promise<{ key: string; url?: string; imageId: Id<"userImages"> }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError({ code: "SIGNED_OUT", message: "Sign in first." });
-    const ext = INSPIRATION_TYPES[args.contentType];
-    if (!ext) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: "Use a PNG, JPEG, or WebP image." });
-    }
     if (args.bytes.byteLength > 8 * 1024 * 1024) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "That image is too large." });
     }
     const bytes = new Uint8Array(args.bytes);
+    // Stored as what its bytes are, whatever the browser called it.
+    const contentType = imageTypeOf(bytes);
+    const ext = contentType ? INSPIRATION_TYPES[contentType] : undefined;
+    if (!contentType || !ext || !INSPIRATION_TYPES[args.contentType]) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Use a PNG, JPEG, or WebP image." });
+    }
     const sha256 = sha256Hex(bytes);
     const info = pngInfo(bytes);
     const mode = storageMode();
@@ -551,8 +553,10 @@ export const uploadInspiration = action({
       if (existing.key) {
         key = existing.key;
       } else {
+        // A new file: at most 60 an hour per member.
+        await ctx.runMutation(internal.images.admitUpload, { userId: existing.userId });
         // The member's own uploads folder, under a code nobody can guess (convex/lib/sizes.ts).
-        key = await storeObject(ctx, uploadKey(existing.userId, Date.now(), randomCode(), ext), bytes, args.contentType);
+        key = await storeObject(ctx, uploadKey(existing.userId, Date.now(), randomCode(), ext), bytes, contentType);
         // The studio shows its own preview meanwhile; pickers and chips use the thumbnail later.
         await ctx.scheduler.runAfter(0, internal.sizing.ensure, { key });
       }

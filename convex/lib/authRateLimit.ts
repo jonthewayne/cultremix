@@ -48,6 +48,14 @@ export const RATE_LIMITS = {
     windowMs: 15 * 60 * 1000,
     blockMs: 15 * 60 * 1000,
   },
+  // New studio uploads per member (imageGen.uploadInspiration): each is stored in the public
+  // bucket and read by a vision model for its notes, so a flood would cost real money. The same
+  // file again is free and doesn't count.
+  "studio:upload": {
+    maxAttempts: 60,
+    windowMs: 60 * 60 * 1000,
+    blockMs: 60 * 60 * 1000,
+  },
 } as const satisfies Record<
   string,
   { maxAttempts: number; windowMs: number; blockMs: number }

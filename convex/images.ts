@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
+import { checkRateLimit } from "./lib/authRateLimit";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { isDevDeployment } from "./lib/r2";
@@ -117,6 +118,20 @@ export const recordUpload = internalMutation({
       throw new ConvexError({ code: "NEEDS_USERNAME", message: "Pick a username first." });
     }
     return await saveImage(ctx, user._id, args);
+  },
+});
+
+// Lets a new upload be stored: at most 60 new images an hour per member (lib/authRateLimit.ts).
+export const admitUpload = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      await checkRateLimit(ctx, "studio:upload", args.userId);
+    } catch {
+      throw new ConvexError({ code: "RATE_LIMITED", message: "That's a lot of new images for one hour. Try again in a little while." });
+    }
+    return null;
   },
 });
 
