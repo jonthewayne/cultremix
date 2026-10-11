@@ -724,6 +724,8 @@ type Step = {
   relayer: Relayer;
   lease: Lease;
   summary: Summary;
+  // Whether this tick already told opsAlerts the relayer is out of MON (true) or sending (false).
+  fundsReported?: boolean;
 };
 
 async function outcome(step: Step, write: WriteDoc, result: typeof outcomeValidator.type): Promise<void> {
@@ -877,6 +879,18 @@ async function signMember(step: Step, write: WriteDoc, payload: WritePayload): P
   return { signature, deadline: Number(deadline), signer: wallet.address };
 }
 
+// Tells the owner and ops when the relayer runs out of MON, once until a write goes through again
+// (convex/opsAlerts.ts). Once per tick is enough.
+async function reportFunds(step: Step, out: boolean) {
+  if (step.fundsReported === out) return;
+  step.fundsReported = out;
+  await step.ctx.runMutation(internal.opsAlerts.recordRelayerFunds, {
+    out,
+    network: step.relayer.deployment.network.name,
+    address: step.relayer.account.address,
+  });
+}
+
 /** Phase C: sign and send pending writes, oldest first. */
 async function sendPending(step: Step, heads: Heads): Promise<void> {
   const { ctx, relayer } = step;
@@ -895,11 +909,13 @@ async function sendPending(step: Step, heads: Heads): Promise<void> {
       if (sent === "no_funds") {
         for (const waiting of pending) await outcome(step, waiting, { type: "defer", error: "The relayer needs MON." });
         step.summary.detail = "The relayer needs MON.";
+        await reportFunds(step, true);
         return;
       }
       if (sent) {
         nextNonce = sent.nonce + 1;
         balance = sent.balance;
+        await reportFunds(step, false);
       }
     } catch (error) {
       // One write's failure (an RPC hiccup, a bad payload) doesn't hold up the rest.

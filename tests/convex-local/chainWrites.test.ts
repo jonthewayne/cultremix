@@ -362,11 +362,21 @@ describe("chain writes: fees and stalls", () => {
     expect(await tick(t)).toMatchObject({ sent: 0, deferred: 2, detail: "The relayer needs MON." });
     expect(await getWrite(t, first)).toMatchObject({ status: "pending", error: "The relayer needs MON.", attempts: 1 });
     expect((await relayerState(t))?.lastError).toBe("The relayer needs MON.");
+    // The owner and ops hear once that it's out, not on every tick.
+    const outAlerts = async () =>
+      t.run(async (ctx) => (await ctx.db.query("notifications").collect()).filter((row) => row.kind === "ops_alert" && row.note?.includes("out of MON")).length);
+    const told = await outAlerts();
+    expect(await t.run(async (ctx) => (await ctx.db.query("opsAlerts").collect()).map((row) => [row.key, row.level]))).toEqual([["relayer-mon", "out"]]);
+    vi.setSystemTime(Date.now() + 6_000);
+    await tick(t);
+    expect(await outAlerts()).toBe(told);
 
     chain.setBalance(RELAYER, 10n ** 20n);
     expect(await tick(t)).toMatchObject({ sent: 0 });
-    vi.setSystemTime(Date.now() + 6_000);
+    vi.setSystemTime(Date.now() + 60_000);
     expect(await tick(t)).toMatchObject({ sent: 2 });
+    // Sending again resets it, so running out later is told again.
+    expect(await t.run(async (ctx) => (await ctx.db.query("opsAlerts").collect()).map((row) => row.level))).toEqual(["ok"]);
     await chain.mine(3);
     await tick(t);
     expect((await getWrite(t, second)).status).toBe("confirmed");
