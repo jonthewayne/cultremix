@@ -82,12 +82,16 @@ Both target your dev deployment by default and production with `--prod` (they as
 `/admin` is for the owner and staff:
 
 - **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day).
-- **Products**: search Printful's catalog, add products with their colors and placements, put them on offer, pick the default, and set each one's name, prices, back-print extra, and print areas.
-- **For sale**: approve a published work for sale; follow its print files and Shopify products per product; pause or resume.
 - **Members**: search by username, email, or creator number; give credits; turn creator access on or off.
 - **Metrics**: counts by day and in total (members, members who generated, batches, designs, published works, remixes, families, credits used, model photos).
-- **Lineage**: look up a work by CR number and correct its lineage (owner and ops staff).
 - **Judges**: make a judge account with a password (owner only).
+- **Lineage**: look up a work by CR number and correct its lineage (owner and ops staff).
+- **Products**: search Printful's catalog, add products with their colors and placements, put them on offer, pick the default, and set each one's name, prices, back-print extra, and print areas. **Check with Printful** reads a product's print areas from Printful's print files.
+- **For sale**: **Connect Printful** and **Connect Shopify** set up each account's webhooks once its keys are in the env. Approve a published work for sale, follow its print files and Shopify products per product, and pause or resume. On dev and staging, **Simulate a sale** makes a Test order, so you can see what a sale does (Test earnings and the creators' notifications) before Shopify exists.
+- **Orders**: Shopify orders with payment, Printful fulfillment, refunds, shipments and tracking, and privacy requests to answer (owner only).
+- **Payouts**: each creator's payable balance from real orders; record a payment by USDC or bank with its reference, and export a CSV (owner only).
+- **Waitlist**: the emails "Buying opens soon" collected, with a CSV export.
+- **Monad**: opens `/admin/chain`, the registry and its queue.
 
 Support staff can look but not change anything.
 

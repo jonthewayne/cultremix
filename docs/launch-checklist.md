@@ -37,7 +37,7 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 - [ ] **Connect**: in Admin, For sale, press **Connect Printful** (sets its webhooks and keeps the signing key) and **Connect Shopify** (subscribes the order webhooks, and warns if the Headless channel is missing). Both say what they set up.
 - [ ] **Products**: in Admin, Products, add the shirts on offer and set each one's name, prices, and back-print extra. Press **Check with Printful** on each, so its print areas come from Printful's print files.
 - [ ] **For sale**: turn on Print-size art, approve two designs (one with a back print). Each product gets a print file; open them and check the placement. Their Shopify products appear in the development store.
-- [ ] **A test order**: turn on Checkout on dev, buy with the development store's test payment gateway (Bogus Gateway), and check that /admin/orders shows it paid, Printful has a draft with the right file on the right side, and the creator's earnings show on /me/earnings as Test.
+- [ ] **A test order**: turn on Checkout on dev, buy with the development store's test payment gateway (Bogus Gateway), and check that /admin/orders shows it paid, Printful has a draft with the right file on the right side, and the creator's earnings show on /me/earnings as Test, with "Someone bought …" in their notifications. (Before Shopify exists, **Simulate a sale** on a For sale row shows the same earnings and notifications.)
 - [ ] **Placement check in Printful**: open the draft in Printful and confirm the design sits where the preview showed it. This settles whether a whole-area file needs a position. Then delete the draft.
 
 ### Monad
@@ -99,5 +99,6 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 - [ ] Fill in [Launch metrics](launch/metrics.md) each day from /admin/metrics.
 - [ ] Keep [Cohort notes](launch/cohort.md) for the first members.
 - [ ] Answer privacy requests on /admin/orders within 30 days.
-- [ ] After judging: turn off judges' creator access (Admin, Members), and start payouts in mid-November.
+- [ ] After judging: turn off judges' creator access (Admin, Members).
+- [ ] From mid-November, pay creators from Admin, Payouts: it lists each creator's payable balance. Send the money by USDC or bank, then record it there with its reference (the amount has to match the balance shown).
 
