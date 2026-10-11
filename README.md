@@ -81,7 +81,7 @@ Both target your dev deployment by default and production with `--prod` (they as
 
 `/admin` is for the owner and staff:
 
-- **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day).
+- **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Sale emails, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day).
 - **Members**: search by username, email, or creator number; give credits; turn creator access on or off.
 - **Metrics**: counts by day and in total (members, members who generated, batches, designs, published works, remixes, families, credits used, model photos).
 - **Judges**: make a judge account with a password (owner only).

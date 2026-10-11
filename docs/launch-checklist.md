@@ -101,5 +101,6 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 - [ ] Keep [Cohort notes](launch/cohort.md) for the first members.
 - [ ] Answer privacy requests on /admin/orders within 30 days.
 - [ ] After judging: turn off judges' creator access (Admin, Members).
+- [ ] Once real orders flow: turn on **Sale emails** in Admin, Overview, so creators get an email when a design they share in sells. They come from the sign-in address; members can turn them off in Settings.
 - [ ] From mid-November, pay creators from Admin, Payouts: it lists each creator's payable balance. Send the money by USDC or bank, then record it there with its reference (the amount has to match the balance shown).
 
