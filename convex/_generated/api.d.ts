@@ -157,6 +157,7 @@ import type * as schema_social from "../schema/social.js";
 import type * as seed from "../seed.js";
 import type * as shopify from "../shopify.js";
 import type * as shopifyFulfill from "../shopifyFulfill.js";
+import type * as sitemap from "../sitemap.js";
 import type * as sizing from "../sizing.js";
 import type * as sms from "../sms.js";
 import type * as social from "../social.js";
@@ -325,6 +326,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   shopify: typeof shopify;
   shopifyFulfill: typeof shopifyFulfill;
+  sitemap: typeof sitemap;
   sizing: typeof sizing;
   sms: typeof sms;
   social: typeof social;

@@ -16,7 +16,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as OnchainRouteImport } from './routes/onchain'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
@@ -81,9 +83,19 @@ const OnchainRoute = OnchainRouteImport.update({
   path: '/onchain',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudioRoute = StudioRouteImport.update({
@@ -235,7 +247,9 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof NotificationsRoute
   '/onboarding': typeof OnboardingRoute
   '/onchain': typeof OnchainRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/team': typeof TeamRoute
   '/unauthorized': typeof UnauthorizedRoute
@@ -272,7 +286,9 @@ export interface FileRoutesByTo {
   '/notifications': typeof NotificationsRoute
   '/onboarding': typeof OnboardingRoute
   '/onchain': typeof OnchainRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/team': typeof TeamRoute
   '/unauthorized': typeof UnauthorizedRoute
@@ -311,7 +327,9 @@ export interface FileRoutesById {
   '/notifications': typeof NotificationsRoute
   '/onboarding': typeof OnboardingRoute
   '/onchain': typeof OnchainRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/team': typeof TeamRoute
   '/unauthorized': typeof UnauthorizedRoute
@@ -351,7 +369,9 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/onboarding'
     | '/onchain'
+    | '/robots.txt'
     | '/settings'
+    | '/sitemap.xml'
     | '/studio'
     | '/team'
     | '/unauthorized'
@@ -388,7 +408,9 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/onboarding'
     | '/onchain'
+    | '/robots.txt'
     | '/settings'
+    | '/sitemap.xml'
     | '/studio'
     | '/team'
     | '/unauthorized'
@@ -426,7 +448,9 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/onboarding'
     | '/onchain'
+    | '/robots.txt'
     | '/settings'
+    | '/sitemap.xml'
     | '/studio'
     | '/team'
     | '/unauthorized'
@@ -465,7 +489,9 @@ export interface RootRouteChildren {
   NotificationsRoute: typeof NotificationsRoute
   OnboardingRoute: typeof OnboardingRoute
   OnchainRoute: typeof OnchainRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   SettingsRoute: typeof SettingsRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRoute
   TeamRoute: typeof TeamRoute
   UnauthorizedRoute: typeof UnauthorizedRoute
@@ -538,11 +564,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnchainRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/studio': {
@@ -778,7 +818,9 @@ const rootRouteChildren: RootRouteChildren = {
   NotificationsRoute: NotificationsRoute,
   OnboardingRoute: OnboardingRoute,
   OnchainRoute: OnchainRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   SettingsRoute: SettingsRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRoute,
   TeamRoute: TeamRoute,
   UnauthorizedRoute: UnauthorizedRoute,

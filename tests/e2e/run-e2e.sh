@@ -90,6 +90,14 @@ if ! curl -fsS "$BASE_URL/economics/v1.json" | grep -q '"creatorPoolBps"'; then
   echo "economics/v1.json is missing or wrong on $BASE_URL"
   exit 1
 fi
+if ! curl -fsS "$BASE_URL/sitemap.xml" | grep -q "/cr/"; then
+  echo "sitemap.xml is missing or lists no works on $BASE_URL"
+  exit 1
+fi
+if ! curl -fsS "$BASE_URL/robots.txt" | grep -q "^Sitemap: "; then
+  echo "robots.txt is missing or wrong on $BASE_URL"
+  exit 1
+fi
 
 agent-browser open "$BASE_URL/onchain"
 agent-browser wait 1500
