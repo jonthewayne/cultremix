@@ -19,7 +19,16 @@ import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { PublishDialog } from "~/components/publish/PublishDialog";
 import { SiteHeader } from "~/components/cr/SiteHeader";
-import { ImageTray, MAX_IMAGES, MAX_STYLES, StyleChips, StyleLibrary, StyleMixer, listNames } from "~/components/studio/StudioInputs";
+import {
+  ImageTray,
+  MAX_IMAGES,
+  MAX_STYLES,
+  StyleChips,
+  StyleLibrary,
+  StyleMixer,
+  listNames,
+  loneStyleAtFull,
+} from "~/components/studio/StudioInputs";
 import { LoadMore, PAGE, Skeleton } from "~/components/studio/LoadMore";
 import { RemixWordInputs, changedWords, wordsTooLong } from "~/components/studio/RemixWordInputs";
 import { RemixPartInputs, missingPhotos, partEntries } from "~/components/studio/RemixPartInputs";
@@ -140,6 +149,10 @@ function StudioPage() {
   // Numbered images to work on, and the style mix. Nothing joins the mix unless the member adds it.
   const [images, setImages] = useState<Array<Slot>>([]);
   const [styles, setStyles] = useState<Array<StyleSlot>>([]);
+  // A lone style sets the whole look whatever its slider says, so it sits at 100.
+  useEffect(() => {
+    if (styles.length === 1 && styles[0].weight !== 100) setStyles(loneStyleAtFull);
+  }, [styles]);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   // An admin's choice of image model; members always get GPT Image 2.5.
@@ -182,7 +195,7 @@ function StudioPage() {
   };
   const dropSlot = (id: string) => {
     setImages((list) => list.filter((slot) => slot.id !== id));
-    setStyles((list) => list.filter((slot) => slot.id !== id));
+    setStyles((list) => loneStyleAtFull(list.filter((slot) => slot.id !== id)));
   };
 
   // Files from the tray (images to work on) or the mixer and its picker (styles).
@@ -297,10 +310,12 @@ function StudioPage() {
         }),
       );
       setStyles(
-        last.styles.flatMap((style) => {
-          const previewUrl = style.thumbUrl ?? style.url;
-          return previewUrl ? [{ id: newSlotId(), imageId: style.imageId, previewUrl, uploading: false, weight: style.weight }] : [];
-        }),
+        loneStyleAtFull(
+          last.styles.flatMap((style) => {
+            const previewUrl = style.thumbUrl ?? style.url;
+            return previewUrl ? [{ id: newSlotId(), imageId: style.imageId, previewUrl, uploading: false, weight: style.weight }] : [];
+          }),
+        ),
       );
       if (last.legacyKey && last.legacyUrl) void addExisting(last.legacyKey, last.legacyUrl, false);
     } else if (session.remix) {
@@ -751,7 +766,7 @@ function StudioPage() {
               images={images}
               states={states}
               onWeight={(id, weight) => setStyles((list) => list.map((slot) => (slot.id === id ? { ...slot, weight } : slot)))}
-              onRemove={(id) => setStyles((list) => list.filter((slot) => slot.id !== id))}
+              onRemove={(id) => setStyles((list) => loneStyleAtFull(list.filter((slot) => slot.id !== id)))}
               onAddImage={addImageLook}
               onBrowse={() => setLibraryOpen(true)}
               onFiles={(files) => void addFiles(files, true)}
@@ -1178,8 +1193,13 @@ function TileCard({
   const failed = isFailed(tile);
   const ink = inkOn(tile.backgroundColor);
   const corner = "absolute bottom-2 right-2 rounded-lg px-2.5 py-1.5 text-xs font-black";
+  const pending = !ready && !failed;
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-2xl" style={{ background: tile.backgroundColor, color: ink }}>
+    <div
+      className="group relative aspect-square overflow-hidden rounded-2xl"
+      // While it's designing, a faint outline keeps the tile visible on a page of the same color.
+      style={{ background: tile.backgroundColor, color: ink, boxShadow: pending ? `inset 0 0 0 1px ${ink}24` : undefined }}
+    >
       {ready ? (
         <button type="button" onClick={onOpen} className="absolute inset-0 flex items-center justify-center p-[6%]" aria-label="View large">
           <Art
@@ -1208,13 +1228,24 @@ function TileCard({
           </span>
         </div>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <motion.span
-            className="h-3 w-3"
-            style={{ background: ink }}
-            animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
-            transition={{ duration: 1.4, repeat: Infinity }}
+        <div className="absolute inset-0" aria-label="Designing" role="status">
+          <motion.div
+            aria-hidden
+            className="absolute inset-y-0 left-0 w-2/3"
+            style={{ background: `linear-gradient(100deg, transparent, ${ink}12, transparent)` }}
+            initial={{ x: "-100%" }}
+            animate={{ x: "160%" }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.3 }}
           />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <motion.span
+              aria-hidden
+              className="h-3 w-3"
+              style={{ background: ink }}
+              animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+            />
+          </div>
         </div>
       )}
       {ready && (

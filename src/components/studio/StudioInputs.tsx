@@ -227,11 +227,18 @@ export function ImageTray({
   );
 }
 
+// One style sets the whole look whatever its slider says (the prompt has nothing to mix it with), so
+// a mixer down to one style puts it back at 100, and a second style then starts from an even split.
+export function loneStyleAtFull<T extends StyleSlot>(list: Array<T>): Array<T> {
+  return list.length === 1 && list[0].weight !== 100 ? [{ ...list[0], weight: 100 }] : list;
+}
+
 function StyleRow({
   slot,
   label,
   position,
   share,
+  alone,
   state,
   onWeight,
   onRemove,
@@ -240,6 +247,8 @@ function StyleRow({
   label: string;
   position: number;
   share: number;
+  // The only style in the mix: its slider stays at 100 (there's nothing to mix it with).
+  alone: boolean;
   state?: ImageState;
   onWeight: (weight: number) => void;
   onRemove: () => void;
@@ -296,12 +305,13 @@ function StyleRow({
                 min={0}
                 max={100}
                 step={1}
-                value={slot.weight}
+                value={alone ? 100 : slot.weight}
+                disabled={alone}
                 onChange={(e) => onWeight(Number(e.target.value))}
-                className="h-2 w-full cursor-pointer accent-black"
-                aria-label={`How much of style ${position} (${label})`}
+                className="h-2 w-full cursor-pointer accent-black disabled:cursor-default disabled:opacity-40"
+                aria-label={alone ? `Style ${position} (${label}) sets the whole look` : `How much of style ${position} (${label})`}
               />
-              <span className="w-9 shrink-0 text-right font-mono text-xs">{slot.weight}</span>
+              <span className="w-9 shrink-0 text-right font-mono text-xs">{alone ? 100 : slot.weight}</span>
               <span className="w-12 shrink-0 text-right text-sm font-bold">{share > 0 ? `${share}%` : "off"}</span>
             </motion.div>
           )}
@@ -404,12 +414,16 @@ export function StyleMixer({
                       label={labelFor(slot)}
                       position={i + 1}
                       share={mix[i]}
+                      alone={styles.length === 1}
                       state={slot.imageId ? states.get(slot.imageId) : undefined}
                       onWeight={(weight) => onWeight(slot.id, weight)}
                       onRemove={() => onRemove(slot.id)}
                     />
                   ))}
                 </div>
+              )}
+              {styles.length === 1 && (
+                <p className="pt-2 text-xs text-neutral-500">One style sets the whole look. Add another to mix them.</p>
               )}
               {styles.length >= 2 && (
                 <p className="pt-2 text-xs text-neutral-500">In your request, call them {styleNames(styles.length)}.</p>
