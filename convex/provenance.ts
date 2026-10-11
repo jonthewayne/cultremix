@@ -39,6 +39,8 @@ export const forWork = query({
       txHash: v.union(v.null(), v.string()),
       txUrl: v.union(v.null(), v.string()),
       confirmedAt: v.union(v.null(), v.number()),
+      // Whether this deployment's registry is deployed: a queued record before then waits for it.
+      registryLive: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -54,6 +56,7 @@ export const forWork = query({
       txHash,
       txUrl: explorerTxLink(chainId, txHash),
       confirmedAt: work.provenanceConfirmedAt ?? null,
+      registryLive: registryAddressHere() !== null,
     };
   },
 });
@@ -104,6 +107,14 @@ export const byFingerprint = query({
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/u;
 
+// This deployment's registry: the committed address, or on dev the one CHAIN_REGISTRY_ADDRESS
+// points at; null until it's deployed.
+function registryAddressHere() {
+  const env = deploymentEnv();
+  const override = process.env.CHAIN_REGISTRY_ADDRESS?.trim();
+  return env === "dev" && override && ADDRESS.test(override) ? override : CHAIN_ENVIRONMENTS[env].registryAddress;
+}
+
 // This environment's registry, for /onchain: the committed address (a dev deployment may point
 // at its own registry with CHAIN_REGISTRY_ADDRESS), or null until it's deployed. Public.
 export const registry = query({
@@ -116,10 +127,8 @@ export const registry = query({
     explorerUrl: v.union(v.null(), v.string()),
   }),
   handler: () => {
-    const env = deploymentEnv();
-    const settings = CHAIN_ENVIRONMENTS[env];
-    const override = process.env.CHAIN_REGISTRY_ADDRESS?.trim();
-    const address = env === "dev" && override && ADDRESS.test(override) ? override : settings.registryAddress;
+    const settings = CHAIN_ENVIRONMENTS[deploymentEnv()];
+    const address = registryAddressHere();
     const explorer = explorerNetwork(process.env, settings.network.chainId);
     return {
       networkName: settings.network.name,

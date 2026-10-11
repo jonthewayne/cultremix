@@ -103,7 +103,11 @@ describe("provenance on the work page", () => {
     expect(await t.query(api.provenance.forWork, { workId })).toBeNull();
 
     await t.run((ctx) => enqueueRegisterWork(asCtx(ctx), workId));
-    expect(await t.query(api.provenance.forWork, { workId })).toMatchObject({ status: "pending", networkName: "Monad Testnet", txHash: null, txUrl: null });
+    expect(await t.query(api.provenance.forWork, { workId })).toMatchObject({ status: "pending", networkName: "Monad Testnet", txHash: null, txUrl: null, registryLive: true });
+    // Before the registry is deployed, a queued record says it waits for it.
+    vi.stubEnv("CHAIN_REGISTRY_ADDRESS", "");
+    expect(await t.query(api.provenance.forWork, { workId })).toMatchObject({ status: "pending", registryLive: false });
+    useChainEnv();
 
     await settle(t, chain);
     const confirmed = await t.query(api.provenance.forWork, { workId });

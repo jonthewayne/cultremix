@@ -42,6 +42,14 @@ function RegistrationStatus({ workId }: { workId: Id<"works"> }) {
       </p>
     );
   }
-  if (data.status === "pending") return <p className="mt-2 font-semibold">Waiting to be registered on {data.networkName}</p>;
+  if (data.status === "pending") {
+    return (
+      <p className="mt-2 font-semibold">
+        {data.registryLive
+          ? `Waiting to be registered on ${data.networkName}`
+          : `Queued for ${data.networkName}: it's recorded once the registry goes live.`}
+      </p>
+    );
+  }
   return <p className="mt-2 font-semibold text-neutral-500">Not registered on {data.networkName} yet</p>;
 }

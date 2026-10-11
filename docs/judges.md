@@ -31,7 +31,7 @@ The full list, with how to check each claim, is under **Judging evidence** in th
 6. **Be social.** Hearts and follows on any work, profiles at `/u/<username>` with follower and following lists, and the **Trending** and **Following** tabs on the home page. Judges can follow each other: the bell in the header shows new follows, hearts, remixes, and sales.
 7. **Check the provenance.** `/onchain` explains what CultRemix records on Monad and how to check a design yourself, starting from the fingerprint on its page. Download a design's **Original file** from under its fingerprint and drop it on `/onchain` to see which design it is.
 
-Until checkout opens, "Buying opens soon" takes an email. The Monad registry deploys to mainnet once production's relayer has MON; until then work pages show each design's fingerprint, Backs stay hidden, and `/onchain` says "Not deployed yet".
+Until checkout opens, "Buying opens soon" takes an email. The Monad registry deploys to mainnet once production's relayer has MON; until then work pages show each design's fingerprint with "Queued for Monad: it's recorded once the registry goes live", Backs stay hidden, and `/onchain` says "Not deployed yet".
 
 ## Making judge accounts
 
