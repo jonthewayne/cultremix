@@ -74,6 +74,18 @@ export async function notifyTakedown(
   return id;
 }
 
+// Tells a creator their design is back up after a takedown (convex/moderation.ts restore).
+export async function notifyRestored(ctx: MutationCtx, args: { recipientId: Id<"users">; workId: Id<"works"> }) {
+  const id = await ctx.db.insert("notifications", {
+    recipientId: args.recipientId,
+    kind: "restored",
+    workId: args.workId,
+    createdAt: Date.now(),
+  });
+  await bumpUnread(ctx, args.recipientId);
+  return id;
+}
+
 // Tells a creator that the kept design they asked to have printed is ready: its first product came
 // back from Shopify (convex/shopify.ts saveSynced). Once per design.
 export async function notifyKeptReady(ctx: MutationCtx, args: { recipientId: Id<"users">; workId: Id<"works"> }) {

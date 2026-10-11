@@ -56,6 +56,10 @@ describe("taking a design down", () => {
     const back = await t.run((ctx) => ctx.db.get("works", workId));
     expect(back).toMatchObject({ status: "published" });
     expect(back?.withdrawReason).toBeUndefined();
+    // Its creator hears that too, with a link to it again.
+    const after = await t.withIdentity({ subject: "auth-creator" }).query(api.notifications.list, { paginationOpts: { numItems: 5, cursor: null } });
+    expect(after.page[0]).toMatchObject({ kind: "restored", work: { cr: "101-001", title: "Grow Slow" } });
+    expect(await t.withIdentity({ subject: "auth-creator" }).query(api.notifications.status, {})).toMatchObject({ unread: 2 });
   });
 
   it("drafts a product whose first sync finishes after the takedown", async () => {

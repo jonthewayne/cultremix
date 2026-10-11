@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { adminAllows, requireAdmin } from "./lib/adminAccess";
 import { imageUrlReader } from "./lib/imageUrls";
-import { notifyTakedown } from "./lib/notifications";
+import { notifyRestored, notifyTakedown } from "./lib/notifications";
 import { formatCr } from "./lib/r2";
 import { listingsOf } from "./lib/shopProduct";
 
@@ -41,7 +41,8 @@ export const withdraw = mutation({
   },
 });
 
-// Puts a design back up as it was. Its listings stay paused until an admin approves it for sale again.
+// Puts a design back up as it was, and tells its creator. Its listings stay paused until an admin
+// approves it for sale again.
 export const restore = mutation({
   args: { workId: v.id("works") },
   returns: v.object({ cr: v.string() }),
@@ -50,6 +51,7 @@ export const restore = mutation({
     const work = await ctx.db.get("works", args.workId);
     if (!work || work.status !== "withdrawn") throw new ConvexError({ code: "NOT_FOUND", message: "That design isn't taken down." });
     await ctx.db.patch("works", work._id, { status: "published", withdrawnAt: undefined, withdrawnBy: undefined, withdrawReason: undefined });
+    await notifyRestored(ctx, { recipientId: work.creatorId, workId: work._id });
     return { cr: formatCr(work.crFamily, work.crExpression) };
   },
 });

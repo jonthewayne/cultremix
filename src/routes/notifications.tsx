@@ -94,7 +94,12 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
   // Sales, takedowns, and kept designs ready come from CultRemix, not a member: a mark instead of an
   // avatar and name.
   const fromCultRemix =
-    isSale || item.kind === "takedown" || item.kind === "kept_ready" || item.kind === "order_attention" || item.kind === "ops_alert";
+    isSale ||
+    item.kind === "takedown" ||
+    item.kind === "restored" ||
+    item.kind === "kept_ready" ||
+    item.kind === "order_attention" ||
+    item.kind === "ops_alert";
   const body = (
     <>
       {fromCultRemix ? (
@@ -102,7 +107,7 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
           aria-hidden
           className="inline-flex size-11 shrink-0 items-center justify-center rounded-[22%] bg-black text-2xl font-black text-white md:size-12"
         >
-          {isSale ? "$" : item.kind === "kept_ready" ? "✓" : "!"}
+          {isSale ? "$" : item.kind === "kept_ready" || item.kind === "restored" ? "✓" : "!"}
         </span>
       ) : (
         <Avatar username={name ?? "?"} image={item.actor.image} className="size-11 md:size-12" />
@@ -234,6 +239,14 @@ function Message({ item }: { item: Notification }) {
         </>
       ) : (
         <>One of your designs was taken down.</>
+      );
+    case "restored":
+      return item.work ? (
+        <>
+          Your design <Cr work={item.work} /> is back up.
+        </>
+      ) : (
+        <>One of your designs is back up.</>
       );
   }
 }

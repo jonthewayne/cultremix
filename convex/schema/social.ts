@@ -26,6 +26,8 @@ export const notificationKindValidator = v.union(
   v.literal("sale"),
   // Your design was taken down (convex/moderation.ts); note says why.
   v.literal("takedown"),
+  // Your design is back up after a takedown (convex/moderation.ts restore).
+  v.literal("restored"),
   // Your kept design is ready to print and order, for you alone (convex/shopify.ts saveSynced).
   v.literal("kept_ready"),
   // For the owner and ops: an order can't go on by itself (convex/orderAlerts.ts); note says why.
