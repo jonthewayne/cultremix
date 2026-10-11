@@ -53,6 +53,10 @@ From the [build log](log.md) and the [builder reports](reports/):
 
 Stack: TanStack Start on Cloudflare Workers, Convex with Better Auth, GPT Image 2.5 through the CultRemix Gateway, fal for print upscaling, Cloudflare R2, Monad.
 
+## Check a file today
+
+Every work page shows its fingerprint, the SHA-256 of its original file, with a link to that file. On `/onchain`, **Which design is this file?** hashes a dropped file in the browser (only the hash leaves the device) and names the design it is; a resaved copy doesn't match. This works before the registry is deployed, and once it is, the same fingerprint is the `contentHash` recorded on Monad.
+
 ## What the registry proves
 
 A CultRemix-run service submits each record, signed by the key of a CultRemix-held wallet assigned to the member's account, with the work's fingerprint and lineage. That proves the design existed with that exact content at that time and which design it came from, in a public record. Because CultRemix holds the keys, it doesn't independently prove that a person agreed to it, and the Back limit is per account. More in the [README](../../README.md#what-the-registry-proves).

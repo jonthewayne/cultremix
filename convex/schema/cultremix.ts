@@ -342,7 +342,9 @@ export const cultremixTables = {
     .index("by_creator_status", ["creatorId", "status"])
     .index("by_artKey", ["artKey"])
     // The studio marks a design as published (its CR number) one design at a time.
-    .index("by_generation", ["generationId"]),
+    .index("by_generation", ["generationId"])
+    // /onchain's check: which published design has this fingerprint (provenance.byFingerprint).
+    .index("by_contentHash", ["contentHash"]),
 
   shoots: defineTable({
     workId: v.id("works"),

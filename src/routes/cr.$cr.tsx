@@ -185,6 +185,14 @@ function ShopPage() {
               <div className="border-t-2 border-black pt-4 text-sm">
                 <p className="font-bold uppercase tracking-wider">Fingerprint</p>
                 <p className="mt-1 break-all font-mono text-xs">SHA-256 {contentHash}</p>
+                {item.artUrl && (
+                  <p className="mt-2">
+                    <a href={item.artUrl} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-4">
+                      Original file
+                    </a>{" "}
+                    · <Link to="/onchain" className="font-semibold underline underline-offset-4">check it</Link>
+                  </p>
+                )}
                 <ChainStatus workId={item.workId} />
               </div>
             )}

@@ -2,6 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
+import { FingerprintCheck } from "~/components/cr/FingerprintCheck";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 
@@ -98,6 +99,14 @@ function OnchainPage() {
               )}
             </dl>
           )}
+        </Section>
+
+        <Section title="Which design is this file?">
+          <p className="mb-4">
+            Every design’s fingerprint is the SHA-256 of its original file. Download the original from a design’s page (under
+            its Fingerprint), drop it here, and see which design it is.
+          </p>
+          <FingerprintCheck />
         </Section>
 
         <Section title="Check a design yourself">

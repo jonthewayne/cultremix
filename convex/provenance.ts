@@ -9,6 +9,8 @@ import {
 } from "../shared/config/chains";
 import { query } from "./_generated/server";
 import { deploymentEnv } from "./deployment";
+import { imageUrlReader } from "./lib/imageUrls";
+import { formatCr } from "./lib/r2";
 import { provenanceStatusValidator } from "./schema/chain";
 
 // A published work's onchain registration, for its page: queued, sent, or confirmed with a
@@ -52,6 +54,50 @@ export const forWork = query({
       txHash,
       txUrl: explorerTxLink(chainId, txHash),
       confirmedAt: work.provenanceConfirmedAt ?? null,
+    };
+  },
+});
+
+const FINGERPRINT = /^[0-9a-f]{64}$/u;
+
+// /onchain's check: the published design whose original file has this SHA-256 (hex, with or
+// without 0x). Null when no published design has it; kept designs are never found here.
+export const byFingerprint = query({
+  args: { contentHash: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      workId: v.id("works"),
+      cr: v.string(),
+      title: v.optional(v.string()),
+      creator: v.optional(v.string()),
+      publishedAt: v.optional(v.number()),
+      thumbUrl: v.optional(v.string()),
+      kind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const hash = args.contentHash.trim().toLowerCase().replace(/^0x/u, "");
+    if (!FINGERPRINT.test(hash)) return null;
+    const works = await ctx.db
+      .query("works")
+      .withIndex("by_contentHash", (q) => q.eq("contentHash", hash))
+      .take(10);
+    // The first published one: the same file published twice is the earlier design.
+    const work = works
+      .filter((candidate) => candidate.status === "published")
+      .sort((a, b) => (a.publishedAt ?? 0) - (b.publishedAt ?? 0))[0];
+    if (!work) return null;
+    const creator = await ctx.db.get("users", work.creatorId);
+    const art = await imageUrlReader(ctx)(work.artKey);
+    return {
+      workId: work._id,
+      cr: formatCr(work.crFamily, work.crExpression),
+      title: work.title,
+      creator: creator?.username,
+      publishedAt: work.publishedAt,
+      thumbUrl: art.thumbUrl,
+      kind: work.kind,
     };
   },
 });
