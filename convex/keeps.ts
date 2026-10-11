@@ -12,6 +12,10 @@ import { formatCr } from "./lib/r2";
 // Kept designs ("Keep it just for you" when publishing): visible only to their creator, on
 // /keep/<id>. Every public query reads only status "published", so they stay out of everything else.
 
+// A design taken down gets nothing new made from its art (convex/moderation.ts): no remixes are
+// published from it (publish.ts), and a kept remix of it isn't printed or shared.
+const KEPT_PARENT_WITHDRAWN = "The design you remixed was taken down, so this one can't be printed or shared. It stays here for you.";
+
 const keptView = v.object({
   workId: v.id("works"),
   title: v.optional(v.string()),
@@ -24,6 +28,8 @@ const keptView = v.object({
   colors: v.array(v.object({ key: v.string(), name: v.string(), hex: v.string() })),
   // The design it remixes, credited on the page.
   parent: v.optional(v.object({ cr: v.string(), title: v.optional(v.string()), username: v.optional(v.string()) })),
+  // The design it remixes was taken down, so it can't be printed or shared.
+  parentWithdrawn: v.boolean(),
   // Still being saved (its art is being prepared).
   preparing: v.boolean(),
   // Getting it printed: ask (nothing asked yet), requested (waiting for an admin), preparing (its
@@ -70,6 +76,7 @@ export const get = query({
         parentWork && (parentWork.status === "published" || parentWork.status === "withdrawn")
           ? { cr: formatCr(parentWork.crFamily, parentWork.crExpression), title: parentWork.title, username: parentCreator?.username }
           : undefined,
+      parentWithdrawn: parentWork?.status === "withdrawn",
       preparing,
       ordering,
       checkoutOpen: await commerceOpen(ctx),
@@ -115,6 +122,10 @@ export const requestPrint = mutation({
     const work = await ctx.db.get("works", args.workId);
     if (!user || !work || work.creatorId !== user._id || work.status !== "private") {
       throw new ConvexError({ code: "NOT_FOUND", message: "Only a kept design's creator can ask to print it." });
+    }
+    const parent = work.parentWorkId ? await ctx.db.get("works", work.parentWorkId) : null;
+    if (parent?.status === "withdrawn") {
+      throw new ConvexError({ code: "PARENT_WITHDRAWN", message: KEPT_PARENT_WITHDRAWN });
     }
     if (work.printRequestedAt === undefined) await ctx.db.patch("works", work._id, { printRequestedAt: Date.now() });
     return null;

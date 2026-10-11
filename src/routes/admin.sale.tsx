@@ -242,7 +242,7 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || Boolean(row.parentWithdrawn)}
             onClick={() =>
               void run(async () => {
                 const result = await approve({ workId: row.workId });
@@ -293,6 +293,11 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
         {row.thumbUrl && <img src={row.thumbUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl bg-neutral-100 object-contain" />}
         <div className="min-w-0 flex-1 space-y-2">
           {row.step && <p className="text-sm font-semibold">{row.step}…</p>}
+          {row.parentWithdrawn && (
+            <p className="text-sm font-semibold text-destructive">
+              Its original, CR {row.parentWithdrawn}, was taken down, so it can't be printed unless that design is put back up.
+            </p>
+          )}
           {row.changed && (
             <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Its creator changed what it comes on or where it sits. Approve again to remake its print files.</p>
           )}

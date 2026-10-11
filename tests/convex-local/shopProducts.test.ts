@@ -507,6 +507,31 @@ describe("a kept design, printed for its creator alone", () => {
     await expect(creator.query(api.sales.keptRequests, {})).rejects.toThrow();
   });
 
+  it("can't be printed once the design it remixes is taken down", async () => {
+    const { t, admin, workId } = await keptShop();
+    const creator = t.withIdentity(CREATOR);
+    // The design it remixes, taken down after it was kept.
+    const original = await t.run(async (ctx) => {
+      const { _id, _creationTime, keep, ...fields } = (await ctx.db.get("works", workId))!;
+      const originalId = await ctx.db.insert("works", { ...fields, status: "withdrawn", crFamily: 105, crExpression: 1, withdrawReason: "Not ours to sell." });
+      await ctx.db.patch("works", workId, { parentWorkId: originalId });
+      return originalId;
+    });
+    expect(await creator.query(api.keeps.get, { workId })).toMatchObject({ parentWithdrawn: true, ordering: "ask", parent: { cr: "105-001" } });
+    await expect(creator.mutation(api.keeps.requestPrint, { workId })).rejects.toThrow(/was taken down, so this one can't be printed/u);
+
+    // One asked for before the takedown says why in Admin, For sale, and can't be approved.
+    await t.run((ctx) => ctx.db.patch("works", workId, { printRequestedAt: Date.now() }));
+    expect(await admin.query(api.sales.keptRequests, {})).toEqual([expect.objectContaining({ workId, parentWithdrawn: "105-001" })]);
+    await expect(admin.mutation(api.sales.approve, { workId })).rejects.toThrow(/Its original, CR 105-001, was taken down/u);
+
+    // Put back up, it can be asked for again.
+    await t.run((ctx) => ctx.db.patch("works", original, { status: "published" }));
+    expect((await admin.query(api.sales.keptRequests, {}))[0].parentWithdrawn).toBeUndefined();
+    expect((await creator.query(api.keeps.get, { workId }))?.parentWithdrawn).toBe(false);
+    await creator.mutation(api.keeps.requestPrint, { workId });
+  });
+
   it("is prepared like a published work and offered to its creator alone", async () => {
     const { t, admin, workId } = await keptShop();
     const creator = t.withIdentity(CREATOR);

@@ -307,6 +307,15 @@ export const approve = mutation({
     if (!work || !sellable(work)) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Only published and kept designs can go on sale." });
     }
+    // A kept remix of a design taken down isn't printed: nothing new is made from that art
+    // (convex/moderation.ts). A published remix is a work of its own, which an admin can take down.
+    const withdrawnParent = await withdrawnParentOf(ctx, work);
+    if (withdrawnParent) {
+      throw new ConvexError({
+        code: "PARENT_WITHDRAWN",
+        message: `Its original, CR ${withdrawnParent}, was taken down, so it can't be printed. Put that design back up first.`,
+      });
+    }
     const choices = chosenProducts(work, await offeredShopProducts(ctx));
     if (choices.length === 0) {
       throw new ConvexError({ code: "NO_PRODUCTS", message: "None of the products this design was published on are offered now." });
@@ -483,6 +492,8 @@ const rowValidator = v.object({
   // A kept design (sold to its creator alone), and when its creator asked to have it printed.
   kept: v.optional(v.boolean()),
   requestedAt: v.optional(v.number()),
+  // A kept design whose original (this CR number) was taken down, so it can't be approved.
+  parentWithdrawn: v.optional(v.string()),
   // The products its creator picked, by name.
   picked: v.array(v.string()),
   step: v.optional(v.string()),
@@ -537,6 +548,13 @@ export const keptRequests = query({
   },
 });
 
+// "101-003" when a kept design's original was taken down; null otherwise, and for published works.
+async function withdrawnParentOf(ctx: Pick<QueryCtx, "db">, work: Doc<"works">) {
+  if (work.status !== "private" || !work.parentWorkId) return null;
+  const parent = await ctx.db.get("works", work.parentWorkId);
+  return parent?.status === "withdrawn" ? crNumber(parent.crFamily, parent.crExpression) : null;
+}
+
 // One work's row in Admin, For sale: what its creator picked and how each product sells.
 async function saleRow(
   ctx: QueryCtx,
@@ -546,6 +564,7 @@ async function saleRow(
 ) {
   const rows = (await listingsOf(ctx, work._id)).filter((row) => row.listing);
   const creator = await ctx.db.get("users", work.creatorId);
+  const withdrawnParent = await withdrawnParentOf(ctx, work);
   const art = await urls(work.artKey);
   const preparing = rows.filter((row) => row.status === "preparing" && !row.prepError);
   const choices = chosenProducts(work, products);
@@ -562,6 +581,7 @@ async function saleRow(
     thumbUrl: art.thumbUrl,
     publishedAt: work.publishedAt,
     ...(work.status === "private" ? { kept: true, requestedAt: work.printRequestedAt } : {}),
+    ...(withdrawnParent ? { parentWithdrawn: withdrawnParent } : {}),
     picked: choices.map((choice) => choice.product.name),
     changed,
     creatorAccess: await creatorEligibleAt(ctx, creator, Date.now()),

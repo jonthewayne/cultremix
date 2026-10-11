@@ -139,7 +139,7 @@ function KeptPage() {
               </div>
             </div>
           )}
-          {!offer && !kept.preparing && <GetItPrinted workId={kept.workId} ordering={kept.ordering} />}
+          {!offer && !kept.preparing && <GetItPrinted workId={kept.workId} ordering={kept.ordering} parentWithdrawn={kept.parentWithdrawn} />}
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -148,7 +148,7 @@ function KeptPage() {
             >
               Download
             </button>
-            {!confirming ? (
+            {kept.parentWithdrawn ? null : !confirming ? (
               <button type="button" onClick={() => setConfirming(true)} className="rounded-2xl bg-black px-5 py-3 text-base font-black text-white">
                 Share with the world
               </button>
@@ -184,10 +184,14 @@ type Ordering = "ask" | "requested" | "preparing" | "ready";
 
 // Getting a kept design printed: ask, and an admin gets it ready (print files and products, for
 // this creator alone); then the buy box above takes its place once checkout is open.
-function GetItPrinted({ workId, ordering }: { workId: Id<"works">; ordering: Ordering }) {
+function GetItPrinted({ workId, ordering, parentWithdrawn }: { workId: Id<"works">; ordering: Ordering; parentWithdrawn: boolean }) {
   const request = useMutation(api.keeps.requestPrint);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One already being made or ready stays so; nothing new starts.
+  if (parentWithdrawn && (ordering === "ask" || ordering === "requested")) {
+    return <p className="text-sm font-semibold">The design you remixed was taken down, so this one can't be printed or shared. It stays here for you.</p>;
+  }
   if (ordering !== "ask") {
     return (
       <p className="text-sm font-semibold">
