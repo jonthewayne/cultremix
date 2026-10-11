@@ -171,7 +171,7 @@ function Connections() {
           onClick={() =>
             void run("shopify", async () => {
               const done = await connectShopify({});
-              return `Shopify: ${done.shop}. ${done.created.length ? `Subscribed ${done.created.join(", ")}.` : "Order webhooks were already there."}${done.headless ? "" : " Add the Headless sales channel before approving works."}`;
+              return `Shopify: ${done.shop}. ${done.created.length ? `Subscribed ${done.created.join(", ")}.` : "Its webhooks were already there."}${done.headless ? "" : " Add the Headless sales channel before approving works."}${done.disputesWarning ? ` ${done.disputesWarning}` : ""}`;
             })
           }
           className={adminButton}

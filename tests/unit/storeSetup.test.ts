@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PRINTFUL_WEBHOOK_EVENTS, areasFromPrintfiles, webhookConfig } from "../../convex/lib/printful/setup";
-import { ORDER_WEBHOOK_TOPICS, missingTopics, shopifyWebhookUri } from "../../convex/lib/shopify/setup";
+import { DISPUTE_WEBHOOK_TOPICS, ORDER_WEBHOOK_TOPICS, missingTopics, shopifyWebhookUri } from "../../convex/lib/shopify/setup";
 
 describe("Printful setup", () => {
   it("asks for every webhook the route handles, in one list", () => {
@@ -50,6 +50,8 @@ describe("Shopify setup", () => {
     const uri = shopifyWebhookUri("https://savory-tiger-504.convex.site");
     expect(uri).toBe("https://savory-tiger-504.convex.site/webhooks/shopify");
     expect(missingTopics([], uri)).toEqual([...ORDER_WEBHOOK_TOPICS]);
+    // The dispute topics, asked for separately (they need read_shopify_payments_disputes).
+    expect(missingTopics([{ id: "3", topic: "DISPUTES_CREATE", uri }], uri, DISPUTE_WEBHOOK_TOPICS)).toEqual(["DISPUTES_UPDATE"]);
     expect(
       missingTopics(
         [

@@ -152,7 +152,7 @@ export const POLICIES: Array<Policy> = [
       {
         heading: "Earnings",
         body: [
-          "When a design sells, a share of the sale goes to the creators behind it, following the published rules (/economics/v1.json). Earnings become payable a while after an order ships, so refunds can come off first. Payouts begin after the hackathon judging, in mid-November 2026.",
+          "When a design sells, a share of the sale goes to the creators behind it, following the published rules (/economics/v1.json). Earnings become payable a while after an order ships, so refunds can come off first. A payment dispute (a chargeback) holds a sale's earnings while it's open, and one the buyer wins takes them back. Payouts begin after the hackathon judging, in mid-November 2026.",
         ],
       },
       {

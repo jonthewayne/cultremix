@@ -178,6 +178,28 @@ export const shopTables = {
     .index("by_source_key", ["source", "eventKey"])
     .index("by_source_received", ["source", "receivedAt"]),
 
+  // Shopify Payments disputes (chargebacks and inquiries) from the disputes webhooks (convex/disputes.ts),
+  // one row per dispute. Earnings read them by order (convex/lib/disputes.ts, INV-23): an open one
+  // holds the order's earnings, and a lost chargeback reverses them. status is Shopify's, lowercase.
+  disputes: defineTable({
+    shopifyDisputeId: v.string(),
+    shopifyOrderId: v.string(),
+    kind: v.union(v.literal("chargeback"), v.literal("inquiry")),
+    status: v.string(),
+    amountCents: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    initiatedAt: v.optional(v.number()),
+    finalizedAt: v.optional(v.number()),
+    // When Shopify sent the update this row reflects (X-Shopify-Triggered-At, else when it arrived),
+    // so an older update that arrives late doesn't undo a newer one.
+    eventAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_dispute", ["shopifyDisputeId"])
+    .index("by_shopifyOrder", ["shopifyOrderId"]),
+
   // Raw webhook bodies, kept 30 days for replay (admin only).
   webhookPayloads: defineTable({
     source: v.union(v.literal("shopify"), v.literal("printful")),
@@ -397,11 +419,11 @@ export const shopTables = {
     unit: v.number(),
     kind: v.union(v.literal("sale"), v.literal("reversal")),
     refundId: v.optional(v.id("refunds")),
-    reason: v.optional(v.union(v.literal("refund"), v.literal("cancel"))),
+    reason: v.optional(v.union(v.literal("refund"), v.literal("cancel"), v.literal("dispute"))),
     roles: v.array(roleValidator),
     amountCents: v.number(),
     state: earningStateValidator,
-    holdReason: v.optional(v.union(v.literal("refund"), v.literal("not_creator"))),
+    holdReason: v.optional(v.union(v.literal("refund"), v.literal("not_creator"), v.literal("dispute"))),
     simulated: v.boolean(),
     maturesAt: v.optional(v.number()),
     // The payout that paid it (convex/payouts.ts), once paid.

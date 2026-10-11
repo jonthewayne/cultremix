@@ -306,7 +306,7 @@ Ops owns `wrangler.jsonc` `env.production`; I didn't touch it.
 ### Follow-ups
 
 1. **INV-10:** check that the bytes at `printKey` hash to `printSha256` and to the onchain content hash before sending the file to Printful.
-2. **Disputes:** record a dispute (`convex/disputes.ts`), hold maturity while it's open, and reverse earnings if it's lost.
+2. ~~**Disputes:** record a dispute (`convex/disputes.ts`), hold maturity while it's open, and reverse earnings if it's lost.~~ Done October 11: the disputes webhooks keep one row per dispute; an open dispute holds the order's unmatured earnings, a chargeback the buyer kept reverses what's left, and one that's over releases the hold (`convex/lib/disputes.ts`).
 3. **Economics:** `seedEconomics`, the public `EconomicsPanel`, and the `/economics/$version` JSON route. The config version is fixed at `v1` until then.
 4. **Payouts:** nothing moves earnings to Paid yet.
 5. **Live checks:** once keys land, recapture the Shopify and Printful fixtures from real responses, then run one development-store test checkout through to a Printful draft.

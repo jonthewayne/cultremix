@@ -1,6 +1,12 @@
 import { internal } from "../../_generated/api";
 import type { ActionCtx } from "../../_generated/server";
-import { SHOPIFY_PRIVACY_TOPICS, SHOPIFY_WEBHOOK_MAX_BYTES, SHOPIFY_WEBHOOK_TOPICS } from "../../../shared/config/shopify";
+import {
+  SHOPIFY_DISPUTE_TOPICS,
+  SHOPIFY_PRIVACY_TOPICS,
+  SHOPIFY_WEBHOOK_MAX_BYTES,
+  SHOPIFY_WEBHOOK_TOPICS,
+} from "../../../shared/config/shopify";
+import { parseDispute } from "../disputes";
 import { verifyShopifyWebhook } from "./webhookVerify";
 
 // POST /webhooks/shopify (KTD-12). Order: size limit, HMAC over the raw body, shop domain, topic,
@@ -58,6 +64,25 @@ export async function handleShopifyWebhook(ctx: ActionCtx, request: Request): Pr
       shopDomain: shop,
       ...(typeof customerId === "number" || typeof customerId === "string" ? { customerId: String(customerId) } : {}),
       orderIds: topic === "customers/data_request" ? ids(privacy.orders_requested) : ids(privacy.orders_to_redact),
+    });
+    return text(result === "duplicate" ? "Duplicate" : "OK", 200);
+  }
+  // Chargebacks and inquiries (convex/disputes.ts) carry their own status; the order isn't fetched.
+  if ((SHOPIFY_DISPUTE_TOPICS as ReadonlyArray<string>).includes(topic)) {
+    let payload: unknown;
+    try {
+      payload = JSON.parse(new TextDecoder().decode(raw));
+    } catch {
+      return text("Bad JSON", 400);
+    }
+    const dispute = parseDispute(payload);
+    if (!dispute) return text("Missing dispute or order id", 400);
+    const triggeredAt = Date.parse(request.headers.get("x-shopify-triggered-at") ?? "");
+    const result = await ctx.runMutation(internal.disputes.record, {
+      webhookId,
+      topic,
+      ...dispute,
+      ...(Number.isFinite(triggeredAt) ? { eventAt: triggeredAt } : {}),
     });
     return text(result === "duplicate" ? "Duplicate" : "OK", 200);
   }

@@ -14,6 +14,7 @@ import {
 } from "./lib/shopify/reconcile";
 import { resolveLineage } from "./lib/shopLineage";
 import { simulatesTestOrders } from "./lib/shopFlags";
+import { disputeEffect, disputeLabel } from "./lib/disputes";
 import { crNumber } from "./lib/shopify/productSync";
 import { chosenProducts, offeredShopProducts } from "./lib/shopProduct";
 import { configFor, notifyNewSales, orderLedger, syncOrderEarnings } from "./earnings";
@@ -590,6 +591,11 @@ const adminOrderValidator = v.object({
     }),
   ),
   refunds: v.array(v.object({ status: v.string(), amountCents: v.number() })),
+  // Shopify Payments disputes on it (convex/disputes.ts): "Chargeback, under review", and whether it
+  // holds or took back the creators' earnings.
+  disputes: v.array(
+    v.object({ label: v.string(), effect: v.union(v.literal("hold"), v.literal("reverse"), v.literal("release")), amountCents: v.union(v.number(), v.null()) }),
+  ),
   // Printful shipments, and whether Shopify has the tracking (and emailed the buyer).
   shipments: v.array(
     v.object({
@@ -622,6 +628,10 @@ export const adminList = query({
       const items = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", order._id)).take(100);
       const refunds = await ctx.db.query("refunds").withIndex("by_order", (q) => q.eq("orderId", order._id)).take(50);
       const shipments = await ctx.db.query("orderShipments").withIndex("by_order", (q) => q.eq("orderId", order._id)).take(20);
+      const disputes = await ctx.db
+        .query("disputes")
+        .withIndex("by_shopifyOrder", (q) => q.eq("shopifyOrderId", order.shopifyOrderId))
+        .take(10);
       const lines = [];
       for (const item of items) {
         const work = item.workId ? await ctx.db.get("works", item.workId) : null;
@@ -660,6 +670,11 @@ export const adminList = query({
         refunds: refunds.map((r) => ({
           status: r.status,
           amountCents: r.lines.reduce((sum, l) => sum + l.amountCents, 0) + r.shippingCents,
+        })),
+        disputes: disputes.map((d) => ({
+          label: disputeLabel(d.kind, d.status),
+          effect: disputeEffect(d.kind, d.status),
+          amountCents: d.amountCents ?? null,
         })),
         shipments: shipments.map((s) => ({
           carrier: s.carrier ?? null,

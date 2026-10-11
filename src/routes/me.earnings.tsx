@@ -19,7 +19,7 @@ const ROLE_LABEL: Record<string, string> = {
   upstream: "Your original",
 };
 
-const KIND_LABEL = { sale: "Sale", refund: "Refund", cancel: "Canceled" } as const;
+const KIND_LABEL = { sale: "Sale", refund: "Refund", cancel: "Canceled", dispute: "Chargeback" } as const;
 
 function dateText(ms: number) {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -116,6 +116,7 @@ function EarningsPage() {
                       {entry.maturesAt ? ` · ${dateText(entry.maturesAt)}` : ""}
                       {entry.holdReason === "not_creator" ? " · until you get a creator number" : ""}
                       {entry.holdReason === "refund" ? " · refund in progress" : ""}
+                      {entry.holdReason === "dispute" ? " · while the buyer's bank reviews a payment dispute" : ""}
                     </p>
                   </div>
                 </li>

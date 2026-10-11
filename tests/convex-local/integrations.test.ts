@@ -163,14 +163,50 @@ describe("Connect Shopify", () => {
     expect(await admin.action(api.integrations.connectShopify, {})).toEqual({
       shop: "CultRemix Dev",
       headless: true,
-      created: ["ORDERS_CANCELLED", "REFUNDS_CREATE"],
+      created: ["ORDERS_CANCELLED", "REFUNDS_CREATE", "DISPUTES_CREATE", "DISPUTES_UPDATE"],
       existing: ["ORDERS_PAID"],
     });
-    expect(created).toEqual([
-      { topic: "ORDERS_CANCELLED", uri: `${SITE}/webhooks/shopify`, format: "JSON" },
-      { topic: "REFUNDS_CREATE", uri: `${SITE}/webhooks/shopify`, format: "JSON" },
-    ]);
+    expect(created).toEqual(
+      ["ORDERS_CANCELLED", "REFUNDS_CREATE", "DISPUTES_CREATE", "DISPUTES_UPDATE"].map((topic) => ({
+        topic,
+        uri: `${SITE}/webhooks/shopify`,
+        format: "JSON",
+      })),
+    );
     expect((await admin.query(api.integrations.status, {})).shopify).toMatchObject({ configured: true, connectedAt: expect.any(Number) });
+  });
+
+  it("still connects when Shopify refuses the dispute webhooks, and says which scope is missing", async () => {
+    const t = newTest();
+    for (const [key, value] of Object.entries(SHOP_ENV)) vi.stubEnv(key, value);
+    const admin = await owner(t);
+    const asked: Array<string> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/admin/oauth/access_token")) return Response.json({ access_token: "tok", expires_in: 86399 });
+      const { query, variables } = JSON.parse(String(init?.body)) as { query: string; variables: { topic: string } };
+      if (query.includes("CultRemixShopCheck")) {
+        return Response.json({
+          data: {
+            shop: { name: "CultRemix Dev", myshopifyDomain: SHOP_ENV.SHOPIFY_SHOP_DOMAIN },
+            publications: { nodes: [{ id: "p2", name: "Headless" }] },
+            webhookSubscriptions: { nodes: [] },
+          },
+        });
+      }
+      asked.push(variables.topic);
+      if (variables.topic.startsWith("DISPUTES_")) {
+        return Response.json({ data: { webhookSubscriptionCreate: { webhookSubscription: null, userErrors: [{ message: "Access denied for topic" }] } } });
+      }
+      return Response.json({ data: { webhookSubscriptionCreate: { webhookSubscription: { id: "w", topic: variables.topic }, userErrors: [] } } });
+    });
+    const result = await admin.action(api.integrations.connectShopify, {});
+    expect(result.created).toEqual(["ORDERS_PAID", "ORDERS_CANCELLED", "REFUNDS_CREATE"]);
+    expect(result.disputesWarning).toBe(
+      "Shopify refused the dispute webhooks (Access denied for topic). Give the app the read_shopify_payments_disputes scope, then connect again, so a chargeback holds its creators' earnings.",
+    );
+    // It stops asking after the first refusal.
+    expect(asked).toEqual(["ORDERS_PAID", "ORDERS_CANCELLED", "REFUNDS_CREATE", "DISPUTES_CREATE"]);
+    expect((await admin.query(api.integrations.status, {})).shopify).toMatchObject({ connectedAt: expect.any(Number) });
   });
 });
 

@@ -28,8 +28,8 @@ There's no staging project. Nothing is copied between the two; each is set up by
 
 Jon signs in once in a Screen Sharing session on mighteous; the Builder does the rest there.
 
-- [ ] **Shopify development store** (free). In the Dev Dashboard, a custom app with these Admin scopes: `write_products`, `read_products`, `write_publications`, `read_publications`, `read_orders`, `read_merchant_managed_fulfillment_orders`, `write_merchant_managed_fulfillment_orders`.
-  - Its compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) point at `https://<dev convex site>/webhooks/shopify`, set in the app's settings. The order webhooks are subscribed by **Connect Shopify** below.
+- [ ] **Shopify development store** (free). In the Dev Dashboard, a custom app with these Admin scopes: `write_products`, `read_products`, `write_publications`, `read_publications`, `read_orders`, `read_merchant_managed_fulfillment_orders`, `write_merchant_managed_fulfillment_orders`, `read_shopify_payments_disputes`. The last lets chargebacks hold and take back their creators' earnings; without it **Connect Shopify** still connects and says the dispute webhooks are missing.
+  - Its compliance webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) point at `https://<dev convex site>/webhooks/shopify`, set in the app's settings. The order and dispute webhooks are subscribed by **Connect Shopify** below.
   - The Headless channel, with a Storefront private token.
   - A $5.95 flat shipping rate for the United States.
   - Buyers finish on Shopify's order status page, whose "Continue shopping" link goes to the store's own online store. Point it home: in Online Store, Themes, Edit code, add `<script>location.replace("https://cultremix.com")</script>` at the top of `theme.liquid`'s `<head>` (dev: the dev site's address), so anyone who lands on the Shopify storefront ends up on CultRemix.

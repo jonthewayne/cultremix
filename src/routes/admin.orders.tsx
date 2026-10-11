@@ -150,6 +150,17 @@ function AdminOrdersPage() {
                       </div>
                       {order.attentionReason && <p className="mt-2 font-semibold">{order.attentionReason}</p>}
                       {order.retrying && <p className="mt-2 text-sm text-muted-foreground">Trying again: {order.retrying}</p>}
+                      {order.disputes.map((dispute, index) => (
+                        <p key={index} className={`mt-2 text-sm font-semibold ${dispute.effect === "release" ? "text-muted-foreground" : "text-destructive"}`}>
+                          {dispute.label}
+                          {dispute.amountCents !== null ? ` · ${formatCents(dispute.amountCents)}` : ""}
+                          {dispute.effect === "hold"
+                            ? " · creators' earnings on hold"
+                            : dispute.effect === "reverse"
+                              ? " · creators' earnings taken back"
+                              : ""}
+                        </p>
+                      ))}
                       <ul className="mt-3 space-y-1">
                         {order.lines.map((line, index) => (
                           <li key={index} className="flex flex-wrap items-baseline gap-x-3 text-sm">

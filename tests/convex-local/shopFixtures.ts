@@ -207,6 +207,8 @@ type ShopifyDelivery = {
   signature?: string | null;
   shop?: string;
   raw?: string;
+  // X-Shopify-Triggered-At, when Shopify says it sent the event.
+  triggeredAt?: string;
 };
 
 let webhookCount = 0;
@@ -218,6 +220,7 @@ export async function postShopifyWebhook(t: T, args: ShopifyDelivery) {
     "x-shopify-topic": args.topic,
     "x-shopify-shop-domain": args.shop ?? SHOP_ENV.SHOPIFY_SHOP_DOMAIN,
     "x-shopify-webhook-id": args.webhookId ?? `wh-${++webhookCount}`,
+    ...(args.triggeredAt ? { "x-shopify-triggered-at": args.triggeredAt } : {}),
   };
   const signature =
     args.signature === undefined ? createHmac("sha256", SHOP_ENV.SHOPIFY_CLIENT_SECRET).update(body).digest("base64") : args.signature;

@@ -7,6 +7,10 @@ export const SHOPIFY_API_VERSION = "2026-07";
 export const SHOPIFY_WEBHOOK_TOPICS = ["orders/paid", "orders/cancelled", "refunds/create"] as const;
 export type ShopifyWebhookTopic = (typeof SHOPIFY_WEBHOOK_TOPICS)[number];
 
+// Shopify Payments disputes (chargebacks and inquiries), handled by convex/disputes.ts. Shopify only
+// sends them to an app with the read_shopify_payments_disputes scope.
+export const SHOPIFY_DISPUTE_TOPICS = ["disputes/create", "disputes/update"] as const;
+
 // Shopify's privacy webhooks, set in the app's compliance webhook settings to the same endpoint
 // (POST /webhooks/shopify) and handled by convex/privacy.ts.
 export const SHOPIFY_PRIVACY_TOPICS = ["customers/data_request", "customers/redact", "shop/redact"] as const;

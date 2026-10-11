@@ -517,6 +517,122 @@ describe("orders.adminList", () => {
   });
 });
 
+describe("chargebacks and inquiries (INV-23)", () => {
+  // Shopify's disputes webhook body. One shirt at $36: A and B each earn 270.
+  const dispute = (status: string, extra: Record<string, unknown> = {}) => ({
+    id: 6021001,
+    order_id: ORDER_ID,
+    type: "chargeback",
+    amount: "36.00",
+    currency: "USD",
+    reason: "fraudulent",
+    status,
+    initiated_at: "2026-10-05T10:00:00Z",
+    ...extra,
+  });
+  const states = async (t: T, who: Id<"users">) =>
+    (await earningsFor(t, who)).map((r) => [r.kind, r.amountCents, r.state, r.holdReason ?? null, r.reason ?? null]);
+  const pastDue = (t: T) =>
+    t.run(async (ctx) => {
+      for (const row of await ctx.db.query("earnings").collect()) await ctx.db.patch("earnings", row._id, { maturesAt: Date.now() - DAY });
+    });
+  const paidOrder = async (t: T) => {
+    shopify.set(rawOrder({ lines: [line(1)] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+  };
+
+  it("holds a disputed order's earnings while it's open, and releases them when the store wins", async () => {
+    const t = newTest();
+    await makeUser(t, { authId: "owner", platformRole: "super_admin_owner" });
+    const { a, b } = await variationOnSale(t);
+    await paidOrder(t);
+    expect(await states(t, b)).toEqual([["sale", 270, "pending", null, null]]);
+
+    await deliver(t, { topic: "disputes/create", body: dispute("needs_response") });
+    for (const who of [a, b]) expect(await states(t, who)).toEqual([["sale", 270, "held", "dispute", null]]);
+    // Held earnings don't mature, even past their date.
+    await pastDue(t);
+    await t.mutation(internal.earnings.matureDue, {});
+    expect(await states(t, b)).toEqual([["sale", 270, "held", "dispute", null]]);
+    const mine = await t.withIdentity({ subject: "auth-b" }).query(api.earnings.mine, {});
+    expect(mine?.entries[0]).toMatchObject({ status: "On hold", holdReason: "dispute" });
+    const list = await t.withIdentity({ subject: "owner" }).query(api.orders.adminList, {});
+    expect(list.orders[0].disputes).toEqual([{ label: "Chargeback, needs a response", effect: "hold", amountCents: 3600 }]);
+
+    await deliver(t, { topic: "disputes/update", body: dispute("won", { finalized_on: "2026-11-20T00:00:00Z" }) });
+    expect(await states(t, b)).toEqual([["sale", 270, "pending", null, null]]);
+    await t.mutation(internal.earnings.matureDue, {});
+    expect(await states(t, b)).toEqual([["sale", 270, "available", null, null]]);
+  });
+
+  it("takes back what a lost chargeback took, once, however often Shopify says so", async () => {
+    const t = newTest();
+    const { a, b } = await variationOnSale(t);
+    await paidOrder(t);
+    await deliver(t, { topic: "disputes/create", body: dispute("under_review"), webhookId: "dispute-1" });
+    await deliver(t, { topic: "disputes/update", body: dispute("lost"), webhookId: "dispute-2" });
+    // The same delivery again, and the same news in a new delivery.
+    expect(await (await deliver(t, { topic: "disputes/update", body: dispute("lost"), webhookId: "dispute-2" })).text()).toBe("Duplicate");
+    await deliver(t, { topic: "disputes/update", body: dispute("lost"), webhookId: "dispute-3" });
+    for (const who of [a, b]) {
+      expect(await states(t, who)).toEqual([
+        ["sale", 270, "reversed", null, null],
+        ["reversal", -270, "reversed", null, "dispute"],
+      ]);
+    }
+    const mine = await t.withIdentity({ subject: "auth-b" }).query(api.earnings.mine, {});
+    expect(mine?.totals).toEqual({ pendingCents: 0, availableCents: 0, paidCents: 0 });
+    expect(mine?.entries.map((entry) => entry.kind).sort()).toEqual(["dispute", "sale"]);
+  });
+
+  it("after the earnings matured, a lost chargeback takes the share back from what's available", async () => {
+    const t = newTest();
+    const { b } = await variationOnSale(t);
+    await paidOrder(t);
+    await pastDue(t);
+    await t.mutation(internal.earnings.matureDue, {});
+    // An open dispute doesn't touch what has already matured; losing it takes it back.
+    await deliver(t, { topic: "disputes/create", body: dispute("needs_response") });
+    expect(await states(t, b)).toEqual([["sale", 270, "available", null, null]]);
+    await deliver(t, { topic: "disputes/update", body: dispute("lost") });
+    expect(await states(t, b)).toEqual([
+      ["sale", 270, "available", null, null],
+      ["reversal", -270, "available", null, "dispute"],
+    ]);
+    const mine = await t.withIdentity({ subject: "auth-b" }).query(api.earnings.mine, {});
+    expect(mine?.totals.availableCents).toBe(0);
+  });
+
+  it("an inquiry holds the earnings but never takes them back, and an older update arriving late changes nothing", async () => {
+    const t = newTest();
+    const { b } = await variationOnSale(t);
+    await paidOrder(t);
+    const inquiry = (status: string) => dispute(status, { type: "inquiry" });
+    await deliver(t, { topic: "disputes/create", body: inquiry("needs_response"), triggeredAt: "2026-10-05T10:00:00Z" });
+    expect(await states(t, b)).toEqual([["sale", 270, "held", "dispute", null]]);
+    await deliver(t, { topic: "disputes/update", body: inquiry("accepted"), triggeredAt: "2026-10-07T10:00:00Z" });
+    expect(await states(t, b)).toEqual([["sale", 270, "pending", null, null]]);
+    // "Under review", sent before "accepted" but delivered after it.
+    await deliver(t, { topic: "disputes/update", body: inquiry("under_review"), triggeredAt: "2026-10-06T10:00:00Z" });
+    expect(await states(t, b)).toEqual([["sale", 270, "pending", null, null]]);
+    expect(await t.run((ctx) => ctx.db.query("disputes").collect())).toMatchObject([
+      { shopifyDisputeId: "6021001", shopifyOrderId: String(ORDER_ID), kind: "inquiry", status: "accepted", amountCents: 3600, currency: "USD" },
+    ]);
+  });
+
+  it("keeps a dispute that arrives before its order and applies it when the order comes", async () => {
+    const t = newTest();
+    const { b } = await variationOnSale(t);
+    expect((await deliver(t, { topic: "disputes/create", body: { id: 1 } })).status).toBe(400);
+    await deliver(t, { topic: "disputes/create", body: dispute("needs_response") });
+    expect(await earningsFor(t, b)).toHaveLength(0);
+    await paidOrder(t);
+    expect(await states(t, b)).toEqual([["sale", 270, "held", "dispute", null]]);
+    // Nobody hears "someone bought it" about a sale disputed before it was seen.
+    expect(await t.run((ctx) => ctx.db.query("notifications").collect())).toHaveLength(0);
+  });
+});
+
 describe("orders.simulateSale", () => {
   it("rehearses a sale outside production: Test earnings and notifications, nothing to print", async () => {
     const t = newTest();

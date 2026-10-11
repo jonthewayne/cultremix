@@ -6,6 +6,7 @@ import { ECONOMIC_CONFIG_V1, type EconomicConfig, type RecipientShare } from "./
 import { saleSplits, type LineLedger, type UnitStatus } from "./lib/creatorPool";
 import { crNumber } from "./lib/shopify/productSync";
 import { notifySale } from "./lib/notifications";
+import { disputeEffect } from "./lib/disputes";
 import { scheduleSaleEmail } from "./saleEmails";
 import { getViewerUser } from "./identity";
 
@@ -92,7 +93,7 @@ export async function orderLedger(ctx: MutationCtx, orderId: Id<"orders">, now: 
       }
     }
     for (const row of rows) {
-      if (row.orderItemId === item._id && row.kind === "reversal" && row.reason === "cancel") {
+      if (row.orderItemId === item._id && row.kind === "reversal" && (row.reason === "cancel" || row.reason === "dispute")) {
         add(row.unit, row.recipientId, -row.amountCents);
       }
     }
@@ -124,7 +125,7 @@ async function setGroupState(
   ctx: MutationCtx,
   group: Group,
   state: "pending" | "held" | "reversed",
-  holdReason: "refund" | "not_creator" | undefined,
+  holdReason: "refund" | "not_creator" | "dispute" | undefined,
   now: number,
 ) {
   for (const row of [group.sale, ...group.reversals]) {
@@ -146,6 +147,15 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
   if (order.isTest && !order.simulated) return [];
   const now = Date.now();
   const { items, refunds, shipments, rows } = await loadOrder(ctx, orderId);
+  // Shopify Payments disputes on the order (convex/disputes.ts, INV-23): an open one holds its
+  // earnings, and a chargeback the buyer kept reverses what's left of them (lib/disputes.ts).
+  const disputes = await ctx.db
+    .query("disputes")
+    .withIndex("by_shopifyOrder", (q) => q.eq("shopifyOrderId", order.shopifyOrderId))
+    .take(20);
+  const effects = disputes.map((dispute) => disputeEffect(dispute.kind, dispute.status));
+  const disputeOpen = effects.includes("hold");
+  const disputeLost = effects.includes("reverse");
   const groups = new Map<string, Group>();
   const fresh: Array<Id<"earnings">> = [];
   const groupFor = (key: string) => {
@@ -223,10 +233,14 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
           group.sale.maturesAt = maturesAt;
         }
         const sale = group.sale;
-        const held = heldUnits.has(unitKey(item._id, unit));
-        if (held && (sale.state === "pending" || (sale.state === "held" && sale.holdReason === "not_creator"))) {
-          await setGroupState(ctx, group, "held", "refund", now);
-        } else if (!held && sale.state === "held" && sale.holdReason === "refund") {
+        // A pending refund on the unit holds it; otherwise an open dispute on the order does. Holds
+        // stop maturing; what has already matured stays available.
+        const hold = heldUnits.has(unitKey(item._id, unit)) ? "refund" : disputeOpen ? "dispute" : undefined;
+        if (hold) {
+          if (sale.state === "pending" || (sale.state === "held" && sale.holdReason !== hold)) {
+            await setGroupState(ctx, group, "held", hold, now);
+          }
+        } else if (sale.state === "held" && (sale.holdReason === "refund" || sale.holdReason === "dispute")) {
           const ok = await eligible(who);
           await setGroupState(ctx, group, ok ? "pending" : "held", ok ? undefined : "not_creator", now);
         }
@@ -237,7 +251,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
   const insertReversal = async (
     group: Group,
     amountCents: number,
-    reason: "refund" | "cancel",
+    reason: "refund" | "cancel" | "dispute",
     refundId: Id<"refunds"> | undefined,
   ) => {
     const sale = group.sale!;
@@ -292,6 +306,19 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
     }
   }
 
+  // A chargeback the buyer kept reverses what no refund or cancellation has taken (or is holding),
+  // once. (A chargeback lost and then won on appeal isn't restored here; the owner corrects it.)
+  if (disputeLost) {
+    for (const [key, group] of groups) {
+      if (!group.sale) continue;
+      const cancelled = group.reversals.filter((r) => r.reason === "cancel").reduce((sum, r) => sum + r.amountCents, 0);
+      const target = Math.min(0, -(group.sale.amountCents - (nonFailedSplit.get(key) ?? 0)) - cancelled);
+      const existing = group.reversals.filter((r) => r.reason === "dispute").reduce((sum, r) => sum + r.amountCents, 0);
+      const delta = target - existing;
+      if (delta < 0) await insertReversal(group, delta, "dispute", undefined);
+    }
+  }
+
   // A sale fully reversed before it matured nets to zero: both sides leave the balances.
   for (const group of groups.values()) {
     const sale = group.sale;
@@ -321,7 +348,7 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
   >();
   for (const sale of rows) {
     if (sale.kind !== "sale" || !fresh.has(sale._id)) continue;
-    if (sale.state === "reversed" || (sale.state === "held" && sale.holdReason === "refund")) continue;
+    if (sale.state === "reversed" || (sale.state === "held" && (sale.holdReason === "refund" || sale.holdReason === "dispute"))) continue;
     const workId = workOf.get(sale.orderItemId);
     if (!workId) continue;
     const reversed = rows
@@ -421,9 +448,9 @@ const entryValidator = v.object({
   createdAt: v.number(),
   amountCents: v.number(),
   status: v.union(v.literal("Pending"), v.literal("On hold"), v.literal("Available"), v.literal("Paid"), v.literal("Reversed")),
-  // Why it's on hold: a refund in progress, or no creator access yet.
-  holdReason: v.union(v.literal("refund"), v.literal("not_creator"), v.null()),
-  kind: v.union(v.literal("sale"), v.literal("refund"), v.literal("cancel")),
+  // Why it's on hold: a refund in progress, a payment dispute open, or no creator access yet.
+  holdReason: v.union(v.literal("refund"), v.literal("not_creator"), v.literal("dispute"), v.null()),
+  kind: v.union(v.literal("sale"), v.literal("refund"), v.literal("cancel"), v.literal("dispute")),
   test: v.boolean(),
   cr: v.union(v.string(), v.null()),
   title: v.union(v.string(), v.null()),

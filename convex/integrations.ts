@@ -5,7 +5,14 @@ import { requireAdmin } from "./lib/adminAccess";
 import { createPrintful, printfulConfigFromEnv } from "./lib/printful/client";
 import { PRINTFUL_WEBHOOK_EVENTS, webhookConfig } from "./lib/printful/setup";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
-import { SHOP_CHECK_QUERY, WEBHOOK_CREATE_MUTATION, missingTopics, shopifyWebhookUri } from "./lib/shopify/setup";
+import {
+  DISPUTE_WEBHOOK_TOPICS,
+  ORDER_WEBHOOK_TOPICS,
+  SHOP_CHECK_QUERY,
+  WEBHOOK_CREATE_MUTATION,
+  missingTopics,
+  shopifyWebhookUri,
+} from "./lib/shopify/setup";
 import type { ShopCheck } from "./lib/shopify/setup";
 import { shopifyAdminForAction } from "./shopify";
 
@@ -127,8 +134,17 @@ export const connectPrintful = action({
 
 export const connectShopify = action({
   args: {},
-  returns: v.object({ shop: v.string(), headless: v.boolean(), created: v.array(v.string()), existing: v.array(v.string()) }),
-  handler: async (ctx): Promise<{ shop: string; headless: boolean; created: Array<string>; existing: Array<string> }> => {
+  returns: v.object({
+    shop: v.string(),
+    headless: v.boolean(),
+    created: v.array(v.string()),
+    existing: v.array(v.string()),
+    // Why the dispute webhooks aren't subscribed (the app lacks read_shopify_payments_disputes).
+    disputesWarning: v.optional(v.string()),
+  }),
+  handler: async (
+    ctx,
+  ): Promise<{ shop: string; headless: boolean; created: Array<string>; existing: Array<string>; disputesWarning?: string }> => {
     await ctx.runQuery(internal.merch.checkAdmin, { level: "manage" });
     const admin = shopifyAdminForAction(ctx);
     if (!admin) {
@@ -157,14 +173,37 @@ export const connectShopify = action({
       }
       created.push(topic);
     }
-    const existing = missingTopics([], uri).filter((topic) => !created.includes(topic));
+    // Chargebacks and inquiries (convex/disputes.ts) need the read_shopify_payments_disputes scope;
+    // without it Shopify refuses them, and everything else still works.
+    let disputesWarning: string | undefined;
+    for (const topic of missingTopics(check.webhookSubscriptions.nodes, uri, DISPUTE_WEBHOOK_TOPICS)) {
+      let refused: string | null = null;
+      try {
+        const result = await admin.graphql<{
+          webhookSubscriptionCreate: { webhookSubscription: { id: string } | null; userErrors: Array<{ message: string }> };
+        }>(WEBHOOK_CREATE_MUTATION, { topic, webhookSubscription: { uri, format: "JSON" } });
+        const { webhookSubscription, userErrors } = result.webhookSubscriptionCreate;
+        if (userErrors.length > 0 || !webhookSubscription) refused = userErrors.map((e) => e.message).join("; ") || "no subscription";
+      } catch (error) {
+        refused = readable(error);
+      }
+      if (refused) {
+        disputesWarning = `Shopify refused the dispute webhooks (${refused}). Give the app the read_shopify_payments_disputes scope, then connect again, so a chargeback holds its creators' earnings.`;
+        break;
+      }
+      created.push(topic);
+    }
+    const existing = [...ORDER_WEBHOOK_TOPICS, ...DISPUTE_WEBHOOK_TOPICS].filter((topic) =>
+      check.webhookSubscriptions.nodes.some((sub) => sub.topic === topic && sub.uri === uri),
+    );
     await ctx.runMutation(internal.integrations.saveConnection, {
       name: "shopify",
       note:
         `${check.shop.name} (${check.shop.myshopifyDomain}): order webhooks to ${uri}${created.length ? `, ${created.length} new` : ""}.` +
-        (headless ? "" : " No Headless sales channel yet: add it, or products can't be published."),
+        (headless ? "" : " No Headless sales channel yet: add it, or products can't be published.") +
+        (disputesWarning ? " Dispute webhooks not subscribed: the app needs read_shopify_payments_disputes." : ""),
     });
-    return { shop: check.shop.name, headless, created, existing };
+    return { shop: check.shop.name, headless, created, existing, ...(disputesWarning ? { disputesWarning } : {}) };
   },
 });
 
