@@ -388,6 +388,42 @@ describe("credits", () => {
     }
   });
 
+  it("runs a batch that didn't work again once, in its session, at a new batch's price", async () => {
+    const t = newTest();
+    await setBudget(t, 10_000);
+    const alice = await addUser(t, "alice");
+    const bob = await addUser(t, "bob");
+    const batchId = await generateBatch(alice.as);
+    await t.mutation(internal.studio.markBatchDispatched, { batchId });
+    await t.mutation(internal.studio.finishBatch, {
+      batchId,
+      results: [0, 1, 2, 3].map((index) => ({ index, error: "blocked" })),
+      spend: { kind: "settle", actualCents: 0 },
+    });
+    // Nothing came back, so the batch's credits came back.
+    expect(await balance(t, alice.userId)).toBe(10);
+
+    await expect(bob.as.mutation(api.studio.retryBatch, { batchId })).rejects.toThrow(/Batch not found/);
+
+    const again = await alice.as.mutation(api.studio.retryBatch, { batchId });
+    if ("refused" in again) throw new Error(`refused: ${again.refused}`);
+    expect(await balance(t, alice.userId)).toBe(8);
+    const before = await t.run((ctx) => ctx.db.get("batches", batchId));
+    const after = await t.run((ctx) => ctx.db.get("batches", again.batchId));
+    expect(after).toMatchObject({ sessionId: before?.sessionId, instruction: BATCH.instruction, backgroundColor: BATCH.backgroundColor, number: 2, layout: "grid" });
+    expect(before?.retriedAs).toBe(again.batchId);
+    expect(await tiles(t, again.batchId)).toHaveLength(4);
+    const page = await alice.as.query(api.studio.sessionBatches, {
+      sessionId: before!.sessionId,
+      paginationOpts: { numItems: 5, cursor: null },
+    });
+    expect(page.page.map((batch) => batch.retried ?? false)).toEqual([false, true]);
+
+    // A second tap doesn't run it, or charge for it, again.
+    await expect(alice.as.mutation(api.studio.retryBatch, { batchId })).rejects.toThrow(/already running again/);
+    expect(await balance(t, alice.userId)).toBe(8);
+  });
+
   it("charges 1 per single design and refunds each failure", async () => {
     process.env.STUDIO_LAYOUT = "single";
     const t = newTest();

@@ -1,6 +1,6 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import type { Infer } from "convex/values";
+import type { Infer, ObjectType } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
@@ -119,6 +119,8 @@ const batchView = v.object({
   tried: v.optional(v.boolean()),
   // The image model an admin picked, when it isn't GPT Image 2.5.
   engine: v.optional(v.string()),
+  // Already run again with "Try again".
+  retried: v.optional(v.boolean()),
   tiles: v.array(tileView),
 });
 
@@ -303,6 +305,7 @@ async function batchViewOf(ctx: Ctx, urls: ReturnType<typeof imageUrlReader>, ba
     parts: batch.partChanges?.length ? partSummary(batch.partChanges) : undefined,
     tried: batch.tryDesign ? true : undefined,
     engine: showModel && batch.engine ? engineName(batch.engine) : undefined,
+    retried: batch.retriedAs ? true : undefined,
     tiles,
   };
 }
@@ -656,281 +659,333 @@ export const startRemix = mutation({
   },
 });
 
-export const generate = mutation({
-  args: {
-    // The session to add the batch to (from the studio's address). Without it, a new session
-    // starts; pages from the previous studio send nothing and keep using their latest session.
-    sessionId: v.optional(v.id("creativeSessions")),
-    newSession: v.optional(v.boolean()),
-    instruction: v.string(),
-    backgroundColor: v.string(),
-    // The studio's numbered images in order, and its style mix (a 0-100 slider per style).
-    images: v.optional(v.array(v.id("userImages"))),
-    styles: v.optional(v.array(v.object({ imageId: v.id("userImages"), weight: v.number() }))),
-    // Sent by pages still running the previous studio until they reload.
-    presets: v.optional(v.array(v.string())),
-    inspirationKey: v.optional(v.string()),
-    // A remix's new words for the parent's remixable words (convex/remixFields.ts).
-    words: v.optional(v.array(v.object({ fieldId: v.string(), text: v.string() }))),
-    // An admin's choice of image model (convex/lib/studioRules.ts ENGINES); members get GPT Image 2.5.
-    engine: v.optional(engineValidator),
-    // A remix's filled-in parts (convex/remixParts.ts): new words for a character, and photos for a
-    // character, person, or group, as the member's images.
-    parts: v.optional(
-      v.array(v.object({ partId: v.string(), to: v.optional(v.string()), photos: v.array(v.id("userImages")) })),
-    ),
-    // The creator trying their own design's remixable parts before publishing.
-    tryDesign: v.optional(v.id("generations")),
-  },
-  returns: v.union(
-    v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
-    v.object({
-      refused: v.union(v.literal("NO_CREDITS"), v.literal("GENERATION_OFF"), v.literal("BUDGET")),
-    }),
+const generateArgs = {
+  // The session to add the batch to (from the studio's address). Without it, a new session
+  // starts; pages from the previous studio send nothing and keep using their latest session.
+  sessionId: v.optional(v.id("creativeSessions")),
+  newSession: v.optional(v.boolean()),
+  instruction: v.string(),
+  backgroundColor: v.string(),
+  // The studio's numbered images in order, and its style mix (a 0-100 slider per style).
+  images: v.optional(v.array(v.id("userImages"))),
+  styles: v.optional(v.array(v.object({ imageId: v.id("userImages"), weight: v.number() }))),
+  // Sent by pages still running the previous studio until they reload.
+  presets: v.optional(v.array(v.string())),
+  inspirationKey: v.optional(v.string()),
+  // A remix's new words for the parent's remixable words (convex/remixFields.ts).
+  words: v.optional(v.array(v.object({ fieldId: v.string(), text: v.string() }))),
+  // An admin's choice of image model (convex/lib/studioRules.ts ENGINES); members get GPT Image 2.5.
+  engine: v.optional(engineValidator),
+  // A remix's filled-in parts (convex/remixParts.ts): new words for a character, and photos for a
+  // character, person, or group, as the member's images.
+  parts: v.optional(
+    v.array(v.object({ partId: v.string(), to: v.optional(v.string()), photos: v.array(v.id("userImages")) })),
   ),
+  // The creator trying their own design's remixable parts before publishing.
+  tryDesign: v.optional(v.id("generations")),
+};
+type GenerateArgs = ObjectType<typeof generateArgs>;
+
+const generateResult = v.union(
+  v.object({ batchId: v.id("batches"), sessionId: v.id("creativeSessions") }),
+  v.object({
+    refused: v.union(v.literal("NO_CREDITS"), v.literal("GENERATION_OFF"), v.literal("BUDGET")),
+  }),
+);
+
+export const generate = mutation({
+  args: generateArgs,
+  returns: generateResult,
+  handler: async (ctx, args) => await startBatch(ctx, await requireMember(ctx), args),
+});
+
+// "Try again" on a batch whose designs didn't come back (a filter, an outage): the same request
+// runs again in its session, through every check a new batch gets, and costs what a new one
+// does (the failed batch gave its credits back). A batch runs again once.
+export const retryBatch = mutation({
+  args: { batchId: v.id("batches") },
+  returns: generateResult,
   handler: async (ctx, args) => {
     const user = await requireMember(ctx);
-    const engine: Engine = args.engine ?? "gpt";
-    if (engine !== "gpt" && !adminAllows(user.platformRole, "manage")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Other image models are for admins for now." });
+    const batch = await ctx.db.get("batches", args.batchId);
+    if (!batch || batch.ownerId !== user._id) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Batch not found." });
     }
-    const instruction = args.instruction.trim().slice(0, 600);
-    const imageIds = args.images ?? [];
-    const styleArgs = args.styles ?? [];
-    if (imageIds.length > MAX_IMAGES || styleArgs.length > MAX_STYLES) {
-      throw new ConvexError({
-        code: "INVALID_INPUT",
-        message: `Use up to ${MAX_IMAGES} images and ${MAX_STYLES} styles.`,
-      });
+    if (batch.retriedAs) {
+      throw new ConvexError({ code: "ALREADY_RETRIED", message: "This one is already running again. Its new designs are at the top." });
     }
-    if (
-      new Set(imageIds).size !== imageIds.length ||
-      new Set(styleArgs.map((s) => s.imageId)).size !== styleArgs.length
-    ) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: "Each image can be added once." });
-    }
-    const load = async (imageId: Id<"userImages">) => {
-      const image = await ctx.db.get("userImages", imageId);
-      if (!image || image.ownerId !== user._id) {
-        throw new ConvexError({ code: "NOT_FOUND", message: "That image is not available." });
-      }
-      return image;
-    };
-    const images = [];
-    for (const imageId of imageIds) {
-      const image = await load(imageId);
-      images.push({ imageId: image._id, key: image.key });
-    }
-    // The parts' photos, checked as the member's own and counted with the call's images.
-    const askedParts = [];
-    let partPhotoCount = 0;
-    for (const entry of args.parts ?? []) {
-      const photos = [];
-      for (const imageId of entry.photos) {
-        const photo = await load(imageId);
-        photos.push({ imageId: photo._id as string, key: photo.key });
-      }
-      partPhotoCount += photos.length;
-      askedParts.push({ partId: entry.partId, to: entry.to, photos });
-    }
-    if (partPhotoCount > MAX_PART_PHOTOS) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: `Use up to ${MAX_PART_PHOTOS} photos for the remix's parts.` });
-    }
-    const styles = [];
-    for (const style of styleArgs) {
-      if (!Number.isFinite(style.weight) || style.weight < 0 || style.weight > 100) {
-        throw new ConvexError({ code: "INVALID_INPUT", message: "Style sliders go from 0 to 100." });
-      }
-      const image = await load(style.imageId);
-      styles.push({ imageId: image._id, key: image.key, weight: Math.round(style.weight) });
-    }
-    const styleOnly = styles.filter((s) => s.weight > 0 && !imageIds.includes(s.imageId));
-    // The previous studio's one image, used as it was: no notes and no style mix.
-    const legacyKey = images.length === 0 && styles.length === 0 ? args.inspirationKey : undefined;
-    if (legacyKey && !isImageKey(legacyKey) && !(isDevDeployment() && legacyKey.startsWith("fake:"))) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: "That image did not upload." });
-    }
-    const presets = (args.presets ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 6);
-    const attached = images.length + styleOnly.length + partPhotoCount + (legacyKey ? 1 : 0);
-    if (!instruction && attached === 0) {
-      throw new ConvexError({
-        code: "INVALID_INPUT",
-        message: "Say what to make, or add an image.",
-      });
-    }
-    if (!HEX.test(args.backgroundColor)) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: "Pick a background color." });
-    }
-    if (!(await flagEnabled(ctx, "gen.vercel"))) return { refused: "GENERATION_OFF" as const };
-    const owner = isOwner(user);
-    const chatgpt = Boolean(process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID);
-    const forced = process.env.IMAGE_PROVIDER;
-    // The other models are only on the gateway.
-    const provider = engine !== "gpt" ? "gateway" : forced === "gateway" || forced === "chatgpt" ? forced : chatgpt ? "chatgpt" : "gateway";
-    // A grid (one call cut into four) on the gateway; the ChatGPT path and STUDIO_LAYOUT=single
-    // make four separate designs, charged one credit each. Nano Banana makes a grid too; Recraft
-    // and a mix make four separate designs.
-    const layout =
-      engine === "gpt"
-        ? provider === "gateway" && process.env.STUDIO_LAYOUT !== "single" ? "grid" : "single"
-        : engineMakesGrid(engine) ? "grid" : "single";
-    const price = layout === "grid" ? BATCH_CREDITS : DESIGNS_PER_BATCH;
-    if (!owner && (await creditBalance(ctx, user._id)) < price) {
-      return { refused: "NO_CREDITS" as const };
-    }
-    // The daily budget (convex/lib/budget.ts): the batch's worst case must fit in what's left of
-    // the gateway's UTC day, all four designs or none. The owner counts too. Each design of a
-    // separate-call batch reserves its own model's worst case.
-    const now = Date.now();
-    const only: SingleEngine = engine === "mix" ? "gpt" : engine;
-    const tileEngines: Array<SingleEngine> = engine === "mix" ? [...MIX_ENGINES] : Array.from({ length: DESIGNS_PER_BATCH }, () => only);
-    const singleCents = (one: SingleEngine) =>
-      one === "nano-banana"
-        ? NANO_BANANA_WORST_CENTS + ROLES_CENTS
-        : one === "recraft"
-          ? RECRAFT_WORST_CENTS + ROLES_CENTS
-          : engine === "mix"
-            ? singleWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high")) + ROLES_CENTS
-            : singleWorstCaseCents(attached, qualityOf(process.env.IMAGE_QUALITY, "medium"));
-    const gridCents =
-      engine === "nano-banana" ? NANO_BANANA_WORST_CENTS + ROLES_CENTS : gridWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high"));
-    const tileCents = tileEngines.map((one) => (provider === "gateway" && layout === "single" ? singleCents(one) : 0));
-    const designCents = provider === "gateway" && layout === "grid" ? gridCents : 0;
-    const batchCents = layout === "grid" ? designCents : tileCents.reduce((sum, cents) => sum + cents, 0);
-    if (batchCents > 0 && !(await hasRoom(ctx, "gateway", batchCents, now))) {
-      return { refused: "BUDGET" as const };
-    }
-    let session: Doc<"creativeSessions"> | null = null;
-    if (args.sessionId) {
-      session = await ctx.db.get("creativeSessions", args.sessionId);
-      if (!session || session.ownerId !== user._id) {
-        throw new ConvexError({ code: "NOT_FOUND", message: "Session not found." });
-      }
-    } else if (!args.newSession) {
-      session = await latestSession(ctx, user._id);
-    }
-    if (!session) {
-      const sessionId = await ctx.db.insert("creativeSessions", {
-        ownerId: user._id,
-        updatedAt: now,
-        phrase: instruction,
-        styleDirection: "",
-        presets: [],
-      });
-      session = (await ctx.db.get("creativeSessions", sessionId))!;
-    }
-    const inspirationKey = images[0]?.key ?? legacyKey;
-    if ((args.words?.length ?? 0) > MAX_FIELDS || args.words?.some((w) => w.text.length > 400)) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: "That's too many words." });
-    }
-    // What this batch remixes, when image 1 is its art: a published work (a remix session) or the
-    // creator's own design (trying its remixable parts). Its words and parts are the stored ones.
-    const source = await remixSource(ctx, user._id, session, images[0]?.key, args.tryDesign);
-    const wordChanges = checkedWordChanges(source?.fields, args.words);
-    let partChanges;
-    if (source) {
-      const result = checkPartChanges(source.parts, askedParts);
-      if (!result.ok) throw new ConvexError({ code: `PARTS_${result.problem}`, message: partProblem(result.problem, result.label, result.limit) });
-      partChanges = result.changes.length > 0
-        ? result.changes.map((c) => ({ ...c, photos: c.photos.map((p) => ({ imageId: p.imageId as Id<"userImages">, key: p.key })) }))
-        : undefined;
-    } else if (askedParts.length > 0) {
-      throw new ConvexError({ code: "PARTS_NOT_REMIXABLE", message: "These parts can't be changed here." });
-    }
-    // The batch's number in its session, which names its folder (batch-01, batch-02, ...).
-    const batchNumber = (session.batchCount ?? (await countBatches(ctx, session._id))) + 1;
-    const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
-    const modelOf = (one: SingleEngine) =>
-      one === "nano-banana"
-        ? NANO_BANANA_MODEL
-        : one === "recraft"
-          ? RECRAFT_MODEL
-          : provider === "chatgpt"
-            ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
-            : attached > 0
-              ? MODEL_EDIT
-              : MODEL_TEXT;
-    const model = engine === "mix" ? "mix" : modelOf(only);
-    const batchId = await ctx.db.insert("batches", {
-      sessionId: session._id,
-      ownerId: user._id,
-      instruction,
-      presets,
-      inspirationKey,
-      images: legacyKey ? undefined : images,
-      styles: legacyKey ? undefined : styles,
-      backgroundColor: args.backgroundColor.toLowerCase(),
-      operation,
-      model,
-      count: DESIGNS_PER_BATCH,
-      layout,
-      charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
-      number: batchNumber,
-      wordChanges,
-      partChanges,
-      tryDesign: source?.kind === "design" ? source.designId : undefined,
-      engine: engine === "gpt" ? undefined : engine,
-    });
-    if (layout === "grid" && !owner) {
-      await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
-    }
-    if (layout === "grid" && designCents > 0) {
-      await openReservation(ctx, {
-        attemptKind: "batch",
-        attemptId: batchId,
-        batchId,
-        provider: "gateway",
-        userId: user._id,
-        credits: owner ? 0 : BATCH_CREDITS,
-        worstCaseCents: designCents,
-      }, now);
-    }
-    for (let index = 0; index < DESIGNS_PER_BATCH; index++) {
-      const generationId = await ctx.db.insert("generations", {
-        sessionId: session._id,
-        batchId,
-        ownerId: user._id,
-        index,
-        kind: operation === "create" ? "concept" : operation,
-        status: "queued",
-        provider,
-        model: layout === "grid" ? model : modelOf(tileEngines[index]),
-        // Grid designs are charged with their batch.
-        charged: layout === "single" && !owner,
-        favorite: false,
-      });
-      if (layout === "single") {
-        if (!owner) await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -1, generationId });
-        if (tileCents[index] > 0) {
-          await openReservation(ctx, {
-            attemptKind: "tile",
-            attemptId: generationId,
-            generationId,
-            provider: "gateway",
-            userId: user._id,
-            credits: owner ? 0 : 1,
-            worstCaseCents: tileCents[index],
-          }, now);
-        }
-        await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
-      }
-    }
-    if (layout === "grid") await ctx.scheduler.runAfter(0, internal.imageGen.runBatch, { batchId });
-    for (const image of images) await ctx.db.patch("userImages", image.imageId, { usedAt: now });
-    for (const change of partChanges ?? []) {
-      for (const photo of change.photos) await ctx.db.patch("userImages", photo.imageId, { usedAt: now });
-    }
-    for (const style of styles) {
-      await ctx.db.patch("userImages", style.imageId, { usedAt: now, styleAt: now });
-    }
-    await ctx.db.patch("creativeSessions", session._id, {
-      updatedAt: now,
-      phrase: instruction,
-      batchCount: batchNumber,
-    });
-    return { batchId, sessionId: session._id };
+    const result = await startBatch(ctx, user, retryArgs(batch));
+    if ("batchId" in result) await ctx.db.patch("batches", batch._id, { retriedAs: result.batchId });
+    return result;
   },
 });
+
+// The request a batch was made from, as generate takes it. Parts left out because the creator
+// lets them be (omit) aren't asked for; the check adds them again.
+export function retryArgs(batch: Doc<"batches">): GenerateArgs {
+  const legacy = !batch.images && !batch.styles;
+  return {
+    sessionId: batch.sessionId,
+    instruction: batch.instruction,
+    backgroundColor: batch.backgroundColor,
+    presets: batch.presets,
+    ...(legacy ? { inspirationKey: batch.inspirationKey } : {}),
+    images: batch.images?.map((image) => image.imageId),
+    styles: batch.styles?.map((style) => ({ imageId: style.imageId, weight: style.weight })),
+    ...(batch.wordChanges?.length ? { words: batch.wordChanges.map((change) => ({ fieldId: change.fieldId, text: change.to })) } : {}),
+    ...(batch.partChanges?.some((change) => !change.omit)
+      ? {
+          parts: batch.partChanges
+            .filter((change) => !change.omit)
+            .map((change) => ({ partId: change.partId, to: change.to, photos: change.photos.map((photo) => photo.imageId) })),
+        }
+      : {}),
+    ...(batch.tryDesign ? { tryDesign: batch.tryDesign } : {}),
+    ...(batch.engine ? { engine: batch.engine } : {}),
+  };
+}
+
+async function startBatch(ctx: MutationCtx, user: Doc<"users">, args: GenerateArgs): Promise<Infer<typeof generateResult>> {
+  const engine: Engine = args.engine ?? "gpt";
+  if (engine !== "gpt" && !adminAllows(user.platformRole, "manage")) {
+    throw new ConvexError({ code: "FORBIDDEN", message: "Other image models are for admins for now." });
+  }
+  const instruction = args.instruction.trim().slice(0, 600);
+  const imageIds = args.images ?? [];
+  const styleArgs = args.styles ?? [];
+  if (imageIds.length > MAX_IMAGES || styleArgs.length > MAX_STYLES) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: `Use up to ${MAX_IMAGES} images and ${MAX_STYLES} styles.`,
+    });
+  }
+  if (
+    new Set(imageIds).size !== imageIds.length ||
+    new Set(styleArgs.map((s) => s.imageId)).size !== styleArgs.length
+  ) {
+    throw new ConvexError({ code: "INVALID_INPUT", message: "Each image can be added once." });
+  }
+  const load = async (imageId: Id<"userImages">) => {
+    const image = await ctx.db.get("userImages", imageId);
+    if (!image || image.ownerId !== user._id) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "That image is not available." });
+    }
+    return image;
+  };
+  const images = [];
+  for (const imageId of imageIds) {
+    const image = await load(imageId);
+    images.push({ imageId: image._id, key: image.key });
+  }
+  // The parts' photos, checked as the member's own and counted with the call's images.
+  const askedParts = [];
+  let partPhotoCount = 0;
+  for (const entry of args.parts ?? []) {
+    const photos = [];
+    for (const imageId of entry.photos) {
+      const photo = await load(imageId);
+      photos.push({ imageId: photo._id as string, key: photo.key });
+    }
+    partPhotoCount += photos.length;
+    askedParts.push({ partId: entry.partId, to: entry.to, photos });
+  }
+  if (partPhotoCount > MAX_PART_PHOTOS) {
+    throw new ConvexError({ code: "INVALID_INPUT", message: `Use up to ${MAX_PART_PHOTOS} photos for the remix's parts.` });
+  }
+  const styles = [];
+  for (const style of styleArgs) {
+    if (!Number.isFinite(style.weight) || style.weight < 0 || style.weight > 100) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Style sliders go from 0 to 100." });
+    }
+    const image = await load(style.imageId);
+    styles.push({ imageId: image._id, key: image.key, weight: Math.round(style.weight) });
+  }
+  const styleOnly = styles.filter((s) => s.weight > 0 && !imageIds.includes(s.imageId));
+  // The previous studio's one image, used as it was: no notes and no style mix.
+  const legacyKey = images.length === 0 && styles.length === 0 ? args.inspirationKey : undefined;
+  if (legacyKey && !isImageKey(legacyKey) && !(isDevDeployment() && legacyKey.startsWith("fake:"))) {
+    throw new ConvexError({ code: "INVALID_INPUT", message: "That image did not upload." });
+  }
+  const presets = (args.presets ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 6);
+  const attached = images.length + styleOnly.length + partPhotoCount + (legacyKey ? 1 : 0);
+  if (!instruction && attached === 0) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: "Say what to make, or add an image.",
+    });
+  }
+  if (!HEX.test(args.backgroundColor)) {
+    throw new ConvexError({ code: "INVALID_INPUT", message: "Pick a background color." });
+  }
+  if (!(await flagEnabled(ctx, "gen.vercel"))) return { refused: "GENERATION_OFF" as const };
+  const owner = isOwner(user);
+  const chatgpt = Boolean(process.env.CHATGPT_ACCESS_TOKEN && process.env.CHATGPT_ACCOUNT_ID);
+  const forced = process.env.IMAGE_PROVIDER;
+  // The other models are only on the gateway.
+  const provider = engine !== "gpt" ? "gateway" : forced === "gateway" || forced === "chatgpt" ? forced : chatgpt ? "chatgpt" : "gateway";
+  // A grid (one call cut into four) on the gateway; the ChatGPT path and STUDIO_LAYOUT=single
+  // make four separate designs, charged one credit each. Nano Banana makes a grid too; Recraft
+  // and a mix make four separate designs.
+  const layout =
+    engine === "gpt"
+      ? provider === "gateway" && process.env.STUDIO_LAYOUT !== "single" ? "grid" : "single"
+      : engineMakesGrid(engine) ? "grid" : "single";
+  const price = layout === "grid" ? BATCH_CREDITS : DESIGNS_PER_BATCH;
+  if (!owner && (await creditBalance(ctx, user._id)) < price) {
+    return { refused: "NO_CREDITS" as const };
+  }
+  // The daily budget (convex/lib/budget.ts): the batch's worst case must fit in what's left of
+  // the gateway's UTC day, all four designs or none. The owner counts too. Each design of a
+  // separate-call batch reserves its own model's worst case.
+  const now = Date.now();
+  const only: SingleEngine = engine === "mix" ? "gpt" : engine;
+  const tileEngines: Array<SingleEngine> = engine === "mix" ? [...MIX_ENGINES] : Array.from({ length: DESIGNS_PER_BATCH }, () => only);
+  const singleCents = (one: SingleEngine) =>
+    one === "nano-banana"
+      ? NANO_BANANA_WORST_CENTS + ROLES_CENTS
+      : one === "recraft"
+        ? RECRAFT_WORST_CENTS + ROLES_CENTS
+        : engine === "mix"
+          ? singleWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high")) + ROLES_CENTS
+          : singleWorstCaseCents(attached, qualityOf(process.env.IMAGE_QUALITY, "medium"));
+  const gridCents =
+    engine === "nano-banana" ? NANO_BANANA_WORST_CENTS + ROLES_CENTS : gridWorstCaseCents(attached, qualityOf(process.env.GRID_QUALITY, "high"));
+  const tileCents = tileEngines.map((one) => (provider === "gateway" && layout === "single" ? singleCents(one) : 0));
+  const designCents = provider === "gateway" && layout === "grid" ? gridCents : 0;
+  const batchCents = layout === "grid" ? designCents : tileCents.reduce((sum, cents) => sum + cents, 0);
+  if (batchCents > 0 && !(await hasRoom(ctx, "gateway", batchCents, now))) {
+    return { refused: "BUDGET" as const };
+  }
+  let session: Doc<"creativeSessions"> | null = null;
+  if (args.sessionId) {
+    session = await ctx.db.get("creativeSessions", args.sessionId);
+    if (!session || session.ownerId !== user._id) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Session not found." });
+    }
+  } else if (!args.newSession) {
+    session = await latestSession(ctx, user._id);
+  }
+  if (!session) {
+    const sessionId = await ctx.db.insert("creativeSessions", {
+      ownerId: user._id,
+      updatedAt: now,
+      phrase: instruction,
+      styleDirection: "",
+      presets: [],
+    });
+    session = (await ctx.db.get("creativeSessions", sessionId))!;
+  }
+  const inspirationKey = images[0]?.key ?? legacyKey;
+  if ((args.words?.length ?? 0) > MAX_FIELDS || args.words?.some((w) => w.text.length > 400)) {
+    throw new ConvexError({ code: "INVALID_INPUT", message: "That's too many words." });
+  }
+  // What this batch remixes, when image 1 is its art: a published work (a remix session) or the
+  // creator's own design (trying its remixable parts). Its words and parts are the stored ones.
+  const source = await remixSource(ctx, user._id, session, images[0]?.key, args.tryDesign);
+  const wordChanges = checkedWordChanges(source?.fields, args.words);
+  let partChanges;
+  if (source) {
+    const result = checkPartChanges(source.parts, askedParts);
+    if (!result.ok) throw new ConvexError({ code: `PARTS_${result.problem}`, message: partProblem(result.problem, result.label, result.limit) });
+    partChanges = result.changes.length > 0
+      ? result.changes.map((c) => ({ ...c, photos: c.photos.map((p) => ({ imageId: p.imageId as Id<"userImages">, key: p.key })) }))
+      : undefined;
+  } else if (askedParts.length > 0) {
+    throw new ConvexError({ code: "PARTS_NOT_REMIXABLE", message: "These parts can't be changed here." });
+  }
+  // The batch's number in its session, which names its folder (batch-01, batch-02, ...).
+  const batchNumber = (session.batchCount ?? (await countBatches(ctx, session._id))) + 1;
+  const operation = session.remixOfWorkId ? "remix" : attached > 0 ? "edit" : "create";
+  const modelOf = (one: SingleEngine) =>
+    one === "nano-banana"
+      ? NANO_BANANA_MODEL
+      : one === "recraft"
+        ? RECRAFT_MODEL
+        : provider === "chatgpt"
+          ? (process.env.CHATGPT_IMAGE_MODEL ?? "gpt-5.5")
+          : attached > 0
+            ? MODEL_EDIT
+            : MODEL_TEXT;
+  const model = engine === "mix" ? "mix" : modelOf(only);
+  const batchId = await ctx.db.insert("batches", {
+    sessionId: session._id,
+    ownerId: user._id,
+    instruction,
+    presets,
+    inspirationKey,
+    images: legacyKey ? undefined : images,
+    styles: legacyKey ? undefined : styles,
+    backgroundColor: args.backgroundColor.toLowerCase(),
+    operation,
+    model,
+    count: DESIGNS_PER_BATCH,
+    layout,
+    charged: layout === "grid" && !owner ? BATCH_CREDITS : undefined,
+    number: batchNumber,
+    wordChanges,
+    partChanges,
+    tryDesign: source?.kind === "design" ? source.designId : undefined,
+    engine: engine === "gpt" ? undefined : engine,
+  });
+  if (layout === "grid" && !owner) {
+    await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -BATCH_CREDITS, batchId });
+  }
+  if (layout === "grid" && designCents > 0) {
+    await openReservation(ctx, {
+      attemptKind: "batch",
+      attemptId: batchId,
+      batchId,
+      provider: "gateway",
+      userId: user._id,
+      credits: owner ? 0 : BATCH_CREDITS,
+      worstCaseCents: designCents,
+    }, now);
+  }
+  for (let index = 0; index < DESIGNS_PER_BATCH; index++) {
+    const generationId = await ctx.db.insert("generations", {
+      sessionId: session._id,
+      batchId,
+      ownerId: user._id,
+      index,
+      kind: operation === "create" ? "concept" : operation,
+      status: "queued",
+      provider,
+      model: layout === "grid" ? model : modelOf(tileEngines[index]),
+      // Grid designs are charged with their batch.
+      charged: layout === "single" && !owner,
+      favorite: false,
+    });
+    if (layout === "single") {
+      if (!owner) await ctx.db.insert("creditLedger", { userId: user._id, kind: "settle", amount: -1, generationId });
+      if (tileCents[index] > 0) {
+        await openReservation(ctx, {
+          attemptKind: "tile",
+          attemptId: generationId,
+          generationId,
+          provider: "gateway",
+          userId: user._id,
+          credits: owner ? 0 : 1,
+          worstCaseCents: tileCents[index],
+        }, now);
+      }
+      await ctx.scheduler.runAfter(0, internal.imageGen.runTile, { generationId });
+    }
+  }
+  if (layout === "grid") await ctx.scheduler.runAfter(0, internal.imageGen.runBatch, { batchId });
+  for (const image of images) await ctx.db.patch("userImages", image.imageId, { usedAt: now });
+  for (const change of partChanges ?? []) {
+    for (const photo of change.photos) await ctx.db.patch("userImages", photo.imageId, { usedAt: now });
+  }
+  for (const style of styles) {
+    await ctx.db.patch("userImages", style.imageId, { usedAt: now, styleAt: now });
+  }
+  await ctx.db.patch("creativeSessions", session._id, {
+    updatedAt: now,
+    phrase: instruction,
+    batchCount: batchNumber,
+  });
+  return { batchId, sessionId: session._id };
+}
 
 // How many batches a session has (sessions from before batch numbers are counted once).
 async function countBatches(ctx: QueryCtx, sessionId: Id<"creativeSessions">) {

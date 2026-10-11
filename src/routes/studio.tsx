@@ -114,6 +114,7 @@ function StudioPage() {
   const instructionRef = useRef<HTMLTextAreaElement>(null);
   const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
   const generate = useMutation(api.studio.generate);
+  const retryBatch = useMutation(api.studio.retryBatch);
   const startRemix = useMutation(api.studio.startRemix);
   const upload = useAction(api.imageGen.uploadInspiration);
   const adopt = useMutation(api.images.adopt);
@@ -531,13 +532,7 @@ function StudioPage() {
         ...(viewer?.canPickModel && engine !== "gpt" ? { engine } : {}),
       });
       if ("refused" in result) {
-        setError(
-          result.refused === "NO_CREDITS"
-            ? "You're out of credits for today."
-            : result.refused === "BUDGET"
-              ? "The studio is resting until tomorrow. Your credits are safe."
-              : "Generation is paused right now.",
-        );
+        setError(refusalMessage(result.refused));
       } else if (result.sessionId !== s) {
         adopted.current = result.sessionId;
         await navigate({ to: "/studio", search: { s: result.sessionId } });
@@ -550,6 +545,23 @@ function StudioPage() {
   };
 
   const batches = session ? batchPages.results : [];
+
+  // "Try again" on a batch that didn't work: the same request runs again, and its designs land on top.
+  const batchesTop = useRef<HTMLElement>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
+  const tryAgain = async (batchId: Id<"batches">) => {
+    if (retrying) return;
+    setRetrying(batchId);
+    try {
+      const result = await retryBatch({ batchId });
+      if ("refused" in result) toast(refusalMessage(result.refused));
+      else batchesTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (err) {
+      toast(errorMessage(err));
+    } finally {
+      setRetrying(null);
+    }
+  };
   const favorites = s ? favoritePages.results : [];
 
   // Back to the studio itself from the viewer, and from Compare under it.
@@ -728,7 +740,7 @@ function StudioPage() {
                       key={hint}
                       type="button"
                       onClick={() => addHint(hint)}
-                      className="rounded-xl bg-neutral-100 px-3 py-1.5 text-left text-sm font-semibold transition-colors hover:bg-black hover:text-white"
+                      className="min-h-10 rounded-xl bg-neutral-100 px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-black hover:text-white"
                     >
                       {hint}
                     </button>
@@ -741,11 +753,11 @@ function StudioPage() {
               <div>
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-sm font-bold uppercase tracking-wider">Need an idea?</span>
-                  <span className="flex gap-4 text-sm font-semibold">
-                    <button type="button" onClick={() => setIdeas(pickIdeas(3, ideas))} className="underline underline-offset-4">
+                  <span className="-my-3 flex gap-2 text-sm font-semibold">
+                    <button type="button" onClick={() => setIdeas(pickIdeas(3, ideas))} className="inline-flex min-h-10 items-center px-1 underline underline-offset-4">
                       Shuffle
                     </button>
-                    <button type="button" onClick={() => setShowIdeas(true)} className="underline underline-offset-4">
+                    <button type="button" onClick={() => setShowIdeas(true)} className="inline-flex min-h-10 items-center px-1 underline underline-offset-4">
                       All ideas
                     </button>
                   </span>
@@ -756,7 +768,7 @@ function StudioPage() {
                       key={idea}
                       type="button"
                       onClick={() => applyIdea(idea)}
-                      className="rounded-xl bg-neutral-100 px-3 py-1.5 text-left text-sm font-semibold transition-colors hover:bg-black hover:text-white"
+                      className="min-h-10 rounded-xl bg-neutral-100 px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-black hover:text-white"
                     >
                       {idea}
                     </button>
@@ -816,7 +828,7 @@ function StudioPage() {
           </form>
         </section>
 
-        <section className="mt-16 flex flex-col gap-14">
+        <section ref={batchesTop} className="mt-16 flex scroll-mt-24 flex-col gap-14">
           {!s && <SessionList onOpen={openSession} />}
           {s && session !== null && batchPages.status === "LoadingFirstPage" && <BatchSkeleton />}
           <AnimatePresence initial={false}>
@@ -880,6 +892,20 @@ function StudioPage() {
                     <span className="shrink-0 text-sm font-semibold text-neutral-500">
                       {batch.refunded} {batch.refunded === 1 ? "credit" : "credits"} back
                     </span>
+                  ) : null}
+                  {batch.tiles.length > 0 && batch.tiles.every(isFailed) ? (
+                    batch.retried ? (
+                      <span className="shrink-0 text-sm font-semibold text-neutral-500">Tried again</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void tryAgain(batch.batchId)}
+                        disabled={retrying !== null}
+                        className="inline-flex h-10 shrink-0 items-center rounded-xl bg-black px-4 text-sm font-black text-white transition-transform active:scale-95 disabled:opacity-50"
+                      >
+                        {retrying === batch.batchId ? "Trying…" : "Try again"}
+                      </button>
+                    )
                   ) : null}
                   <DismissedToggle
                     count={batch.tiles.filter((tile) => tile.rejected).length}
@@ -1107,6 +1133,13 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
 }
 
 // A batch still loading: its line and four grey squares, laid out like the real thing.
+// Why a batch didn't start.
+function refusalMessage(refused: "NO_CREDITS" | "GENERATION_OFF" | "BUDGET") {
+  if (refused === "NO_CREDITS") return "You're out of credits for today.";
+  if (refused === "BUDGET") return "The studio is resting until tomorrow. Your credits are safe.";
+  return "Generation is paused right now.";
+}
+
 function BatchSkeleton() {
   return (
     <div aria-hidden="true">

@@ -293,6 +293,11 @@ describe("remixing with the words", () => {
     ]);
     const job = await t.query(internal.studio.batchJob, { batchId: result.batchId });
     expect(job?.wordChanges).toContain("it's longer, so fit it by setting it smaller or over more lines.");
+
+    // "Try again" asks for the same words, the emptied box included.
+    const again = await bob.as.mutation(api.studio.retryBatch, { batchId: result.batchId });
+    if ("refused" in again) throw new Error(again.refused);
+    expect((await t.run((ctx) => ctx.db.get("batches", again.batchId)))?.wordChanges).toEqual(batch?.wordChanges);
     expect(job?.wordChanges).toContain('- Date: remove "EST. 1992" completely');
     expect(job?.wordChanges).toContain('- Tagline: "TAKE IT / EASY"');
   });

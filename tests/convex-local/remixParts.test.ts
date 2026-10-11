@@ -189,6 +189,11 @@ describe("a remix fills in the parts", () => {
     // Only the parts changed: publishing it is a variation, without a comparison.
     const preview = await bob.as.query(api.publish.preview, { generationId: (await t.run((ctx) => ctx.db.query("generations").withIndex("by_batch", (q) => q.eq("batchId", result.batchId)).first()))!._id });
     expect(preview?.remix?.relation.status).toBe("words");
+
+    // "Try again" asks for the same parts, and Mrs. Claus is left out by her rule again.
+    const again = await bob.as.mutation(api.studio.retryBatch, { batchId: result.batchId });
+    if ("refused" in again) throw new Error("refused");
+    expect((await batchOf(t, again.batchId))?.partChanges).toEqual(batch?.partChanges);
   });
 
   it("keeps a remix without image 1 from changing parts", async () => {

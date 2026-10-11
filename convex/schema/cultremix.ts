@@ -147,6 +147,8 @@ export const cultremixTables = {
     partChanges: v.optional(v.array(partChange)),
     // A creator trying their own design's remixable parts before publishing ("Try it as a remix").
     tryDesign: v.optional(v.id("generations")),
+    // The batch "Try again" made from this one, so a second tap can't run (and charge) it twice.
+    retriedAs: v.optional(v.id("batches")),
     // The image model an admin picked (convex/lib/studioRules.ts ENGINES); absent means GPT Image 2.5.
     engine: v.optional(v.union(v.literal("gpt"), v.literal("nano-banana"), v.literal("recraft"), v.literal("mix"))),
   }).index("by_session", ["sessionId"]),
