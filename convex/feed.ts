@@ -45,6 +45,7 @@ export const feedItem = v.object({
   artThumbUrl: v.optional(v.string()),
   photoUrl: v.optional(v.string()),
   photoMediumUrl: v.optional(v.string()),
+  photoThumbUrl: v.optional(v.string()),
   photoState,
   parentCr: v.optional(v.string()),
   publishedAt: v.number(),
@@ -88,6 +89,7 @@ export async function toFeedItem(ctx: QueryCtx, work: Doc<"works">, urls: Urls =
     artThumbUrl: art.thumbUrl,
     photoUrl: shot.url,
     photoMediumUrl: shot.mediumUrl,
+    photoThumbUrl: shot.thumbUrl,
     photoState: !photo
       ? ("none" as const)
       : photo.state === "failed" && photo.reason === DAILY_LIMIT

@@ -98,9 +98,17 @@ function ShopPage() {
       <main className="px-4 pb-24 md:px-10">
         <div className="grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2 md:gap-4">
           <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%] transition-colors duration-300" style={{ background: color?.hex ?? item.backgroundColor }}>
-            <Art url={item.artMediumUrl ?? item.artUrl} fullUrl={item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain" />
+            {/* The 1200 px copy is sharp at this size; the original file is linked under the fingerprint. */}
+            <Art
+              url={item.artMediumUrl ?? item.artUrl}
+              smallUrl={item.artThumbUrl}
+              sizes="(min-width: 640px) 48vw, 92vw"
+              priority
+              alt={item.title ?? `CR ${item.cr}`}
+              className="h-full w-auto max-w-full object-contain"
+            />
           </div>
-          <PhotoSquare item={item} large />
+          <PhotoSquare item={item} large priority />
         </div>
         <PhotoRetry cr={item.cr} />
 

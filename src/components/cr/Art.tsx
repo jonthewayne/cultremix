@@ -14,12 +14,21 @@ export function Art({
   alt,
   className,
   instant = false,
+  smallUrl,
+  sizes,
+  priority = false,
 }: {
   url?: string;
   fullUrl?: string;
   alt: string;
   className?: string;
   instant?: boolean;
+  // A smaller copy (the 400 px thumb beside url's 1200 px medium) and how wide the image shows, so
+  // the browser picks the smallest that's sharp enough (a feed square on a phone needs the thumb).
+  smallUrl?: string;
+  sizes?: string;
+  // The page's largest image: fetched first, and never lazily.
+  priority?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
   // Art on the server-rendered page shows as soon as it loads; art that mounts later fades in.
@@ -47,12 +56,20 @@ export function Art({
   if (!url) return null;
   if (url.startsWith("fake:")) return <FakeArt seed={url} className={className} />;
   const src = upgraded && upgraded === fullUrl ? upgraded : url;
+  // Two widths when there's a small copy (and no full-size upgrade in play); otherwise just src.
+  const choices =
+    smallUrl && sizes && !upgraded && !smallUrl.startsWith("fake:")
+      ? { srcSet: `${smallUrl} ${SMALL_WIDTH}w, ${src} ${MEDIUM_WIDTH}w`, sizes }
+      : {};
+  const loading = priority ? ({ fetchPriority: "high" } as const) : ({ loading: "lazy" } as const);
   if (instant) return <img src={src} alt={alt} draggable={false} decoding="sync" className={className} />;
-  if (!fadeIn) return <img src={src} alt={alt} draggable={false} className={className} />;
+  if (!fadeIn) return <img src={src} {...choices} {...loading} alt={alt} draggable={false} className={className} />;
   return (
     <m.img
       ref={imgRef}
       src={src}
+      {...choices}
+      {...loading}
       alt={alt}
       draggable={false}
       className={className}
@@ -63,6 +80,10 @@ export function Art({
     />
   );
 }
+
+// The widths of the copies beside every original (convex/lib/sizes.ts SIZES).
+const SMALL_WIDTH = 400;
+const MEDIUM_WIDTH = 1200;
 
 function FakeArt({ seed, className }: { seed: string; className?: string }) {
   let hue = 0;

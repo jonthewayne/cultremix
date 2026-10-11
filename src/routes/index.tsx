@@ -189,9 +189,16 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
       <Link to="/cr/$cr" params={{ cr: item.cr }} className="group block">
         <div className="grid grid-cols-2 gap-2 md:gap-4">
           <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[7%]" style={{ background: item.backgroundColor }}>
-            <Art url={item.artMediumUrl ?? item.artUrl} alt={item.title ?? `CR ${item.cr}`} className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]" />
+            <Art
+              url={item.artMediumUrl ?? item.artUrl}
+              smallUrl={item.artThumbUrl}
+              sizes={HALF_ROW}
+              priority={index === 0}
+              alt={item.title ?? `CR ${item.cr}`}
+              className="h-full w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.04]"
+            />
           </div>
-          <PhotoSquare item={item} />
+          <PhotoSquare item={item} priority={index === 0} />
         </div>
       </Link>
       <div className="mt-4 flex flex-col gap-2 md:mt-6 md:flex-row md:items-end md:justify-between md:gap-8">
@@ -226,7 +233,10 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
   );
 }
 
-export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: boolean }) {
+// A feed row's two squares each take about half the page's width.
+const HALF_ROW = "(min-width: 768px) 45vw, 46vw";
+
+export function PhotoSquare({ item, large = false, priority = false }: { item: FeedItem; large?: boolean; priority?: boolean }) {
   if (item.photoUrl) {
     return (
       <div className="relative aspect-square overflow-hidden rounded-2xl bg-neutral-100">
@@ -235,7 +245,14 @@ export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: b
             <span className="text-sm font-bold opacity-60">Model photo (dev placeholder)</span>
           </div>
         ) : (
-          <Art url={item.photoMediumUrl ?? item.photoUrl} alt={`Model wearing CR ${item.cr}`} className="h-full w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]" />
+          <Art
+            url={item.photoMediumUrl ?? item.photoUrl}
+            smallUrl={item.photoThumbUrl}
+            sizes={large ? "(min-width: 640px) 48vw, 92vw" : HALF_ROW}
+            priority={priority}
+            alt={`Model wearing CR ${item.cr}`}
+            className="h-full w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]"
+          />
         )}
       </div>
     );
