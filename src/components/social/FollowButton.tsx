@@ -5,15 +5,18 @@ import { api } from "../../../convex/_generated/api";
 import { showMutationError, useMemberAction } from "./useSignIn";
 import { cn } from "~/lib/utils";
 
-// Follow / Following. Flips at once; the server's answer settles it. Hidden on your own name.
+// Follow / Following. Flips at once; the server's answer settles it. Hidden on your own name, or
+// replaced by ownLabel (quiet text at the button's height, so a row of cards stays even).
 export function FollowButton({
   username,
   size = "md",
   className,
+  ownLabel,
 }: {
   username: string;
   size?: "sm" | "md";
   className?: string;
+  ownLabel?: string;
 }) {
   const { signedIn, username: viewerName, signIn } = useMemberAction();
   const self = viewerName !== undefined && viewerName.toLowerCase() === username.toLowerCase();
@@ -32,7 +35,14 @@ export function FollowButton({
     }
   });
 
-  if (self || state?.self) return null;
+  if (self || state?.self) {
+    if (!ownLabel) return null;
+    return (
+      <span className={cn("inline-flex shrink-0 items-center font-black text-neutral-500", size === "sm" ? "h-10 text-sm" : "h-11 text-base", className)}>
+        {ownLabel}
+      </span>
+    );
+  }
   const following = state?.following === true;
   const onClick = () => {
     if (signedIn === undefined) return;

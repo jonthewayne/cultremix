@@ -34,7 +34,7 @@ export function ActiveCreators() {
                 {member.creatorNumber === undefined ? " " : `№ ${member.creatorNumber}`}
               </span>
             </Link>
-            <FollowButton username={member.username} size="sm" className="mt-3" />
+            <FollowButton username={member.username} size="sm" className="mt-3" ownLabel="You" />
           </li>
         ))}
         {status !== "Exhausted" && (
