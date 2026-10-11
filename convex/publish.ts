@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import { getViewerUser } from "./identity";
+import { getViewerUser, isOwner } from "./identity";
 import { requireMember } from "./studio";
 import { MAX_DESCRIPTION_LENGTH, defaultOfferedColors, garmentColor, validateOfferedColors } from "./lib/garments";
 import { isFlagOn } from "./lib/flagState";
@@ -510,6 +510,57 @@ function pickPrintProducts(
   }
   return out;
 }
+
+const printProductsValidator = v.array(v.object({ productId: v.number(), placement: v.optional(relativePlacementValidator) }));
+
+// Where a work sits and what it comes on, for its creator (and the owner) to change after
+// publishing. Null for anyone else. onSale: it has listings, so a change reaches the shop when an
+// admin approves it again.
+export const printSetup = query({
+  args: { workId: v.id("works") },
+  returns: v.union(
+    v.null(),
+    v.object({ printPlacement: relativePlacementValidator, printProducts: printProductsValidator, onSale: v.boolean() }),
+  ),
+  handler: async (ctx, args) => {
+    const user = await getViewerUser(ctx);
+    const work = await ctx.db.get("works", args.workId);
+    if (!user || !work || (work.creatorId !== user._id && !isOwner(user))) return null;
+    if (work.status !== "published" && work.status !== "private") return null;
+    const offered = await offeredShopProducts(ctx);
+    const shared = clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT);
+    const listings = await ctx.db
+      .query("shopProducts")
+      .withIndex("by_work", (q) => q.eq("workId", work._id))
+      .take(20);
+    return {
+      printPlacement: shared,
+      printProducts: chosenProducts(work, offered).map(({ product, placement }) =>
+        sameRelative(placement, shared) ? { productId: product.printfulProductId } : { productId: product.printfulProductId, placement },
+      ),
+      onSale: listings.some((row) => row.listing !== undefined),
+    };
+  },
+});
+
+export const setPrintSetup = mutation({
+  args: { workId: v.id("works"), printPlacement: relativePlacementValidator, printProducts: printProductsValidator },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await requireMember(ctx);
+    const work = await ctx.db.get("works", args.workId);
+    if (!work || (work.creatorId !== user._id && !isOwner(user)) || (work.status !== "published" && work.status !== "private")) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "That design isn't yours to change." });
+    }
+    const printPlacement = clampRelative(args.printPlacement);
+    const printProducts = pickPrintProducts(args.printProducts, printPlacement, await offeredShopProducts(ctx));
+    if (printProducts.length === 0) {
+      throw new ConvexError({ code: "INVALID_PRODUCTS", message: "Pick at least one product it comes on." });
+    }
+    await ctx.db.patch("works", work._id, { printPlacement, printProducts });
+    return null;
+  },
+});
 
 // What the model photo shows: the first product a work sells on, with the design where its creator put it.
 async function photoGarment(ctx: QueryCtx | MutationCtx, work: Doc<"works">) {

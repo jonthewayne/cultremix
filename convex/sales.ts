@@ -9,7 +9,7 @@ import { printfulConfigFromEnv } from "./lib/printful/client";
 import { topazWorstCaseCents } from "./lib/pricing";
 import { publicUrl } from "./lib/r2";
 import { commerceOpen } from "./lib/shopFlags";
-import { chosenProducts, listingFor, listingsOf, offeredShopProducts } from "./lib/shopProduct";
+import { chosenProducts, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
 import { crNumber, productHandle } from "./lib/shopify/productSync";
 import { MAX_VERSIONS, UPSCALE_MAX_SIDE } from "./print";
@@ -209,6 +209,9 @@ export const renderJob = internalQuery({
           productKey: v.string(),
           placement: relativePlacementValidator,
           printArea: printAreaValidator,
+          // Where the creator placed it in the Print Studio, in inches, when that was on this
+          // product's front; it wins over the publish placement for this product.
+          studio: v.optional(v.object({ xIn: v.number(), yIn: v.number(), widthIn: v.number() })),
         }),
       ),
     }),
@@ -218,15 +221,27 @@ export const renderJob = internalQuery({
     const version = await ctx.db.get("printVersions", args.versionId);
     if (!work || !version || version.workId !== work._id) return null;
     if (version.status !== "ready" || !version.key || !version.width || !version.height || !version.metrics) return null;
+    const studio = await ctx.db
+      .query("printPlacements")
+      .withIndex("by_work", (q) => q.eq("workId", work._id))
+      .unique();
+    const target = studio ? await printTargetForWork(ctx, work) : null;
     const listings = [];
     for (const listingId of args.listingIds) {
       const row = await ctx.db.get("shopProducts", listingId);
       if (!row || row.workId !== work._id || row.status !== "preparing" || row.printFile || !row.listing) continue;
+      const placedHere =
+        studio &&
+        target &&
+        row.listing.placement.side === "front" &&
+        target.geometry.key === row.listing.productKey &&
+        sameArea(target.geometry.printArea, row.listing.printArea);
       listings.push({
         listingId: row._id,
         productKey: row.listing.productKey,
         placement: row.listing.placement,
         printArea: row.listing.printArea,
+        ...(placedHere ? { studio: { xIn: studio.xIn, yIn: studio.yIn, widthIn: studio.widthIn } } : {}),
       });
     }
     return {
@@ -289,6 +304,12 @@ export const approve = mutation({
     const rows = await listingsOf(ctx, work._id);
     const cr = crNumber(work.crFamily, work.crExpression);
     const now = Date.now();
+    // A Print Studio placement saved after a product's file was made means a new file for it.
+    const studio = await ctx.db
+      .query("printPlacements")
+      .withIndex("by_work", (q) => q.eq("workId", work._id))
+      .unique();
+    const studioKey = studio ? (await printTargetForWork(ctx, work)).geometry.key : null;
     const products: Array<{ name: string; status: Row["status"]; colors: number }> = [];
     const skipped: Array<string> = [];
     const kept = new Set<string>();
@@ -305,7 +326,8 @@ export const approve = mutation({
         existing?.printFile &&
           existing.listing &&
           sameRelative(existing.listing.placement, listing.placement) &&
-          sameArea(existing.listing.printArea, listing.printArea),
+          sameArea(existing.listing.printArea, listing.printArea) &&
+          !(studio && studioKey === product.key && studio.updatedAt > existing.printFile.madeAt),
       );
       // A live product stays on sale while it syncs again.
       const status: Row["status"] = !sameFile ? "preparing" : existing?.status === "live" ? "live" : "pending";
@@ -438,6 +460,8 @@ const rowValidator = v.object({
   picked: v.array(v.string()),
   step: v.optional(v.string()),
   approvedAt: v.optional(v.number()),
+  // Its creator changed what it comes on or where it sits since it was approved.
+  changed: v.boolean(),
   listings: v.array(listingRowValidator),
 });
 
@@ -460,6 +484,12 @@ export const list = query({
         const creator = await ctx.db.get("users", work.creatorId);
         const art = await urls(work.artKey);
         const preparing = rows.filter((row) => row.status === "preparing" && !row.prepError);
+        const choices = chosenProducts(work, products);
+        const live = rows.filter((row) => row.status !== "paused");
+        const changed =
+          live.length > 0 &&
+          (choices.some((choice) => !live.some((row) => row.productKey === choice.product.key && sameRelative(row.listing!.placement, choice.placement))) ||
+            live.some((row) => !choices.some((choice) => choice.product.key === row.productKey)));
         return {
           workId: work._id,
           cr: crNumber(work.crFamily, work.crExpression),
@@ -467,9 +497,12 @@ export const list = query({
           creator: creator?.username,
           thumbUrl: art.thumbUrl,
           publishedAt: work.publishedAt,
-          picked: chosenProducts(work, products).map((choice) => choice.product.name),
+          picked: choices.map((choice) => choice.product.name),
+          changed,
           step: preparing.length > 0 ? await prepStep(ctx, work._id, preparing) : undefined,
-          approvedAt: rows.reduce<number | undefined>((latest, row) => Math.max(latest ?? 0, row.approvedAt ?? 0) || latest, undefined),
+          ...(rows.some((row) => row.approvedAt !== undefined)
+            ? { approvedAt: Math.max(...rows.map((row) => row.approvedAt ?? 0)) }
+            : {}),
           listings: rows.map((row) => {
             const listing = row.listing!;
             return {

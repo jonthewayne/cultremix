@@ -107,9 +107,13 @@ export function PublishDialog({
     products.find((product) => chosenProducts.includes(product.productId)) ??
     products[0];
   const aspect = useImageAspect(tile.mediumUrl ?? tile.url);
+  // Ticking a product shows it; unticking the one shown moves to another that's still picked.
   const toggleProduct = (productId: number) => {
-    setFocusedProductId(productId);
-    setPickedProducts(chosenProducts.includes(productId) ? chosenProducts.filter((id) => id !== productId) : [...chosenProducts, productId]);
+    const on = chosenProducts.includes(productId);
+    const next = on ? chosenProducts.filter((id) => id !== productId) : [...chosenProducts, productId];
+    setPickedProducts(next);
+    if (!on) setFocusedProductId(productId);
+    else if (focusedProduct?.productId === productId && next.length > 0) setFocusedProductId(next[0]);
   };
   const changePlacement = (next: RelativePlacement) => {
     if (focusedProduct && focusedProduct.productId in own) setOwn({ ...own, [focusedProduct.productId]: next });

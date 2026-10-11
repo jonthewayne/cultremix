@@ -31,6 +31,24 @@ function AdminSale() {
   const [cursors, setCursors] = useState<Array<string | null>>([null]);
   const cursor = cursors[cursors.length - 1];
   const list = useQuery(api.sales.list, { cursor });
+  const approve = useMutation(api.sales.approve);
+  const [batch, setBatch] = useState<string | null>(null);
+  const waiting = (list?.page ?? []).filter((row) => row.listings.length === 0 && row.picked.length > 0);
+  // Approves every work on this page that isn't on sale yet, one at a time.
+  const approveWaiting = async () => {
+    let done = 0;
+    const problems: Array<string> = [];
+    for (const row of waiting) {
+      setBatch(`Approving CR ${row.cr} (${done + 1} of ${waiting.length})…`);
+      try {
+        await approve({ workId: row.workId });
+        done++;
+      } catch (err) {
+        problems.push(`CR ${row.cr}: ${errorMessage(err)}`);
+      }
+    }
+    setBatch(`Approved ${done} of ${waiting.length}.${problems.length ? ` ${problems.join(" ")}` : ""}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -56,9 +74,17 @@ function AdminSale() {
                 </li>
               ))}
             </ul>
-            <Link to="/admin/products" className="text-sm font-semibold underline underline-offset-4">
-              Products and prices
-            </Link>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to="/admin/products" className="text-sm font-semibold underline underline-offset-4">
+                Products and prices
+              </Link>
+              {waiting.length > 1 && (
+                <button type="button" disabled={batch?.endsWith("…")} onClick={() => void approveWaiting()} className={adminButton}>
+                  Approve the {waiting.length} below that aren't on sale
+                </button>
+              )}
+            </div>
+            {batch && <p className="text-sm font-semibold">{batch}</p>}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Loading…</p>
@@ -154,6 +180,9 @@ function WorkRow({ row }: { row: Row }) {
         {row.thumbUrl && <img src={row.thumbUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl bg-neutral-100 object-contain" />}
         <div className="min-w-0 flex-1 space-y-2">
           {row.step && <p className="text-sm font-semibold">{row.step}…</p>}
+          {row.changed && (
+            <p className="text-sm font-semibold text-amber-700">Its creator changed what it comes on or where it sits. Approve again to remake its print files.</p>
+          )}
           {!approved && <p className="text-sm text-muted-foreground">Not approved yet.</p>}
           {row.listings.map((listing) => (
             <div key={listing.productKey} className="flex flex-wrap items-center gap-2 text-sm">

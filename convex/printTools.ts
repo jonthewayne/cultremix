@@ -9,7 +9,7 @@ import type { PrintGeometry } from "../shared/config/print-products";
 import { hazeShare } from "../src/lib/print/alpha";
 import { HAZE_REFUSE, printCheck } from "../src/lib/print/check";
 import { parseHex } from "../src/lib/print/knockout";
-import { aspectOf, canvasPx, pixelRect, placedHeight } from "../src/lib/print/placement";
+import { aspectOf, canvasPx, clampPlacement, pixelRect, placedHeight } from "../src/lib/print/placement";
 import { areaPlacement, toInches } from "../src/lib/print/shirtPlacement";
 import type { PrintArea, RelativePlacement } from "../src/lib/print/shirtPlacement";
 import { geometryOf } from "./lib/shopProduct";
@@ -206,7 +206,13 @@ type ListingJob = {
   family: number;
   expression: number;
   version: { id: Id<"printVersions">; key: string; width: number; height: number; metrics: { hasAlpha: boolean; solid: number; visible: number; haze: number } };
-  listings: Array<{ listingId: Id<"shopProducts">; productKey: string; placement: RelativePlacement; printArea: PrintArea }>;
+  listings: Array<{
+    listingId: Id<"shopProducts">;
+    productKey: string;
+    placement: RelativePlacement;
+    printArea: PrintArea;
+    studio?: { xIn: number; yIn: number; widthIn: number };
+  }>;
 };
 
 // The print files for a work going on sale (convex/sales.ts): for each product, the art placed where
@@ -226,7 +232,10 @@ export const renderListings = internalAction({
       try {
         if (!storageMode()) throw new Error("Storage isn't set up.");
         const geometry = geometryOf(listing.productKey, listing.printArea);
-        const placement = areaPlacement(toInches(listing.placement, aspect, listing.printArea), listing.printArea);
+        // The Print Studio's placement for this product when there is one, else the publish placement.
+        const placement = listing.studio
+          ? clampPlacement(listing.studio, aspect, geometry)
+          : areaPlacement(toInches(listing.placement, aspect, listing.printArea), listing.printArea);
         const metrics = { width: version.width, height: version.height, ...version.metrics };
         const check = printCheck(metrics, placement, geometry);
         const refusal = check.items.find((item) => item.status === "refuse");

@@ -226,6 +226,19 @@ describe("approving a work for sale", () => {
     }
   });
 
+  it("uses the Print Studio's placement for the product it was placed on", async () => {
+    const { t, admin, workId, creator } = await shop();
+    await admin.mutation(api.sales.approve, { workId });
+    const [first] = await versions(t, workId);
+    await t.mutation(internal.print.recordVersion, { versionId: first._id, key: "fake:art.png", width: 3000, height: 3000, metrics: METRICS });
+    await t.run((ctx) =>
+      ctx.db.insert("printPlacements", { workId, versionId: first._id, xIn: 1, yIn: 2, widthIn: 8, color: "Black", updatedBy: creator, updatedAt: Date.now() }),
+    );
+    const job = await t.query(internal.sales.renderJob, { workId, versionId: first._id, listingIds: (await rows(t, workId)).map((row) => row._id) });
+    // The tee's front gets the Print Studio's inches; the hoodie's back keeps its own placement.
+    expect(job?.listings.map((listing) => listing.studio)).toEqual([{ xIn: 1, yIn: 2, widthIn: 8 }, undefined]);
+  });
+
   it("uses large art as it is", async () => {
     const { t, admin, workId } = await shop();
     await admin.mutation(api.sales.approve, { workId });
@@ -285,6 +298,41 @@ describe("approving a work for sale", () => {
     expect((await admin.mutation(api.sales.approve, { workId })).products.map((p) => p.status)).toEqual(["preparing", "pending"]);
     const tee = (await rows(t, workId)).find((row) => row.productKey === "printful-586");
     expect(tee?.printFile).toBeUndefined();
+  });
+});
+
+describe("changing what it comes on and where it sits after publishing", () => {
+  it("is its creator's to change, and the admin list asks for approval again", async () => {
+    const { t, admin, workId, creator } = await shop();
+    const CREATOR = { subject: "test|creator", issuer: "test" };
+    await t.run((ctx) => ctx.db.patch("users", creator, { authId: CREATOR.subject, username: "maker", usernameLower: "maker" }));
+    const someone = { subject: "test|someone", issuer: "test" };
+    await t.run((ctx) => ctx.db.insert("users", { name: "Someone", authId: someone.subject, username: "someone", usernameLower: "someone" }));
+
+    expect(await t.withIdentity(CREATOR).query(api.publish.printSetup, { workId })).toEqual({
+      printPlacement: { side: "front", size: 0.65, drop: 0.1 },
+      printProducts: [{ productId: 586 }, { productId: 146, placement: { side: "back", size: 0.9, drop: 0.05 } }],
+      onSale: false,
+    });
+    expect(await t.withIdentity(someone).query(api.publish.printSetup, { workId })).toBeNull();
+    await expect(
+      t.withIdentity(someone).mutation(api.publish.setPrintSetup, { workId, printPlacement: { side: "front", size: 0.4, drop: 0 }, printProducts: [{ productId: 586 }] }),
+    ).rejects.toThrow(/isn't yours/u);
+
+    await approveAndPrepare(t, admin, workId);
+    expect((await admin.query(api.sales.list, {})).page[0].changed).toBe(false);
+    // Smaller on the tee, the hoodie dropped, and a product that isn't on offer ignored.
+    await t.withIdentity(CREATOR).mutation(api.publish.setPrintSetup, {
+      workId,
+      printPlacement: { side: "front", size: 0.4, drop: 9 },
+      printProducts: [{ productId: 586 }, { productId: 999 }],
+    });
+    const work = await t.run((ctx) => ctx.db.get("works", workId));
+    expect(work).toMatchObject({ printPlacement: { side: "front", size: 0.4, drop: 1 }, printProducts: [{ productId: 586 }] });
+    expect((await admin.query(api.sales.list, {})).page[0].changed).toBe(true);
+    await expect(
+      t.withIdentity(CREATOR).mutation(api.publish.setPrintSetup, { workId, printPlacement: { side: "front", size: 0.4, drop: 0 }, printProducts: [{ productId: 999 }] }),
+    ).rejects.toThrow(/at least one product/u);
   });
 });
 
