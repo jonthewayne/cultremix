@@ -6,7 +6,9 @@ import { getViewerUser } from "./identity";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { isDevDeployment } from "./lib/r2";
-import { proposeOnNotes } from "./remixFields";
+import { requestedWords } from "./lib/prompts";
+import { snapWordsToRequest } from "./lib/remixFields";
+import { inheritOnPublish, proposeOnNotes } from "./remixFields";
 import { requireMember } from "./studio";
 import { isImageKey } from "./lib/sizes";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -295,17 +297,56 @@ export const saveWorkNotes = internalMutation({
   handler: async (ctx, args) => {
     const work = await ctx.db.get("works", args.workId);
     if (!work || work.notes) return null;
+    // A reading a letter or two off the words the design was made to say takes their spelling.
+    const notes = snapWordsToRequest(args.notes, await askedWords(ctx, work));
     await ctx.db.patch("works", work._id, {
-      notes: args.notes,
+      notes,
       notesSummary: args.summary,
       notesKind: args.kind,
       notesModel: args.model,
     });
     // The remixable words proposed from the notes' words; the creator adjusts them.
-    await proposeOnNotes(ctx, work._id, args.notes);
+    await proposeOnNotes(ctx, work._id, notes);
     // Its remixable characters, people, and groups, unless it has them from a setup or its parent.
     if (!work.remixParts) await ctx.scheduler.runAfter(0, internal.remixPartsActions.proposeForWork, { workId: work._id });
     return null;
+  },
+});
+
+// The words a work's design was asked to say: those in capitals or quotes in its batch's request,
+// and a remix's new words.
+async function askedWords(ctx: MutationCtx, work: Doc<"works">) {
+  const generation = await ctx.db.get("generations", work.generationId);
+  const batch = generation ? await ctx.db.get("batches", generation.batchId) : null;
+  if (!batch) return [];
+  return [...requestedWords(batch.instruction), ...(batch.wordChanges ?? []).map((change) => change.to).filter(Boolean)];
+}
+
+// Ops repair for a misread design: forgets a work's notes and its proposed remixable words, then
+// reads it again. The creator's edits to those words go with them, so it's for fixing a bad reading.
+// bunx convex run images:rereadWorkNotes '{"cr":"108-001"}' (production: --prod).
+export const rereadWorkNotes = internalMutation({
+  args: { cr: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const match = /^(\d{3})-(\d{3})$/u.exec(args.cr.trim());
+    if (!match) throw new ConvexError({ code: "BAD_CR", message: "Use a CR number like 108-001." });
+    const work = await ctx.db
+      .query("works")
+      .withIndex("by_family_expression", (q) => q.eq("crFamily", Number(match[1])).eq("crExpression", Number(match[2])))
+      .unique();
+    if (!work || work.status !== "published") return "No published work has that number.";
+    await ctx.db.patch("works", work._id, {
+      notes: undefined,
+      notesSummary: undefined,
+      notesKind: undefined,
+      notesModel: undefined,
+      remixFields: undefined,
+    });
+    // A words remix takes its parent's boxes again; anything else gets boxes from the new reading.
+    await inheritOnPublish(ctx, work._id);
+    await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
+    return `Reading CR ${args.cr.trim()} again.`;
   },
 });
 

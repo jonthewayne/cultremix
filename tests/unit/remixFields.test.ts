@@ -5,6 +5,7 @@ import {
   inheritRemixFields,
   maxLengthFor,
   proposeRemixFields,
+  snapWordsToRequest,
   wordChangeInstruction,
   wordPieces,
 } from "../../convex/lib/remixFields";
@@ -273,5 +274,42 @@ describe("inheritRemixFields and changeSummary", () => {
       "GROW SLOW to GROW WILD; TAKE IT EASY to STAY WEIRD",
     );
     expect(changeSummary([{ from: "EST. 1992", to: "" }])).toBe("removed EST. 1992");
+  });
+});
+
+describe("snapWordsToRequest", () => {
+  // CR 108-001 on dev: asked to say FAR OUT, read as TAROUT.
+  const notes = [
+    "Summary: a 70s concert poster of a woman",
+    "Subject and layout: a portrait framed by swirling waves.",
+    "Words:",
+    '- "TAROUT" (headline), chunky groovy letters arched under the portrait, the largest text',
+    '- "Since 1969" (tagline), small, at the bottom',
+    'Lettering: the headline is bubbly; "TAROUT" here is outside the Words section.',
+  ].join("\n");
+
+  it("gives a reading a letter off the asked words their spelling, in the reading's capitals", () => {
+    const fixed = snapWordsToRequest(notes, ["FAR OUT"]);
+    expect(fixed).toContain('- "FAR OUT" (headline)');
+    expect(fixed).toContain('"TAROUT" here is outside the Words section.');
+    expect(proposeRemixFields(fixed)[0]).toMatchObject({ label: "Headline", text: "FAR OUT" });
+    expect(snapWordsToRequest(notes, ["far out"])).toContain('- "FAR OUT" (headline)');
+    expect(snapWordsToRequest(notes.replace('"TAROUT"', '"Tar out"'), ["Far Out"])).toContain('- "Far Out" (headline)');
+  });
+
+  it("keeps exact readings, distant text, and short words as read", () => {
+    const lineBreak = notes.replace('"TAROUT"', '"FAR / OUT"');
+    expect(snapWordsToRequest(lineBreak, ["FAR OUT"])).toBe(lineBreak);
+    expect(snapWordsToRequest(notes, ["GROW SLOW"])).toBe(notes);
+    expect(snapWordsToRequest(notes, [])).toBe(notes);
+    const short = notes.replace('"TAROUT"', '"ARM"');
+    expect(snapWordsToRequest(short, ["ART"])).toBe(short);
+  });
+
+  it("allows two letters off for long phrases and picks the closest asked words", () => {
+    const long = notes.replace('"TAROUT"', '"STAY WIERD FOREVER"');
+    expect(snapWordsToRequest(long, ["STAY WEIRD FOREVER", "STAY WILD"])).toContain('"STAY WEIRD FOREVER"');
+    const far = notes.replace('"TAROUT"', '"STAY WIRED FOR NOW"');
+    expect(snapWordsToRequest(far, ["STAY WEIRD FOREVER"])).toBe(far);
   });
 });

@@ -99,6 +99,12 @@ function canonicalSection(name: string) {
   return SECTION_NAMES.find((s) => s.toLowerCase() === lower) ?? name;
 }
 
+// The section a notes line opens ("Words", "Color", …), or null for any other line.
+export function sectionHeading(line: string): string | null {
+  const match = SECTION.exec(line);
+  return match ? canonicalSection(match[1]) : null;
+}
+
 // The notes' sections by heading, in either "### Words" or "Words: …" form.
 export function noteSections(notes: string) {
   const sections: Array<{ name: string; lines: Array<string> }> = [];

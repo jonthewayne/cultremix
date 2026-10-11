@@ -5,7 +5,7 @@
 // switched-on words stays a variation (convex/lib/lineage.ts remixChangedOnlyWords).
 // Server only, like convex/lib/prompts.ts: the notes and the prompt never reach the browser.
 
-import { noteSections, spellOut } from "./prompts";
+import { noteSections, sectionHeading, spellOut } from "./prompts";
 import { MAX_FIELD_LENGTH, changeSummary, cleanFieldText, length } from "./remixWords";
 
 export { MAX_FIELD_LENGTH, changeSummary, cleanFieldText, length };
@@ -93,6 +93,82 @@ function withLineBreaks(text: string) {
     .filter((line, i, lines) => line || (i > 0 && i < lines.length - 1))
     .join("\n")
     .trim();
+}
+
+// ---- Readings checked against the words the design was asked to say ----
+
+// Letters and digits only, in capitals: how two readings of the same words compare.
+function letterKey(text: string) {
+  return text.toUpperCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+// How many letters a reading may be off and still be the asked words: none under four letters (ART
+// and ARM are different words), one up to eight letters, two beyond.
+function allowedSlip(letters: number) {
+  return letters < 4 ? 0 : letters <= 8 ? 1 : 2;
+}
+
+// Levenshtein distance, giving up once it's past `limit`.
+function editDistance(a: string, b: string, limit: number) {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(previous[j] + 1, row[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      best = Math.min(best, row[j]);
+    }
+    if (best > limit) return limit + 1;
+    previous = row;
+  }
+  return previous[b.length];
+}
+
+// A design made to say FAR OUT whose reader saw "TAROUT": quoted text in the notes' Words section
+// that's a letter or two off words the creator asked for (in capitals or quotes in the request, or a
+// remix's new words) takes the asked spelling, in the reading's capitals. Stylized lettering is where
+// readers slip, and the asked words are what the design was drawn to say. A reading that matches
+// letter for letter keeps its own spacing and line breaks; text far from anything asked stays as read.
+export function snapWordsToRequest(notes: string, asked: ReadonlyArray<string>): string {
+  const targets = asked
+    .map((text) => ({ text: text.trim(), key: letterKey(text) }))
+    .filter((target) => target.key.length >= 2);
+  if (!notes || targets.length === 0) return notes;
+  const snap = (reading: string) => {
+    const key = letterKey(reading);
+    if (key.length < 2 || targets.some((target) => target.key === key)) return reading;
+    let best: { distance: number; text: string } | null = null;
+    for (const target of targets) {
+      const limit = allowedSlip(Math.max(target.key.length, key.length));
+      if (limit === 0) continue;
+      const distance = editDistance(target.key, key, limit);
+      if (distance <= limit && (!best || distance < best.distance)) best = { distance, text: target.text };
+    }
+    if (!best) return reading;
+    const capitals = reading === reading.toUpperCase();
+    return capitals ? best.text.toUpperCase() : best.text;
+  };
+  let inWords = false;
+  return notes
+    .split("\n")
+    .map((line) => {
+      const heading = sectionHeading(line);
+      if (heading) inWords = heading === "Words";
+      if (!inWords) return line;
+      let out = "";
+      let at = 0;
+      for (let i = 0; i < line.length; i++) {
+        if (!OPEN.has(line[i])) continue;
+        const quote = readQuote(line, i);
+        if (!quote) continue;
+        out += line.slice(at, i + 1) + snap(quote.text);
+        at = quote.end - 1;
+        i = quote.end - 1;
+      }
+      return out + line.slice(at);
+    })
+    .join("\n");
 }
 
 // Every quoted piece in the notes' "Words" section, in order, with the words describing it.
