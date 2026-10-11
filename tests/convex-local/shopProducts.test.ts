@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import {  addToCart } from "../../src/server/cart";
 import { createStorefront } from "../../src/server/storefront";
+import { productTitle } from "../../convex/lib/shopify/productSync";
 import { newTest } from "./setup";
 import { SHOP_ENV, makeOnSale, makeUser, makeWork, setFlag } from "./shopFixtures";
 import type {CartContext} from "../../src/server/cart";
@@ -449,6 +450,99 @@ describe("selling it", () => {
     expect(await t.query(api.shopify.offer, { cr: "101-001" })).not.toBeNull();
     expect(await t.query(api.shopify.offer, { cr: "101-002" })).toBeNull();
     expect(await t.query(api.shopify.offer, { cr: "nope" })).toBeNull();
+  });
+});
+
+describe("a kept design, printed for its creator alone", () => {
+  const CREATOR = { subject: "test|creator", issuer: "test" };
+  const SOMEONE = { subject: "test|someone", issuer: "test" };
+
+  // The shop's work, kept just for its creator instead of published: family 0, never shown.
+  async function keptShop() {
+    const setup = await shop();
+    await setup.t.run(async (ctx) => {
+      await ctx.db.patch("users", setup.creator, { authId: CREATOR.subject, username: "maker", usernameLower: "maker" });
+      await ctx.db.insert("users", { name: "Someone", authId: SOMEONE.subject, username: "someone", usernameLower: "someone" });
+      await ctx.db.patch("works", setup.workId, { status: "private", keep: "private", crFamily: 0, crExpression: 1 });
+    });
+    return setup;
+  }
+
+  it("waits for its creator to ask, then shows in Admin, For sale", async () => {
+    const { t, admin, workId } = await keptShop();
+    const creator = t.withIdentity(CREATOR);
+    expect(await admin.query(api.sales.keptRequests, {})).toEqual([]);
+    expect((await creator.query(api.keeps.get, { workId }))?.ordering).toBe("ask");
+    await expect(t.withIdentity(SOMEONE).mutation(api.keeps.requestPrint, { workId })).rejects.toThrow(/creator/u);
+    await creator.mutation(api.keeps.requestPrint, { workId });
+    expect((await creator.query(api.keeps.get, { workId }))?.ordering).toBe("requested");
+    const requests = await admin.query(api.sales.keptRequests, {});
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ workId, kept: true, creator: "maker" });
+    expect(requests[0].requestedAt).toBeGreaterThan(0);
+    // It isn't one of the published works, and members can't see the requests.
+    expect((await admin.query(api.sales.list, {})).page).toEqual([]);
+    await expect(creator.query(api.sales.keptRequests, {})).rejects.toThrow();
+  });
+
+  it("is prepared like a published work and offered to its creator alone", async () => {
+    const { t, admin, workId } = await keptShop();
+    const creator = t.withIdentity(CREATOR);
+    await creator.mutation(api.keeps.requestPrint, { workId });
+    await approveAndPrepare(t, admin, workId);
+    expect((await creator.query(api.keeps.get, { workId }))?.ordering).toBe("preparing");
+    const listings = await rows(t, workId);
+    expect(listings.map((row) => row.handle).sort()).toEqual(["cr-000-001-146", "cr-000-001-586"]);
+    // Its Shopify product is named for what it is; it has no public number.
+    const job = await t.query(internal.shopify.listingForSync, { listingId: listings[0]._id });
+    expect(job).toMatchObject({ kept: true, cr: "000-001" });
+    expect(productTitle(job!.cr, "Grow Slow", job!.listing.name, job!.kept)).toMatch(/^Kept design · Grow Slow · /u);
+
+    for (const row of listings) {
+      const sold = row.listing!.colors.flatMap((color) =>
+        color.variants.map((variant, i) => ({
+          color: color.code,
+          size: variant.size,
+          sku: `CR-000-001-${row.listing!.printfulProductId}-${color.code}-${variant.size}`,
+          priceCents: row.listing!.priceCents,
+          printfulVariantId: variant.id,
+          shopifyVariantId: `gid://shopify/ProductVariant/${row.listing!.printfulProductId}${color.code}${i}`,
+        })),
+      );
+      await t.mutation(internal.shopify.saveSynced, { listingId: row._id, productId: `gid://shopify/Product/${row.listing!.printfulProductId}`, variants: sold });
+    }
+    expect((await creator.query(api.keeps.get, { workId }))?.ordering).toBe("ready");
+    expect(await creator.query(api.shopify.keptOffer, { workId })).toBeNull();
+
+    await setFlag(t, "commerce.checkout", true);
+    const offer = await creator.query(api.shopify.keptOffer, { workId });
+    expect(offer?.products.map((p) => p.key)).toEqual(["printful-586", "printful-146"]);
+    expect(await t.withIdentity(SOMEONE).query(api.shopify.keptOffer, { workId })).toBeNull();
+    expect(await t.query(api.shopify.keptOffer, { workId })).toBeNull();
+    expect(await t.query(api.shopify.offer, { cr: "000-001" })).toBeNull();
+
+    // The cart asks for it by id as the signed-in member: its creator's add reaches Shopify (down
+    // here); anyone else's is refused before Shopify hears of it.
+    const shopifyCalls: Array<string> = [];
+    const cart = (identity: typeof CREATOR): CartContext => ({
+      cookieHeader: null,
+      buyerIp: null,
+      secure: true,
+      storefront: createStorefront({
+        config: { shopDomain: "cultremix-dev.myshopify.com", privateToken: "private" },
+        fetch: async (_input, init) => {
+          shopifyCalls.push(String(init?.body));
+          return new Response("down", { status: 503 });
+        },
+      }),
+      lookupOffer: async () => null,
+      lookupKeptOffer: (id) => t.withIdentity(identity).query(api.shopify.keptOffer, { workId: id as Id<"works"> }),
+    });
+    const line = { keep: workId, product: "printful-146", color: "BLACK", size: "M", quantity: 1 };
+    await expect(addToCart(cart(SOMEONE), line)).rejects.toMatchObject({ code: "CLOSED" });
+    expect(shopifyCalls).toHaveLength(0);
+    await expect(addToCart(cart(CREATOR), line)).rejects.toBeTruthy();
+    expect(shopifyCalls).toHaveLength(1);
   });
 });
 

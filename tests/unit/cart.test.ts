@@ -128,6 +128,16 @@ describe("input checks", () => {
     expect(() => parseAddInput(null)).toThrow(CartError);
     expect(() => parseAddInput({ cr: "101-001", product: "hoodie", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
     expect(() => parseAddInput({ cr: "101-001", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
+    // A kept design (no CR number) by its id; one or the other, never both.
+    expect(parseAddInput({ keep: "k179q6y63yqrp487w1b1bc85eh8g26m0", product: "printful-586", color: "WHITE", size: "L", quantity: 1 })).toEqual({
+      keep: "k179q6y63yqrp487w1b1bc85eh8g26m0",
+      product: "printful-586",
+      color: "WHITE",
+      size: "L",
+      quantity: 1,
+    });
+    expect(() => parseAddInput({ keep: "k179q6y63yqrp487w1b1bc85eh8g26m0", cr: "101-001", product: "printful-586", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
+    expect(() => parseAddInput({ keep: "../works", product: "printful-586", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
     expect(() => parseLineInput({ lineId: "gid://shopify/Product/1", quantity: 1 })).toThrow(CartError);
     expect(parseLineInput({ lineId: LINE_ID, quantity: 0 }).quantity).toBe(0);
   });

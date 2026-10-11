@@ -15,7 +15,7 @@ import { storeVersion } from "./printTools";
 // and polling that only reads. Each attempt holds its worst-case fal cost against the daily budget
 // from the moment it's admitted (convex/print.ts upscale) until it finishes.
 
-type Job = { version: Doc<"printVersions">; parent: Doc<"printVersions"> | null; family: number; expression: number };
+type Job = { version: Doc<"printVersions">; parent: Doc<"printVersions"> | null; family: number; expression: number; keptBy?: string };
 
 // The largest result we'll download (a 6144 px square PNG is well under this).
 const MAX_RESULT_BYTES = 200 * 1024 * 1024;

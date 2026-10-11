@@ -25,7 +25,8 @@ function readable(error: unknown) {
   return error instanceof Error && error.message ? error.message.slice(0, 200) : "Something went wrong.";
 }
 
-type Job = { version: Doc<"printVersions">; parent: Doc<"printVersions"> | null; family: number; expression: number };
+// keptBy: a kept design's creator, whose folder holds its print files (lib/printKeys.ts).
+type Job = { version: Doc<"printVersions">; parent: Doc<"printVersions"> | null; family: number; expression: number; keptBy?: string };
 
 // Stores a new version's PNG and its preview, then records it.
 export async function storeVersion(
@@ -38,7 +39,7 @@ export async function storeVersion(
   if (extra.requireAlpha && !measured.metrics.hasAlpha) {
     throw new Error("The upscale came back without transparency, so it can't be used.");
   }
-  const planned = printVersionKey(job.family, job.expression, randomCode(), job.version.number);
+  const planned = printVersionKey(job.family, job.expression, randomCode(), job.version.number, job.keptBy);
   const [key, previewKey] = await Promise.all([
     storeObject(ctx, planned, bytes, "image/png"),
     previewWebp(bytes).then((webp) => storeObject(ctx, printPreviewKey(planned), webp, "image/webp")),
@@ -205,6 +206,7 @@ export const render = internalAction({
 type ListingJob = {
   family: number;
   expression: number;
+  keptBy?: string;
   version: { id: Id<"printVersions">; key: string; width: number; height: number; metrics: { hasAlpha: boolean; solid: number; visible: number; haze: number } };
   listings: Array<{
     listingId: Id<"shopProducts">;
@@ -246,7 +248,7 @@ export const renderListings = internalAction({
         const rendered = await renderPrintFile(source, rect, canvas, geometry.dpi);
         if (!rendered.designMetrics.hasAlpha) throw new Error("The rendered file lost its transparency.");
         if (hazeShare(rendered.designMetrics) > HAZE_REFUSE) throw new Error("The rendered file has too much faint haze.");
-        const planned = printFileKey(job.family, job.expression, randomCode());
+        const planned = printFileKey(job.family, job.expression, randomCode(), job.keptBy);
         const [key, previewKey] = await Promise.all([
           storeObject(ctx, planned, rendered.bytes, "image/png"),
           previewWebp(rendered.bytes).then((webp) => storeObject(ctx, printPreviewKey(planned), webp, "image/webp")),

@@ -343,7 +343,12 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
     totals.set(key, total);
   }
   const now = Date.now();
-  for (const total of totals.values()) await notifySale(ctx, { ...total, test: order.simulated, at: now });
+  for (const total of totals.values()) {
+    // A kept design sells only to its creator, so they bought it themselves: no "someone bought".
+    const work = await ctx.db.get("works", total.workId);
+    if (work?.status === "private" && work.creatorId === total.recipientId) continue;
+    await notifySale(ctx, { ...total, test: order.simulated, at: now });
+  }
 }
 
 // ---- Crons and hooks ----

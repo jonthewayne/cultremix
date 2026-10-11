@@ -10,6 +10,7 @@ import { topazWorstCaseCents } from "./lib/pricing";
 import { publicUrl } from "./lib/r2";
 import { commerceOpen, simulatesTestOrders } from "./lib/shopFlags";
 import { chosenProducts, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
+import type { ShopProduct } from "./lib/shopProduct";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
 import { crNumber, productHandle } from "./lib/shopify/productSync";
 import { MAX_VERSIONS, UPSCALE_MAX_SIDE } from "./print";
@@ -33,6 +34,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 
 type Ctx = QueryCtx | MutationCtx;
 type Row = Doc<"shopProducts">;
+
+// Published works sell to anyone; a kept design sells to its creator alone (shopify.keptOffer).
+function sellable(work: Doc<"works">) {
+  return work.status === "published" || work.status === "private";
+}
 
 // A print file run that hasn't reported back in this long can be started again.
 const RENDER_STALE_MS = 10 * 60_000;
@@ -77,7 +83,7 @@ export async function advancePrep(ctx: MutationCtx, workId: Id<"works">) {
   const rows = (await listingsOf(ctx, workId)).filter((row) => row.status === "preparing" && row.listing && row.approvedBy);
   if (rows.length === 0) return;
   const work = await ctx.db.get("works", workId);
-  if (!work || work.status !== "published") return await prepFailed(ctx, rows, "Only published works can go on sale.");
+  if (!work || !sellable(work)) return await prepFailed(ctx, rows, "Only published and kept designs can go on sale.");
   const waiting: Array<Row> = [];
   for (const row of rows) {
     if (row.printFile) await toShop(ctx, row);
@@ -202,6 +208,8 @@ export const renderJob = internalQuery({
     v.object({
       family: v.number(),
       expression: v.number(),
+      // A kept design's creator, whose folder holds its print files.
+      keptBy: v.optional(v.id("users")),
       version: v.object({ id: v.id("printVersions"), key: v.string(), width: v.number(), height: v.number(), metrics: metricsValidator }),
       listings: v.array(
         v.object({
@@ -247,6 +255,7 @@ export const renderJob = internalQuery({
     return {
       family: work.crFamily,
       expression: work.crExpression,
+      ...(work.crFamily === 0 ? { keptBy: work.creatorId } : {}),
       version: { id: version._id, key: version.key, width: version.width, height: version.height, metrics: version.metrics },
       listings,
     };
@@ -294,8 +303,8 @@ export const approve = mutation({
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx, "manage");
     const work = await ctx.db.get("works", args.workId);
-    if (!work || work.status !== "published") {
-      throw new ConvexError({ code: "NOT_FOUND", message: "Only published works can go on sale." });
+    if (!work || !sellable(work)) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Only published and kept designs can go on sale." });
     }
     const choices = chosenProducts(work, await offeredShopProducts(ctx));
     if (choices.length === 0) {
@@ -401,7 +410,7 @@ export const resume = mutation({
     const rows = (await listingsOf(ctx, args.workId)).filter(
       (row) => row.listing && row.status === "paused" && (!args.productKey || row.productKey === args.productKey),
     );
-    if (!work || work.status !== "published" || rows.length === 0) {
+    if (!work || !sellable(work) || rows.length === 0) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Approve it for sale first." });
     }
     const now = Date.now();
@@ -456,6 +465,9 @@ const rowValidator = v.object({
   creator: v.optional(v.string()),
   thumbUrl: v.optional(v.string()),
   publishedAt: v.optional(v.number()),
+  // A kept design (sold to its creator alone), and when its creator asked to have it printed.
+  kept: v.optional(v.boolean()),
+  requestedAt: v.optional(v.number()),
   // The products its creator picked, by name.
   picked: v.array(v.string()),
   step: v.optional(v.string()),
@@ -478,61 +490,91 @@ export const list = query({
       .paginate({ cursor: args.cursor ?? null, numItems: 20 });
     const urls = imageUrlReader(ctx);
     const products = await offeredShopProducts(ctx);
-    const page = await Promise.all(
-      result.page.map(async (work) => {
-        const rows = (await listingsOf(ctx, work._id)).filter((row) => row.listing);
-        const creator = await ctx.db.get("users", work.creatorId);
-        const art = await urls(work.artKey);
-        const preparing = rows.filter((row) => row.status === "preparing" && !row.prepError);
-        const choices = chosenProducts(work, products);
-        const live = rows.filter((row) => row.status !== "paused");
-        const changed =
-          live.length > 0 &&
-          (choices.some((choice) => !live.some((row) => row.productKey === choice.product.key && sameRelative(row.listing!.placement, choice.placement))) ||
-            live.some((row) => !choices.some((choice) => choice.product.key === row.productKey)));
-        return {
-          workId: work._id,
-          cr: crNumber(work.crFamily, work.crExpression),
-          title: work.title,
-          creator: creator?.username,
-          thumbUrl: art.thumbUrl,
-          publishedAt: work.publishedAt,
-          picked: choices.map((choice) => choice.product.name),
-          changed,
-          step: preparing.length > 0 ? await prepStep(ctx, work._id, preparing) : undefined,
-          ...(rows.some((row) => row.approvedAt !== undefined)
-            ? { approvedAt: Math.max(...rows.map((row) => row.approvedAt ?? 0)) }
-            : {}),
-          listings: rows.map((row) => {
-            const listing = row.listing!;
-            return {
-              productKey: listing.productKey,
-              name: listing.name,
-              kind: listing.kind,
-              side: listing.placement.side,
-              status: row.status,
-              priceCents: listing.priceCents,
-              largePriceCents: listing.largePriceCents,
-              colors: listing.colors.map(({ name, hex }) => ({ name, hex })),
-              ...(row.prepError ? { prepError: row.prepError } : {}),
-              ...(row.lastError && row.status !== "live" ? { lastError: row.lastError } : {}),
-              printFile: row.printFile
-                ? {
-                    previewUrl: publicUrl(row.printFile.previewKey) ?? publicUrl(row.printFile.key),
-                    url: publicUrl(row.printFile.key),
-                    widthIn: row.printFile.placement.widthIn,
-                    dpi: Math.floor(row.printFile.dpi),
-                    grade: row.printFile.grade,
-                  }
-                : null,
-            };
-          }),
-        };
-      }),
-    );
+    const page = await Promise.all(result.page.map((work) => saleRow(ctx, work, products, urls)));
     return { page, isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });
+
+// How many kept designs Admin, For sale looks through for print requests.
+const KEPT_SCAN = 300;
+
+// Kept designs whose creators asked to have them printed (keeps.requestPrint), newest request
+// first. Approving one puts it on sale for its creator alone (shopify.keptOffer).
+export const keptRequests = query({
+  args: {},
+  returns: v.array(rowValidator),
+  handler: async (ctx) => {
+    await requireAdmin(ctx, "view");
+    const kept = await ctx.db
+      .query("works")
+      .withIndex("by_status_publishedAt", (q) => q.eq("status", "private"))
+      .order("desc")
+      .take(KEPT_SCAN);
+    const asked = kept
+      .filter((work) => work.printRequestedAt !== undefined)
+      .sort((a, b) => (b.printRequestedAt ?? 0) - (a.printRequestedAt ?? 0))
+      .slice(0, 50);
+    const urls = imageUrlReader(ctx);
+    const products = await offeredShopProducts(ctx);
+    return await Promise.all(asked.map((work) => saleRow(ctx, work, products, urls)));
+  },
+});
+
+// One work's row in Admin, For sale: what its creator picked and how each product sells.
+async function saleRow(
+  ctx: QueryCtx,
+  work: Doc<"works">,
+  products: Array<ShopProduct>,
+  urls: ReturnType<typeof imageUrlReader>,
+) {
+  const rows = (await listingsOf(ctx, work._id)).filter((row) => row.listing);
+  const creator = await ctx.db.get("users", work.creatorId);
+  const art = await urls(work.artKey);
+  const preparing = rows.filter((row) => row.status === "preparing" && !row.prepError);
+  const choices = chosenProducts(work, products);
+  const live = rows.filter((row) => row.status !== "paused");
+  const changed =
+    live.length > 0 &&
+    (choices.some((choice) => !live.some((row) => row.productKey === choice.product.key && sameRelative(row.listing!.placement, choice.placement))) ||
+      live.some((row) => !choices.some((choice) => choice.product.key === row.productKey)));
+  return {
+    workId: work._id,
+    cr: crNumber(work.crFamily, work.crExpression),
+    title: work.title,
+    creator: creator?.username,
+    thumbUrl: art.thumbUrl,
+    publishedAt: work.publishedAt,
+    ...(work.status === "private" ? { kept: true, requestedAt: work.printRequestedAt } : {}),
+    picked: choices.map((choice) => choice.product.name),
+    changed,
+    step: preparing.length > 0 ? await prepStep(ctx, work._id, preparing) : undefined,
+    ...(rows.some((row) => row.approvedAt !== undefined) ? { approvedAt: Math.max(...rows.map((row) => row.approvedAt ?? 0)) } : {}),
+    listings: rows.map((row) => {
+      const listing = row.listing!;
+      return {
+        productKey: listing.productKey,
+        name: listing.name,
+        kind: listing.kind,
+        side: listing.placement.side,
+        status: row.status,
+        priceCents: listing.priceCents,
+        largePriceCents: listing.largePriceCents,
+        colors: listing.colors.map(({ name, hex }) => ({ name, hex })),
+        ...(row.prepError ? { prepError: row.prepError } : {}),
+        ...(row.lastError && row.status !== "live" ? { lastError: row.lastError } : {}),
+        printFile: row.printFile
+          ? {
+              previewUrl: publicUrl(row.printFile.previewKey) ?? publicUrl(row.printFile.key),
+              url: publicUrl(row.printFile.key),
+              widthIn: row.printFile.placement.widthIn,
+              dpi: Math.floor(row.printFile.dpi),
+              grade: row.printFile.grade,
+            }
+          : null,
+      };
+    }),
+  };
+}
 
 // The products on offer, and what still stands between an approved work and a sale.
 export const overview = query({

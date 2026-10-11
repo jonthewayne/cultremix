@@ -211,6 +211,19 @@ describe("POST /webhooks/shopify", () => {
     expect(list.page[0].parent).toBeUndefined();
   });
 
+  it("never tells a kept design's creator that someone bought it (they did), but tells the original's", async () => {
+    const t = newTest();
+    const { a, b, work } = await variationOnSale(t);
+    await t.run((ctx) => ctx.db.patch("works", work, { status: "private", keep: "private" }));
+    shopify.set(rawOrder({ lines: [line(1)] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+    // Both still earn their shares.
+    expect(await earningsFor(t, a)).toHaveLength(1);
+    expect(await earningsFor(t, b)).toHaveLength(1);
+    const notes = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(notes.map((n) => n.recipientId)).toEqual([a]);
+  });
+
   it("handles refund before paid, reversing only the refunded unit", async () => {
     const t = newTest();
     const { a, b } = await variationOnSale(t);

@@ -22,7 +22,8 @@ export type BuyProduct = {
   variants: Array<{ color: string; size: string; priceCents: number }>;
 };
 
-export type BuyOffer = { cr: string; products: Array<BuyProduct> };
+// keep: a kept design's id, for its creator's own page (it has no public CR number).
+export type BuyOffer = { cr: string; keep?: string; products: Array<BuyProduct> };
 
 const MAX = 10;
 
@@ -64,7 +65,8 @@ export function BuyBox({
 
   async function add() {
     if (!variant || !size) return;
-    if (await addLine({ cr: offer.cr, product: product.key, color, size, quantity })) {
+    const design = offer.keep ? { keep: offer.keep } : { cr: offer.cr };
+    if (await addLine({ ...design, product: product.key, color, size, quantity })) {
       setQty(1);
       setOpen(true);
     }

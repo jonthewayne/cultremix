@@ -22,9 +22,12 @@ export function productHandle(cr: string, printfulProductId?: number): string {
   return printfulProductId === undefined ? `cr-${cr}` : `cr-${cr}-${printfulProductId}`;
 }
 
-export function productTitle(cr: string, title?: string, garment?: string): string {
+// A kept design has no public number, so its product (what its creator sees at checkout and in
+// Shopify's emails) is named "Kept design · <title>".
+export function productTitle(cr: string, title?: string, garment?: string, kept = false): string {
   const name = title?.trim();
-  const base = name ? `CR ${cr} · ${name}` : `CR ${cr}`;
+  const label = kept ? "Kept design" : `CR ${cr}`;
+  const base = name ? `${label} · ${name}` : label;
   return garment ? `${base} · ${garment}` : base;
 }
 
@@ -80,11 +83,12 @@ export function buildProductSetInput(args: {
   title?: string;
   imageUrls?: Array<string>;
   listing: SaleListing;
+  kept?: boolean;
 }) {
   const variants = variantList(args.cr, args.listing);
   const colors = args.listing.colors.filter((c) => variants.some((v) => v.color === c.code));
   const sizes = PRINT_SIZES.filter((size) => variants.some((v) => v.size === size));
-  const title = productTitle(args.cr, args.title, args.listing.name);
+  const title = productTitle(args.cr, args.title, args.listing.name, args.kept);
   return {
     handle: productHandle(args.cr, args.listing.printfulProductId),
     title,
@@ -178,7 +182,7 @@ export function matchVariants(cr: string, nodes: Array<VariantNode>, listing: Sa
 // reads from. Returns the product and every variant's GID.
 export async function syncProduct(
   admin: ShopifyAdmin,
-  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string>; listing: SaleListing },
+  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string>; listing: SaleListing; kept?: boolean },
 ): Promise<{ productId: string; variants: Array<SyncedVariant> }> {
   const input = buildProductSetInput(args);
   const data = await admin.graphql<ProductSetResult>(PRODUCT_SET_MUTATION, {

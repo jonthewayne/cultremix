@@ -31,6 +31,8 @@ function AdminSale() {
   const [cursors, setCursors] = useState<Array<string | null>>([null]);
   const cursor = cursors[cursors.length - 1];
   const list = useQuery(api.sales.list, { cursor });
+  // Kept designs whose creators asked to have them printed (keeps.requestPrint).
+  const kept = useQuery(api.sales.keptRequests, {});
   const approve = useMutation(api.sales.approve);
   const [batch, setBatch] = useState<string | null>(null);
   const waiting = (list?.page ?? []).filter((row) => row.listings.length === 0 && row.picked.length > 0);
@@ -92,6 +94,19 @@ function AdminSale() {
         )}
       </AdminSection>
 
+      {kept && kept.length > 0 && (
+        <div className="space-y-1 pt-2">
+          <h2 className="text-lg font-black">Kept designs to print</h2>
+          <p className="text-sm text-muted-foreground">
+            Their creators asked to have them printed. Approving one makes its print files and products, sold to its creator alone from
+            their kept page.
+          </p>
+        </div>
+      )}
+      {(kept ?? []).map((row) => (
+        <WorkRow key={row.workId} row={row} canSimulate={false} />
+      ))}
+      {kept && kept.length > 0 && <h2 className="pt-2 text-lg font-black">Published works</h2>}
       {(list?.page ?? []).map((row) => (
         <WorkRow key={row.workId} row={row} canSimulate={overview?.canSimulate ?? false} />
       ))}
@@ -215,8 +230,14 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
 
   return (
     <AdminSection
-      title={`CR ${row.cr}${row.title ? ` · ${row.title}` : ""}`}
-      description={`@${row.creator ?? "unknown"} · picked ${row.picked.join(", ") || "nothing on offer"}${row.publishedAt ? ` · published ${new Date(row.publishedAt).toLocaleDateString()}` : ""}`}
+      title={row.kept ? `Kept design${row.title ? ` · ${row.title}` : ""}` : `CR ${row.cr}${row.title ? ` · ${row.title}` : ""}`}
+      description={`@${row.creator ?? "unknown"} · picked ${row.picked.join(", ") || "nothing on offer"}${
+        row.kept && row.requestedAt
+          ? ` · asked to print it ${new Date(row.requestedAt).toLocaleDateString()}`
+          : row.publishedAt
+            ? ` · published ${new Date(row.publishedAt).toLocaleDateString()}`
+            : ""
+      }`}
       action={
         <div className="flex flex-wrap gap-2">
           <button
@@ -233,7 +254,7 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
             }
             className={adminButton}
           >
-            {approved ? "Approve again" : "Approve for sale"}
+            {approved ? "Approve again" : row.kept ? "Approve for its creator" : "Approve for sale"}
           </button>
           {selling.length > 0 && (
             <button type="button" disabled={busy} onClick={() => void run(() => pause({ workId: row.workId }))} className={adminButton}>
@@ -298,9 +319,13 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
             </div>
           ))}
           {note && <p className="text-sm font-semibold">{note}</p>}
-          <Link to="/cr/$cr" params={{ cr: row.cr }} className="text-sm font-semibold underline underline-offset-4">
-            Work page
-          </Link>
+          {row.kept ? (
+            <p className="text-sm text-muted-foreground">Its page is its creator's alone; once it's on sale, they order it there.</p>
+          ) : (
+            <Link to="/cr/$cr" params={{ cr: row.cr }} className="text-sm font-semibold underline underline-offset-4">
+              Work page
+            </Link>
+          )}
         </div>
       </div>
     </AdminSection>

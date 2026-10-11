@@ -493,6 +493,8 @@ const jobValidator = v.union(
     parent: v.any(),
     family: v.number(),
     expression: v.number(),
+    // A kept design's creator, whose folder holds its print files.
+    keptBy: v.optional(v.id("users")),
   }),
 );
 
@@ -505,7 +507,13 @@ export const versionJob = internalQuery({
     const work = await ctx.db.get("works", version.workId);
     if (!work) return null;
     const parent = version.parentId ? await ctx.db.get("printVersions", version.parentId) : null;
-    return { version, parent, family: work.crFamily, expression: work.crExpression };
+    return {
+      version,
+      parent,
+      family: work.crFamily,
+      expression: work.crExpression,
+      ...(work.crFamily === 0 ? { keptBy: work.creatorId } : {}),
+    };
   },
 });
 

@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import { fetchAuthQuery } from "~/lib/auth-server";
 import {
   CartError,
   addToCart,
@@ -34,6 +36,14 @@ async function cartContext(): Promise<CartContext> {
       if (!convexUrl) return null;
       return new ConvexHttpClient(convexUrl).query(api.shopify.offer, { cr });
     },
+    // As the signed-in member: a kept design's offer is its creator's alone.
+    lookupKeptOffer: async (workId) => {
+      try {
+        return await fetchAuthQuery(api.shopify.keptOffer, { workId: workId as Id<"works"> });
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
@@ -55,7 +65,7 @@ async function respond(run: (ctx: CartContext) => Promise<CartResult>): Promise<
 export const getCartFn = createServerFn({ method: "GET" }).handler(() => respond(getCart));
 
 export const addToCartFn = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => input as { cr: string; product: string; color: string; size: string; quantity: number })
+  .inputValidator((input: unknown) => input as { cr?: string; keep?: string; product: string; color: string; size: string; quantity: number })
   .handler(({ data }) => respond((ctx) => addToCart(ctx, parseAddInput(data))));
 
 export const updateCartLineFn = createServerFn({ method: "POST" })

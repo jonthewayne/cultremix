@@ -23,6 +23,9 @@ export type CartContext = {
   storefront: Storefront | null;
   // The work's live offer (convex shopify.offer); null while checkout is off.
   lookupOffer: (cr: string) => Promise<Offer>;
+  // A kept design's offer, asked for as the signed-in member (convex shopify.keptOffer), so only
+  // its creator gets one.
+  lookupKeptOffer?: (workId: string) => Promise<Offer>;
 };
 
 export type CartResult = { cart: CartView | null; setCookies: Array<string> };
@@ -86,16 +89,22 @@ function record(input: unknown): Record<string, unknown> {
   return input as Record<string, unknown>;
 }
 
-export type AddInput = { cr: string; product: string; color: string; size: string; quantity: number };
+// A published work by its CR number, or a kept design (which has none) by its id.
+export type AddInput = { cr?: string; keep?: string; product: string; color: string; size: string; quantity: number };
+
+const KEPT_ID = /^[a-z0-9]{16,64}$/u;
 
 export function parseAddInput(input: unknown): AddInput {
   const data = record(input);
-  const { cr, product, color, size } = data;
-  if (typeof cr !== "string" || !/^\d{3}-\d{3}$/u.test(cr)) throw new CartError("INVALID", "That design wasn't found.");
+  const { cr, keep, product, color, size } = data;
+  const byCr = typeof cr === "string" && /^\d{3}-\d{3}$/u.test(cr);
+  const byKeep = typeof keep === "string" && KEPT_ID.test(keep);
+  if (byCr === byKeep) throw new CartError("INVALID", "That design wasn't found.");
   if (typeof product !== "string" || !/^printful-\d{1,9}$/u.test(product)) throw new CartError("INVALID", "Pick a product.");
   if (typeof color !== "string" || !/^[A-Z0-9_]{1,20}$/u.test(color)) throw new CartError("INVALID", "Pick a color.");
   if (typeof size !== "string" || !/^[A-Z0-9]{1,4}$/u.test(size)) throw new CartError("INVALID", "Pick a size.");
-  return { cr, product, color, size, quantity: quantityOf(data.quantity, 1) };
+  const design = byCr ? { cr: cr as string } : { keep: keep as string };
+  return { ...design, product, color, size, quantity: quantityOf(data.quantity, 1) };
 }
 
 export type LineInput = { lineId: string; quantity: number };
@@ -131,7 +140,11 @@ export async function getCart(ctx: CartContext): Promise<CartResult> {
 }
 
 export async function addToCart(ctx: CartContext, input: AddInput): Promise<CartResult> {
-  const offer = await ctx.lookupOffer(input.cr);
+  const offer = input.keep
+    ? ((await ctx.lookupKeptOffer?.(input.keep)) ?? null)
+    : input.cr
+      ? await ctx.lookupOffer(input.cr)
+      : null;
   if (!offer || !ctx.storefront) throw new CartError("CLOSED", "Buying opens soon.");
   const product = offer.products.find((p) => p.key === input.product);
   if (!product) throw new CartError("UNAVAILABLE", "That product isn't available.");

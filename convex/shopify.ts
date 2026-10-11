@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, query } from "./_generated/server";
-import type { ActionCtx } from "./_generated/server";
+import type { ActionCtx, QueryCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { getViewerUser } from "./identity";
 import { createShopifyAdmin, shopifyAdminConfigFromEnv, type FetchLike } from "./lib/shopify/adminClient";
 import { crNumber, syncProduct } from "./lib/shopify/productSync";
 import { commerceOpen } from "./lib/shopFlags";
@@ -72,7 +74,8 @@ export function retryDelay(attempts: number): number {
 }
 
 // What a listing's Shopify product is made from. Null when it isn't ready to sync (paused, still
-// preparing, or its work isn't public).
+// preparing, or its work is neither public nor kept). A kept design is approved for its creator
+// alone; its product is named "Kept design" and only the creator's cart can reach it.
 export const listingForSync = internalQuery({
   args: { listingId: v.id("shopProducts") },
   returns: v.union(
@@ -83,13 +86,14 @@ export const listingForSync = internalQuery({
       title: v.optional(v.string()),
       imageUrls: v.array(v.string()),
       listing: listingValidator,
+      kept: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
     const row = await ctx.db.get("shopProducts", args.listingId);
     if (!row?.listing || !row.printFile || row.status === "paused" || row.status === "preparing") return null;
     const work = await ctx.db.get("works", row.workId);
-    if (!work || work.status !== "published") return null;
+    if (!work || (work.status !== "published" && work.status !== "private")) return null;
     const keys: Array<string | undefined> = [work.artKey];
     const photo = await ctx.db
       .query("shootPhotos")
@@ -100,7 +104,14 @@ export const listingForSync = internalQuery({
     const imageUrls = keys
       .map((key) => publicUrl(key))
       .filter((url): url is string => typeof url === "string" && /^https:\/\//u.test(url));
-    return { workId: work._id, cr: crNumber(work.crFamily, work.crExpression), title: work.title, imageUrls, listing: row.listing };
+    return {
+      workId: work._id,
+      cr: crNumber(work.crFamily, work.crExpression),
+      title: work.title,
+      imageUrls,
+      listing: row.listing,
+      kept: work.status === "private",
+    };
   },
 });
 
@@ -207,6 +218,7 @@ export const syncListing = internalAction({
         title: job.title,
         imageUrls: job.imageUrls,
         listing: job.listing,
+        kept: job.kept,
       });
       await ctx.runMutation(internal.shopify.saveSynced, {
         listingId: args.listingId,
@@ -296,40 +308,59 @@ export const offer = query({
       .withIndex("by_family_expression", (q) => q.eq("crFamily", Number(match[1])).eq("crExpression", Number(match[2])))
       .unique();
     if (!work || work.status !== "published") return null;
-    const rows = (await listingsOf(ctx, work._id)).filter((row) => row.status === "live" && row.listing);
-    if (rows.length === 0) return null;
-    const variants = await ctx.db
-      .query("workVariants")
-      .withIndex("by_work", (q) => q.eq("workId", work._id))
-      .take(500);
-    const products = [];
-    for (const row of rows) {
-      const listing = row.listing!;
-      // Only the listing's colors are sold: rows for any other color (kept so old orders still
-      // resolve) are never offered, so the cart refuses them.
-      const mine = variants.filter((variant) => variant.listingId === row._id);
-      const colors = listing.colors.filter((color) => mine.some((variant) => variant.color === color.code));
-      const sold = mine.filter((variant) => colors.some((color) => color.code === variant.color));
-      if (sold.length === 0) continue;
-      products.push({
-        key: listing.productKey,
-        name: listing.name,
-        kind: listing.kind,
-        side: listing.placement.side,
-        placement: listing.placement,
-        printArea: listing.printArea,
-        colors: colors.map(({ key, code, name, hex }) => ({ key, code, name, hex })),
-        sizes: PRINT_SIZES.filter((size) => sold.some((variant) => variant.size === size)),
-        variants: sold.map((variant) => ({
-          color: variant.color,
-          size: variant.size,
-          merchandiseId: variant.shopifyVariantId,
-          priceCents: variant.priceCents,
-        })),
-      });
-    }
-    if (products.length === 0) return null;
-    return { workId: work._id, cr: crNumber(work.crFamily, work.crExpression), products };
+    return await offerOf(ctx, work);
   },
 });
+
+// A kept design's offer, for its creator alone (the cart asks as the signed-in member). Null for
+// anyone else, while checkout is off, or before it's approved and live.
+export const keptOffer = query({
+  args: { workId: v.id("works") },
+  returns: v.union(v.null(), offerValidator),
+  handler: async (ctx, args) => {
+    if (!(await commerceOpen(ctx))) return null;
+    const viewer = await getViewerUser(ctx);
+    const work = await ctx.db.get("works", args.workId);
+    if (!viewer || !work || work.creatorId !== viewer._id || work.status !== "private") return null;
+    return await offerOf(ctx, work);
+  },
+});
+
+// What a work sells now: each live product with its colors, sizes, prices, and side.
+async function offerOf(ctx: QueryCtx, work: Doc<"works">) {
+  const rows = (await listingsOf(ctx, work._id)).filter((row) => row.status === "live" && row.listing);
+  if (rows.length === 0) return null;
+  const variants = await ctx.db
+    .query("workVariants")
+    .withIndex("by_work", (q) => q.eq("workId", work._id))
+    .take(500);
+  const products = [];
+  for (const row of rows) {
+    const listing = row.listing!;
+    // Only the listing's colors are sold: rows for any other color (kept so old orders still
+    // resolve) are never offered, so the cart refuses them.
+    const mine = variants.filter((variant) => variant.listingId === row._id);
+    const colors = listing.colors.filter((color) => mine.some((variant) => variant.color === color.code));
+    const sold = mine.filter((variant) => colors.some((color) => color.code === variant.color));
+    if (sold.length === 0) continue;
+    products.push({
+      key: listing.productKey,
+      name: listing.name,
+      kind: listing.kind,
+      side: listing.placement.side,
+      placement: listing.placement,
+      printArea: listing.printArea,
+      colors: colors.map(({ key, code, name, hex }) => ({ key, code, name, hex })),
+      sizes: PRINT_SIZES.filter((size) => sold.some((variant) => variant.size === size)),
+      variants: sold.map((variant) => ({
+        color: variant.color,
+        size: variant.size,
+        merchandiseId: variant.shopifyVariantId,
+        priceCents: variant.priceCents,
+      })),
+    });
+  }
+  if (products.length === 0) return null;
+  return { workId: work._id, cr: crNumber(work.crFamily, work.crExpression), products };
+}
 

@@ -296,6 +296,18 @@ describe("print keys", () => {
     expect(isPrintFileKey(`works/101/001/print-short/print.png`)).toBe(false);
   });
 
+  it("puts a kept design's files in its creator's folder", () => {
+    const code = "abcdefghijklmnopqrstuvwxyz";
+    const owner = "k17cqvg0q4m23jgrwqt3zc92zn8fdce4";
+    expect(printFileKey(0, 5, code, owner)).toBe(`members/${owner}/kept/005/print-${code}/print.png`);
+    expect(printVersionKey(0, 5, code, 2, owner)).toBe(`members/${owner}/kept/005/print-${code}/version-2.png`);
+    expect(isPrintFileKey(printFileKey(0, 5, code, owner))).toBe(true);
+    // Without its creator, family 0 isn't a place; and a creator never moves a published work.
+    expect(() => printFileKey(0, 5, code)).toThrow();
+    expect(() => printFileKey(0, 5, code, "../works")).toThrow();
+    expect(printFileKey(101, 1, code, owner)).toBe(`works/101/001/print-${code}/print.png`);
+  });
+
   it("refuses guessable or malformed parts", () => {
     expect(() => printFileKey(101, 1, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")).toThrow();
     expect(() => printFileKey(101, 1, "abc")).toThrow();

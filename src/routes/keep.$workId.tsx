@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { BuyBox } from "~/components/commerce/BuyBox";
 import { Art } from "~/components/cr/Art";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
@@ -13,8 +14,9 @@ import { designFilename, saveImage } from "~/lib/saveImage";
 import { cn } from "~/lib/utils";
 
 // A kept design ("Keep it just for you"): only its creator can open this page. It shows the design
-// on its shirt colors, credits the design it remixes, and can share it with the world, which gives
-// it a public CR number.
+// on its shirt colors, credits the design it remixes, gets it printed (the creator asks, an admin
+// approves it for them alone, and then it sells here to them only), and can share it with the
+// world, which gives it a public CR number.
 export const Route = createFileRoute("/keep/$workId")({
   beforeLoad: requireAuthenticatedRoute,
   head: () => ({ meta: [{ title: "Kept design · CultRemix" }, { name: "robots", content: "noindex" }] }),
@@ -25,8 +27,12 @@ function KeptPage() {
   const { workId } = Route.useParams();
   const navigate = useNavigate();
   const kept = useQuery(convexQuery(api.keeps.get, { workId: workId as Id<"works"> })).data;
+  // Once it's approved and checkout is open: what it sells on, to its creator alone.
+  const offer = useQuery(convexQuery(api.shopify.keptOffer, { workId: workId as Id<"works"> })).data;
   const share = useMutation(api.publish.shareKeep);
   const [shown, setShown] = useState<string | null>(null);
+  const [productKey, setProductKey] = useState<string | null>(null);
+  const [colorKey, setColorKey] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +62,9 @@ function KeptPage() {
     );
   }
 
-  const background = shown ?? kept.backgroundColor;
+  const product = offer ? (offer.products.find((p) => p.key === productKey) ?? offer.products[0]) : undefined;
+  const saleColor = product ? (product.colors.find((c) => c.key === colorKey) ?? product.colors[0]) : undefined;
+  const background = shown ?? saleColor?.hex ?? kept.backgroundColor;
   const shareIt = async () => {
     setSharing(true);
     setError(null);
@@ -100,7 +108,19 @@ function KeptPage() {
               {kept.parent.username ? ` by @${kept.parent.username}` : ""}. Its creator still gets credit.
             </p>
           )}
-          {kept.colors.length > 0 && (
+          {offer && product ? (
+            <BuyBox
+              offer={{ ...offer, keep: kept.workId }}
+              product={product}
+              onProductChange={setProductKey}
+              colorKey={saleColor?.key ?? ""}
+              onColorChange={(key) => {
+                setColorKey(key);
+                setShown(null);
+              }}
+              artUrl={kept.mediumUrl ?? kept.url}
+            />
+          ) : kept.colors.length > 0 && (
             <div>
               <p className="text-sm font-bold uppercase tracking-wider">Shirt colors</p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -117,9 +137,9 @@ function KeptPage() {
                   />
                 ))}
               </div>
-              <p className="mt-2 text-sm text-neutral-600">Buying opens soon. Kept designs can be ordered by you alone.</p>
             </div>
           )}
+          {!offer && !kept.preparing && <GetItPrinted workId={kept.workId} ordering={kept.ordering} />}
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -156,6 +176,55 @@ function KeptPage() {
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+type Ordering = "ask" | "requested" | "preparing" | "ready";
+
+// Getting a kept design printed: ask, and an admin gets it ready (print files and products, for
+// this creator alone); then the buy box above takes its place once checkout is open.
+function GetItPrinted({ workId, ordering }: { workId: Id<"works">; ordering: Ordering }) {
+  const request = useMutation(api.keeps.requestPrint);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (ordering !== "ask") {
+    return (
+      <p className="text-sm font-semibold">
+        {ordering === "ready"
+          ? "It's ready to print. Ordering opens soon, right here."
+          : "We're getting it ready to print. You'll order it here."}
+      </p>
+    );
+  }
+  const ask = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await request({ workId });
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-2xl border-2 border-black p-4">
+      <p className="font-bold">Want it on a shirt?</p>
+      <p className="mt-1 text-sm text-neutral-600">We'll get it ready to print, then you can order it here. No one else can.</p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void ask()}
+        className="mt-3 rounded-xl bg-black px-4 py-2 font-black text-white disabled:opacity-40"
+      >
+        {busy ? "Asking…" : "Get it printed"}
+      </button>
+      {error && (
+        <p role="alert" className="mt-2 text-sm font-semibold text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
