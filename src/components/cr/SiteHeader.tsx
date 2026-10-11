@@ -82,8 +82,8 @@ export function SiteHeader() {
                 <p className="border-b border-neutral-200 px-4 py-3 text-xs text-neutral-500 sm:hidden">
                   {viewer.unlimited ? "Unlimited credits" : `${viewer.credits} credits left`}
                 </p>
-                {viewer.creatorNumber === 1 && (
-                  <p className="border-b border-neutral-200 px-4 py-3 text-xs font-bold">Creator № 1</p>
+                {viewer.creatorNumber !== undefined && (
+                  <p className="border-b border-neutral-200 px-4 py-3 text-xs font-bold">Creator № {viewer.creatorNumber}</p>
                 )}
                 {viewer.username && (
                   <Link
@@ -95,6 +95,9 @@ export function SiteHeader() {
                     Your profile
                   </Link>
                 )}
+                <Link to="/me/earnings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
+                  Earnings
+                </Link>
                 <Link to="/settings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
                   Settings
                 </Link>
