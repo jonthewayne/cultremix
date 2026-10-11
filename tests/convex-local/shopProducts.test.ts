@@ -26,17 +26,26 @@ const SIZES = ["S", "M", "L", "XL", "2XL"];
 const variants = (base: number) => SIZES.map((size, i) => ({ size, id: base + i }));
 
 function fakeShopify() {
-  const productSets: Array<{ handle: string; skus: Array<string> }> = [];
+  const productSets: Array<{ handle: string; skus: Array<string>; status?: string }> = [];
+  const productUpdates: Array<{ id: string; status: string }> = [];
   const fetchFake = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input).endsWith("/admin/oauth/access_token")) return Response.json({ access_token: "tok", expires_in: 86399 });
     const { query, variables } = JSON.parse(String(init?.body)) as {
       query: string;
-      variables?: { identifier?: { handle: string }; input?: { variants?: Array<{ inventoryItem: { sku: string } }> } };
+      variables?: {
+        identifier?: { handle: string };
+        input?: { status?: string; variants?: Array<{ inventoryItem: { sku: string } }> };
+        product?: { id: string; status: string };
+      };
     };
+    if (query.includes("productUpdate")) {
+      productUpdates.push(variables!.product!);
+      return Response.json({ data: { productUpdate: { product: variables!.product, userErrors: [] } } });
+    }
     if (query.includes("productSet")) {
       // Shopify answers with the variants it was given.
       const skus = (variables?.input?.variants ?? []).map((v) => v.inventoryItem.sku);
-      productSets.push({ handle: variables?.identifier?.handle ?? "", skus });
+      productSets.push({ handle: variables?.identifier?.handle ?? "", skus, status: variables?.input?.status });
       return Response.json({
         data: {
           productSet: {
@@ -53,7 +62,12 @@ function fakeShopify() {
     if (query.includes("publications")) return Response.json({ data: { publications: { nodes: [{ id: "gid://shopify/Publication/3", name: "Headless" }] } } });
     return Response.json({ data: { publishablePublish: { userErrors: [] } } });
   });
-  return { fetchFake, productSets };
+  return { fetchFake, productSets, productUpdates };
+}
+
+// The scheduled jobs whose function name includes name, oldest first.
+async function jobs(t: T, name: string) {
+  return (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((job) => job.name.includes(name));
 }
 
 // The owner, two products on offer (the 1717 tee as the default, and a hoodie that comes in black
@@ -622,6 +636,18 @@ describe("a kept design, printed for its creator alone", () => {
       productIds: ["gid://shopify/Product/late"],
     });
   });
+
+  it("is unlisted, not active, while checkout is open, and a draft while it's closed", async () => {
+    const { t, admin, workId } = await keptShop();
+    await t.withIdentity(CREATOR).mutation(api.keeps.requestPrint, { workId });
+    await approveAndPrepare(t, admin, workId);
+    await synced(t, workId, "000-001", "kept");
+    const listingIds = (await rows(t, workId)).map((row) => row._id);
+    await setFlag(t, "commerce.checkout", true);
+    expect((await t.query(internal.shopify.wantedStatuses, { listingIds })).map((item) => item.status)).toEqual(["UNLISTED", "UNLISTED"]);
+    await setFlag(t, "commerce.checkout", false);
+    expect((await t.query(internal.shopify.wantedStatuses, { listingIds })).map((item) => item.status)).toEqual(["DRAFT", "DRAFT"]);
+  });
 });
 
 describe("Shopify product sync", () => {
@@ -683,6 +709,60 @@ describe("Shopify product sync", () => {
     expect(await t.action(internal.shopify.syncListing, { listingId })).toBe("skipped");
     await t.run((ctx) => ctx.db.patch("shopProducts", listingId, { status: "preparing" }));
     expect(await t.action(internal.shopify.syncListing, { listingId })).toBe("skipped");
+  });
+
+  it("keeps products as drafts while checkout is off, and makes them sellable while it's on", async () => {
+    const t = newTest();
+    for (const [key, value] of Object.entries(SHOP_ENV)) vi.stubEnv(key, value);
+    const { fetchFake, productSets, productUpdates } = fakeShopify();
+    vi.stubGlobal("fetch", fetchFake);
+    await t.run((ctx) => ctx.db.insert("users", { name: "Owner", authId: OWNER.subject, platformRole: "super_admin_owner" }));
+    const owner = t.withIdentity(OWNER);
+    const { listingId } = await pending(t);
+    // Checkout is off: Shopify makes a draft, which nothing can buy.
+    expect(await t.action(internal.shopify.syncListing, { listingId })).toBe("live");
+    expect(productSets[0].status).toBe("DRAFT");
+
+    // On: every live listing's product becomes active, and a sync from now on makes it active.
+    await owner.mutation(api.admin.setFlag, { key: "commerce.checkout", enabled: true });
+    const [on] = await jobs(t, "applyCheckout");
+    expect(on.args[0]).toEqual({ open: true, cursor: null });
+    await t.action(internal.shopify.applyCheckout, { open: true, cursor: null });
+    expect(productUpdates).toEqual([{ id: "gid://shopify/Product/77", status: "ACTIVE" }]);
+    await t.run((ctx) => ctx.db.patch("shopProducts", listingId, { status: "pending" }));
+    expect(await t.action(internal.shopify.syncListing, { listingId })).toBe("live");
+    expect(productSets[1].status).toBe("ACTIVE");
+
+    // Off: drafts again, so even a cart made while it was on can't check out. The same value again
+    // starts nothing, and a run from an earlier turn of the switch changes nothing.
+    await owner.mutation(api.admin.setFlag, { key: "commerce.checkout", enabled: false });
+    await owner.mutation(api.admin.setFlag, { key: "commerce.checkout", enabled: false });
+    expect((await jobs(t, "applyCheckout")).map((job) => job.args[0])).toEqual([
+      { open: true, cursor: null },
+      { open: false, cursor: null },
+    ]);
+    await t.action(internal.shopify.applyCheckout, { open: true, cursor: null });
+    expect(productUpdates).toHaveLength(1);
+    await t.action(internal.shopify.applyCheckout, { open: false, cursor: null });
+    expect(productUpdates.at(-1)).toEqual({ id: "gid://shopify/Product/77", status: "DRAFT" });
+  });
+
+  it("gives Shopify what checkout says now when a sync from before the switch turned saves", async () => {
+    const t = newTest();
+    for (const [key, value] of Object.entries(SHOP_ENV)) vi.stubEnv(key, value);
+    const { fetchFake, productUpdates } = fakeShopify();
+    vi.stubGlobal("fetch", fetchFake);
+    const { listingId } = await pending(t);
+    await setFlag(t, "commerce.checkout", true);
+    // It started while checkout was off, so Shopify made a draft; checkout is on now.
+    await t.mutation(internal.shopify.saveSynced, { listingId, productId: "gid://shopify/Product/77", variants: [], status: "DRAFT" });
+    const [job] = await jobs(t, "applyStatus");
+    expect(job.args[0]).toEqual({ listingIds: [listingId], attempt: 0 });
+    await t.action(internal.shopify.applyStatus, { listingIds: [listingId], attempt: 0 });
+    expect(productUpdates).toEqual([{ id: "gid://shopify/Product/77", status: "ACTIVE" }]);
+    // What it wrote matches the switch: nothing more to do.
+    await t.mutation(internal.shopify.saveSynced, { listingId, productId: "gid://shopify/Product/77", variants: [], status: "ACTIVE" });
+    expect(await jobs(t, "applyStatus")).toHaveLength(1);
   });
 
   it("retries due listings while checkout is still off", async () => {

@@ -37,9 +37,9 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 - [ ] **Dev env**: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID` in Convex; `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` for the dev server. Never `PRINTFUL_AUTO_CONFIRM`.
 - [ ] **Connect**: in Admin, For sale, press **Connect Printful** (sets its webhooks and keeps the signing key) and **Connect Shopify** (subscribes the order webhooks, and warns if the Headless channel is missing). Both say what they set up.
 - [ ] **Products**: in Admin, Products, add the shirts on offer and set each one's name, prices, and back-print extra. Press **Check with Printful** on each, so its print areas come from Printful's print files.
-- [ ] **For sale**: turn on Print-size art, approve two designs (one with a back print). Each product gets a print file; open them and check the placement. Their Shopify products appear in the development store.
-- [ ] **A test order**: turn on Checkout on dev, buy with the development store's test payment gateway (Bogus Gateway), and check that /admin/orders shows it paid, Printful has a draft with the right file on the right side, and the creator's earnings show on /me/earnings as Test, with "Someone bought …" in their notifications. (Before Shopify exists, **Simulate a sale** on a For sale row shows the same earnings and notifications.)
-- [ ] **A kept design**: press Get it printed on a kept design, approve it under "Kept designs to print" in For sale, and check that its Shopify product is **Unlisted** with a handle starting `kept-`, that it doesn't appear in the development store's product search, and that its creator can buy it from the kept page (Shopify says unlisted products work in carts and checkout). Then share it with the world: the kept product is archived, and approving the shared design makes a new product under its CR number.
+- [ ] **For sale**: turn on Print-size art, approve two designs (one with a back print). Each product gets a print file; open them and check the placement. Their Shopify products appear in the development store as drafts while Checkout is off.
+- [ ] **A test order**: turn on Checkout on dev (its Shopify products become active within a few seconds), buy with the development store's test payment gateway (Bogus Gateway), and check that /admin/orders shows it paid, Printful has a draft with the right file on the right side, and the creator's earnings show on /me/earnings as Test, with "Someone bought …" in their notifications. (Before Shopify exists, **Simulate a sale** on a For sale row shows the same earnings and notifications.)
+- [ ] **A kept design**: press Get it printed on a kept design, approve it under "Kept designs to print" in For sale, and check that its Shopify product is **Unlisted** with a handle starting `kept-`, that it doesn't appear in the development store's product search, and that its creator can buy it from the kept page (Shopify says unlisted products work in carts and checkout). Turn Checkout off and on again: every product goes to Draft, then back to Active (Unlisted for the kept one). Then share it with the world: the kept product is archived, and approving the shared design makes a new product under its CR number.
 - [ ] **Placement check in Printful**: open the draft in Printful and confirm the design sits where the preview showed it. This settles whether a whole-area file needs a position. Then delete the draft.
 
 ### Monad
@@ -77,10 +77,10 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 
 ### Orders, in four steps
 
-1. [ ] Products and prices set in Admin, Products; a few designs approved in Admin, For sale, with Shopify products live.
-2. [ ] One order in Shopify Payments' test mode on the live store, end to end: a Printful draft, deleted.
-3. [ ] One real order (Jon buys a shirt). It prints and ships; Shopify emails the tracking, and /admin/orders shows "buyer emailed by Shopify".
-4. [ ] Turn Checkout on in /admin. Work pages show the buy box; "Buying opens soon" goes away.
+1. [ ] Products and prices set in Admin, Products; a few designs approved in Admin, For sale, with their Shopify products made (drafts while Checkout is off).
+2. [ ] Turn Checkout on in /admin: the Shopify products become active, and work pages show the buy box. Then one order in Shopify Payments' test mode on the live store, end to end: a Printful draft, deleted. Turn Checkout off again if the store shouldn't open yet.
+3. [ ] One real order (Jon buys a shirt, with Checkout on). It prints and ships; Shopify emails the tracking, and /admin/orders shows "buyer emailed by Shopify".
+4. [ ] Leave Checkout on: the store is open, and "Buying opens soon" is gone. To stop selling at any time, turn Checkout off: the buy box goes, and Shopify's products become drafts, so even a cart made earlier can't check out.
 
 ### Judges
 

@@ -113,6 +113,11 @@ describe("buildProductSetInput", () => {
     expect(input.status).toBe("ACTIVE");
   });
 
+  it("makes a draft while checkout is off, kept or not", () => {
+    expect(buildProductSetInput({ workId: "w1", cr: "101-001", listing: LAUNCH, draft: true }).status).toBe("DRAFT");
+    expect(buildProductSetInput({ workId: "k57a9x2", cr: "000-002", listing: LAUNCH, kept: true, draft: true }).status).toBe("DRAFT");
+  });
+
   it("adds images when given", () => {
     const withImages = buildProductSetInput({ workId: "w", cr: "101-002", imageUrls: ["https://media/a.png"], listing: LAUNCH });
     expect(withImages.files).toEqual([{ originalSource: "https://media/a.png", contentType: "IMAGE", alt: `CR 101-002 · ${NAME}` }]);
@@ -176,6 +181,7 @@ describe("syncProduct", () => {
     const result = await syncProduct(admin, { workId: "w1", cr: "101-001", title: "Night Swim", listing: LAUNCH });
     expect(result.productId).toBe("gid://shopify/Product/9");
     expect(result.variants).toHaveLength(20);
+    expect(result.status).toBe("ACTIVE");
     const productCall = JSON.parse(calls[1].body) as { query: string; variables: { identifier: { handle: string }; input: { variants: Array<unknown> } } };
     expect(productCall.variables.identifier).toEqual({ handle: "cr-101-001-586" });
     expect(productCall.variables.input.variants).toHaveLength(20);

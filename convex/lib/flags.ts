@@ -29,7 +29,7 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
     key: "commerce.checkout",
     label: "Checkout",
     description:
-      "Shoppers buy shirts through Shopify checkout, and paid orders go to Printful. Turn it on only after the Shopify and Printful keys are set. While it's off, work pages say Buying opens soon and production shows Early access.",
+      "Shoppers buy shirts through Shopify checkout, and paid orders go to Printful. Turn it on only after the Shopify and Printful keys are set. While it's off, work pages say Buying opens soon, production shows Early access, and Shopify keeps the products as drafts, so even a cart made earlier can't check out.",
     defaultOn: false,
   },
   {

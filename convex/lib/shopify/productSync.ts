@@ -85,6 +85,17 @@ function money(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
+export type ProductStatus = "ACTIVE" | "UNLISTED" | "DRAFT" | "ARCHIVED";
+
+// What a listing's product is in Shopify. A draft while checkout is off (convex/shopify.ts,
+// applyCheckout), so a cart made before it closed can't check out. A kept design sells to its
+// creator alone, so its product is unlisted: Shopify leaves it out of product lists, search,
+// collections, recommendations, and the sitemap, while carts and checkout treat it like an active
+// product (Admin API 2025-10 and later). Anything else is active.
+export function productStatus(args: { kept?: boolean; draft?: boolean }): ProductStatus {
+  return args.draft ? "DRAFT" : args.kept ? "UNLISTED" : "ACTIVE";
+}
+
 export function buildProductSetInput(args: {
   workId: string;
   cr: string;
@@ -92,6 +103,7 @@ export function buildProductSetInput(args: {
   imageUrls?: Array<string>;
   listing: SaleListing;
   kept?: boolean;
+  draft?: boolean;
 }) {
   const variants = variantList(args.cr, args.listing);
   const colors = args.listing.colors.filter((c) => variants.some((v) => v.color === c.code));
@@ -104,10 +116,7 @@ export function buildProductSetInput(args: {
     title,
     vendor: PRINT_PRODUCT.vendor,
     productType: GARMENT_KINDS[args.listing.kind]?.label ?? PRINT_PRODUCT.productType,
-    // A kept design sells to its creator alone, so its product is unlisted: Shopify leaves it out
-    // of product lists, search, collections, recommendations, and the sitemap, while carts and
-    // checkout treat it like an active product (Admin API 2025-10 and later).
-    status: args.kept ? "UNLISTED" : "ACTIVE",
+    status: productStatus(args),
     productOptions: [
       { name: "Color", values: colors.map((c) => ({ name: c.name })) },
       { name: "Size", values: sizes.map((s) => ({ name: s })) },
@@ -196,15 +205,15 @@ export function matchVariants(cr: string, nodes: Array<VariantNode>, listing: Sa
 }
 
 // Sets a product's status: ARCHIVED for one CultRemix no longer sells (a kept design's, once it's
-// shared with the world), DRAFT for one taken off sale for now (a design taken down, which an
-// approval can make ACTIVE again). Shopify keeps either for the orders that used it, and nothing can
-// buy it.
-export async function setProductStatus(admin: ShopifyAdmin, productId: string, status: "ARCHIVED" | "DRAFT"): Promise<void> {
+// shared with the world), DRAFT for one off sale for now (a design taken down, or every product
+// while checkout is off), and ACTIVE or UNLISTED to sell it again. Shopify keeps a draft or archived
+// product for the orders that used it, and nothing can buy it.
+export async function setProductStatus(admin: ShopifyAdmin, productId: string, status: ProductStatus): Promise<void> {
   const data = await admin.graphql<{ productUpdate: { userErrors: Array<{ message: string }> } }>(ARCHIVE_MUTATION, {
     product: { id: productId, status },
   });
   if (data.productUpdate.userErrors.length) {
-    throw new Error(`Shopify refused ${status.toLowerCase()}: ${data.productUpdate.userErrors.map((e) => e.message).join("; ")}`);
+    throw new Error(`Shopify refused status ${status}: ${data.productUpdate.userErrors.map((e) => e.message).join("; ")}`);
   }
 }
 
@@ -216,8 +225,8 @@ export async function archiveProduct(admin: ShopifyAdmin, productId: string): Pr
 // reads from. Returns the product and every variant's GID.
 export async function syncProduct(
   admin: ShopifyAdmin,
-  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string>; listing: SaleListing; kept?: boolean },
-): Promise<{ productId: string; variants: Array<SyncedVariant> }> {
+  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string>; listing: SaleListing; kept?: boolean; draft?: boolean },
+): Promise<{ productId: string; variants: Array<SyncedVariant>; status: ProductStatus }> {
   const input = buildProductSetInput(args);
   const data = await admin.graphql<ProductSetResult>(PRODUCT_SET_MUTATION, {
     input,
@@ -240,5 +249,5 @@ export async function syncProduct(
   if (published.publishablePublish.userErrors.length) {
     throw new Error(`Publishing refused: ${published.publishablePublish.userErrors.map((e) => e.message).join("; ")}`);
   }
-  return { productId: product.id, variants };
+  return { productId: product.id, variants, status: productStatus(args) };
 }

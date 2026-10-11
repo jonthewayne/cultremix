@@ -1,10 +1,12 @@
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { creditBalance, getAppSettings } from "./identity";
 import { adminAllows, requireAdmin } from "./lib/adminAccess";
 import { memberSpendToday } from "./lib/budget";
 import { isCreator, setCreatorAccess } from "./lib/creators";
-import { FEATURE_FLAGS, flagDefinition } from "./lib/flags";
+import { FEATURE_FLAGS, flagDefault, flagDefinition } from "./lib/flags";
+import { COMMERCE_FLAG } from "./lib/shopFlags";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -113,8 +115,13 @@ export const setFlag = mutation({
       .query("featureFlags")
       .withIndex("by_key", (q) => q.eq("key", args.key))
       .unique();
+    const was = row ? row.enabled : flagDefault(args.key);
     if (row) await ctx.db.patch("featureFlags", row._id, { enabled: args.enabled });
     else await ctx.db.insert("featureFlags", { key: args.key, enabled: args.enabled });
+    // Checkout brings the products in Shopify along: drafts while it's off, sellable while it's on.
+    if (args.key === COMMERCE_FLAG && was !== args.enabled) {
+      await ctx.scheduler.runAfter(0, internal.shopify.applyCheckout, { open: args.enabled, cursor: null });
+    }
     return null;
   },
 });

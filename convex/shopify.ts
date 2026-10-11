@@ -2,10 +2,10 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, query } from "./_generated/server";
 import type { ActionCtx, QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getViewerUser } from "./identity";
 import { createShopifyAdmin, shopifyAdminConfigFromEnv, type FetchLike } from "./lib/shopify/adminClient";
-import { archiveProduct, crNumber, setProductStatus, syncProduct, variantSku } from "./lib/shopify/productSync";
+import { archiveProduct, crNumber, setProductStatus, syncProduct, variantSku, type ProductStatus } from "./lib/shopify/productSync";
 import { commerceOpen } from "./lib/shopFlags";
 import { listingsOf } from "./lib/shopProduct";
 import { publicUrl } from "./lib/r2";
@@ -73,9 +73,23 @@ export function retryDelay(attempts: number): number {
   return Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1));
 }
 
+const productStatusValidator = v.union(v.literal("ACTIVE"), v.literal("UNLISTED"), v.literal("DRAFT"), v.literal("ARCHIVED"));
+
+// What a listing's Shopify product should be now, or null to leave it alone. Every product is a
+// draft while checkout is off (so a cart made before it closed can't check out) and once its design
+// is taken down; a live listing sells, unlisted for a kept design; a paused listing keeps what it has
+// (pausing leaves Shopify alone, and resuming syncs it again).
+function wantedStatus(listing: Doc<"shopProducts">["status"], work: Doc<"works"> | null, open: boolean): ProductStatus | null {
+  if (!work || work.status === "withdrawn" || !open) return "DRAFT";
+  if (listing !== "live") return null;
+  if (work.status === "private") return "UNLISTED";
+  return work.status === "published" ? "ACTIVE" : null;
+}
+
 // What a listing's Shopify product is made from. Null when it isn't ready to sync (paused, still
 // preparing, or its work is neither public nor kept). A kept design is approved for its creator
-// alone; its product is named "Kept design" and only the creator's cart can reach it.
+// alone; its product is named "Kept design" and only the creator's cart can reach it. draft: checkout
+// is off, so Shopify keeps the product as a draft until it opens.
 export const listingForSync = internalQuery({
   args: { listingId: v.id("shopProducts") },
   returns: v.union(
@@ -87,6 +101,7 @@ export const listingForSync = internalQuery({
       imageUrls: v.array(v.string()),
       listing: listingValidator,
       kept: v.boolean(),
+      draft: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -111,6 +126,7 @@ export const listingForSync = internalQuery({
       imageUrls,
       listing: row.listing,
       kept: work.status === "private",
+      draft: !(await commerceOpen(ctx)),
     };
   },
 });
@@ -125,8 +141,15 @@ const syncedVariant = v.object({
 });
 
 export const saveSynced = internalMutation({
-  // kept: the sync wrote a kept design's product (unlisted, for its creator alone).
-  args: { listingId: v.id("shopProducts"), productId: v.string(), variants: v.array(syncedVariant), kept: v.optional(v.boolean()) },
+  // kept: the sync wrote a kept design's product (unlisted, for its creator alone). status: the
+  // status the sync gave the product.
+  args: {
+    listingId: v.id("shopProducts"),
+    productId: v.string(),
+    variants: v.array(syncedVariant),
+    kept: v.optional(v.boolean()),
+    status: v.optional(productStatusValidator),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await ctx.db.get("shopProducts", args.listingId);
@@ -160,9 +183,10 @@ export const saveSynced = internalMutation({
     }
     const now = Date.now();
     const withdrawn = work?.status === "withdrawn";
+    const status = row.status === "paused" || withdrawn ? ("paused" as const) : ("live" as const);
     // Paused while it synced: it stays paused, with its product id kept.
     await ctx.db.patch("shopProducts", row._id, {
-      status: row.status === "paused" || withdrawn ? ("paused" as const) : ("live" as const),
+      status,
       shopifyProductId: args.productId,
       lastError: undefined,
       nextAttemptAt: undefined,
@@ -171,7 +195,15 @@ export const saveSynced = internalMutation({
     });
     // Taken down while it synced (convex/moderation.ts): Shopify made this product active after the
     // takedown drafted the others (a first sync had no product to draft yet), so it's drafted too.
-    if (withdrawn) await ctx.scheduler.runAfter(0, internal.shopify.draftProducts, { productIds: [args.productId] });
+    if (withdrawn) {
+      if (args.status !== "DRAFT") await ctx.scheduler.runAfter(0, internal.shopify.draftProducts, { productIds: [args.productId] });
+    } else if (args.status !== undefined) {
+      // Checkout opened or closed while it synced: Shopify gets what the switch says now.
+      const want = wantedStatus(status, work, await commerceOpen(ctx));
+      if (want !== null && want !== args.status) {
+        await ctx.scheduler.runAfter(0, internal.shopify.applyStatus, { listingIds: [row._id], attempt: 0 });
+      }
+    }
     return null;
   },
 });
@@ -231,11 +263,13 @@ export const syncListing = internalAction({
         imageUrls: job.imageUrls,
         listing: job.listing,
         kept: job.kept,
+        draft: job.draft,
       });
       await ctx.runMutation(internal.shopify.saveSynced, {
         listingId: args.listingId,
         productId: result.productId,
         kept: job.kept,
+        status: result.status,
         variants: result.variants.map((variant) => ({
           color: variant.color,
           size: variant.size,
@@ -293,6 +327,89 @@ export const draftProducts = internalAction({
         console.warn(`Drafting ${productId} failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+    return null;
+  },
+});
+
+// ---- Checkout open or closed: what Shopify's products are ----
+
+const STATUS_RETRIES = 4;
+const CHECKOUT_PAGE = 50;
+
+// The listings' products and what each should be now (wantedStatus), read just before writing so a
+// late write can't undo a newer change.
+export const wantedStatuses = internalQuery({
+  args: { listingIds: v.array(v.id("shopProducts")) },
+  returns: v.array(v.object({ listingId: v.id("shopProducts"), productId: v.string(), status: productStatusValidator })),
+  handler: async (ctx, args) => {
+    const open = await commerceOpen(ctx);
+    const out = [];
+    for (const listingId of args.listingIds) {
+      const row = await ctx.db.get("shopProducts", listingId);
+      if (!row?.shopifyProductId) continue;
+      const status = wantedStatus(row.status, await ctx.db.get("works", row.workId), open);
+      if (status) out.push({ listingId, productId: row.shopifyProductId, status });
+    }
+    return out;
+  },
+});
+
+// Writes each listing's wanted status to Shopify; the ones Shopify refused try again with backoff.
+async function writeStatuses(ctx: ActionCtx, listingIds: Array<Id<"shopProducts">>, attempt: number) {
+  const admin = shopifyAdminForAction(ctx);
+  if (!admin || listingIds.length === 0) return;
+  const items = await ctx.runQuery(internal.shopify.wantedStatuses, { listingIds });
+  const failed: Array<Id<"shopProducts">> = [];
+  for (const item of items) {
+    try {
+      await setProductStatus(admin, item.productId, item.status);
+    } catch (error) {
+      console.warn(`Setting ${item.productId} to ${item.status} failed: ${error instanceof Error ? error.message : String(error)}`);
+      failed.push(item.listingId);
+    }
+  }
+  if (failed.length > 0 && attempt < STATUS_RETRIES) {
+    await ctx.scheduler.runAfter(retryDelay(attempt + 2), internal.shopify.applyStatus, { listingIds: failed, attempt: attempt + 1 });
+  }
+}
+
+export const applyStatus = internalAction({
+  args: { listingIds: v.array(v.id("shopProducts")), attempt: v.number() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await writeStatuses(ctx, args.listingIds, args.attempt);
+    return null;
+  },
+});
+
+// A page of listings with Shopify products, and whether checkout is open now.
+export const checkoutPage = internalQuery({
+  args: { cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ open: v.boolean(), listingIds: v.array(v.id("shopProducts")), cursor: v.string(), done: v.boolean() }),
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("shopProducts").paginate({ cursor: args.cursor, numItems: CHECKOUT_PAGE });
+    return {
+      open: await commerceOpen(ctx),
+      listingIds: page.page.filter((row) => row.shopifyProductId).map((row) => row._id),
+      cursor: page.continueCursor,
+      done: page.isDone,
+    };
+  },
+});
+
+// Turning Checkout on or off in Admin (admin.setFlag) brings the products in Shopify along, a page
+// at a time: off makes every one a draft, so even a cart made before it closed can't check out; on
+// makes each live listing's product sellable again. A later turn of the switch takes over from an
+// earlier run.
+export const applyCheckout = internalAction({
+  args: { open: v.boolean(), cursor: v.union(v.string(), v.null()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (!shopifyAdminForAction(ctx)) return null;
+    const page = await ctx.runQuery(internal.shopify.checkoutPage, { cursor: args.cursor });
+    if (page.open !== args.open) return null;
+    await writeStatuses(ctx, page.listingIds, 0);
+    if (!page.done) await ctx.scheduler.runAfter(0, internal.shopify.applyCheckout, { open: args.open, cursor: page.cursor });
     return null;
   },
 });

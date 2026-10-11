@@ -61,7 +61,7 @@ function AdminSale() {
         {overview ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2 text-sm font-bold">
-              <Flag on={overview.checkoutOn} label="Checkout" note={overview.checkoutOn ? "on" : "off: pages say Buying opens soon"} />
+              <Flag on={overview.checkoutOn} label="Checkout" note={overview.checkoutOn ? "on" : "off: pages say Buying opens soon, and Shopify keeps the products as drafts"} />
               <Flag on={overview.upscaleOn} label="Print-size art" note={overview.upscaleOn ? "on" : "off: approvals stop at the upscale"} />
               <Flag on={overview.shopify} label="Shopify" note={overview.shopify ? "connected" : "not set up: products wait"} />
               <Flag on={overview.printful} label="Printful" note={overview.printful ? "connected" : "not set up: orders wait"} />
