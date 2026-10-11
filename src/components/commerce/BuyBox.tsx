@@ -1,5 +1,8 @@
 import { useCallback, useState } from "react";
 import { formatPrice } from "../../../shared/config/print-products";
+import type { GarmentKind } from "../../../shared/config/print-products";
+import type { PrintArea, RelativePlacement } from "~/lib/print/shirtPlacement";
+import { OnTheShirt } from "./OnTheShirt";
 import { ColorSwatches } from "~/components/cr/ColorSwatches";
 import { useCaptureRef } from "~/lib/ref";
 import { cn } from "~/lib/utils";
@@ -9,7 +12,10 @@ import { useCart } from "./useCart";
 export type BuyProduct = {
   key: string;
   name: string;
+  kind: GarmentKind;
   side: "front" | "back";
+  placement: RelativePlacement;
+  printArea: PrintArea;
   // key: the garment color key the page selects by; code: the SKU code the cart sends.
   colors: Array<{ key: string; code: string; name: string; hex: string }>;
   sizes: Array<string>;
@@ -31,12 +37,14 @@ export function BuyBox({
   onProductChange,
   colorKey,
   onColorChange,
+  artUrl,
 }: {
   offer: BuyOffer;
   product: BuyProduct;
   onProductChange: (key: string) => void;
   colorKey: string;
   onColorChange: (key: string) => void;
+  artUrl?: string;
 }) {
   useCaptureRef();
   const { cart, error, busy, addLine, setQuantity, removeLine } = useCart();
@@ -99,6 +107,10 @@ export function BuyBox({
       )}
 
       {picked && <ColorSwatches colors={product.colors} value={picked.key} onChange={onColorChange} />}
+
+      {picked && (
+        <OnTheShirt kind={product.kind} placement={product.placement} printArea={product.printArea} hex={picked.hex} artUrl={artUrl} />
+      )}
 
       <div>
         <p className="text-sm font-bold uppercase tracking-wider">Size</p>

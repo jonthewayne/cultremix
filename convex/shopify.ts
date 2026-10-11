@@ -8,7 +8,7 @@ import { commerceOpen } from "./lib/shopFlags";
 import { listingsOf } from "./lib/shopProduct";
 import { publicUrl } from "./lib/r2";
 import { PRINT_SIZES } from "../shared/config/print-products";
-import { garmentKindValidator, printSideValidator } from "./schema/merch";
+import { garmentKindValidator, printAreaValidator, printSideValidator, relativePlacementValidator } from "./schema/merch";
 import { listingValidator } from "./schema/shop";
 
 // Shopify products for works on sale (V1 U9). An admin approves a work (convex/sales.ts); each of its
@@ -267,6 +267,9 @@ const offerProductValidator = v.object({
   name: v.string(),
   kind: garmentKindValidator,
   side: printSideValidator,
+  // Where the design sits, for the buy box's drawn garment.
+  placement: relativePlacementValidator,
+  printArea: printAreaValidator,
   // key is the garment color key (works.offeredColors), so the page's swatches and the buy box
   // share one selection; code is the SKU code the cart sends.
   colors: v.array(v.object({ key: v.string(), code: v.string(), name: v.string(), hex: v.string() })),
@@ -313,6 +316,8 @@ export const offer = query({
         name: listing.name,
         kind: listing.kind,
         side: listing.placement.side,
+        placement: listing.placement,
+        printArea: listing.printArea,
         colors: colors.map(({ key, code, name, hex }) => ({ key, code, name, hex })),
         sizes: PRINT_SIZES.filter((size) => sold.some((variant) => variant.size === size)),
         variants: sold.map((variant) => ({

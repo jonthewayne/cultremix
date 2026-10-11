@@ -4,8 +4,8 @@ import { action, internalMutation, internalQuery, mutation, query } from "./_gen
 import { requireAdmin } from "./lib/adminAccess";
 import { GARMENT_COLORS, colorKey } from "./lib/garments";
 import type { GarmentColor, Palette } from "./lib/garments";
-import { chosenProducts, merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
-import { garmentKindValidator, merchColor, printAreaValidator } from "./schema/merch";
+import { areaFor, chosenProducts, merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
+import { garmentKindValidator, merchColor, printAreaValidator, relativePlacementValidator } from "./schema/merch";
 import { createPrintful, printfulConfigFromEnv } from "./lib/printful/client";
 import { areasFromPrintfiles } from "./lib/printful/setup";
 import { garmentKindOf } from "../shared/config/print-products";
@@ -107,7 +107,14 @@ export const offered = query({
 export const comesOn = query({
   args: { cr: v.string() },
   returns: v.array(
-    v.object({ name: v.string(), kind: garmentKindValidator, side: v.union(v.literal("front"), v.literal("back")), priceCents: v.number() }),
+    v.object({
+      name: v.string(),
+      kind: garmentKindValidator,
+      side: v.union(v.literal("front"), v.literal("back")),
+      priceCents: v.number(),
+      placement: relativePlacementValidator,
+      printArea: printAreaValidator,
+    }),
   ),
   handler: async (ctx, args) => {
     const match = /^(\d{3})-(\d{3})$/u.exec(args.cr.trim());
@@ -122,6 +129,8 @@ export const comesOn = query({
       kind: product.kind,
       side: placement.side,
       priceCents: product.priceCents + (placement.side === "back" ? product.backExtraCents : 0),
+      placement,
+      printArea: areaFor(product, placement.side),
     }));
   },
 });

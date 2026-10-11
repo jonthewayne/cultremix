@@ -29,6 +29,7 @@ import { pageColors, selectedColor, type PickedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
 import { PhotoSquare } from "./index";
 import { BuyBox } from "~/components/commerce/BuyBox";
+import { OnTheShirt } from "~/components/commerce/OnTheShirt";
 import { formatPrice } from "../../shared/config/print-products";
 
 export const Route = createFileRoute("/cr/$cr")({
@@ -131,6 +132,7 @@ function ShopPage() {
                 onProductChange={(key) => setPickedProduct({ cr: item.cr, key })}
                 colorKey={color?.key ?? ""}
                 onColorChange={pick}
+                artUrl={item.artMediumUrl ?? item.artUrl}
               />
             ) : (
               <>
@@ -145,6 +147,15 @@ function ShopPage() {
                   </span>
                 </div>
                 {color && <ColorSwatches colors={colors} value={color.key} onChange={pick} />}
+                {color && comesOn?.[0] && (
+                  <OnTheShirt
+                    kind={comesOn[0].kind}
+                    placement={comesOn[0].placement}
+                    printArea={comesOn[0].printArea}
+                    hex={color.hex}
+                    artUrl={item.artMediumUrl ?? item.artUrl}
+                  />
+                )}
                 <div>
                   <p className="text-sm font-bold uppercase tracking-wider">Size</p>
                   <div className="mt-2 flex flex-wrap gap-2">
