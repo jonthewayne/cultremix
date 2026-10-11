@@ -1,4 +1,5 @@
 import { hairShape, noteSections } from "../../convex/lib/prompts";
+import type { PhotoGarment } from "../../convex/lib/prompts";
 import type { RemixPart } from "../../convex/lib/remixParts";
 
 // Every capability the image pipeline aims to support, as cases the suite can rerun: the image model
@@ -64,8 +65,16 @@ export type GenerateCase = Base & {
   keeps?: KeepsCheck;
 };
 
-// The model photo: one 1024x1024 photo of someone wearing the design.
-export type PhotoCase = Base & { kind: "photo"; design: string; shirt: string; asks: Array<Ask>; words?: WordsCheck };
+// The model photo: one 1024x1024 photo of someone wearing the design. garment is what they wear and
+// where the design sits (convex/lib/prompts.ts photoPrompt); absent, a tee with the default placement.
+export type PhotoCase = Base & {
+  kind: "photo";
+  design: string;
+  shirt: string;
+  garment?: PhotoGarment;
+  asks: Array<Ask>;
+  words?: WordsCheck;
+};
 
 export type Notes = { summary?: string; kind?: "photo" | "art"; notes: string };
 export type NotesCase = Base & {
@@ -701,6 +710,43 @@ export const CASES: Array<Case> = [
       { id: "worn", ask: "Is a person wearing a t-shirt with the design printed on the front?" },
       { id: "faithful", ask: "Does the printed graphic match the design: the same mushrooms and lettering?" },
       { id: "photo", ask: "Is it a realistic photograph?" },
+    ],
+  },
+  {
+    kind: "photo",
+    id: "model-photo-hoodie-back",
+    group: "photo",
+    title: "Model photo: a hoodie printed on the back",
+    supports:
+      "The photo follows where the creator placed the design: a pullover hoodie with the design large on the back, shot from behind with the model looking over a shoulder.",
+    since: "2026-10-10",
+    design: "slow-roll-night",
+    shirt: "#ffffff",
+    garment: { kind: "hoodie", placement: { side: "back", size: 0.85, drop: 0.08 } },
+    words: { has: ["SLOW", "ROLL"] },
+    asks: [
+      { id: "hoodie", ask: "Is the person wearing a hooded sweatshirt (a hoodie)?" },
+      { id: "back", ask: "Is the design printed on the back of the garment, with the person seen from behind?" },
+      { id: "faithful", ask: "Does the printed graphic match the design: the same snail on a skateboard and the same lettering?" },
+      { id: "photo", ask: "Is it a realistic photograph?" },
+    ],
+  },
+  {
+    kind: "photo",
+    id: "model-photo-small-chest",
+    group: "photo",
+    title: "Model photo: a small print on the chest",
+    supports: "A design placed Small near the top prints small on the upper chest, not across the whole front.",
+    since: "2026-10-10",
+    design: "grow-slow",
+    shirt: "#1b1b1c",
+    garment: { kind: "tee", placement: { side: "front", size: 0.4, drop: 0 } },
+    asks: [
+      { id: "worn", ask: "Is a person wearing a t-shirt with the design printed on the front?" },
+      { id: "small", ask: "Is the printed design small, covering well under half of the shirt's width?" },
+      { id: "upper", ask: "Is the design on the upper chest, closer to the collar than to the hem?" },
+      { id: "centered", ask: "Is the design centered left to right on the shirt, rather than off to one side like a pocket logo?" },
+      { id: "faithful", ask: "Does the printed graphic match the design: the same mushrooms?" },
     ],
   },
 

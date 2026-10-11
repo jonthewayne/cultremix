@@ -83,7 +83,7 @@ describe("sizeWords", () => {
   it("describes the print for the model photo", () => {
     expect(sizeWords(DEFAULT_PLACEMENT)).toBe("a large print centered on the upper chest");
     expect(sizeWords({ side: "back", size: 0.65, drop: 0.5 })).toBe("a medium-size print centered on the back");
-    expect(sizeWords({ side: "front", size: 0.3, drop: 0 })).toBe("a small print on the upper chest");
+    expect(sizeWords({ side: "front", size: 0.3, drop: 0 })).toBe("a small print centered on the upper chest, not off to one side");
     expect(sizeWords({ side: "back", size: 1, drop: 0 })).toBe("a big print filling most of the back");
   });
 });

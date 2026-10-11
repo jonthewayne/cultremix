@@ -45,6 +45,10 @@ function generateLines(c: Extract<Case, { kind: "generate" | "photo" }>) {
     for (const ask of c.gridAsks ?? []) lines.push(`Checks, whole grid: ${askLine(ask, 1)}`);
   } else {
     lines.push(`Design: \`${c.design}\` on a ${c.shirt} shirt`);
+    if (c.garment) {
+      const { side, size, drop } = c.garment.placement;
+      lines.push(`Worn as: a ${c.garment.kind}, printed on the ${side} at ${Math.round(size * 100)}% of Full, ${Math.round(drop * 100)}% down`);
+    }
     if (c.words) lines.push(`Checks: ${wordsLine(c.words, 1)}`);
     for (const ask of c.asks) lines.push(`Checks: ${askLine(ask, 1)}`);
   }

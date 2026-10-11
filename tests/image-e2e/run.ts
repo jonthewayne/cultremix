@@ -473,7 +473,7 @@ async function runPhoto(c: PhotoCase, ctx: Context): Promise<CaseResult> {
   mkdirSync(dir, { recursive: true });
   const base = { id: c.id, group: c.group, kind: c.kind, status: c.status ?? "supported", title: c.title } as const;
   const art = await ctx.png(c.design);
-  const text = photoPrompt(c.shirt, pickLook(`suite:${c.id}`, []));
+  const text = photoPrompt(c.shirt, pickLook(`suite:${c.id}`, []), c.garment);
   writeFileSync(join(dir, "prompt.txt"), text);
   if (ctx.args.dryRun) return { ...base, passed: true, checks: [], seconds: 0, costCents: 0, note: "dry run" };
   let photo: Uint8Array;

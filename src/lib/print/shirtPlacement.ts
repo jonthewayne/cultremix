@@ -92,7 +92,9 @@ export function sizeWords(placement: RelativePlacement) {
   const rel = clampRelative(placement);
   const part = rel.side === "back" ? "back" : "chest";
   const where = rel.drop < 0.3 ? `upper ${part}` : rel.drop > 0.7 ? `lower ${part}` : part;
-  if (rel.size < 0.5) return `a small print on the ${where}`;
+  // Centered every time: a small print without it reads as a left-chest logo, and the print file
+  // always centers the design.
+  if (rel.size < 0.5) return `a small print centered on the ${where}, not off to one side`;
   if (rel.size < 0.75) return `a medium-size print centered on the ${where}`;
   if (rel.size < 0.95) return `a large print centered on the ${where}`;
   return rel.side === "back" ? "a big print filling most of the back" : "a big print filling most of the front";

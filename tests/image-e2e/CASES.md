@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words.
 
-81 cases: 3 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 1 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
+83 cases: 3 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
 
 ## Words
 
@@ -409,6 +409,32 @@ A street-style photo of a model wearing the design, with the graphic reproduced 
 - Checks: Does the printed graphic match the design: the same mushrooms and lettering (1 of 1)
 - Checks: Is it a realistic photograph (1 of 1)
 - First tested 2026-09-29
+
+### `model-photo-hoodie-back`: Model photo: a hoodie printed on the back
+
+The photo follows where the creator placed the design: a pullover hoodie with the design large on the back, shot from behind with the model looking over a shoulder.
+
+- Design: `slow-roll-night` on a #ffffff shirt
+- Worn as: a hoodie, printed on the back at 85% of Full, 8% down
+- Checks: words read: SLOW ROLL (1 of 1)
+- Checks: Is the person wearing a hooded sweatshirt (a hoodie) (1 of 1)
+- Checks: Is the design printed on the back of the garment, with the person seen from behind (1 of 1)
+- Checks: Does the printed graphic match the design: the same snail on a skateboard and the same lettering (1 of 1)
+- Checks: Is it a realistic photograph (1 of 1)
+- First tested 2026-10-10
+
+### `model-photo-small-chest`: Model photo: a small print on the chest
+
+A design placed Small near the top prints small on the upper chest, not across the whole front.
+
+- Design: `grow-slow` on a #1b1b1c shirt
+- Worn as: a tee, printed on the front at 40% of Full, 0% down
+- Checks: Is a person wearing a t-shirt with the design printed on the front (1 of 1)
+- Checks: Is the printed design small, covering well under half of the shirt's width (1 of 1)
+- Checks: Is the design on the upper chest, closer to the collar than to the hem (1 of 1)
+- Checks: Is the design centered left to right on the shirt, rather than off to one side like a pocket logo (1 of 1)
+- Checks: Does the printed graphic match the design: the same mushrooms (1 of 1)
+- First tested 2026-10-10
 
 ## Image notes (GPT-6 Luna)
 
