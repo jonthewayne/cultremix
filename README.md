@@ -19,6 +19,28 @@ Built for the Monad hackathon (Social, Attention & Culture track). Live at [cult
 | **Cloudflare R2** | One public bucket per environment. Each image lives in its own folder with a thumbnail and a medium copy; a published work's files sit under `works/<family>/<expression>/`, and anything not published sits under an unguessable 128-bit code. The full layout is in [Image generation → Storage and sizes](docs/image-generation/README.md#storage-and-sizes). |
 | **Monad** | Provenance for published designs: each work's fingerprint (SHA-256), its lineage, its Backs, and the economics rules it follows. The registry contract (`contracts/`) and the chain writer (`convex/chain.ts`) are built; the mainnet registry deploys with `bun run chain:deploy:mainnet` once production's relayer has MON. See below. |
 
+How a design travels:
+
+```mermaid
+flowchart LR
+  subgraph Make
+    A[Studio: images, styles, words] -->|one grid call| B[CultRemix Gateway<br/>GPT Image 2.5]
+    B --> C[Four designs<br/>in R2]
+  end
+  subgraph Publish
+    C -->|Publish| D[CR number<br/>work page, model photo]
+    D -->|fingerprint, lineage| E[(Monad registry<br/>via relayer)]
+    D -->|Remix this| A
+  end
+  subgraph Sell
+    D -->|admin approves| F[Print files, 300 DPI<br/>fal upscale]
+    F --> G[Shopify products]
+    G -->|checkout| H[Order webhook]
+    H --> I[Printful prints and ships]
+    H --> J[15% to the people<br/>behind the design]
+  end
+```
+
 More detail: [Architecture](docs/architecture.md), [Image generation](docs/image-generation/README.md), [Onchain provenance ADR](docs/adr/0001-onchain-provenance.md).
 
 ## What's in it today
