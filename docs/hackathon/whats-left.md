@@ -24,14 +24,14 @@ As of October 11, 2026, 2:50 p.m. Pacific. The Monad submission is due **Tuesday
    - Circle: a developer account, with a test key now and a live key for production.
 4. **A Screen Sharing session on mighteous.** Jon signs in once, in a Chrome window with its own profile, and the Builder does the rest there: the development store and its app (scopes in the [launch checklist](../launch-checklist.md#the-shop)), the Headless channel's token, the shipping rate, and Printful's store and token. Then three presses in Admin finish the setup: **Connect Printful**, **Connect Shopify**, and **Check with Printful**.
 5. **Gateway credit.** The CultRemix Gateway account had $13.51 on October 11 at 2:50 p.m. (Admin, Overview shows it). Judges' designs, notes, and model photos are paid from it, about 13¢ a batch, so add credit (about $50) before judging.
-6. **MON.** Testnet faucet MON for dev's relayer `0x7D39bCfd08b206fEaacb4F1E2817aDB22e06f921` (dev already has its relayer key, so the testnet registry can go up as soon as the MON lands), and about 1 MON for production's relayer (deploying the registry needs about 0.47 MON on hand; each publish costs a few hundredths).
+6. **MON.** Testnet faucet MON for dev's relayer `0x7D39bCfd08b206fEaacb4F1E2817aDB22e06f921` (dev already has its relayer key, so the testnet registry can go up as soon as the MON lands), and about 1 MON for production's relayer (deploying the registry needs about 0.47 MON on hand; each publish costs a few hundredths). OKX sells MON and withdraws it on the Monad network straight to the relayer's address (Coinbase lists MON too; check that its withdraw screen offers the Monad network). Pick the network named Monad, never Ethereum or Base, and send a small test amount first.
 7. **A backup of production's relayer key** in Jon's password manager, copied over Screen Sharing.
 8. **The hackathon pieces.**
    - Make the repo public.
    - Approve the store policies at /policies, then paste them into Shopify.
    - Paste the submission form's fields into [submission.md](submission.md).
    - Invite the first creators.
-   - Once production is deployed, publish 8 to 10 designs there and a few remixes of them (variations and a fork), so judges land on a full feed, Trending, and family trees.
+   - Once production is deployed, publish 8 to 10 designs there and a few remixes of them (variations and a fork), so judges land on a full feed, Trending, and family trees. [launch-set.md](launch-set.md) has requests that worked on dev, about $2 and half an hour in all.
    - Record the two videos ([scripts](video-scripts.md)).
 
 ## Builder work
