@@ -15,7 +15,7 @@ Everyone else keeps signing in with an email code, exactly as before.
 
 1. Open [cultremix.com/login](https://cultremix.com/login).
 2. Tap **Have a password? Sign in with it**.
-3. Enter the email and password we sent. The studio opens.
+3. Enter the email and password we sent. The studio opens, with a short **Welcome, judge** list of what to try (make, publish, remix, follow the lineage to /onchain) under its title until they press **Got it**.
 
 If the password is wrong, the page says “That email and password don’t match.” After too many tries in a row it asks them to wait a minute.
 

@@ -4,6 +4,9 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 type Ctx = QueryCtx | MutationCtx;
 
+// The creatorAccess note on a hackathon judge's account (convex/judges.ts).
+export const JUDGE_ACCESS_NOTE = "judge";
+
 // Creator № 1 is the owner's (bootstrapFirstSuperAdmin), so the counter starts at 2.
 export const FIRST_ASSIGNED_CREATOR_NUMBER = 2;
 

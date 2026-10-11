@@ -146,7 +146,11 @@ describe("judge accounts", () => {
     // Onboarding sees the username and grants nothing more.
     const asJudge = t.withIdentity({ subject: "auth-judge-1", issuer: "test" });
     const viewer = await asJudge.mutation(api.identity.completeOnboarding, { username: "other" });
-    expect(viewer).toMatchObject({ username: "judge_one", credits: 40, needsUsername: false });
+    expect(viewer).toMatchObject({ username: "judge_one", credits: 40, needsUsername: false, isJudge: true });
+    // The studio shows judges where to start; nobody else.
+    expect(await asJudge.query(api.identity.viewer, {})).toMatchObject({ isJudge: true });
+    const member = await addUser(t, "alice");
+    expect(await member.as.query(api.identity.viewer, {})).toMatchObject({ isJudge: false });
   });
 
   it("refuses a username someone else has", async () => {

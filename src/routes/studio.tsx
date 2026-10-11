@@ -38,6 +38,7 @@ import { RemixSetupSheet } from "~/components/studio/RemixSetupSheet";
 import { DesignMenu, SessionList, SessionTitle } from "~/components/studio/StudioSessions";
 import { Compare } from "~/components/studio/Compare";
 import { FavoritesTray } from "~/components/studio/FavoritesTray";
+import { JudgeWelcome } from "~/components/studio/JudgeWelcome";
 import { Viewer } from "~/components/studio/Viewer";
 import { designItems, isFailed } from "~/components/studio/design";
 import { useDesignActions } from "~/components/studio/designActions";
@@ -682,6 +683,7 @@ function StudioPage() {
             ) : (
               !loadingSession && <p className="text-lg text-neutral-600">New design. Your sessions are below.</p>
             )}
+            {viewer?.isJudge && <JudgeWelcome />}
           </div>
 
           <form onSubmit={submit} className="flex min-w-0 flex-col gap-5">

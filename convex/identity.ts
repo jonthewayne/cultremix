@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { adminAllows } from "./lib/adminAccess";
+import { JUDGE_ACCESS_NOTE, activeCreatorAccess } from "./lib/creators";
 import { validateUsername } from "./lib/username";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -31,6 +32,8 @@ export const viewerValidator = v.object({
   isAdmin: v.optional(v.boolean()),
   // Admins who manage (ops, owner): they can take a design down from its page.
   canManage: v.optional(v.boolean()),
+  // A hackathon judge's account (convex/judges.ts): the studio shows them where to start.
+  isJudge: v.optional(v.boolean()),
 });
 
 export async function getViewerUser(ctx: Ctx): Promise<Doc<"users"> | null> {
@@ -87,6 +90,7 @@ async function toViewer(ctx: Ctx, user: Doc<"users">) {
     canPickModel: adminAllows(user.platformRole, "manage"),
     isAdmin: adminAllows(user.platformRole, "view"),
     canManage: adminAllows(user.platformRole, "manage"),
+    isJudge: (await activeCreatorAccess(ctx, user._id))?.note === JUDGE_ACCESS_NOTE,
   };
 }
 

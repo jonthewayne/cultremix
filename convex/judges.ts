@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { createAuth } from "./auth";
 import { requireAdmin } from "./lib/adminAccess";
-import { ensureCreatorNumber } from "./lib/creators";
+import { JUDGE_ACCESS_NOTE, ensureCreatorNumber } from "./lib/creators";
 import { PASSWORD_MIN_LENGTH, generateJudgePassword } from "./lib/passwordAuth";
 import { validateUsername } from "./lib/username";
 import type { Id } from "./_generated/dataModel";
@@ -12,7 +12,7 @@ import type { ActionCtx } from "./_generated/server";
 // Judge accounts (KTD-15): email and password, made only here. Each gets creator access,
 // 40 credits, and a username, so a judge lands in the studio without onboarding.
 export const JUDGE_CREDITS = 40;
-export const JUDGE_NOTE = "judge";
+export const JUDGE_NOTE = JUDGE_ACCESS_NOTE;
 
 const provisionArgs = {
   email: v.string(),
