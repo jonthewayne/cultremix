@@ -132,6 +132,7 @@ import type * as lib_styleParts from "../lib/styleParts.js";
 import type * as lib_trending from "../lib/trending.js";
 import type * as lib_upscaleFlow from "../lib/upscaleFlow.js";
 import type * as lib_username from "../lib/username.js";
+import type * as lib_waitlistEmail from "../lib/waitlistEmail.js";
 import type * as lib_wordReader from "../lib/wordReader.js";
 import type * as lineage from "../lineage.js";
 import type * as merch from "../merch.js";
@@ -314,6 +315,7 @@ declare const fullApi: ApiFromModules<{
   "lib/trending": typeof lib_trending;
   "lib/upscaleFlow": typeof lib_upscaleFlow;
   "lib/username": typeof lib_username;
+  "lib/waitlistEmail": typeof lib_waitlistEmail;
   "lib/wordReader": typeof lib_wordReader;
   lineage: typeof lineage;
   merch: typeof merch;

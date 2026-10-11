@@ -11,10 +11,13 @@ export const publishTables = {
     workId: v.optional(v.id("works")),
     userId: v.optional(v.id("users")),
     createdAt: v.number(),
+    // When its one email went out (waitlist.emailOpen): the design could be bought then.
+    notifiedAt: v.optional(v.number()),
   })
     .index("by_email_kind_work", ["emailLower", "kind", "workId"])
     .index("by_kind_created", ["kind", "createdAt"])
-    .index("by_work", ["workId"]),
+    .index("by_work", ["workId"])
+    .index("by_work_notified", ["workId", "notifiedAt"]),
 
   waitlistTotals: defineTable({
     kind: v.union(v.literal("buy"), v.literal("creator")),
