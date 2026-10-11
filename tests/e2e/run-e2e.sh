@@ -48,6 +48,16 @@ assert_no_broken_images() {
   agent-browser eval "(() => { const broken = [...document.images].filter((i) => i.complete && i.naturalWidth === 0).map((i) => i.src); if (broken.length) throw new Error('Broken images: ' + broken.join(', ')); return true })()"
 }
 
+# Security headers (src/start.ts) on a deployed site; a local dev server loads them when it starts.
+if [[ "$BASE_URL" == https://* ]]; then
+  page_headers="$(curl -fsS -D - -o /dev/null "$BASE_URL/")"
+  expected=("x-frame-options: DENY" "x-content-type-options: nosniff")
+  [[ "$BASE_URL" == *cultremix.com* ]] && expected+=("strict-transport-security: max-age=")
+  for header in "${expected[@]}"; do
+    grep -qi "^$header" <<<"$page_headers" || { echo "$BASE_URL/ is missing the header: $header"; exit 1; }
+  done
+fi
+
 agent-browser open "$BASE_URL/"
 agent-browser wait 1500
 assert_text "get paid."

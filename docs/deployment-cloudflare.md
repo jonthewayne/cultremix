@@ -47,6 +47,10 @@ Preview builds use development mode, then the workflow patches `dist/server/wran
 
 The deploy workflow runs unit tests and TypeScript checks first. It builds before deploying Convex functions or the Worker, so a failed test or build does not update either deployment.
 
+## Security Headers
+
+`src/start.ts` adds security headers to every response the Worker makes (pages, server routes such as `/economics/v1.json`, and server functions): `X-Frame-Options: DENY` with a Content-Security-Policy of `frame-ancestors 'none'; base-uri 'self'; object-src 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a Permissions-Policy that turns off the camera, microphone, location, payment, and USB. On `cultremix.com` and its subdomains it also sends `Strict-Transport-Security` for a year. The policy doesn't limit scripts, styles, images, or connections; that would need every Convex, R2, and Shopify origin listed and tested first. TanStack Start reads `src/start.ts` when the server starts, so a running dev server needs a restart to send them. The e2e smoke test checks them on any `https://` `BASE_URL`.
+
 ## Type Generation
 
 ```bash
