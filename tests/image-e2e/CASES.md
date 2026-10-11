@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words.
 
-83 cases: 3 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
+84 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
 
 ## Words
 
@@ -23,7 +23,7 @@ A design made from a request alone spells its words exactly, in four clearly dif
 
 ### `words-not-from-style`: The request's words, never the style's (known limit)
 
-With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: the style's letterforms sometimes leak into the new words, often in all four designs of a grid (GRASH, TrROH, TRROSH in 2 of 7 suite runs on 2026-10-05). A retest of the same prompt gave 20 of 20 designs right, so two candidate fixes (a copy of the style image with its words removed, and an instruction to letter every word fresh) couldn't be told apart from it. Checking each design's spelling after it's made would catch it.
+With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: the style's letterforms sometimes leak into the new words, often in all four designs of a grid (GRASH, TrROH, TRROSH in 2 of 7 suite runs on 2026-10-05). A retest of the same prompt gave 20 of 20 designs right, so two candidate fixes (a copy of the style image with its words removed, and an instruction to letter every word fresh) couldn't be told apart from it. Since 2026-10-11 the studio's spelling check catches it after each batch (words-fix-spelling).
 
 - Style mixer: `grow-slow` at 100
 - Request: "A raccoon in a tiny crown that says TRASH ROYALTY"
@@ -32,6 +32,18 @@ With a style image that has its own words (GROW SLOW), every design spells the r
 - Checks: Does the design show a raccoon wearing a crown (4 of 4)
 - Checks: Is it drawn in the style of the style image: warped cream bubble lettering with layered colored outlines and dense psychedelic illustration (4 of 4)
 - First tested 2026-10-01
+
+### `words-fix-spelling`: Fix the spelling
+
+A design whose words came out misspelled (TRASH drawn as TrROH, from words-not-from-style) gets the studio's Fix the spelling request, with the design as image 1: every design reads TRASH ROYALTY, in the raccoon design's lettering style, and at least two of the four keep its subject, layout, and style (the grid still varies composition, which is what lets the model letter the word fresh). Tested 2026-10-11: "Fix only the lettering … change nothing else" copied the wrong letters back (TrRSH, 0 of 4), and so did keeping image 1's composition in all four (0 of 4 spelled right, 4 of 4 kept); naming the misreading and asking for the word from scratch spelled it right in 4 of 4 in two grids, with 2 of 4 and then 4 of 4 keeping the design.
+
+- Images: `trash-royalty-trroh`
+- Request: "Fix the spelling in image 1: TRASH is drawn wrong; it reads trroh. Redraw that word from scratch with exactly its 5 letters, in the same lettering style, size, colors, and place, without reusing its current letter shapes. Keep everything else exactly as in image 1, in all four designs: the same drawing, colors, and layout. Change nothing else."
+- Checks: four designs cut from one grid on a transparent background
+- Checks: words read: TRASH ROYALTY; never TRROH, TROH (4 of 4)
+- Checks: the remix comparison calls it image 1's design, a variation with the same subject, layout, and style (2 of 4)
+- Checks: Does the design show a raccoon wearing a crown (4 of 4)
+- First tested 2026-10-11
 
 ### `words-change-one-image`: Change the words on one image
 
@@ -583,6 +595,7 @@ Reference images in [fixtures/](fixtures/), all made by CultRemix's own image ca
 | `trash-royalty` | a graffiti raccoon in a crown and sunglasses, TRASH ROYALTY (CR 103-001) | dev works/103/001 |
 | `slow-roll-night` | a neon snail on a skateboard under a night sky, SLOW ROLL (CR 104-001) | dev works/104/001 |
 | `cartoon-boys` | a cartoon of three tall boys with spiky hair, huge ears, and hoodies | dev studio, 2026-10-04 |
+| `trash-royalty-trroh` | a psychedelic raccoon in a crown whose lettering reads TrROH ROYALTY, a misspelled TRASH ROYALTY | suite run 20261005-1915, words-not-from-style design 1 |
 | `since-1999` | GROW SLOW with SINCE 1999 added under the mushroom | dev studio, 2026-10-04 |
 | `grow-wild-free` | the mushroom design reading GROW WILD AND FREE | dev studio, 2026-10-04 |
 | `grow-bold` | the mushroom design reading GROW BOLD | dev studio, 2026-10-04 |

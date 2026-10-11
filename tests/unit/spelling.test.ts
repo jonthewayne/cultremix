@@ -52,7 +52,7 @@ describe("the studio's words for it", () => {
       "It reads TRROSH and ROYALTEE where you asked for TRASH and ROYALTY.",
     );
     const fix = fixSpellingRequest(misses);
-    expect(fix).toContain("so TRASH is spelled exactly right");
+    expect(fix).toContain("TRASH is drawn wrong; it reads trrosh. Redraw that word from scratch with exactly its 5 letters");
     // The fix batch is checked for the right words only, never the misreading.
     expect(requestedWords(fix)).toEqual(["TRASH"]);
     expect(wordsToCheck({ instruction: fixSpellingRequest([...misses, { asked: "ROYALTY", read: "ROYALTEE" }]) })).toEqual([

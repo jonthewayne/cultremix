@@ -1,6 +1,7 @@
 import { hairShape, noteSections } from "../../convex/lib/prompts";
 import type { PhotoGarment } from "../../convex/lib/prompts";
 import type { RemixPart } from "../../convex/lib/remixParts";
+import { fixSpellingRequest } from "../../src/lib/spelling";
 
 // Every capability the image pipeline aims to support, as cases the suite can rerun: the image model
 // with our prompts (generate, photo), and the GPT-6 Luna steps around it (notes, reader, compare).
@@ -126,7 +127,7 @@ export const CASES: Array<Case> = [
     status: "known-limit",
     title: "The request's words, never the style's",
     supports:
-      "With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: the style's letterforms sometimes leak into the new words, often in all four designs of a grid (GRASH, TrROH, TRROSH in 2 of 7 suite runs on 2026-10-05). A retest of the same prompt gave 20 of 20 designs right, so two candidate fixes (a copy of the style image with its words removed, and an instruction to letter every word fresh) couldn't be told apart from it. Checking each design's spelling after it's made would catch it.",
+      "With a style image that has its own words (GROW SLOW), every design spells the request's words letter for letter and borrows none of the style's. Known limit: the style's letterforms sometimes leak into the new words, often in all four designs of a grid (GRASH, TrROH, TRROSH in 2 of 7 suite runs on 2026-10-05). A retest of the same prompt gave 20 of 20 designs right, so two candidate fixes (a copy of the style image with its words removed, and an instruction to letter every word fresh) couldn't be told apart from it. Since 2026-10-11 the studio's spelling check catches it after each batch (words-fix-spelling).",
     since: "2026-10-01",
     mixer: [{ fixture: "grow-slow", weight: 100 }],
     request: "A raccoon in a tiny crown that says TRASH ROYALTY",
@@ -136,6 +137,20 @@ export const CASES: Array<Case> = [
       { id: "raccoon", ask: "Does the design show a raccoon wearing a crown?" },
       { id: "style", ask: "Is it drawn in the style of the style image: warped cream bubble lettering with layered colored outlines and dense psychedelic illustration?" },
     ],
+  },
+  {
+    kind: "generate",
+    id: "words-fix-spelling",
+    group: "words",
+    title: "Fix the spelling",
+    supports:
+      "A design whose words came out misspelled (TRASH drawn as TrROH, from words-not-from-style) gets the studio's Fix the spelling request, with the design as image 1: every design reads TRASH ROYALTY, in the raccoon design's lettering style, and at least two of the four keep its subject, layout, and style (the grid still varies composition, which is what lets the model letter the word fresh). Tested 2026-10-11: \"Fix only the lettering … change nothing else\" copied the wrong letters back (TrRSH, 0 of 4), and so did keeping image 1's composition in all four (0 of 4 spelled right, 4 of 4 kept); naming the misreading and asking for the word from scratch spelled it right in 4 of 4 in two grids, with 2 of 4 and then 4 of 4 keeping the design.",
+    since: "2026-10-11",
+    images: ["trash-royalty-trroh"],
+    request: fixSpellingRequest([{ asked: "TRASH", read: "TRROH" }]),
+    words: { has: ["TRASH", "ROYALTY"], not: ["TRROH", "TROH"] },
+    keeps: { parts: ["subject", "layout", "style"], min: 2 },
+    asks: [{ id: "raccoon", ask: "Does the design show a raccoon wearing a crown?" }],
   },
   {
     kind: "generate",

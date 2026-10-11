@@ -194,6 +194,14 @@ The suite (`511ba12`, `008fe02`) runs every case through production's prompt cod
   - Given a style image's figure notes, Recraft drew the style images' own woman and picnickers, so its prompt leaves figure drawing out.
 - **A version for a shirt color.** "Keep the same design, words, and layout" added mountains, pines, or a moon behind 3 of 4 wolves. "Keep exactly the same design … Add nothing new" changed only their colors in 4 of 4.
 
+### October 11: checking and fixing spelling
+
+- **Reading the lettering back** (`convex/lib/wordReader.ts`, Gemini 3.1 Pro at low thinking, with the suite's word-reader prompt). On the four leaked designs from run `20261005-1915` (TrROH, TrROW, TrROSH, TrROH), the first reading caught three. TrROW is three letters off TRASH, so the rule now allows one more letter when a reading starts with the right letter, and a second reading caught all four. Eight correctly spelled suite designs and 16 dev designs gave no warning. A reading took 7 to 16 s and about 0.3¢.
+- **The fix request** (suite case `words-fix-spelling`, image 1 the TrROH raccoon, about 14¢ a run). Three wordings, one grid each:
+  - "Fix only the lettering in image 1 so TRASH is spelled exactly right. Keep everything else exactly as it is." Image 1's notes had read its lettering as TRASH, and "follow the image" kept its letter shapes: TrRSH in 3 of 4, and 0 of 4 spelled right.
+  - Naming the misreading and asking for the word from scratch ("TRASH is drawn wrong; it reads trroh. Redraw that word from scratch with exactly its 5 letters, in the same lettering style, size, colors, and place, without reusing its current letter shapes"): 4 of 4 spelled right, and 2 of 4 kept the layout (the grid line still says to vary the composition; one put the raccoon in the can, one gave it a donut). A second grid: 4 of 4 spelled right and 4 of 4 kept the design, with only the snack changing (run `20261011-1808-fix-spelling-4`).
+  - The same request with the grid told to draw all four as image 1, varying only small details (the way a remix's grid is): 4 of 4 kept the layout, and 0 of 4 spelled right (TrRAH, TrRSH). Holding the composition made the model copy image 1's letters back, so that flag was dropped; the studio sends the second wording.
+
 ## Open problems, and what to try next
 
 1. **A quieter style can't lead a louder one.** The image model weighs how loud a picture is over its share, so a busy style at 30% takes over a cleaner one at 50%. Ideas, cheapest first:
