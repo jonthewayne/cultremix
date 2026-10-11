@@ -15,17 +15,19 @@ import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
 import { profileShareCard, shareMeta } from "~/lib/share";
 import { cn } from "~/lib/utils";
 
-type Shelf = "works" | "remixes" | "backed";
+type Shelf = "works" | "remixes" | "backed" | "kept";
 const PAGE_SIZE = 12;
-const SHELVES: Array<{ id: Shelf; label: string }> = [
+// Kept is only on your own profile: the designs you kept just for you.
+const SHELVES: Array<{ id: Shelf; label: string; selfOnly?: boolean }> = [
   { id: "works", label: "Works" },
   { id: "remixes", label: "Remixes" },
   { id: "backed", label: "Backed" },
+  { id: "kept", label: "Kept", selfOnly: true },
 ];
 
 export const Route = createFileRoute("/u/$username")({
-  validateSearch: (search: Record<string, unknown>): { shelf?: "remixes" | "backed" } =>
-    search.shelf === "remixes" || search.shelf === "backed" ? { shelf: search.shelf } : {},
+  validateSearch: (search: Record<string, unknown>): { shelf?: "remixes" | "backed" | "kept" } =>
+    search.shelf === "remixes" || search.shelf === "backed" || search.shelf === "kept" ? { shelf: search.shelf } : {},
   loaderDeps: ({ search }): { shelf: Shelf } => ({ shelf: search.shelf ?? "works" }),
   loader: async ({ context, params, deps }) => {
     const username = params.username;
@@ -35,7 +37,9 @@ export const Route = createFileRoute("/u/$username")({
         context.queryClient.fetchQuery(options).catch(() => null),
         deps.shelf === "backed"
           ? prefetchFirstPage(context, api.social.backed, { username }, PAGE_SIZE)
-          : prefetchFirstPage(context, api.social.works, { username, shelf: deps.shelf }, PAGE_SIZE),
+          : deps.shelf === "kept"
+            ? Promise.resolve()
+            : prefetchFirstPage(context, api.social.works, { username, shelf: deps.shelf }, PAGE_SIZE),
       ]);
     }
     const profile = context.queryClient.getQueryData(options.queryKey) as
@@ -131,7 +135,7 @@ function ProfilePage() {
         </p>
 
         <nav aria-label="Designs" className="mt-12 flex gap-6 border-b-2 border-black md:mt-16">
-          {SHELVES.map(({ id, label }) => (
+          {SHELVES.filter((item) => !item.selfOnly || isSelf).map(({ id, label }) => (
             <Link
               key={id}
               to="/u/$username"
@@ -148,7 +152,13 @@ function ProfilePage() {
             </Link>
           ))}
         </nav>
-        {shelf === "backed" ? (
+        {shelf === "kept" ? (
+          isSelf ? (
+            <KeptGrid />
+          ) : (
+            <p className="mt-8 text-xl font-semibold text-neutral-400">Kept designs are only shown to their creator.</p>
+          )
+        ) : shelf === "backed" ? (
           <BackedGrid key={`${username}:backed`} username={username} isSelf={isSelf} />
         ) : (
           <ShelfGrid key={`${username}:${shelf}`} username={username} shelf={shelf} isSelf={isSelf} />
@@ -178,6 +188,37 @@ function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: "work
   return (
     <div className="mt-8">
       <WorkGrid items={items} showCreator={false} />
+      <LoadMore status={status} loadMore={loadMore} className="mt-12" />
+    </div>
+  );
+}
+
+// Your kept designs ("Keep it just for you"), newest first. Only you see this shelf.
+function KeptGrid() {
+  const { items, status, loadMore } = usePagedQuery(api.keeps.mine, {}, PAGE_SIZE);
+  if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
+  if (items.length === 0 && status === "Exhausted") {
+    return (
+      <div className="mt-8">
+        <p className="text-xl font-semibold text-neutral-400">Nothing kept yet.</p>
+        <p className="mt-2 text-neutral-600">When you publish, choose Keep it just for you, and it waits here, private to you.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-8">
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {items.map((item) => (
+          <li key={item.workId}>
+            <Link to="/keep/$workId" params={{ workId: item.workId }} className="block">
+              <span className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl p-[10%]" style={{ background: item.backgroundColor }}>
+                {item.thumbUrl && <img src={item.thumbUrl} alt="" className="h-full w-auto max-w-full object-contain" />}
+              </span>
+              <span className="mt-2 block truncate text-sm font-bold">{item.title ?? "Untitled"}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
       <LoadMore status={status} loadMore={loadMore} className="mt-12" />
     </div>
   );
