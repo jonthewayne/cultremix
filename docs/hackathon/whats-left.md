@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 11, 2026, 4:30 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
+As of October 11, 2026, 5:20 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -23,7 +23,7 @@ As of October 11, 2026, 4:30 a.m. Pacific. The Monad submission is due **Tuesday
    - Printful: billing.
    - Circle: a developer account, with a test key now and a live key for production.
 4. **A Screen Sharing session on mighteous.** Jon signs in once, in a Chrome window with its own profile, and the Builder does the rest there: the development store and its app (scopes in the [launch checklist](../launch-checklist.md#the-shop)), the Headless channel's token, the shipping rate, and Printful's store and token. Then three presses in Admin finish the setup: **Connect Printful**, **Connect Shopify**, and **Check with Printful**.
-5. **MON.** Testnet faucet MON for dev's relayer `0x7D39bCfd08b206fEaacb4F1E2817aDB22e06f921`, and about 1 MON for production's relayer (deploying the registry needs about 0.47 MON on hand; each publish costs a few hundredths).
+5. **MON.** Testnet faucet MON for dev's relayer `0x7D39bCfd08b206fEaacb4F1E2817aDB22e06f921` (dev already has its relayer key, so the testnet registry can go up as soon as the MON lands), and about 1 MON for production's relayer (deploying the registry needs about 0.47 MON on hand; each publish costs a few hundredths).
 6. **A backup of production's relayer key** in Jon's password manager, copied over Screen Sharing.
 7. **The hackathon pieces.**
    - Make the repo public.
@@ -58,7 +58,9 @@ As of October 11, 2026, 4:30 a.m. Pacific. The Monad submission is due **Tuesday
 14. ~~The launch checklist.~~ Rewritten October 10 for dev and production ([launch-checklist.md](../launch-checklist.md)).
 15. ~~The submission package.~~ Done October 10: logo PNGs (`cultremix-logo.png`, `cultremix-logo-wide.png`), README, submission, and judges docs, and the demo and pitch scripts.
 
-**If time allows:** ~~a list of kept designs~~ and ~~signed-in end-to-end tests~~ are done (October 10). October 11 added a demo rehearsal with its fixes, clean hydration on signed-in pages, an accessibility check (`bun run test:a11y`), loading skeletons, a fingerprint check on /onchain, and faster pages (Lighthouse mobile home 60 to 92). The production build was also run in the Workers runtime: it needs production's Convex deployed first, which the Ops message now says.
+**If time allows:** ~~a list of kept designs~~ and ~~signed-in end-to-end tests~~ are done (October 10). October 11 added a demo rehearsal with its fixes, clean hydration on signed-in pages, an accessibility check (`bun run test:a11y`), loading skeletons, a fingerprint check on /onchain, and faster pages (Lighthouse mobile home 60 to 92). The production build was also run in the Workers runtime: it needs production's Convex deployed first, which the Ops message now says. Since then: **Try again** on a batch whose designs all failed (a filter block), Admin in the site's own header and light page with its tabs kept on the Monad tab, an Admin link in the account menu, and the last 40 px tap targets from the QA report.
+
+**The V1 plan, checked October 11.** Its requirements (R1–R44) against the build: everything is built except the per-member ChatGPT connection (R30–R32), which the September 29 sprint plan deferred and no later plan picked up, so every design is made through the CultRemix Gateway. R44's "staging link on testnet" became production on mainnet with the October 7 decision; dev stays the testnet rehearsal.
 
 **After judging:** more products, a Printify price comparison, a small second design on the front of a back print, and a registry admin key separate from the relayer's.
 
