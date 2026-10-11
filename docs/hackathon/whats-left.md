@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 11, 2026, 12:15 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
+As of October 11, 2026, 4:30 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -43,21 +43,22 @@ As of October 11, 2026, 12:15 a.m. Pacific. The Monad submission is due **Tuesda
 5. ~~Store policies.~~ Drafted October 10 at /policies, marked as drafts until Jon approves them.
 6. ~~Store setup from Admin.~~ Done October 10: Connect Printful, Connect Shopify, and Check with Printful replace hand-copied webhooks and print sizes.
 7. ~~Payouts.~~ Done October 10: Admin, Payouts lists each creator's payable balance and records payments; creators see them on /me/earnings.
-8. ~~Sale notifications.~~ Done October 11: "Someone bought Slow Roll CR 106-001. You earn $5.40." On dev, **Simulate a sale** shows a sale's earnings and notifications without Shopify.
-9. The order rehearsal runs once the accounts exist ([launch checklist](../launch-checklist.md), "Dev: rehearse each piece").
+8. ~~Sale notifications.~~ Done October 11: "Someone bought Slow Roll CR 106-001. You earn $5.40." On dev, **Simulate a sale** shows a sale's earnings and notifications without Shopify. Sale emails are built behind a switch that starts off (turn on in Admin once real orders flow).
+9. ~~Ordering kept designs.~~ Done October 11: **Get it printed** on a kept design's page; Admin approves it for its creator alone, and it sells to them from their private page.
+10. The order rehearsal runs once the accounts exist ([launch checklist](../launch-checklist.md), "Dev: rehearse each piece").
 
 **Monad:**
 
-10. The testnet registry goes up on dev, then a few designs are published there and the real costs measured.
-11. Circle wallets get tested on dev with test keys, then production switches to live keys.
-12. The mainnet registry and the economics rules go up on production: `bun run chain:deploy:mainnet --broadcast --confirm-mainnet` once production's relayer has its MON (the dry run works now).
+11. The testnet registry goes up on dev, then a few designs are published there and the real costs measured.
+12. Circle wallets get tested on dev with test keys, then production switches to live keys.
+13. The mainnet registry and the economics rules go up on production: `bun run chain:deploy:mainnet --broadcast --confirm-mainnet` once production's relayer has its MON (the dry run works now).
 
 **Launch:**
 
-13. ~~The launch checklist.~~ Rewritten October 10 for dev and production ([launch-checklist.md](../launch-checklist.md)).
-14. ~~The submission package.~~ Done October 10: logo PNGs (`cultremix-logo.png`, `cultremix-logo-wide.png`), README, submission, and judges docs, and the demo and pitch scripts.
+14. ~~The launch checklist.~~ Rewritten October 10 for dev and production ([launch-checklist.md](../launch-checklist.md)).
+15. ~~The submission package.~~ Done October 10: logo PNGs (`cultremix-logo.png`, `cultremix-logo-wide.png`), README, submission, and judges docs, and the demo and pitch scripts.
 
-**If time allows:** ~~a list of kept designs~~ and ~~signed-in end-to-end tests~~ are done (October 10); the QA leftovers and studio follow-ups remain.
+**If time allows:** ~~a list of kept designs~~ and ~~signed-in end-to-end tests~~ are done (October 10). October 11 added a demo rehearsal with its fixes, clean hydration on signed-in pages, an accessibility check (`bun run test:a11y`), loading skeletons, a fingerprint check on /onchain, and faster pages (Lighthouse mobile home 60 to 92). The production build was also run in the Workers runtime: it needs production's Convex deployed first, which the Ops message now says.
 
 **After judging:** more products, a Printify price comparison, a small second design on the front of a back print, and a registry admin key separate from the relayer's.
 
