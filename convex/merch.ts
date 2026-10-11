@@ -4,7 +4,7 @@ import { action, internalMutation, internalQuery, mutation, query } from "./_gen
 import { requireAdmin } from "./lib/adminAccess";
 import { GARMENT_COLORS, colorKey } from "./lib/garments";
 import type { GarmentColor, Palette } from "./lib/garments";
-import { merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
+import { chosenProducts, merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
 import { garmentKindValidator, merchColor, printAreaValidator } from "./schema/merch";
 import { garmentKindOf } from "../shared/config/print-products";
 import type { Doc } from "./_generated/dataModel";
@@ -96,6 +96,30 @@ export const offered = query({
       ...(product.back ? { back: product.back } : {}),
       colors: product.colors.map(({ key, name, hex }) => ({ key, name, hex })),
       isDefault: product.isDefault,
+    }));
+  },
+});
+
+// What a published work comes on (the products its creator picked that are still on offer), for its
+// page before it's on sale: each product's name, kind, side, and price with any back-print extra.
+export const comesOn = query({
+  args: { cr: v.string() },
+  returns: v.array(
+    v.object({ name: v.string(), kind: garmentKindValidator, side: v.union(v.literal("front"), v.literal("back")), priceCents: v.number() }),
+  ),
+  handler: async (ctx, args) => {
+    const match = /^(\d{3})-(\d{3})$/u.exec(args.cr.trim());
+    if (!match) return [];
+    const work = await ctx.db
+      .query("works")
+      .withIndex("by_family_expression", (q) => q.eq("crFamily", Number(match[1])).eq("crExpression", Number(match[2])))
+      .unique();
+    if (!work || work.status !== "published") return [];
+    return chosenProducts(work, await offeredShopProducts(ctx)).map(({ product, placement }) => ({
+      name: product.name,
+      kind: product.kind,
+      side: placement.side,
+      priceCents: product.priceCents + (placement.side === "back" ? product.backExtraCents : 0),
     }));
   },
 });

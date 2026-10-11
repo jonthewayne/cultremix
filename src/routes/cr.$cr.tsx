@@ -64,8 +64,9 @@ function ShopPage() {
   const page = useQuery(convexQuery(api.feed.byCr, { cr }));
   // Null until checkout opens and this work is on sale; the page is unchanged until then.
   const offer = useQuery(convexQuery(api.shopify.offer, { cr })).data;
-  // Until it's on sale: the default product and its price (convex/merch.ts offered).
-  const lead = useQuery(convexQuery(api.merch.offered, {})).data?.[0];
+  // Until it's on sale: what it comes on, with prices (convex/merch.ts comesOn).
+  const comesOn = useQuery(convexQuery(api.merch.comesOn, { cr })).data;
+  const from = comesOn && comesOn.length > 0 ? Math.min(...comesOn.map((product) => product.priceCents)) : undefined;
   const data = page.data;
   // The picked shirt color, remembered per work so moving to another CR starts on its lead. The
   // one selection for the art square, the swatches, and the buy box.
@@ -134,8 +135,14 @@ function ShopPage() {
             ) : (
               <>
                 <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
-                  <span className="text-5xl font-black tracking-tight">{lead ? formatPrice(lead.priceCents) : "$36"}</span>
-                  <span className="text-sm font-semibold">{lead?.name ?? "Heavyweight garment-dyed tee"}</span>
+                  <span className="text-5xl font-black tracking-tight">
+                    {from !== undefined ? `${comesOn!.length > 1 ? "from " : ""}${formatPrice(from)}` : "$36"}
+                  </span>
+                  <span className="text-right text-sm font-semibold">
+                    {comesOn && comesOn.length > 0
+                      ? comesOn.map((product) => `${product.name}${product.side === "back" ? " (back print)" : ""}`).join(" · ")
+                      : "Heavyweight garment-dyed tee"}
+                  </span>
                 </div>
                 {color && <ColorSwatches colors={colors} value={color.key} onChange={pick} />}
                 <div>
