@@ -19,7 +19,7 @@ For Convex schema, queries, mutations, actions, auth, and tests, follow `docs/co
 
 Important local pattern:
 
-- Authenticated app code uses `ConvexQueryClient` with `expectAuth: true`.
+- The shared `ConvexQueryClient` (`src/router.tsx`) waits for the member's token only on pages the server rendered for a signed-in member (the `cr-session` meta, `src/lib/sessionMeta.ts`); public pages load signed out (KTD-1a).
 - Pre-auth screens must use `src/lib/convex-preauth.ts`, not authenticated Convex hooks.
 - Keep roles DB-authoritative in Convex tables. Do not put authorization roles in JWT claims.
 

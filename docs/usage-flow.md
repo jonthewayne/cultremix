@@ -13,7 +13,7 @@ There are four moving parts:
 
 The key split is auth state:
 
-- Authenticated app routes use `ConvexQueryClient` with `expectAuth: true`.
+- The shared `ConvexQueryClient` waits for the member's token only on pages the server rendered for a signed-in member, so their first live results are the member's own; public pages load signed out.
 - Pre-auth screens, such as login and verification, use a standalone Convex client so they can create login attempts before a session exists.
 - `/api/auth/*` is same-origin and proxies Better Auth requests through TanStack Start to Convex.
 

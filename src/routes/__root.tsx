@@ -13,6 +13,7 @@ import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { convexAuthClient } from "~/lib/auth-client";
 import { getTokenAndRenewSession } from "~/lib/auth-server";
 import { redirectForOnboarding, useOnboardingGuard } from "~/lib/onboardingGuard";
+import { SESSION_META } from "~/lib/sessionMeta";
 import {
   SHARE_DESCRIPTION,
   SHARE_IMAGE,
@@ -92,7 +93,7 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   const context = useRouteContext({ from: Route.id });
   return (
-    <RootDocument>
+    <RootDocument signedIn={Boolean(context.token)}>
       <ConvexBetterAuthProvider
         client={context.convexQueryClient.convexClient}
         authClient={convexAuthClient}
@@ -110,10 +111,12 @@ function OnboardingGuard() {
   return null;
 }
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootDocument({ children, signedIn }: { children: React.ReactNode; signedIn: boolean }) {
   return (
     <html suppressHydrationWarning>
       <head>
+        {/* src/router.tsx reads it: a signed-in page's live queries wait for the member's token. */}
+        {signedIn && <meta name={SESSION_META} content="1" />}
         <HeadContent />
       </head>
       <body>

@@ -14,7 +14,7 @@ Convex is the app database and function runtime. Better Auth stores its auth tab
 - `authVerificationAttempts` and `phoneVerificationAttempts` track pre-session auth flows.
 - `authRateLimits` centralizes rate limits.
 
-Authenticated app code uses `ConvexQueryClient` with `expectAuth: true` in `src/router.tsx`. Login and verification screens use `src/lib/convex-preauth.ts`, a standalone Convex client that can call pre-auth mutations before a Better Auth session exists.
+The shared `ConvexQueryClient` in `src/router.tsx` sets `expectAuth` only when the server rendered the page for a signed-in member (it marks the page with a `cr-session` meta tag, `src/lib/sessionMeta.ts`). Then live queries wait for the member's token, so the first results match what the server sent and the page hydrates cleanly; signed out, queries run at once so public pages load (KTD-1a). Login and verification screens use `src/lib/convex-preauth.ts`, a standalone Convex client that can call pre-auth mutations before a Better Auth session exists.
 
 ## SSR Auth Handoff
 
