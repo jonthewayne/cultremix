@@ -437,6 +437,84 @@ describe("upscales and the fal budget", () => {
   });
 });
 
+// "Remove background" (BiRefNet on fal): a version cut out of any background, for no credits,
+// holding two cents of the fal budget until it settles or is released.
+describe("removing the background", () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
+  });
+
+  const held = (t: T, attemptId: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("reservations")
+        .withIndex("by_attempt", (q) => q.eq("attemptId", attemptId))
+        .unique(),
+    );
+
+  it("makes a transparent version from art with any background, without credits, and settles at two cents", async () => {
+    const { t, alice } = await setup();
+    const v1 = await openAndMeasure(t);
+    // A photo-like background knockout can't clear.
+    await t.run((ctx) => ctx.db.patch("printVersions", v1, { metrics: { ...METRICS, hasAlpha: false } }));
+    const result = await t.withIdentity(ALICE).mutation(api.print.removeBackground, { cr: CR, versionId: v1 });
+    const versionId = (result as { versionId: Id<"printVersions"> }).versionId;
+    expect(await t.run((ctx) => ctx.db.get("printVersions", versionId))).toMatchObject({
+      op: "cutout",
+      status: "pending",
+      parentId: v1,
+      upscaled: false,
+      charged: 0,
+      fal: { state: "queued", polls: 0 },
+    });
+    expect(await balance(t, alice)).toBe(10);
+    expect(await held(t, versionId)).toMatchObject({ attemptKind: "upscale", provider: "fal", credits: 0, worstCaseCents: 2, state: "open" });
+    const studio = await t.withIdentity(ALICE).query(api.print.studio, { cr: CR });
+    expect(studio?.versions.find((version) => version.id === versionId)).toMatchObject({ op: "cutout", removing: true, upscaling: false });
+    // One at a time.
+    await expect(t.withIdentity(ALICE).mutation(api.print.removeBackground, { cr: CR, versionId: v1 })).rejects.toThrow(/already being removed/u);
+
+    expect(await t.mutation(internal.print.claimSubmission, { versionId })).toBe(true);
+    expect(await t.mutation(internal.print.recordVersion, { versionId, key: "fake:cut.png", width: 1024, height: 1024, metrics: METRICS })).toBe(true);
+    expect(await held(t, versionId)).toMatchObject({ state: "settled", actualCents: 2 });
+    // With its background gone, it can be upscaled.
+    expect("versionId" in (await t.withIdentity(ALICE).mutation(api.print.upscale, { cr: CR, versionId }))).toBe(true);
+  });
+
+  it("releases one that never reached fal, and refuses transparent or upscaled art, other members, the switch off, and a spent budget", async () => {
+    const { t } = await setup();
+    const v1 = await openAndMeasure(t);
+    const alice = t.withIdentity(ALICE);
+    // Art that's already transparent would come back hazy.
+    await expect(alice.mutation(api.print.removeBackground, { cr: CR, versionId: v1 })).rejects.toThrow(/already transparent/u);
+    await t.run((ctx) => ctx.db.patch("printVersions", v1, { metrics: { ...METRICS, hasAlpha: false } }));
+    const { versionId } = (await alice.mutation(api.print.removeBackground, { cr: CR, versionId: v1 })) as { versionId: Id<"printVersions"> };
+    expect(await t.mutation(internal.print.failVersion, { versionId, error: "Background removal isn't set up yet." })).toBe(true);
+    expect(await held(t, versionId)).toMatchObject({ state: "released", reason: "not sent" });
+
+    await expect(t.withIdentity(BOB).mutation(api.print.removeBackground, { cr: CR, versionId: v1 })).rejects.toThrow();
+    await t.run((ctx) => ctx.db.patch("printVersions", v1, { upscaled: true }));
+    await expect(alice.mutation(api.print.removeBackground, { cr: CR, versionId: v1 })).rejects.toThrow(/before upscaling/u);
+    await t.run((ctx) => ctx.db.patch("printVersions", v1, { upscaled: false }));
+
+    const flag = await t.run((ctx) => ctx.db.query("featureFlags").withIndex("by_key", (q) => q.eq("key", "gen.upscale")).unique());
+    await t.run((ctx) => ctx.db.patch("featureFlags", flag!._id, { enabled: false }));
+    expect(await alice.mutation(api.print.removeBackground, { cr: CR, versionId: v1 })).toEqual({ refused: "DISABLED" });
+    await t.run((ctx) => ctx.db.patch("featureFlags", flag!._id, { enabled: true }));
+
+    await t.run((ctx) =>
+      ctx.db.insert("appSettings", {
+        key: "main",
+        signupGrant: { enabled: true, credits: 24 },
+        dailyBudgetCents: 1,
+        shootsPerMemberPerDay: 3,
+        updatedAt: 0,
+      }),
+    );
+    expect(await alice.mutation(api.print.removeBackground, { cr: CR, versionId: v1 })).toEqual({ refused: "BUDGET" });
+  });
+});
+
 describe("placement and the print file", () => {
   const FILE = {
     key: "works/101/001/print-aaaaaaaaaaaaaaaaaaaaaaaaaa/print.png",

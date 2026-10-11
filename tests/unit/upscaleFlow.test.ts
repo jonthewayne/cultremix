@@ -147,6 +147,17 @@ describe("upscale submission", () => {
   });
 });
 
+describe("background removal through the same flow", () => {
+  it("speaks of background removal and the cutout in its messages", async () => {
+    const { deps, log } = submitDeps({ kind: "cutout", client: null });
+    expect(await submitUpscale(deps)).toBe("failed");
+    expect(log).toEqual(["fail Background removal isn't set up yet. (release)"]);
+    const poll = pollDeps(["COMPLETED"], await opaquePng(), { kind: "cutout" });
+    expect(await pollUpscale(poll.deps)).toBe("failed");
+    expect(poll.log).toEqual(["fail The cutout came back without transparency, so it can't be used."]);
+  });
+});
+
 describe("upscale polling", () => {
   it("waits while fal works, backing off, and never posts", async () => {
     const { deps, log, posts } = pollDeps(["IN_QUEUE"], await transparentPng());

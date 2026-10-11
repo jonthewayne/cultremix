@@ -87,7 +87,8 @@ async function finishAbandoned(ctx: MutationCtx, reservation: Doc<"reservations"
     // A reshoot keeps the photo that's up; only a first photo still pending is marked failed.
     if (photo?.state === "pending") await failShootPhoto(ctx, reservation.shootId, message);
   } else if (reservation.attemptKind === "upscale") {
-    // An upscale's attempt is its print version; failing it gives the credits back.
+    // An upscale's (or a background removal's) attempt is its print version; failing it gives the
+    // credits back.
     const versionId = ctx.db.normalizeId("printVersions", reservation.attemptId);
     const version = versionId ? await ctx.db.get("printVersions", versionId) : null;
     if (version) await failPrintVersion(ctx, version, message, spend);

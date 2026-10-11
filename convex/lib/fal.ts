@@ -1,4 +1,5 @@
-// A small client for fal's queue API, used for "Upscale for print" (Topaz Transparent, 4x). The
+// A small client for fal's queue API, used for "Upscale for print" (Topaz Transparent, 4x) and
+// "Remove background" (BiRefNet v2). The
 // fetch it uses can be replaced, so tests never reach the network.
 //
 //   POST https://queue.fal.run/<endpoint>            { image_url } -> { request_id, status_url, response_url }
@@ -9,6 +10,18 @@
 // GETs only read, so they may be retried. The key goes only to queue.fal.run.
 
 export const TOPAZ_TRANSPARENT = "fal-ai/topaz/upscale/image/transparent";
+// "Remove background" in the Print Studio: BiRefNet v2, which cuts the art out as it is (a PNG with
+// transparency) instead of drawing it again. Its dynamic general model: on graphic T-shirt art (a
+// spray-paint raccoon over paper, navy, and white, October 11) it kept the black ink, splatter, and
+// drips whole with no fringe on dark or light cloth, while the heavy model dropped every black area
+// and Bria and rembg left a beige fringe of the old background.
+export const BIREFNET_V2 = "fal-ai/birefnet/v2";
+export const CUTOUT_INPUT = {
+  model: "General Use (Dynamic)",
+  operating_resolution: "2048x2048",
+  output_format: "png",
+  refine_foreground: true,
+} as const;
 export const FAL_QUEUE = "https://queue.fal.run";
 const QUEUE_HOST = "queue.fal.run";
 
@@ -61,7 +74,15 @@ async function detail(response: Response) {
   return text.slice(0, 200) || `HTTP ${response.status}`;
 }
 
-export function falClient(options: { key: string; fetch?: FetchLike; endpoint?: string; retries?: number; retryDelayMs?: number }) {
+// input: the endpoint's own settings, sent with the image (BiRefNet's model and resolution).
+export function falClient(options: {
+  key: string;
+  fetch?: FetchLike;
+  endpoint?: string;
+  input?: Record<string, unknown>;
+  retries?: number;
+  retryDelayMs?: number;
+}) {
   const doFetch: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
   const endpoint = options.endpoint ?? TOPAZ_TRANSPARENT;
   const retries = options.retries ?? 2;
@@ -94,7 +115,7 @@ export function falClient(options: { key: string; fetch?: FetchLike; endpoint?: 
       const response = await doFetch(`${FAL_QUEUE}/${endpoint}`, {
         method: "POST",
         headers: { ...auth, "Content-Type": "application/json" },
-        body: JSON.stringify({ image_url: imageUrl }),
+        body: JSON.stringify({ ...options.input, image_url: imageUrl }),
       });
       if (!response.ok) throw new FalError(await detail(response), response.status);
       const body = (await response.json()) as { request_id?: unknown; status_url?: unknown; response_url?: unknown };

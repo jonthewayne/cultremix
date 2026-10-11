@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FAL_QUEUE, TOPAZ_TRANSPARENT, falClient, isQueueUrl } from "../../convex/lib/fal";
+import { BIREFNET_V2, CUTOUT_INPUT, FAL_QUEUE, TOPAZ_TRANSPARENT, falClient, isQueueUrl } from "../../convex/lib/fal";
 import type { FetchLike } from "../../convex/lib/fal";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body?: string };
@@ -42,6 +42,20 @@ describe("fal queue client", () => {
     expect(calls[0].method).toBe("POST");
     expect(calls[0].headers.Authorization).toBe("Key test-key");
     expect(JSON.parse(calls[0].body!)).toEqual({ image_url: "https://images.example/design.png" });
+  });
+
+  it("sends an endpoint's own settings with the image (BiRefNet for Remove background)", async () => {
+    const { fetch, calls } = fakeFetch([json(SUBMITTED, 202)]);
+    const client = falClient({ key: "k", fetch, endpoint: BIREFNET_V2, input: CUTOUT_INPUT });
+    await client.submit("https://images.example/design.png");
+    expect(calls[0].url).toBe(`${FAL_QUEUE}/fal-ai/birefnet/v2`);
+    expect(JSON.parse(calls[0].body!)).toEqual({
+      model: "General Use (Dynamic)",
+      operating_resolution: "2048x2048",
+      output_format: "png",
+      refine_foreground: true,
+      image_url: "https://images.example/design.png",
+    });
   });
 
   it("never retries a failed submit", async () => {

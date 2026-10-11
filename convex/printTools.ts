@@ -37,7 +37,7 @@ export async function storeVersion(
 ): Promise<boolean> {
   const measured = await measureImage(bytes);
   if (extra.requireAlpha && !measured.metrics.hasAlpha) {
-    throw new Error("The upscale came back without transparency, so it can't be used.");
+    throw new Error(`The ${job.version.op === "cutout" ? "cutout" : "upscale"} came back without transparency, so it can't be used.`);
   }
   const planned = printVersionKey(job.family, job.expression, randomCode(), job.version.number, job.keptBy);
   const [key, previewKey] = await Promise.all([

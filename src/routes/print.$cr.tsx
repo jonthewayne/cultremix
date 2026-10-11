@@ -55,6 +55,7 @@ const OP_LABEL: Record<Version["op"], string> = {
   trim: "Trimmed",
   knockout: "Knocked out",
   upscale: "Upscaled 4×",
+  cutout: "Background removed",
 };
 
 function closestColor(hex: string, colors: StudioProduct["colors"]) {
@@ -134,6 +135,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
   const trim = useMutation(api.print.trim);
   const knockout = useMutation(api.print.knockout);
   const upscale = useMutation(api.print.upscale);
+  const removeBackground = useMutation(api.print.removeBackground);
   const savePlacement = useMutation(api.print.savePlacement);
   const render = useMutation(api.print.render);
   const [busy, setBusy] = useState(false);
@@ -228,6 +230,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
   const shirt = product.colors.find((color) => color.name === draft?.color) ?? product.colors[0];
   const rendering = studio.placement?.rendering ?? false;
   const upscaling = studio.versions.some((version) => version.upscaling);
+  const removing = studio.versions.some((version) => version.removing);
 
   // The swatches: the colors the work is offered in (plus the one in use), else every color the
   // shirt comes in. "More colors" shows the rest.
@@ -254,6 +257,15 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
               ? "Upscaling is resting until tomorrow. Your credits weren't used."
               : "Upscaling is paused right now.",
         );
+      }
+    });
+
+  const startCutout = () =>
+    run(async () => {
+      if (!selected) return;
+      const result = await removeBackground({ cr, versionId: selected.id });
+      if ("refused" in result) {
+        setError(result.refused === "BUDGET" ? "Background removal is resting until tomorrow." : "Background removal is paused right now.");
       }
     });
 
@@ -356,7 +368,15 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                         <img src={version.previewUrl} alt={`Version ${version.number}`} className="h-full w-full object-contain" />
                       ) : (
                         <span className="px-2 text-center text-xs font-bold text-neutral-600">
-                          {version.status === "pending" ? (version.upscaling ? "Upscaling…" : "Making…") : version.status === "failed" ? "Didn’t work" : `v${version.number}`}
+                          {version.status === "pending"
+                            ? version.upscaling
+                              ? "Upscaling…"
+                              : version.removing
+                                ? "Removing the background…"
+                                : "Making…"
+                            : version.status === "failed"
+                              ? "Didn’t work"
+                              : `v${version.number}`}
                         </span>
                       )}
                     </div>
@@ -376,7 +396,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
 
             {!locked && (
               <Panel title="Clean it up">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   <ToolButton
                     label="Trim"
                     hint="Crop to the art"
@@ -391,12 +411,21 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                     onClick={() => setTool(tool === "knockout" ? null : "knockout")}
                   />
                   <ToolButton
+                    label="Remove background"
+                    hint={isReady(selected) && selected.metrics.hasAlpha ? "Its background is already transparent" : "Cut the art out of any background"}
+                    disabled={busy || !cutoutUsable(selected, studio, removing)}
+                    onClick={startCutout}
+                  />
+                  <ToolButton
                     label="Upscale for print"
                     hint={studio.isOwner ? "4× sharper · free for you" : `4× sharper · ${studio.upscaleCredits} credits`}
                     disabled={busy || Boolean(upscaleBlocked(selected, studio, upscaling))}
                     onClick={startUpscale}
                   />
                 </div>
+                {cutoutBlocked(selected, studio, removing) && (
+                  <p className="mt-3 text-xs text-muted-foreground">{cutoutBlocked(selected, studio, removing)}</p>
+                )}
                 {upscaleBlocked(selected, studio, upscaling) && (
                   <p className="mt-3 text-xs text-muted-foreground">{upscaleBlocked(selected, studio, upscaling)}</p>
                 )}
@@ -531,13 +560,28 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
   );
 }
 
+// Why "Remove background" can't run on this version right now, or null. It shares the Print-size art
+// switch with upscales, and works on art from before any upscale.
+function cutoutBlocked(version: Version | undefined, studio: Studio, removing: boolean) {
+  if (!studio.upscaleEnabled) return "Background removal is paused right now.";
+  if (removing) return "Removing the background… this takes a few seconds.";
+  if (!isReady(version)) return null;
+  if (version.upscaled) return "Remove the background before upscaling: pick a version from before the upscale.";
+  return null;
+}
+
+// Whether "Remove background" can run on this version: it's for art without transparency (the
+// button's own hint says so for transparent art, without a line under the tools).
+const cutoutUsable = (version: Version | undefined, studio: Studio, removing: boolean) =>
+  isReady(version) && !version.metrics.hasAlpha && !cutoutBlocked(version, studio, removing);
+
 function upscaleBlocked(version: Version | undefined, studio: Studio, upscaling: boolean) {
   if (!studio.upscaleEnabled) return "Upscaling is paused right now.";
   if (upscaling) return "Upscaling… this takes about a minute.";
   if (!isReady(version)) return null;
   if (version.upscaled) return "This version is already upscaled.";
   if (Math.max(version.width, version.height) > UPSCALE_MAX_SIDE) return `Upscaling takes art up to ${UPSCALE_MAX_SIDE} px. Trim it first.`;
-  if (!version.metrics.hasAlpha) return "Knock out the background first: the upscale keeps transparency.";
+  if (!version.metrics.hasAlpha) return "Remove the background first (or knock out a flat color): the upscale keeps transparency.";
   if (!studio.isOwner && studio.credits < studio.upscaleCredits) return `Upscaling takes ${studio.upscaleCredits} credits. You have ${studio.credits}.`;
   return null;
 }

@@ -91,6 +91,11 @@ export function topazCents(outputWidth: number, outputHeight: number) {
 }
 
 // One Topaz upscale of a design of the given size (fal), 4x on each side.
+// Removing a background with fal's BiRefNet v2 (convex/upscale.ts): billed by compute time,
+// about $0.0008 a second, and a heavy pass at 2048 px takes a few seconds. Two cents is held and
+// settled for each one, which bounds it.
+export const CUTOUT_CENTS = 2;
+
 export function topazWorstCaseCents(width: number, height: number) {
   return topazCents(width * 4, height * 4);
 }

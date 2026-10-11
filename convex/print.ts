@@ -12,15 +12,15 @@ import { authorizeDispatch, closeReservation, hasRoom, openReservation, spendVal
 import { imageUrlReader } from "./lib/imageUrls";
 import { EXPIRED_MESSAGE } from "./lib/paidAttempts";
 import type { Spend } from "./lib/paidAttempts";
-import { topazCents, topazWorstCaseCents } from "./lib/pricing";
+import { CUTOUT_CENTS, topazCents, topazWorstCaseCents } from "./lib/pricing";
 import { formatCr, parseCr, publicUrl } from "./lib/r2";
 import { nudgeSalePrep } from "./lib/salePrep";
 import { printTargetForWork } from "./lib/shopProduct";
 import { flagEnabled } from "./studio";
 
 // Print Studio (V1 U6): a published work's creator, or the owner, turns its art into a print file.
-// Version 1 is the published art; trim, knockout and "Upscale for print" make more versions
-// (convex/printTools.ts, convex/upscale.ts). The placement is saved per work, and the print file
+// Version 1 is the published art; trim, knockout, "Remove background" and "Upscale for print" make
+// more versions (convex/printTools.ts, convex/upscale.ts). The placement is saved per work, and the print file
 // is made once (works.printKey and works.printSha256 never change after).
 
 type Ctx = QueryCtx | MutationCtx;
@@ -160,7 +160,7 @@ export const studio = query({
           id: v.id("printVersions"),
           number: v.number(),
           parentNumber: v.optional(v.number()),
-          op: v.union(v.literal("published"), v.literal("trim"), v.literal("knockout"), v.literal("upscale")),
+          op: v.union(v.literal("published"), v.literal("trim"), v.literal("knockout"), v.literal("upscale"), v.literal("cutout")),
           status: v.union(v.literal("pending"), v.literal("ready"), v.literal("failed")),
           url: v.optional(v.string()),
           previewUrl: v.optional(v.string()),
@@ -169,6 +169,8 @@ export const studio = query({
           metrics: v.optional(metricsValidator),
           upscaled: v.boolean(),
           upscaling: v.boolean(),
+          // A background removal still running.
+          removing: v.boolean(),
           error: v.optional(v.string()),
           charged: v.number(),
         }),
@@ -216,6 +218,7 @@ export const studio = query({
             metrics: version.metrics,
             upscaled: version.upscaled,
             upscaling: version.op === "upscale" && version.status === "pending",
+            removing: version.op === "cutout" && version.status === "pending",
             error: version.error,
             charged: version.charged,
           };
@@ -380,7 +383,10 @@ export const upscale = mutation({
       throw new ConvexError({ code: "TOO_LARGE", message: `Upscaling takes images up to ${UPSCALE_MAX_SIDE} px.` });
     }
     if (!parent.metrics.hasAlpha) {
-      throw new ConvexError({ code: "NO_ALPHA", message: "Knock out the background first: the upscale keeps transparency." });
+      throw new ConvexError({
+        code: "NO_ALPHA",
+        message: "Remove the background first (or knock out a flat color): the upscale keeps transparency.",
+      });
     }
     const versions = await versionsOf(ctx, work._id);
     if (versions.some((version) => version.op === "upscale" && version.status === "pending")) {
@@ -419,6 +425,59 @@ export const upscale = mutation({
         note: `print upscale ${versionId}`,
       });
     }
+    await ctx.scheduler.runAfter(0, internal.upscale.submit, { versionId });
+    return { versionId };
+  },
+});
+
+// "Remove background": fal's BiRefNet v2 cuts the art out of an opaque background, whatever the
+// background is (knockout clears only one flat color). No credits: it costs about a cent, and each
+// one holds CUTOUT_CENTS against today's fal budget (convex/lib/budget.ts) until it settles at that
+// price, or is released when nothing reached fal. It runs on art before any upscale, and the
+// Print-size art switch (gen.upscale) turns it off along with upscales.
+export const removeBackground = mutation({
+  args: { cr: v.string(), versionId: v.id("printVersions") },
+  returns: v.union(
+    v.object({ versionId: v.id("printVersions") }),
+    v.object({ refused: v.union(v.literal("DISABLED"), v.literal("BUDGET")) }),
+  ),
+  handler: async (ctx, args) => {
+    const { user, work } = await requirePrinter(ctx, args.cr);
+    requireUnlocked(work);
+    if (!(await flagEnabled(ctx, "gen.upscale"))) return { refused: "DISABLED" as const };
+    const parent = await readyVersion(ctx, work, args.versionId);
+    if (parent.upscaled) {
+      throw new ConvexError({ code: "UPSCALED", message: "Remove the background before upscaling: pick a version from before the upscale." });
+    }
+    // Art that's already transparent comes back from BiRefNet with a gray haze where the
+    // transparency was (tested October 11), so this is only for art on a solid or busy background.
+    if (parent.metrics.hasAlpha) {
+      throw new ConvexError({ code: "ALREADY_TRANSPARENT", message: "This version's background is already transparent." });
+    }
+    const versions = await versionsOf(ctx, work._id);
+    if (versions.some((version) => version.op === "cutout" && version.status === "pending")) {
+      throw new ConvexError({ code: "BUSY", message: "A background is already being removed." });
+    }
+    const now = Date.now();
+    if (!(await hasRoom(ctx, "fal", CUTOUT_CENTS, now))) return { refused: "BUDGET" as const };
+    const versionId = await ctx.db.insert("printVersions", {
+      workId: work._id,
+      number: await nextVersion(ctx, work),
+      parentId: parent._id,
+      op: "cutout",
+      status: "pending",
+      upscaled: false,
+      remixSourceId: parent.remixSourceId,
+      fal: { state: "queued", polls: 0 },
+      charged: 0,
+      createdBy: user._id,
+    });
+    // A print version's fal attempt: the sweeper fails it like an upscale's (convex/budget.ts).
+    await openReservation(
+      ctx,
+      { attemptKind: "upscale", attemptId: versionId, provider: "fal", userId: user._id, credits: 0, worstCaseCents: CUTOUT_CENTS },
+      now,
+    );
     await ctx.scheduler.runAfter(0, internal.upscale.submit, { versionId });
     return { versionId };
   },
@@ -536,6 +595,8 @@ export const recordVersion = internalMutation({
       // fal bills Topaz by the size of what it returns; a bigger image than reserved for is an
       // overage, and that turns upscaling off until an admin turns it back on.
       await closeReservation(ctx, version._id, { kind: "settle", actualCents: topazCents(args.width, args.height), reason: "done" });
+    } else if (version.op === "cutout") {
+      await closeReservation(ctx, version._id, { kind: "settle", actualCents: CUTOUT_CENTS, reason: "done" });
     }
     await ctx.db.patch("printVersions", version._id, {
       status: "ready",
@@ -571,7 +632,7 @@ export async function failPrintVersion(ctx: MutationCtx, version: Doc<"printVers
       note: `print upscale ${version._id} failed`,
     });
   }
-  if (version.op === "upscale") {
+  if (version.op === "upscale" || version.op === "cutout") {
     const sent = version.fal !== undefined && version.fal.state !== "queued";
     await closeReservation(ctx, version._id, spend ?? (sent ? { kind: "settle", reason: "failed" } : { kind: "release", reason: "not sent" }));
   }

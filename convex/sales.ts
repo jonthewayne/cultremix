@@ -144,7 +144,7 @@ export async function advancePrep(ctx: MutationCtx, workId: Id<"works">) {
         return await prepFailed(ctx, waiting, `The upscale failed twice: ${failed[failed.length - 1].error ?? "unknown error"}`);
       }
       if (!base.metrics?.hasAlpha || !base.width || !base.height) {
-        return await prepFailed(ctx, waiting, "The art has no transparent background. Knock it out in the Print Studio, then approve again.");
+        return await prepFailed(ctx, waiting, "The art has no transparent background. Remove its background in the Print Studio (or knock out a flat color), then approve again.");
       }
       if (!(await flagEnabled(ctx, "gen.upscale"))) return await prepFailed(ctx, waiting, "Turn on Print-size art in Admin, then approve again.");
       if (versions.length >= MAX_VERSIONS) return await prepFailed(ctx, waiting, "This work has too many Print Studio versions. Finish it there.");

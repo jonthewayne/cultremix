@@ -8,7 +8,9 @@ export const printTables = {
     workId: v.id("works"),
     number: v.number(),
     parentId: v.optional(v.id("printVersions")),
-    op: v.union(v.literal("published"), v.literal("trim"), v.literal("knockout"), v.literal("upscale")),
+    // cutout: the background removed by fal's BiRefNet (convex/upscale.ts), for art whose
+    // background isn't one flat color.
+    op: v.union(v.literal("published"), v.literal("trim"), v.literal("knockout"), v.literal("upscale"), v.literal("cutout")),
     status: v.union(v.literal("pending"), v.literal("ready"), v.literal("failed")),
     // Version 1 is the published art's own key; later versions sit in an unguessable folder
     // (convex/lib/printKeys.ts).

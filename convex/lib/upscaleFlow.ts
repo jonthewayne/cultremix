@@ -11,6 +11,18 @@ import type { Spend } from "./paidAttempts";
 // Each submit failure says what happened to the attempt's fal budget reservation: released when
 // nothing reached fal (or fal refused it outright), settled when fal may have the job.
 
+// The flow runs both fal tools; what its messages call them.
+const WORDS = {
+  upscale: { setUp: "Upscaling isn't set up yet.", refused: "The upscaler couldn't take it.", noAddress: "upscale from", it: "The upscale" },
+  cutout: {
+    setUp: "Background removal isn't set up yet.",
+    refused: "Background removal couldn't take it.",
+    noAddress: "remove the background from",
+    it: "The cutout",
+  },
+} as const;
+export type FalJob = keyof typeof WORDS;
+
 export const POLL_FIRST_MS = 4_000;
 export const POLL_MAX_MS = 20_000;
 export const UPSCALE_TIMEOUT_MS = 15 * 60_000;
@@ -32,6 +44,8 @@ export function submitFailureSpend(error: unknown): Spend {
 }
 
 export type SubmitDeps = {
+  // Which tool this is, for its messages (an upscale unless said).
+  kind?: FalJob;
   claim: () => Promise<boolean>;
   client: Pick<FalClient, "submit"> | null;
   imageUrl: string | undefined;
@@ -41,27 +55,28 @@ export type SubmitDeps = {
 };
 
 export async function submitUpscale(deps: SubmitDeps): Promise<"skipped" | "submitted" | "failed"> {
+  const words = WORDS[deps.kind ?? "upscale"];
   if (!(await deps.claim())) return "skipped";
   if (!deps.client) {
-    await deps.fail("Upscaling isn't set up yet.", { kind: "release", reason: "no key" });
+    await deps.fail(words.setUp, { kind: "release", reason: "no key" });
     return "failed";
   }
   if (!deps.imageUrl || !/^https?:\/\//u.test(deps.imageUrl)) {
-    await deps.fail("This version has no public address to upscale from.", { kind: "release", reason: "no address" });
+    await deps.fail(`This version has no public address to ${words.noAddress}.`, { kind: "release", reason: "no address" });
     return "failed";
   }
   let submission: Submission;
   try {
     submission = await deps.client.submit(deps.imageUrl);
   } catch (error) {
-    await deps.fail(message(error, "The upscaler couldn't take it."), submitFailureSpend(error));
+    await deps.fail(message(error, words.refused), submitFailureSpend(error));
     return "failed";
   }
   try {
     await deps.record(submission);
   } catch (error) {
     // fal has the job but we couldn't save its ID: give up on it rather than ever posting again.
-    await deps.fail(message(error, "The upscale couldn't be tracked."), { kind: "settle", reason: "untracked" });
+    await deps.fail(message(error, `${words.it} couldn't be tracked.`), { kind: "settle", reason: "untracked" });
     return "failed";
   }
   await deps.schedulePoll(pollDelay(1));
@@ -69,6 +84,7 @@ export async function submitUpscale(deps: SubmitDeps): Promise<"skipped" | "subm
 }
 
 export type PollDeps = {
+  kind?: FalJob;
   client: Pick<FalClient, "status" | "result">;
   statusUrl: string;
   responseUrl: string;
@@ -84,6 +100,7 @@ export type PollDeps = {
 };
 
 export async function pollUpscale(deps: PollDeps): Promise<"waiting" | "done" | "failed"> {
+  const words = WORDS[deps.kind ?? "upscale"];
   const polls = await deps.notePoll();
   const elapsed = deps.now() - deps.submittedAt;
   try {
@@ -94,7 +111,7 @@ export async function pollUpscale(deps: PollDeps): Promise<"waiting" | "done" | 
     }
     if (status.status !== "COMPLETED") {
       if (elapsed > UPSCALE_TIMEOUT_MS) {
-        await deps.fail("The upscale took too long.");
+        await deps.fail(`${words.it} took too long.`);
         return "failed";
       }
       await deps.scheduleNext(pollDelay(polls + 1));
@@ -103,20 +120,20 @@ export async function pollUpscale(deps: PollDeps): Promise<"waiting" | "done" | 
     const image = await deps.client.result(deps.responseUrl);
     const bytes = await deps.download(image.url);
     if (!deps.carriesAlpha(bytes)) {
-      await deps.fail("The upscale came back without transparency, so it can't be used.");
+      await deps.fail(`${words.it} came back without transparency, so it can't be used.`);
       return "failed";
     }
     try {
       await deps.accept(bytes, elapsed);
     } catch (error) {
-      await deps.fail(message(error, "The upscale couldn't be saved."));
+      await deps.fail(message(error, `${words.it} couldn't be saved.`));
       return "failed";
     }
     return "done";
   } catch (error) {
     // Reading failed even after retries. Keep polling (GETs only) until the time runs out.
     if (elapsed > UPSCALE_TIMEOUT_MS) {
-      await deps.fail(message(error, "The upscale couldn't be read."));
+      await deps.fail(message(error, `${words.it} couldn't be read.`));
       return "failed";
     }
     await deps.scheduleNext(pollDelay(polls + 1));

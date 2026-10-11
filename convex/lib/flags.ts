@@ -55,7 +55,8 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
   {
     key: "gen.upscale",
     label: "Print-size art",
-    description: "Creators can upscale art to print size in the Print Studio (2 credits; the owner is exempt). Off refuses new upscales.",
+    description:
+      "Creators can upscale art to print size (2 credits; the owner is exempt) and remove backgrounds in the Print Studio, and approving a work for sale upscales its art. Off refuses new upscales and background removals.",
     defaultOn: false,
   },
 ];
