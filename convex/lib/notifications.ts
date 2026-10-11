@@ -94,6 +94,19 @@ export async function notifyKeptReady(ctx: MutationCtx, args: { recipientId: Id<
   return id;
 }
 
+// Tells an admin that an order can't go on by itself (convex/orderAlerts.ts).
+export async function notifyOrderAttention(ctx: MutationCtx, args: { recipientId: Id<"users">; orderName: string; reason: string }) {
+  const id = await ctx.db.insert("notifications", {
+    recipientId: args.recipientId,
+    kind: "order_attention",
+    orderName: args.orderName,
+    note: args.reason.slice(0, 500),
+    createdAt: Date.now(),
+  });
+  await bumpUnread(ctx, args.recipientId);
+  return id;
+}
+
 // How far up a remix's parents to look for the recipient's own design.
 const MAX_LINEAGE_STEPS = 50;
 

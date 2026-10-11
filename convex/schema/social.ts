@@ -28,6 +28,8 @@ export const notificationKindValidator = v.union(
   v.literal("takedown"),
   // Your kept design is ready to print and order, for you alone (convex/shopify.ts saveSynced).
   v.literal("kept_ready"),
+  // For the owner and ops: an order can't go on by itself (convex/orderAlerts.ts); note says why.
+  v.literal("order_attention"),
 );
 
 export const socialTables = {
@@ -100,8 +102,10 @@ export const socialTables = {
     workId: v.optional(v.id("works")),
     ownWorkId: v.optional(v.id("works")),
     sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean(), held: v.optional(v.boolean()) })),
-    // For a takedown: why the design came down.
+    // For a takedown: why the design came down. For order_attention: what's wrong.
     note: v.optional(v.string()),
+    // For order_attention: the Shopify order's name ("#1001").
+    orderName: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_recipient_created", ["recipientId", "createdAt"])

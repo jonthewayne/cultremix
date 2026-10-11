@@ -273,6 +273,8 @@ export const shopTables = {
     printfulStatusAt: v.optional(v.number()),
     fulfillmentState: fulfillmentStateValidator,
     attentionReason: v.optional(v.string()),
+    // The stuck state and reason the owner and ops were last told about (convex/orderAlerts.ts).
+    alertedFor: v.optional(v.string()),
     // The last transient Printful problem (unreachable, not configured); cleared on success.
     fulfillmentError: v.optional(v.string()),
     // Production confirms no earlier than this (1 hour after payment).

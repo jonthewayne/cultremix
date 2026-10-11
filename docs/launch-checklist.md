@@ -80,7 +80,7 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 
 1. [ ] Products and prices set in Admin, Products; a few designs approved in Admin, For sale, with their Shopify products made (drafts while Checkout is off).
 2. [ ] Turn Checkout on in /admin: the Shopify products become active, and work pages show the buy box. Then one order in Shopify Payments' test mode on the live store, end to end: a Printful draft, deleted. Turn Checkout off again if the store shouldn't open yet.
-3. [ ] One real order (Jon buys a shirt, with Checkout on). It prints and ships; Shopify emails the tracking, and /admin/orders shows "buyer emailed by Shopify".
+3. [ ] One real order (Jon buys a shirt, with Checkout on). If an order ever can't go on by itself, the owner gets a bell notification and an email ("Order #1001 needs you") within 15 minutes, linking to Admin, Orders. It prints and ships; Shopify emails the tracking, and /admin/orders shows "buyer emailed by Shopify".
 4. [ ] Leave Checkout on: the store is open, and "Buying opens soon" is gone. Then in Admin, Waitlist, press **Email them**: everyone who left an email under "Buying opens soon" for a design now on sale gets one email. Press it again after approving more designs. To stop selling at any time, turn Checkout off: the buy box goes, and Shopify's products become drafts, so even a cart made earlier can't check out.
 
 ### Judges

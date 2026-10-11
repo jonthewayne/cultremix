@@ -17,6 +17,8 @@ crons.interval("shopify order reconcile", { minutes: 15 }, internal.orders.recon
 crons.interval("shopify product retry", { minutes: 15 }, internal.shopify.retryDueProducts, {});
 crons.interval("printful reconcile", { minutes: 30 }, internal.fulfillment.reconcile, {});
 crons.interval("shopify tracking retry", { minutes: 15 }, internal.shopifyFulfill.retryDue, {});
+// Orders that can't go on by themselves tell the owner and ops (convex/orderAlerts.ts).
+crons.interval("stuck order alerts", { minutes: 15 }, internal.orderAlerts.alertStuck, {});
 crons.interval("earnings maturity", { hours: 1 }, internal.earnings.matureDue, {});
 crons.daily("webhook payload purge", { hourUTC: 9, minuteUTC: 15 }, internal.orders.purgeExpiredPayloads, {});
 // Buyer addresses: removed 30 days after shipping or cancellation, and redactions that waited
