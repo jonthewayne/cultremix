@@ -101,14 +101,14 @@ function TreeNodeView({ node, compact, onExpand }: { node: TreeNode; compact: bo
         <div className="flex aspect-square w-full items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 text-[11px] font-bold">
           Withdrawn
         </div>
-        <CrMark cr={work.cr} className="mt-1.5 flex-nowrap text-sm" />
+        <CrMark cr={work.cr} noTag className="mt-1.5 flex-nowrap text-sm" />
       </div>
     );
   }
   const body = (
     <>
       <Thumb work={work} current={node.current} faded={node.type !== "work"} />
-      <CrMark cr={work.cr} className={cn("mt-1.5 flex-nowrap", compact ? "text-[13px]" : "text-base")} />
+      <CrMark cr={work.cr} noTag className={cn("mt-1.5 flex-nowrap", compact ? "text-[13px]" : "text-base")} />
       {node.type === "work" ? (
         <>
           <p className="truncate text-xs">@{work.username}</p>
