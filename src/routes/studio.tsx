@@ -306,7 +306,8 @@ function StudioPage() {
     const last = session.lastInputs;
     if (last) {
       setInstruction(last.instruction);
-      setColor(last.backgroundColor);
+      // Stored colors snap to the shirts on offer now, which may have changed since.
+      setColor(shirtHex(last.backgroundColor));
       setImages(
         last.images.flatMap((image) => {
           const previewUrl = image.thumbUrl ?? image.url;
@@ -326,11 +327,11 @@ function StudioPage() {
       const { artKey, artThumbUrl, artUrl, backgroundColor } = session.remix;
       const preview = artThumbUrl ?? artUrl;
       if (artKey && preview) {
-        setColor(backgroundColor);
+        setColor(shirtHex(backgroundColor));
         void addExisting(artKey, preview, false);
       }
     }
-  }, [s, session, addExisting]);
+  }, [s, session, addExisting, shirtHex]);
   // A session that isn't the member's (or no longer exists) falls back to a blank studio. The query
   // answers null until the page's sign-in token reaches Convex, so only "missing" counts.
   useEffect(() => {
@@ -349,13 +350,15 @@ function StudioPage() {
         setInstruction("");
         setWords({});
         setPartValues({});
-        setColor(result.backgroundColor);
+        // The original's shirt, as the nearest shirt on offer now (an older design may use one
+        // that's no longer offered).
+        setColor(shirtHex(result.backgroundColor));
         const preview = result.artThumbUrl ?? result.artUrl;
         if (result.artKey && preview) void addExisting(result.artKey, preview, false);
         void navigate({ to: "/studio", search: { s: result.sessionId }, replace: true });
       })
       .catch((err) => setError(errorMessage(err)));
-  }, [remix, viewer?.username, startRemix, addExisting, navigate]);
+  }, [remix, viewer?.username, startRemix, addExisting, navigate, shirtHex]);
 
   const openSession = (sessionId: string) => {
     void navigate({ to: "/studio", search: { s: sessionId } });
