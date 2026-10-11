@@ -189,6 +189,20 @@ describe("publishing a remix as a variation or a fork", () => {
     expect(await check(other)).toBeNull();
   });
 
+  it("refuses to publish a remix, public or kept, of a design taken down after it was made", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const root = await publish(t, alice);
+    const generationId = await tile(t, bob.userId, root.workId);
+    await t.run((ctx) => ctx.db.patch("works", root.workId, { status: "withdrawn", withdrawReason: "Not ours to sell." }));
+    for (const keep of [undefined, "private" as const]) {
+      await expect(
+        bob.as.mutation(api.publish.quick, { requestId: `late-${keep ?? "world"}`, generationId, ...(keep ? { keep } : {}) }),
+      ).rejects.toThrow(/was taken down/u);
+    }
+  });
+
   it("refuses to publish a remix whose parent is gone", async () => {
     const t = newTest();
     const alice = await member(t, "alice");

@@ -35,6 +35,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const PUBLISHING_OFF = "Publishing is paused for now. Your designs are safe here; try again soon.";
+const PARENT_WITHDRAWN = "The design you remixed was taken down, so its remixes can't be published. Your designs stay here.";
 
 // ---- How a remix relates to the design it remixes ----
 
@@ -328,9 +329,14 @@ export const quick = mutation({
     }
 
     // A remix is a variation (the parent's family, next expression) or a fork (a new family,
-    // expression 1, crediting the parent). The parent must still have its public record.
+    // expression 1, crediting the parent). The parent must still be published: a design taken down
+    // (convex/moderation.ts) gets no new remixes, public or kept, since a remix carries its art, and
+    // a takedown is usually about that art. Remixes published before it stay up.
     const parent = session.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
-    if (session.remixOfWorkId && (!parent || (parent.status !== "published" && parent.status !== "withdrawn"))) {
+    if (parent?.status === "withdrawn") {
+      throw new ConvexError({ code: "PARENT_WITHDRAWN", message: PARENT_WITHDRAWN });
+    }
+    if (session.remixOfWorkId && (!parent || parent.status !== "published")) {
       throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
     }
     const keep = args.keep === "private";
@@ -400,7 +406,10 @@ export const shareKeep = mutation({
       throw new ConvexError({ code: "PUBLISHING_OFF", message: PUBLISHING_OFF });
     }
     const parent = work.parentWorkId ? await ctx.db.get("works", work.parentWorkId) : null;
-    if (work.parentWorkId && (!parent || (parent.status !== "published" && parent.status !== "withdrawn"))) {
+    if (parent?.status === "withdrawn") {
+      throw new ConvexError({ code: "PARENT_WITHDRAWN", message: PARENT_WITHDRAWN });
+    }
+    if (work.parentWorkId && (!parent || parent.status !== "published")) {
       throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
     }
     const generation = await ctx.db.get("generations", work.generationId);
