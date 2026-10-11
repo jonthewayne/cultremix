@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { vi } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { RawOrder } from "../../convex/lib/shopify/orderQuery";
@@ -102,6 +102,11 @@ export async function makeWork(
   });
 }
 
+// The bytes the public bucket serves for a print file in these tests, and their fingerprint, which
+// makeOnSale saves as the file's approved SHA-256 (INV-10 checks them before a Printful create).
+export const PRINT_FILE_BYTES = new TextEncoder().encode("CultRemix print file fixture: 3600 x 4800 at 300 DPI");
+export const PRINT_FILE_SHA256 = createHash("sha256").update(PRINT_FILE_BYTES).digest("hex");
+
 // Puts a work on sale without Shopify: a live listing on the launch shirt (front print, the work's
 // print file as its file when it has one) and a variant per color and size (20 for the launch
 // colors), numbered from base.
@@ -134,7 +139,7 @@ export async function makeOnSale(t: T, workId: Id<"works">, cr: string, base = 1
         ? {
             printFile: {
               key: work.printKey,
-              sha256: "f".repeat(64),
+              sha256: PRINT_FILE_SHA256,
               widthPx: 3600,
               heightPx: 4800,
               versionId,

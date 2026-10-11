@@ -143,14 +143,21 @@ function AdminOrdersPage() {
                             ALERT.has(order.fulfillmentState) ? "bg-destructive text-white" : "bg-muted text-foreground"
                           }`}
                         >
-                          {STATE_LABEL[order.fulfillmentState] ?? order.fulfillmentState}
+                          {order.fulfillmentState === "waiting" && order.paid
+                            ? "Paid, going to print"
+                            : (STATE_LABEL[order.fulfillmentState] ?? order.fulfillmentState)}
                         </span>
                       </div>
                       {order.attentionReason && <p className="mt-2 font-semibold">{order.attentionReason}</p>}
+                      {order.retrying && <p className="mt-2 text-sm text-muted-foreground">Trying again: {order.retrying}</p>}
                       <ul className="mt-3 space-y-1">
                         {order.lines.map((line, index) => (
                           <li key={index} className="flex flex-wrap items-baseline gap-x-3 text-sm">
-                            {line.cr ? <CrMark cr={line.cr} className="text-lg" /> : <span className="font-bold">Unknown design</span>}
+                            {line.cr ? (
+                              <CrMark cr={line.cr} className="text-lg" />
+                            ) : (
+                              <span className="font-bold">{line.kept ? "Kept design" : "Unknown design"}</span>
+                            )}
                             <span className="font-mono text-muted-foreground">{line.sku ?? "no SKU"}</span>
                             <span>× {line.quantity}</span>
                             {line.refunded > 0 && <span className="text-muted-foreground">({line.refunded} refunded)</span>}

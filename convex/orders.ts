@@ -573,11 +573,21 @@ const adminOrderValidator = v.object({
   fulfillmentState: v.string(),
   printfulStatus: v.union(v.string(), v.null()),
   attentionReason: v.union(v.string(), v.null()),
+  // Why sending it to print is being tried again (Printful not set up, unreachable, or a print
+  // file that couldn't be read to check it), while it waits to go.
+  retrying: v.union(v.string(), v.null()),
   totalCents: v.number(),
   poolCents: v.number(),
   ref: v.union(v.string(), v.null()),
   lines: v.array(
-    v.object({ cr: v.union(v.string(), v.null()), sku: v.union(v.string(), v.null()), quantity: v.number(), refunded: v.number() }),
+    v.object({
+      cr: v.union(v.string(), v.null()),
+      // A kept design (just for its creator), which has no public number.
+      kept: v.boolean(),
+      sku: v.union(v.string(), v.null()),
+      quantity: v.number(),
+      refunded: v.number(),
+    }),
   ),
   refunds: v.array(v.object({ status: v.string(), amountCents: v.number() })),
   // Printful shipments, and whether Shopify has the tracking (and emailed the buyer).
@@ -618,8 +628,10 @@ export const adminList = query({
         const refunded = refunds
           .filter((r) => r.status === "succeeded")
           .reduce((sum, r) => sum + r.lines.filter((l) => l.orderItemId === item._id).reduce((s, l) => s + l.quantity, 0), 0);
+        const kept = work?.status === "private";
         lines.push({
-          cr: work ? crNumber(work.crFamily, work.crExpression) : null,
+          cr: work && !kept ? crNumber(work.crFamily, work.crExpression) : null,
+          kept,
           sku: item.sku ?? null,
           quantity: item.quantity,
           refunded,
@@ -637,6 +649,10 @@ export const adminList = query({
         fulfillmentState: order.fulfillmentState,
         printfulStatus: order.printfulStatus ?? null,
         attentionReason: order.attentionReason ?? null,
+        retrying:
+          (order.fulfillmentState === "waiting" || order.fulfillmentState === "creating") && order.fulfillmentError
+            ? order.fulfillmentError
+            : null,
         totalCents: order.totalCents,
         poolCents: items.reduce((sum, item) => sum + item.poolCents, 0),
         ref: order.ref ?? null,

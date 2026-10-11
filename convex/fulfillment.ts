@@ -20,6 +20,8 @@ import {
   type ShipmentRecord,
 } from "./lib/printful/client";
 import { publicUrl } from "./lib/r2";
+import { checkPrintFiles } from "./lib/printFingerprint";
+import { advancePrep } from "./sales";
 import { autoConfirmAllowedByEnv, autoConfirmFlagAllows } from "./lib/shopFlags";
 import { catalogColorByCode } from "./lib/shopColors";
 import { crNumber } from "./lib/shopify/productSync";
@@ -79,8 +81,12 @@ function printfulVariantFor(variant: Doc<"workVariants">): number | null {
   return catalogColorByCode(variant.color)?.printfulVariantIds[variant.size as PrintSize] ?? null;
 }
 
+// A print file the order sends, with the fingerprint it must still have (INV-10).
+const fileValidator = v.object({ url: v.string(), sha256: v.string(), label: v.string() });
+type FileCheck = Infer<typeof fileValidator>;
+
 type CreatePlan =
-  | { ok: true; request: PrintfulOrderRequest }
+  | { ok: true; request: PrintfulOrderRequest; files: Array<FileCheck> }
   | { ok: false; state: "needs_attention" | "manual_required" | "canceled"; reason?: string };
 
 // What a create would send, or why the order can't go to Printful automatically.
@@ -88,6 +94,7 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
   const { items, refunds } = await loadParts(db, order._id);
   const open = openQuantities(items, refunds);
   const lines: Parameters<typeof buildOrderRequest>[0]["lines"] = [];
+  const files: Array<FileCheck> = [];
   for (const item of items) {
     const quantity = open.get(item._id) ?? 0;
     if (quantity === 0) continue;
@@ -99,17 +106,31 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
     // work's Print Studio file on the front.
     const listing = variant.listingId ? await db.get("shopProducts", variant.listingId) : null;
     const printKey = variant.listingId ? listing?.printFile?.key : work.printKey;
+    const printSha256 = variant.listingId ? listing?.printFile?.sha256 : work.printSha256;
     const placement = listing?.listing?.placement.side ?? "front";
     const url = publicUrl(printKey);
-    if (!printKey) return { ok: false, state: "needs_attention", reason: `${cr} has no print file.` };
+    if (!printKey) {
+      // A file being made again (after a fingerprint check, or a new approval) is on its way.
+      const reason =
+        listing?.status === "preparing"
+          ? listing.prepError
+            ? `${cr}'s print file couldn't be made: ${listing.prepError}`
+            : `${cr}'s print file is being made. The order goes to Printful once it's ready.`
+          : `${cr} has no print file.`;
+      return { ok: false, state: "needs_attention", reason };
+    }
     if (!url || !/^https?:\/\//u.test(url)) {
       return { ok: false, state: "needs_attention", reason: `${cr}'s print file isn't at a public address yet.` };
+    }
+    if (!printSha256) {
+      return { ok: false, state: "needs_attention", reason: `${cr}'s print file has no fingerprint to check it against.` };
     }
     const catalogVariantId = printfulVariantFor(variant);
     if (catalogVariantId === null) {
       return { ok: false, state: "needs_attention", reason: `${cr} ${variant.color} ${variant.size} has no Printful variant yet.` };
     }
     lines.push({ lineItemId: item.shopifyLineItemId, catalogVariantId, quantity, printUrl: url, placement });
+    files.push({ url, sha256: printSha256, label: cr });
   }
   if (lines.length === 0) return { ok: false, state: "canceled" };
   const r = order.recipient;
@@ -132,7 +153,7 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
   if (r.stateCode) recipient.state_code = r.stateCode;
   if (r.phone) recipient.phone = r.phone;
   if (r.email) recipient.email = r.email;
-  return { ok: true, request: buildOrderRequest({ shopifyOrderId: order.shopifyOrderId, recipient, lines }) };
+  return { ok: true, request: buildOrderRequest({ shopifyOrderId: order.shopifyOrderId, recipient, lines }), files };
 }
 
 const requestValidator = v.object({
@@ -173,6 +194,8 @@ const opValidator = v.union(
     shopifyOrderId: v.string(),
     // Absent: look up only (an ambiguous create, or an order the owner makes by hand).
     request: v.optional(requestValidator),
+    // The request's print files, checked against their fingerprints just before the create.
+    files: v.optional(v.array(fileValidator)),
     ambiguousSince: v.optional(v.number()),
   }),
   v.object({ kind: v.literal("delete"), printfulOrderId: v.number(), refundIds: v.array(v.id("refunds")) }),
@@ -250,6 +273,7 @@ export const advance = internalMutation({
           kind: "create",
           shopifyOrderId: order.shopifyOrderId,
           request: ambiguousSince === undefined && plan.ok ? plan.request : undefined,
+          files: ambiguousSince === undefined && plan.ok ? plan.files : undefined,
           ambiguousSince,
         },
         { fulfillmentState: "creating", attentionReason: undefined },
@@ -371,6 +395,22 @@ export const run = internalAction({
             } else await fail("ambiguous", "Waiting to see whether Printful made the order.");
             return null;
           }
+          // INV-10: Printful gets the approved bytes. A file that changed or is gone is made again
+          // and the order waits for it; one that can't be read right now is tried again later.
+          const problems = await checkPrintFiles(op.files ?? []);
+          const bad = problems.filter((problem) => problem.problem !== "unreadable");
+          if (bad.length > 0) {
+            await ctx.runMutation(internal.fulfillment.printFileChanged, {
+              orderId,
+              urls: bad.map((problem) => problem.url),
+              reason: printFileReason(bad),
+            });
+            return null;
+          }
+          if (problems.length > 0) {
+            await fail("transient", `Couldn't read ${problems[0].label}'s print file to check it: ${problems[0].detail}`);
+            return null;
+          }
           let created: PrintfulOrder;
           try {
             created = await printful.createOrder(op.request);
@@ -470,6 +510,56 @@ export const failed = internalMutation({
         return null;
       }
     }
+  },
+});
+
+// "CR 101-002's print file isn't the approved one (…). It's being made again from the same art; the
+// order goes to Printful once the new file passes this check."
+function printFileReason(problems: Array<{ label: string; problem: string; detail: string }>) {
+  const first = problems[0];
+  const what = first.problem === "missing" ? `is gone (${first.detail})` : `isn't the approved one (${first.detail})`;
+  const more = problems.length > 1 ? ` ${problems.length - 1} more file${problems.length > 2 ? "s" : ""} too.` : "";
+  return `${first.label}'s print file ${what}.${more} It's being made again from the same art; the order goes to Printful once the new file passes this check.`;
+}
+
+// INV-10, after the check before a create: a print file at one of the order's addresses isn't the
+// approved file. The order waits with the reason and no fulfillmentError, so the 30-minute sweep plans
+// it again; each product whose file it was gets a new file, rendered again from the art it was made
+// from (no new upscale), so the order goes on its own once that file is ready. A paused product
+// stays paused, without the file, until it's resumed. A file from before products could be chosen
+// (works.printKey) can't be made again here; the order just waits for the owner.
+export const printFileChanged = internalMutation({
+  args: { orderId: v.id("orders"), urls: v.array(v.string()), reason: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get("orders", args.orderId);
+    if (!order || order.printfulOrderId !== undefined) return null;
+    const now = Date.now();
+    const { items } = await loadParts(ctx.db, order._id);
+    const works = new Set<Id<"works">>();
+    for (const item of items) {
+      const variant = item.variantId ? await ctx.db.get("workVariants", item.variantId) : null;
+      const listing = variant?.listingId ? await ctx.db.get("shopProducts", variant.listingId) : null;
+      const url = publicUrl(listing?.printFile?.key);
+      if (!listing || !url || !args.urls.includes(url)) continue;
+      await ctx.db.patch("shopProducts", listing._id, {
+        printFile: undefined,
+        renderStartedAt: undefined,
+        prepError: undefined,
+        ...(listing.status === "paused" ? {} : { status: "preparing" as const }),
+        updatedAt: now,
+      });
+      works.add(listing.workId);
+    }
+    for (const workId of works) await advancePrep(ctx, workId);
+    await ctx.db.patch("orders", order._id, {
+      fulfillmentState: "needs_attention",
+      attentionReason: args.reason.slice(0, 500),
+      fulfillmentError: undefined,
+      leaseUntil: undefined,
+      updatedAt: now,
+    });
+    return null;
   },
 });
 

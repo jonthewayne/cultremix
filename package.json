@@ -55,6 +55,7 @@
     "@convex-dev/r2": "^0.10.2",
     "@convex-dev/react-query": "^0.1.0",
     "@convex-dev/resend": "^0.2.8",
+    "@noble/hashes": "^2.2.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@radix-ui/react-label": "^2.1.15",

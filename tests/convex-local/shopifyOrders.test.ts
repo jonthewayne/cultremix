@@ -505,8 +505,15 @@ describe("orders.adminList", () => {
     await expect(t.query(api.orders.adminList, {})).rejects.toThrow();
     await expect(t.withIdentity({ subject: "member" }).query(api.orders.adminList, {})).rejects.toThrow();
     const list = await t.withIdentity({ subject: "owner" }).query(api.orders.adminList, {});
-    expect(list.orders[0]).toMatchObject({ name: "#1001", paid: true, fulfillmentState: "waiting", poolCents: 1080 });
-    expect(list.orders[0].lines).toEqual([{ cr: "101-002", sku: null, quantity: 2, refunded: 0 }]);
+    // Paid, and waiting to go to print because Printful isn't set up in this test: Admin says why.
+    expect(list.orders[0]).toMatchObject({
+      name: "#1001",
+      paid: true,
+      fulfillmentState: "waiting",
+      retrying: "Printful is not configured yet.",
+      poolCents: 1080,
+    });
+    expect(list.orders[0].lines).toEqual([{ cr: "101-002", kept: false, sku: null, quantity: 2, refunded: 0 }]);
   });
 });
 

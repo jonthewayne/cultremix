@@ -4,7 +4,18 @@ import { internal } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { rawOrder, type FixtureLine, type FixtureRefund } from "../fixtures/shopifyOrder";
 import { newTest } from "./setup";
-import { SHOP_ENV, deliver, fakeShopify, makeOnSale, makeUser, makeWork, postShopifyWebhook, setFlag } from "./shopFixtures";
+import {
+  PRINT_FILE_BYTES,
+  PRINT_FILE_SHA256,
+  SHOP_ENV,
+  deliver,
+  fakeShopify,
+  makeOnSale,
+  makeUser,
+  makeWork,
+  postShopifyWebhook,
+  setFlag,
+} from "./shopFixtures";
 
 // Printful fulfillment against a fake Printful v2 API and a fake Shopify Admin API. No network.
 
@@ -111,8 +122,25 @@ function fakePrintful() {
   };
 }
 
+// The public bucket Printful reads print files from: each file's approved bytes, unless a test
+// answers differently for a key.
+function fakeFiles() {
+  const reads: Array<string> = [];
+  const answers = new Map<string, () => Response>();
+  return {
+    reads,
+    answer: (key: string, respond: () => Response) => answers.set(`https://files.cultremix.test/${key}`, respond),
+    reset: () => answers.clear(),
+    handle: (url: string) => {
+      reads.push(url);
+      return answers.get(url)?.() ?? new Response(PRINT_FILE_BYTES);
+    },
+  };
+}
+
 let shopify: ReturnType<typeof fakeShopify>;
 let printful: ReturnType<typeof fakePrintful>;
+let files: ReturnType<typeof fakeFiles>;
 
 const creates = () => printful.count("POST", /^\/v2\/orders$/u);
 const confirms = () => printful.count("POST", /\/confirmation$/u);
@@ -128,11 +156,15 @@ beforeEach(() => {
   vi.stubEnv("PRINTFUL_AUTO_CONFIRM", "true");
   shopify = fakeShopify();
   printful = fakePrintful();
+  files = fakeFiles();
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).startsWith("https://api.printful.com") ? printful.handle(String(input), init) : shopify.fetchFake(input, init),
-    ),
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("https://api.printful.com")) return printful.handle(url, init);
+      if (url.startsWith("https://files.cultremix.test/")) return files.handle(url);
+      return shopify.fetchFake(input, init);
+    }),
   );
 });
 
@@ -236,8 +268,10 @@ describe("creating the Printful order", () => {
         },
       ],
     });
-    // Looked up by external_id before the create.
+    // Looked up by external_id before the create, and the print file read once (two shirts, one
+    // file) to check it's the approved one.
     expect(printful.calls[0]).toMatchObject({ method: "GET", path: `/v2/orders/@${ORDER_ID}` });
+    expect(files.reads).toEqual([`https://files.cultremix.test/${PRINT_KEY}`]);
 
     const order = await theOrder(t);
     expect(order).toMatchObject({ fulfillmentState: "draft", printfulStatus: "draft", printfulStoreId: STORE_ID });
@@ -265,6 +299,68 @@ describe("creating the Printful order", () => {
     expect(sent.order_items[0].placements).toEqual([
       { placement: "back", technique: "dtg", layers: [{ type: "file", url: `https://files.cultremix.test/${backKey}` }] },
     ]);
+  });
+
+  it("never sends a print file that isn't the approved one: it's made again, and the order waits for it", async () => {
+    const t = newTest();
+    const { b, work } = await onSale(t);
+    const listing = async () =>
+      (await t.run((ctx) => ctx.db.query("shopProducts").withIndex("by_work", (q) => q.eq("workId", work)).unique()))!;
+    // Approved the way Admin, For sale approves it, so its file can be made again.
+    const row = await listing();
+    await t.run((ctx) => ctx.db.patch("shopProducts", row._id, { approvedBy: b, approvedAt: Date.now() }));
+    const approved = row.printFile!;
+    files.answer(PRINT_KEY, () => new Response(new TextEncoder().encode("someone else's art")));
+    await paid(t);
+
+    expect(creates()).toBe(0);
+    const order = await theOrder(t);
+    expect(order.fulfillmentState).toBe("needs_attention");
+    // No fulfillmentError: the sweep plans it again (a Printful refusal would wait for the owner).
+    expect(order.fulfillmentError).toBeUndefined();
+    expect(order.attentionReason).toMatch(/^CR 101-002's print file isn't the approved one \(its bytes hash to /u);
+    expect(order.attentionReason).toContain("It's being made again from the same art");
+    // The product's file is dropped and made again. (This test's art was never measured, so making
+    // it stops at that, as the next reason says; the new file is recorded by hand below.)
+    const remaking = await listing();
+    expect(remaking.status).toBe("preparing");
+    expect(remaking.printFile).toBeUndefined();
+
+    // The 30-minute sweep plans it again and says why it's still waiting.
+    await t.action(internal.fulfillment.reconcile, {});
+    await settle(t);
+    expect(creates()).toBe(0);
+    expect((await theOrder(t)).attentionReason).toBe("CR 101-002's print file couldn't be made: The art couldn't be measured.");
+
+    // The new file lands under a new key; the next sweep checks it and sends it.
+    const newKey = "works/101/002/print-" + "n".repeat(26) + "/print.png";
+    await t.mutation(internal.sales.recordListingFile, {
+      listingId: (await listing())._id,
+      file: { ...approved, key: newKey, sha256: PRINT_FILE_SHA256 },
+    });
+    await t.action(internal.fulfillment.reconcile, {});
+    await settle(t);
+    expect(creates()).toBe(1);
+    expect(JSON.stringify(printful.calls.find((c) => c.method === "POST" && c.path === "/v2/orders")!.body)).toContain(newKey);
+    expect((await theOrder(t)).fulfillmentState).toBe("draft");
+  });
+
+  it("tries again later when a print file can't be read to check it", async () => {
+    const t = newTest();
+    await onSale(t);
+    files.answer(PRINT_KEY, () => new Response("busy", { status: 503 }));
+    await paid(t);
+
+    expect(creates()).toBe(0);
+    const order = await theOrder(t);
+    expect(order.fulfillmentState).toBe("waiting");
+    expect(order.fulfillmentError).toBe("Couldn't read CR 101-002's print file to check it: HTTP 503");
+
+    files.reset();
+    vi.advanceTimersByTime(6 * MINUTE);
+    await t.action(internal.fulfillment.reconcile, {});
+    await settle(t);
+    expect(creates()).toBe(1);
   });
 
   it("keeps one Printful order across replays, other topics, and reconciliation", async () => {
