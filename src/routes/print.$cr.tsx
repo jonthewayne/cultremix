@@ -429,7 +429,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                       disabled={locked}
                       onClick={() => change({ color: color.name })}
                       className={cn(
-                        "h-9 w-9 rounded-full border-2 border-border transition-transform hover:scale-110 disabled:hover:scale-100",
+                        "h-10 w-10 rounded-full border-2 border-border transition-transform hover:scale-110 disabled:hover:scale-100",
                         color.name === draft.color && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
                       )}
                       style={{ background: color.hex }}

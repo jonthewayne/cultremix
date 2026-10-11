@@ -232,7 +232,7 @@ export function RemixableParts({
                   <button
                     type="button"
                     onClick={() => removePart(part.id)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg font-black hover:opacity-70"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-black hover:opacity-70"
                     aria-label={`Remove ${part.label}`}
                   >
                     ×

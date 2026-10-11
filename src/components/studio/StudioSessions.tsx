@@ -273,7 +273,7 @@ export function DesignMenu({
         aria-expanded={open}
         aria-label="More options"
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-xl font-black leading-none text-black shadow ring-1 ring-black/20 backdrop-blur transition-transform hover:scale-110",
+          "flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xl font-black leading-none text-black shadow ring-1 ring-black/20 backdrop-blur transition-transform hover:scale-110",
           className,
         )}
       >

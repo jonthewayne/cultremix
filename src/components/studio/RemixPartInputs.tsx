@@ -132,7 +132,7 @@ function PartRow({
               <button
                 type="button"
                 onClick={() => onRemovePhoto(slot.id)}
-                className="group absolute right-0 top-0 flex h-9 w-9 items-center justify-center"
+                className="group absolute right-0 top-0 flex h-10 w-10 items-center justify-center"
                 aria-label={`Remove photo ${i + 1} from ${part.label}`}
               >
                 <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs font-black ring-1 ring-black group-hover:bg-black group-hover:text-white">

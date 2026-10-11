@@ -206,4 +206,4 @@ After deployment:
 BASE_URL=https://your-test-domain.example.com bun run test:e2e
 ```
 
-Expected result: public auth pages render, theme toggle works, and screenshots are captured. Full login tests require valid email/SMS provider configuration or test OTP storage.
+Expected result: public auth pages render and screenshots are captured. Full login tests require valid email/SMS provider configuration or test OTP storage.

@@ -27,6 +27,8 @@ export const viewerValidator = v.object({
   unlimited: v.boolean(),
   // Admins who manage the platform can try other image models in the studio.
   canPickModel: v.optional(v.boolean()),
+  // Any admin (support, ops, owner): the header menu links to Admin.
+  isAdmin: v.optional(v.boolean()),
 });
 
 export async function getViewerUser(ctx: Ctx): Promise<Doc<"users"> | null> {
@@ -81,6 +83,7 @@ async function toViewer(ctx: Ctx, user: Doc<"users">) {
     credits: await creditBalance(ctx, user._id),
     unlimited: isOwner(user),
     canPickModel: adminAllows(user.platformRole, "manage"),
+    isAdmin: adminAllows(user.platformRole, "view"),
   };
 }
 

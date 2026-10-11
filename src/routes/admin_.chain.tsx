@@ -7,13 +7,14 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { hasCapability } from "../../convex/lib/authz";
 import { AppShell } from "~/components/app/app-shell";
-import { PageHeader } from "~/components/app/page-header";
+import { AdminFrame } from "~/components/admin/AdminFrame";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { isSuperAdminRole, useCurrentUser } from "~/hooks/use-auth";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 
 export const Route = createFileRoute("/admin_/chain")({
+  head: () => ({ meta: [{ title: "Monad · Admin · CultRemix" }] }),
   beforeLoad: requireAuthenticatedRoute,
   component: ChainAdminPage,
 });
@@ -101,9 +102,9 @@ function ChainAdminPage() {
   const stalled = overview?.relayers.find((row) => row.stalled);
 
   return (
-    <AppShell>
+    <AdminFrame>
       <div className="space-y-6">
-        <PageHeader title="Chain" description="The relayer that registers works, Backs, and lineage corrections on Monad." />
+        <p className="text-muted-foreground">The relayer that registers works, Backs, and lineage corrections on Monad.</p>
         {message && <p className="rounded-md border bg-background px-3 py-2 text-sm">{message}</p>}
 
         <Card>
@@ -310,7 +311,7 @@ function ChainAdminPage() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
+    </AdminFrame>
   );
 }
 

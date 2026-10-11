@@ -95,7 +95,7 @@ Authorization:
 App UI:
 
 - shadcn/ui CSS variable contract, including base, chart, sidebar, and radius tokens.
-- Light/dark theme toggle.
+- Light and dark theme tokens. CultRemix pages are light only, so the starter's theme toggle isn't shown.
 - Login, email verify, phone verify, invite acceptance, unauthorized, not found, dashboard, settings, team, and admin route surfaces.
 - Theme generator friendly: replace only the `:root` and `.dark` variable blocks in `src/styles/app.css`.
 

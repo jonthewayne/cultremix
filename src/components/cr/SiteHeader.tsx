@@ -101,6 +101,11 @@ export function SiteHeader() {
                 <Link to="/settings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
                   Settings
                 </Link>
+                {viewer.isAdmin && (
+                  <Link to="/admin" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
+                    Admin
+                  </Link>
+                )}
                 <button type="button" onClick={() => void signOut()} className="block w-full px-4 py-3 text-left hover:bg-neutral-100">
                   Sign out
                 </button>

@@ -15,4 +15,4 @@ To customize:
 3. Replace the `:root` and `.dark` variable blocks in `src/styles/app.css`.
 4. Keep the `@theme inline` block and the variable names intact.
 
-The theme toggle stores the selected mode in `localStorage` and applies `.dark` to the document element before hydration.
+CultRemix pages, Admin included, are light only. The starter's theme toggle (`src/components/ui/theme-toggle.tsx`) is no longer rendered, so nothing applies `.dark`; the dark variables stay in `app.css` so a dark theme can come back.
