@@ -11,7 +11,11 @@ export function inkOn(hex: string) {
   const [r, g, b] = [m[1], m[2], m[3]].map((part) => parseInt(part, 16) / 255);
   const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  return luminance > 0.36 ? "#000000" : "#ffffff";
+  // WCAG contrast against each: black wins from about 18% luminance up. (A 36% cutoff put white
+  // on mid tones such as #8c928b at 3.2:1, where black reads at 6.6:1.)
+  const onBlack = (luminance + 0.05) / 0.05;
+  const onWhite = 1.05 / (luminance + 0.05);
+  return onBlack >= onWhite ? "#000000" : "#ffffff";
 }
 
 // The most common color along the image's edges (4-bit bins per channel),

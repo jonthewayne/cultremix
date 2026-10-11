@@ -170,7 +170,12 @@ function AdminOrdersPage() {
                           <dt className="inline">Payment </dt>
                           <dd className="inline text-foreground">{order.paid ? "Paid" : order.financialState.toLowerCase()}</dd>
                         </div>
-                        {order.cancelled && <div className="font-bold text-foreground">Canceled</div>}
+                        {order.cancelled && (
+                          <div>
+                            <dt className="sr-only">Status</dt>
+                            <dd className="inline font-bold text-foreground">Canceled</dd>
+                          </div>
+                        )}
                         {order.printfulStatus && (
                           <div>
                             <dt className="inline">Printful </dt>
@@ -191,7 +196,10 @@ function AdminOrdersPage() {
                             <dd className="inline text-foreground">{order.ref}</dd>
                           </div>
                         )}
-                        <div>{new Date(order.createdAt).toLocaleString()}</div>
+                        <div>
+                          <dt className="sr-only">Placed</dt>
+                          <dd className="inline">{new Date(order.createdAt).toLocaleString()}</dd>
+                        </div>
                       </dl>
                       {order.shipments.length > 0 && (
                         <ul className="mt-2 space-y-1 text-sm">

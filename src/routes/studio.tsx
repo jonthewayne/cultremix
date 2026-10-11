@@ -1256,7 +1256,8 @@ function TileCard({
       ) : failed && tile.blocked ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center md:p-4">
           <span className="text-lg font-black leading-tight">Blocked by filter</span>
-          <span className="mt-1 max-w-[16rem] text-xs opacity-70">
+          {/* Full ink: small text at partial opacity drops under 4.5:1 on mid-tone backgrounds. */}
+          <span className="mt-1 max-w-[16rem] text-xs">
             Shittles, this got flagged for some reason. Please try again if you think we got this wrong.
             {grid ? "" : " Credit’s back."}
           </span>
@@ -1264,7 +1265,7 @@ function TileCard({
       ) : failed ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
           <span className="text-lg font-black">Didn’t work</span>
-          <span className="mt-1 line-clamp-3 text-xs opacity-70">
+          <span className="mt-1 line-clamp-3 text-xs">
             {tile.error ?? "Try again."}
             {grid ? "" : " Credit refunded."}
           </span>
@@ -1359,7 +1360,7 @@ function TileCard({
             className={cn(
               corner,
               "border-2 border-current transition-opacity",
-              failed ? "opacity-70 hover:opacity-100" : "hidden opacity-0 md:block md:group-hover:opacity-100 md:focus-visible:opacity-100",
+              failed ? "" : "hidden opacity-0 md:block md:group-hover:opacity-100 md:focus-visible:opacity-100",
             )}
             aria-label="Dismiss this design"
           >

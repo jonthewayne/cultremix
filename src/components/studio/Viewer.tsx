@@ -445,7 +445,7 @@ export function Viewer({
         </button>
       </div>
 
-      <p className="hidden pb-4 pt-2 text-center text-xs font-semibold opacity-60 md:block [@media(pointer:coarse)]:hidden">
+      <p className="hidden pb-4 pt-2 text-center text-xs font-medium md:block [@media(pointer:coarse)]:hidden">
         ← → move · F favorite · X dismiss · C compare · B start from this · P publish · T transparency · Esc close
       </p>
 
