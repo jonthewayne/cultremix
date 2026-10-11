@@ -7,7 +7,7 @@
   "vision": "openai/gpt-6-luna",
   "words": "google/gemini-3.1-pro-preview"
  },
- "recordedAt": "2026-10-11T06:19:19.358Z",
+ "recordedAt": "2026-10-11T21:19:55.037Z",
  "cases": {
   "words-from-text": {
    "passed": true,
@@ -655,6 +655,102 @@
     "upper": "1/1",
     "centered": "1/1",
     "faithful": "1/1"
+   }
+  },
+  "spelling-trroh": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: TRASH as TRROH; TRASH as TRROH"
+   }
+  },
+  "spelling-trrosh": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: TRASH as TRROSH; TRASH as TRROSH"
+   }
+  },
+  "spelling-trrow": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: TRASH as TRROW; TRASH as TRROW"
+   }
+  },
+  "spelling-trash-royalty": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-remix-word": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-remix-one-word": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-remix-two-lines": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-style-in-capitals": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-four-words": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-digits": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-long-line": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-arched": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-in-pieces": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-neon": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-quoted": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
+   }
+  },
+  "spelling-ampersand": {
+   "passed": true,
+   "checks": {
+    "flags": "2/2: none; none"
    }
   }
  }

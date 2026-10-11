@@ -29,9 +29,12 @@ import type { RemixField } from "../../convex/lib/remixFields";
 import { allowedChangesNote, checkPartChanges, partChangeInstruction } from "../../convex/lib/remixParts";
 import { decodeToRgba, encodePng } from "../../convex/lib/resize";
 import { readRoles } from "../../convex/lib/roleReader";
+import { spellingMisses, wordsToCheck } from "../../convex/lib/spelling";
+import type { SpellingMiss } from "../../convex/lib/spelling";
+import { readDesignWords } from "../../convex/lib/wordReader";
 import { caseBoard } from "./board";
 import { CASES, keepsParts } from "./cases";
-import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PhotoCase, ReaderCase, WordsCheck } from "./cases";
+import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PhotoCase, ReaderCase, SpellingCase, WordsCheck } from "./cases";
 import { renderCatalog } from "./catalog";
 import { fixture, fixturePath } from "./fixtures";
 import { checkImage, readWords, throttled, wordsMatch } from "./judge";
@@ -587,6 +590,51 @@ async function runCompare(c: CompareCase, ctx: Context): Promise<CaseResult> {
   };
 }
 
+// The studio's spelling check on a finished design, as convex/spellingCheck.ts runs it: the words its
+// request asked for, its lettering read back (a failed reading tried once more), and the asked words
+// it drew a letter or two off. Every try (two by default) must flag exactly the case's words.
+type Reading = { words: Array<string>; misses: Array<SpellingMiss> } | { error: string };
+async function runSpelling(c: SpellingCase, ctx: Context): Promise<CaseResult> {
+  const started = Date.now();
+  const base = { id: c.id, group: c.group, kind: c.kind, status: c.status ?? "supported", title: c.title } as const;
+  const trials = ctx.args.trials ?? 2;
+  const asked = wordsToCheck({ instruction: c.request, wordChanges: (c.wordChanges ?? []).map((to) => ({ to })) });
+  const design = await ctx.png(c.fixture);
+  const reads = await Promise.all(
+    Array.from({ length: trials }, async (): Promise<Reading> => {
+      let lastError = "The reading failed.";
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { words, costCents } = await throttled(() => readDesignWords(design, PIN.wordReader));
+          ctx.spent.cents += costCents ?? 0;
+          return { words, misses: spellingMisses(asked, words) };
+        } catch (error) {
+          lastError = noteFailure(ctx, error);
+          if (STOPPING.test(lastError)) break;
+        }
+      }
+      return { error: lastError };
+    }),
+  );
+  const want = [...c.flags].sort().join(",");
+  const matched = reads.filter((read) => "misses" in read && read.misses.map((m) => m.asked).sort().join(",") === want).length;
+  const shown = reads.map((read) => ("misses" in read ? read.misses.map((m) => `${m.asked} as ${m.read}`).join(", ") || "none" : "no reading"));
+  const checks = [
+    { id: "flags", label: c.flags.length ? `flags ${c.flags.join(", ")}` : "flags nothing", passed: matched === trials, detail: `${matched}/${trials}: ${shown.join("; ")}` },
+  ];
+  const failed = reads.find((read) => "error" in read);
+  const first = reads.find((read) => "words" in read);
+  return {
+    ...base,
+    passed: !failed && matched === trials,
+    checks,
+    seconds: (Date.now() - started) / 1000,
+    costCents: 0,
+    note: first && "words" in first ? `read: ${first.words.join(" / ")}` : undefined,
+    error: failed && "error" in failed ? `The word reader failed: ${failed.error.slice(0, 120)}` : undefined,
+  };
+}
+
 type Baseline = {
   name: string;
   models: { withImages: string; textOnly: string; quality: string; vision: string; words?: string };
@@ -714,7 +762,9 @@ async function main() {
               ? runNotes(c, ctx)
               : c.kind === "reader"
                 ? await runReader(c, ctx)
-                : await runCompare(c, ctx);
+                : c.kind === "compare"
+                  ? await runCompare(c, ctx)
+                  : await runSpelling(c, ctx);
       const mark = result.error ? "ERROR" : result.passed ? "PASS" : result.status === "known-limit" ? "LIMIT" : "FAIL";
       const detail = result.error ?? result.checks.filter((k) => !k.passed).map((k) => `${k.id} ${k.detail}`).join("; ");
       console.log(`${mark.padEnd(5)} ${c.id.padEnd(44)} ${detail}`);

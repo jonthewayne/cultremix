@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { normalizeWords, wordsToCheck } from "../../convex/lib/spelling";
 import { CASES } from "../image-e2e/cases";
 import { renderCatalog } from "../image-e2e/catalog";
 import { FIXTURES, fixtureExists } from "../image-e2e/fixtures";
@@ -20,6 +21,7 @@ describe("the image test suite's catalog", () => {
       if (c.kind === "notes") used.add(c.fixture);
       if (c.kind === "reader") for (const id of [...c.images, ...(c.mixer ?? [])]) used.add(id);
       if (c.kind === "compare") for (const id of [c.original, c.remix]) used.add(id);
+      if (c.kind === "spelling") used.add(c.fixture);
     }
     const known = new Set(FIXTURES.map((f) => f.id));
     for (const id of used) {
@@ -39,6 +41,15 @@ describe("the image test suite's catalog", () => {
       if (c.kind === "generate" && c.remix?.words?.length) expect(c.images?.length, c.id).toBeGreaterThan(0);
       // The keeps check compares each design with image 1.
       if (c.kind === "generate" && c.keeps) expect(c.images?.length, c.id).toBeGreaterThan(0);
+    }
+  });
+
+  it("expects spelling flags only on words a spelling case asks for", () => {
+    for (const c of CASES) {
+      if (c.kind !== "spelling") continue;
+      const asked = wordsToCheck({ instruction: c.request, wordChanges: (c.wordChanges ?? []).map((to) => ({ to })) }).flatMap((w) => normalizeWords(w).split(" "));
+      expect(asked.length, c.id).toBeGreaterThan(0);
+      for (const flag of c.flags) expect(asked, c.id).toContain(flag);
     }
   });
 

@@ -1,3 +1,4 @@
+import { wordsToCheck } from "../../convex/lib/spelling";
 import { CASES, keepsParts } from "./cases";
 import type { Ask, Case, Group, KeepsCheck, WordsCheck } from "./cases";
 import { FIXTURES, fixture } from "./fixtures";
@@ -19,6 +20,12 @@ const GROUPS: Array<{ group: Group; title: string; about: string }> = [
     group: "compare",
     title: "Remix comparison (GPT-6 Luna)",
     about: "Whether a remix keeps its original's look and layout (a variation, even with a new subject or words) or restyles or rebuilds it (it may be a fork).",
+  },
+  {
+    group: "spelling",
+    title: "Spelling check (Gemini 3.1 Pro)",
+    about:
+      "The studio's Typo? chip: a finished design's lettering read back letter for letter and compared with the words its batch asked for, flagging an asked word drawn a letter or two off and leaving lettering spelled right alone.",
   },
 ];
 
@@ -61,7 +68,7 @@ export function renderCatalog(cases: Array<Case> = CASES) {
     "",
     "Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit by hand. How to run the suite: [README.md](README.md).",
     "",
-    `Pinned to \`${PIN.name}\`: \`${PIN.imageWithImages}\` with images, \`${PIN.imageTextOnly}\` without, grids ${PIN.gridSize} at ${PIN.gridQuality} quality; \`${PIN.vision}\` for notes, the request reader, the remix comparison, and the checker's questions; \`${PIN.wordReader}\` reads each design's words.`,
+    `Pinned to \`${PIN.name}\`: \`${PIN.imageWithImages}\` with images, \`${PIN.imageTextOnly}\` without, grids ${PIN.gridSize} at ${PIN.gridQuality} quality; \`${PIN.vision}\` for notes, the request reader, the remix comparison, and the checker's questions; \`${PIN.wordReader}\` reads each design's words, for the checker and the spelling check.`,
     "",
     `${cases.length} cases: ${GROUPS.map((g) => `${cases.filter((c) => c.group === g.group).length} ${g.title.toLowerCase()}`).join(", ")}.`,
     "",
@@ -76,6 +83,16 @@ export function renderCatalog(cases: Array<Case> = CASES) {
         if (c.kind !== "reader") continue;
         const expected = c.roles.map((r) => r.join("/")).join(" or ") + ((c.styleHair ?? [false]).includes(true) ? (c.styleHair?.includes(false) ? ", style hair either way" : ", style hair") : "");
         out.push(`| \`${c.id}\` | ${names(c.images)} | ${c.mixer?.length ? names(c.mixer) : ""} | ${quote(c.request)} | ${expected} | ${c.since} |`);
+      }
+      out.push("");
+      continue;
+    }
+    if (group === "spelling") {
+      out.push("| Case | Design | Words checked | Flags | Since |", "|---|---|---|---|---|");
+      for (const c of list) {
+        if (c.kind !== "spelling") continue;
+        const asked = wordsToCheck({ instruction: c.request, wordChanges: (c.wordChanges ?? []).map((to) => ({ to })) });
+        out.push(`| ${c.title} | \`${c.fixture}\` | ${asked.join("; ")} | ${c.flags.length ? c.flags.join(", ") : "none"} | ${c.since} |`);
       }
       out.push("");
       continue;

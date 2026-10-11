@@ -2,9 +2,9 @@
 
 Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit by hand. How to run the suite: [README.md](README.md).
 
-Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words.
+Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words, for the checker and the spelling check.
 
-84 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna).
+100 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna), 16 spelling check (gemini 3.1 pro).
 
 ## Words
 
@@ -577,6 +577,29 @@ Whether a remix keeps its original's look and layout (a variation, even with a n
 | A photo redrawn as a 70s poster | `person` | `person-70s` | fork | 2026-10-05 |
 | An unrelated design | `grow-slow` | `slow-roll-night` | fork | 2026-10-05 |
 
+## Spelling check (Gemini 3.1 Pro)
+
+The studio's Typo? chip: a finished design's lettering read back letter for letter and compared with the words its batch asked for, flagging an asked word drawn a letter or two off and leaving lettering spelled right alone.
+
+| Case | Design | Words checked | Flags | Since |
+|---|---|---|---|---|
+| TRASH drawn as TrROH | `trash-royalty-trroh` | TRASH ROYALTY | TRASH | 2026-10-11 |
+| TRASH drawn as TRROSH, two letters off | `trash-royalty-trrosh` | TRASH ROYALTY | TRASH | 2026-10-11 |
+| TRASH drawn as TRROW, three letters off | `trash-royalty-trrow` | TRASH ROYALTY | TRASH | 2026-10-11 |
+| TRASH ROYALTY spelled right | `trash-royalty` | TRASH ROYALTY | none | 2026-10-11 |
+| A remix's new word | `trash-couture` | COUTURE | none | 2026-10-11 |
+| A remix of GROW SLOW to GROW LOUD | `grow-loud` | LOUD | none | 2026-10-11 |
+| Two lines a remix changed | `unplugged-flex` | UNPLUGGED; THE NEW FLEX | none | 2026-10-11 |
+| A style named in capitals isn't lettering | `grow-slow` | GROW SLOW; PSYCHEDELIC 1970S | none | 2026-10-11 |
+| Four words | `grow-wild-free` | GROW WILD AND FREE | none | 2026-10-11 |
+| A year in digits | `since-1999` | SINCE 1999 | none | 2026-10-11 |
+| A long line in wave lettering | `offline-luxury` | OFFLINE IS THE NEW LUXURY | none | 2026-10-11 |
+| Arched, distressed lettering | `lion` | KING OF THE BLOCK | none | 2026-10-11 |
+| Lettering that may be read in pieces | `lion-night-shift` | NIGHT SHIFT | none | 2026-10-11 |
+| Neon lettering | `slow-roll-night` | SLOW ROLL | none | 2026-10-11 |
+| Hand lettering asked for in quotes | `lion-sketch` | Wild at Heart | none | 2026-10-11 |
+| An ampersand on a banner | `santa-elves` | MERRY; BRIGHT | none | 2026-10-11 |
+
 ## Fixtures
 
 Reference images in [fixtures/](fixtures/), all made by CultRemix's own image calls.
@@ -596,6 +619,8 @@ Reference images in [fixtures/](fixtures/), all made by CultRemix's own image ca
 | `slow-roll-night` | a neon snail on a skateboard under a night sky, SLOW ROLL (CR 104-001) | dev works/104/001 |
 | `cartoon-boys` | a cartoon of three tall boys with spiky hair, huge ears, and hoodies | dev studio, 2026-10-04 |
 | `trash-royalty-trroh` | a psychedelic raccoon in a crown whose lettering reads TrROH ROYALTY, a misspelled TRASH ROYALTY | suite run 20261005-1915, words-not-from-style design 1 |
+| `trash-royalty-trrow` | the psychedelic raccoon in a crown with its lettering reading TRROW ROYALTY, TRASH three letters off | suite run 20261005-1915, words-not-from-style design 2 |
+| `trash-royalty-trrosh` | the psychedelic raccoon in a crown with its lettering reading TRROSH ROYALTY, TRASH two letters off | suite run 20261005-1915, words-not-from-style design 3 |
 | `since-1999` | GROW SLOW with SINCE 1999 added under the mushroom | dev studio, 2026-10-04 |
 | `grow-wild-free` | the mushroom design reading GROW WILD AND FREE | dev studio, 2026-10-04 |
 | `grow-bold` | the mushroom design reading GROW BOLD | dev studio, 2026-10-04 |

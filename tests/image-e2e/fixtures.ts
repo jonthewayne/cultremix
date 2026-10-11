@@ -23,8 +23,10 @@ export const FIXTURES: Array<Fixture> = [
   { id: "trash-royalty", kind: "art", what: "a graffiti raccoon in a crown and sunglasses, TRASH ROYALTY (CR 103-001)", origin: "dev works/103/001" },
   { id: "slow-roll-night", kind: "art", what: "a neon snail on a skateboard under a night sky, SLOW ROLL (CR 104-001)", origin: "dev works/104/001" },
   { id: "cartoon-boys", kind: "art", what: "a cartoon of three tall boys with spiky hair, huge ears, and hoodies", origin: "dev studio, 2026-10-04" },
-  // A design whose lettering leaked from its style image: TRASH drawn as TrROH.
+  // Designs whose lettering leaked from their style image, GROW SLOW: TRASH drawn as TrROH, TRROW, and TRROSH.
   { id: "trash-royalty-trroh", kind: "art", what: "a psychedelic raccoon in a crown whose lettering reads TrROH ROYALTY, a misspelled TRASH ROYALTY", origin: "suite run 20261005-1915, words-not-from-style design 1" },
+  { id: "trash-royalty-trrow", kind: "art", what: "the psychedelic raccoon in a crown with its lettering reading TRROW ROYALTY, TRASH three letters off", origin: "suite run 20261005-1915, words-not-from-style design 2" },
+  { id: "trash-royalty-trrosh", kind: "art", what: "the psychedelic raccoon in a crown with its lettering reading TRROSH ROYALTY, TRASH two letters off", origin: "suite run 20261005-1915, words-not-from-style design 3" },
   // Remixes made on dev, for the remix comparison.
   { id: "since-1999", kind: "art", what: "GROW SLOW with SINCE 1999 added under the mushroom", origin: "dev studio, 2026-10-04" },
   { id: "grow-wild-free", kind: "art", what: "the mushroom design reading GROW WILD AND FREE", origin: "dev studio, 2026-10-04" },

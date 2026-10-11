@@ -4,11 +4,12 @@ import type { RemixPart } from "../../convex/lib/remixParts";
 import { fixSpellingRequest } from "../../src/lib/spelling";
 
 // Every capability the image pipeline aims to support, as cases the suite can rerun: the image model
-// with our prompts (generate, photo), and the GPT-6 Luna steps around it (notes, reader, compare).
+// with our prompts (generate, photo), the GPT-6 Luna steps around it (notes, reader, compare), and
+// the studio's spelling check (spelling).
 // Each case says what it supports, when we first tested it, and how a run checks it. CASES.md is
 // rendered from this file (bun run test:image --catalog).
 
-export type Group = "words" | "styles" | "people" | "remix" | "layout" | "photo" | "notes" | "reader" | "compare";
+export type Group = "words" | "styles" | "people" | "remix" | "layout" | "photo" | "notes" | "reader" | "compare" | "spelling";
 // known-limit: tracked for future models; failing doesn't fail a run.
 export type Status = "supported" | "known-limit";
 
@@ -101,7 +102,19 @@ export type ReaderCase = Base & {
 
 export type CompareCase = Base & { kind: "compare"; original: string; remix: string; expect: "variation" | "fork" | "either" };
 
-export type Case = GenerateCase | PhotoCase | NotesCase | ReaderCase | CompareCase;
+// The studio's spelling check (convex/lib/spelling.ts) on a finished design: its lettering read back
+// letter for letter (convex/lib/wordReader.ts) and compared with the words its batch asked for, which
+// are the request's words in capitals or quotes and a remix's new words (wordsToCheck). flags are the
+// asked words the check should call misspelled; a design spelled right should get none.
+export type SpellingCase = Base & {
+  kind: "spelling";
+  fixture: string;
+  request: string;
+  wordChanges?: Array<string>;
+  flags: Array<string>;
+};
+
+export type Case = GenerateCase | PhotoCase | NotesCase | ReaderCase | CompareCase | SpellingCase;
 
 const section = (n: Notes, name: string) => noteSections(n.notes).find((s) => s.name === name)?.text ?? "";
 const quotedPieces = (text: string) => text.split("\n").filter((line) => /["“„«]/u.test(line)).length;
@@ -869,6 +882,7 @@ export const CASES: Array<Case> = [
   },
   ...readerCases(),
   ...compareCases(),
+  ...spellingCases(),
 ];
 
 // What a request wants from each numbered image (convex/lib/roleReader.ts), 23 requests written to
@@ -960,5 +974,46 @@ function compareCases(): Array<CompareCase> {
     original,
     remix,
     expect,
+  }));
+}
+
+// The spelling check, 2026-10-11: three designs whose lettering leaked from a style image (TRASH
+// drawn as TrROH, TRROSH, and TRROW, the last at the check's limit of three letters off), and
+// thirteen spelled right in arched, distressed, neon, wave, and hand lettering, so the check is tested
+// both for catching a misspelling and for leaving good lettering alone.
+function spellingCases(): Array<SpellingCase> {
+  const TRASH = "A raccoon in a tiny crown that says TRASH ROYALTY";
+  const rows: Array<[string, string, string, string, Array<string>, Array<string>?]> = [
+    ["spelling-trroh", "trash-royalty-trroh", "TRASH drawn as TrROH", TRASH, ["TRASH"]],
+    ["spelling-trrosh", "trash-royalty-trrosh", "TRASH drawn as TRROSH, two letters off", TRASH, ["TRASH"]],
+    ["spelling-trrow", "trash-royalty-trrow", "TRASH drawn as TRROW, three letters off", TRASH, ["TRASH"]],
+    ["spelling-trash-royalty", "trash-royalty", "TRASH ROYALTY spelled right", TRASH, []],
+    ["spelling-remix-word", "trash-couture", "A remix's new word", "", [], ["COUTURE"]],
+    ["spelling-remix-one-word", "grow-loud", "A remix of GROW SLOW to GROW LOUD", "", [], ["LOUD"]],
+    ["spelling-remix-two-lines", "unplugged-flex", "Two lines a remix changed", "", [], ["UNPLUGGED", "THE NEW FLEX"]],
+    ["spelling-style-in-capitals", "grow-slow", "A style named in capitals isn't lettering", "GROW SLOW in a PSYCHEDELIC 1970S style", []],
+    ["spelling-four-words", "grow-wild-free", "Four words", "change the words to GROW WILD AND FREE", []],
+    ["spelling-digits", "since-1999", "A year in digits", "add SINCE 1999 under the mushroom", []],
+    ["spelling-long-line", "offline-luxury", "A long line in wave lettering", "OFFLINE IS THE NEW LUXURY in vintage ocean-wave lettering", []],
+    ["spelling-arched", "lion", "Arched, distressed lettering", "a distressed lion head with arched lettering KING OF THE BLOCK", []],
+    ["spelling-in-pieces", "lion-night-shift", "Lettering that may be read in pieces", "change the words to NIGHT SHIFT", []],
+    ["spelling-neon", "slow-roll-night", "Neon lettering", "a neon snail on a skateboard, SLOW ROLL", []],
+    ["spelling-quoted", "lion-sketch", "Hand lettering asked for in quotes", 'a pencil sketch of a lion\'s head under hand-lettered "Wild at Heart"', []],
+    ["spelling-ampersand", "santa-elves", "An ampersand on a banner", "Santa and his elves over a MERRY & BRIGHT banner", []],
+  ];
+  return rows.map(([id, fixture, title, request, flags, wordChanges]) => ({
+    kind: "spelling",
+    id,
+    group: "spelling",
+    title,
+    supports:
+      flags.length > 0
+        ? "The spelling check flags an asked word the design drew a letter or two off, so the studio can offer Fix the spelling."
+        : "The spelling check leaves lettering that's spelled right alone, so the Typo? chip only shows on a real misspelling.",
+    since: "2026-10-11",
+    fixture,
+    request,
+    wordChanges,
+    flags,
   }));
 }

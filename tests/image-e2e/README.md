@@ -2,9 +2,9 @@
 
 A rerunnable record of everything CultRemix's image pipeline aims to do, run against the real models: GPT Image 2.5 makes the images, and GPT-6 Luna writes each image's notes, reads what a request wants from each image, compares a remix with its original, and answers the checks' questions, while Gemini 3.1 Pro reads each design's words letter for letter. When a prompt changes or a new image model comes along, a run says which capabilities still work.
 
-Every case runs through production's own code. Prompts come from `convex/lib/batchPrompt.ts` (the request reader plus `studioPrompt`), remix word boxes from `convex/lib/remixFields.ts`, notes from `convex/lib/notesWriter.ts`, the remix comparison from `convex/lib/remixCompare.ts`, and the image call from `convex/lib/imageCalls.ts`, the same function production calls. The suite cuts each grid with the production cutter, then checks each design: a checker answers the case's questions, a word reader spells out its lettering, and for a remix that should keep its design, production's own remix comparison looks at it next to the original.
+Every case runs through production's own code. Prompts come from `convex/lib/batchPrompt.ts` (the request reader plus `studioPrompt`), remix word boxes from `convex/lib/remixFields.ts`, notes from `convex/lib/notesWriter.ts`, the remix comparison from `convex/lib/remixCompare.ts`, the spelling check from `convex/lib/spelling.ts` and `convex/lib/wordReader.ts`, and the image call from `convex/lib/imageCalls.ts`, the same function production calls. The suite cuts each grid with the production cutter, then checks each design: a checker answers the case's questions, a word reader spells out its lettering, and for a remix that should keep its design, production's own remix comparison looks at it next to the original.
 
-[CASES.md](CASES.md) lists every case: what it supports, its inputs, how it's checked, and when we first tested it. It covers words, styles and style mixes, people, remixes, the grid and layout, the model photo, image notes, the request reader, and the remix comparison.
+[CASES.md](CASES.md) lists every case: what it supports, its inputs, how it's checked, and when we first tested it. It covers words, styles and style mixes, people, remixes, the grid and layout, the model photo, image notes, the request reader, the remix comparison, and the studio's spelling check.
 
 ## Running it
 
@@ -37,6 +37,7 @@ The suite and production draw on the same CultRemix Gateway credit. A run checks
 - **Model photo:** the same checks on the one photo.
 - **Notes:** what the notes say about the image, such as quoting its words or describing a style's hair.
 - **Request reader and remix comparison:** two tries each (`--trials` changes it), both answering as expected unless the case allows one miss.
+- **Spelling check:** two readings of each finished design (`--trials` changes it), each flagging exactly the case's words, as the studio's Typo? chip would: TRASH for the designs drawn TrROH, TRROSH, and TRROW, and nothing for lettering spelled right. A reading that fails is tried once more, as in production (`convex/spellingCheck.ts`).
 
 The checker is a vision model and can misread a design, so look at a failing case's board first. Each answer had to be calibrated, and these are the lessons:
 
@@ -53,7 +54,7 @@ If the designs are right and the checker is wrong, reword the case's question, n
 From seven full runs on 2026-10-05 and targeted reruns after each fix (boards in each run folder). The last full run, `20261005-1934`, passed 70 of 71 supported cases; the one failure, her hair turned pink, is fixed below. The styles, people, remix comparison, and notes groups were rerun after the latest fixes (`20261006-0350`, `-0423`):
 
 - **Reliable:** the request reader (25 of 25 cases), the remix comparison (18 of 18), the notes, words from a request, a style named in words or on a single image, two- and three-style mixes, a photo restyled as pop art or a 70s poster with her likeness kept, a whole-body cartoon style with her own hair or with the style's hair on request, word remixes that keep their design, a remix in words, a character swapped in a remix, a remix restyled by the mixer, solid color panels, four images in one call, and the model photo.
-- **Known limits:** a style image's own lettering leaking into new words (GRASH, TRRSH, or TrROH for TRASH; all four designs in two runs of seven, one design in another; a retest of the same prompt spelled all 12 designs right, so it comes and goes), and a lion style giving a wolf a lion-like mane in about half the designs at high quality (none in 12 at medium since the notes stopped listing the mane as a trait).
+- **Known limits:** a style image's own lettering leaking into new words (GRASH, TRRSH, or TrROH for TRASH; all four designs in two runs of seven, one design in another; a retest of the same prompt spelled all 12 designs right, so it comes and goes; since 2026-10-11 the studio's spelling check catches it and offers Fix the spelling), and a lion style giving a wolf a lion-like mane in about half the designs at high quality (none in 12 at medium since the notes stopped listing the mane as a trait).
 - **Fixed by the suite** (2026-10-05):
   - A grid with a style dropped the request's words from three of four designs until the prompt said every design shows them.
   - The notes' hair description flipped between runs until it simply describes the hair shown.
@@ -66,6 +67,9 @@ From seven full runs on 2026-10-05 and targeted reruns after each fix (boards in
   - Santa, Mrs. Claus, and the elves (`remix-parts-family`, `remix-parts-group-size`). People and groups are named by role only, with their looks from the family photos. Both pass at high quality.
   - A lettering style in second place (`mix-lettering-second`). GPT-6 Luna now picks each smaller style's part, so GROW SLOW goes on the lettering: 4 of 4 at high quality, with no person. The figure notes no longer describe the style image's own person, which had drawn the pop-art woman into 5 to 6 of 12 designs.
   - A new known limit: a quieter style can't lead a louder one (`mix-quiet-lead`). With the pop-art portrait at 50% and GROW SLOW at 30%, no design was mostly pop-art.
+- **Added 2026-10-11:**
+  - The studio's spelling check (`--group spelling`, 16 cases, about 9¢). Two runs (`20261011-2117`, `-2119`) read each design four times with the same answer every time: the three designs whose TRASH leaked from the GROW SLOW style were flagged on every reading (read as TRROH, TRROSH, and TRROW; TRROW is three letters off, the most the check allows for a five-letter word with the same first letter), and none of the 13 spelled right was flagged, in arched, distressed, neon, wave, and hand lettering, digits, an ampersand, and lettering read in pieces.
+  - Fix the spelling (`words-fix-spelling`, about 14¢): the studio's request on the TrROH raccoon spelled TRASH right in all 8 designs of two grids, and 6 of the 8 kept the design (run `20261011-1808-fix-spelling-4` was 4 of 4 on both). The wordings tried are in the [notebook](../../docs/image-generation/style-mixing.md).
 
 ## Pinned to GPT Image 2.5
 
@@ -92,7 +96,7 @@ Fixtures live in [fixtures/](fixtures/) as WebP images at most 1024 px on a side
 
 ## Costs
 
-Measured on 2026-10-05: a full run cost $2.65 to $2.85 and took 7 to 9 minutes. A `--recheck` of a full run cost about 25¢.
+Measured on 2026-10-05: a full run cost $2.65 to $2.85 and took 7 to 9 minutes. The spelling group, added 2026-10-11, adds about 9¢ and runs alongside the image cases. A `--recheck` of a full run cost about 25¢.
 
 | Kind | Each | In a full run |
 |---|---|---|
@@ -100,3 +104,4 @@ Measured on 2026-10-05: a full run cost $2.65 to $2.85 and took 7 to 9 minutes. 
 | Model photo (1024x1024 medium) | about 3¢ | 1 |
 | Checker and word reader, per design | under half a cent | about 200 calls |
 | Notes, reader, comparison | a fraction of a cent per call | about 90 calls |
+| Spelling check, per reading | about 0.3¢ | 32 readings, about 9¢ |
