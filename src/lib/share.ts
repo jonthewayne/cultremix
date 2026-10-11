@@ -21,6 +21,9 @@ type WorkLike = {
   creator: { username: string };
   artUrl?: string;
   artMediumUrl?: string;
+  // The model photo, once it's ready (a square, so the preview shows the shirt worn).
+  photoMediumUrl?: string;
+  photoState?: string;
   parentCr?: string;
 };
 
@@ -39,7 +42,10 @@ export function absoluteUrl(url: string | undefined) {
 export function workShareCard(item: WorkLike): ShareCard {
   const name = `CR ${item.cr}`;
   const by = `@${item.creator.username}`;
-  const image = absoluteUrl(item.artMediumUrl) ?? absoluteUrl(item.artUrl);
+  // The model photo when it's ready: a transparent design would land on whatever color each app
+  // shows behind previews, and a photo of it worn reads as a shirt you can buy.
+  const photo = item.photoState === "succeeded" ? absoluteUrl(item.photoMediumUrl) : undefined;
+  const image = photo ?? absoluteUrl(item.artMediumUrl) ?? absoluteUrl(item.artUrl);
   // A remix in its parent's family is a variation; one that started a new family is a fork.
   const kind = item.parentCr && familyOfCr(item.cr) === familyOfCr(item.parentCr) ? "variation" : "fork";
   const lead = item.parentCr ? `${by}’s ${kind} of CR ${item.parentCr}.` : `A design by ${by}.`;
@@ -48,7 +54,11 @@ export function workShareCard(item: WorkLike): ShareCard {
     description: `${lead} Wear it, share it, or remix it on ${SITE_NAME}.`,
     url: `${SITE_URL}/cr/${encodeURIComponent(item.cr)}`,
     image: image ?? SHARE_IMAGE,
-    imageAlt: image ? `${item.title ?? name} by ${by}` : SHARE_IMAGE_ALT,
+    imageAlt: photo
+      ? `Someone wearing ${item.title ?? name} by ${by}`
+      : image
+        ? `${item.title ?? name} by ${by}`
+        : SHARE_IMAGE_ALT,
     card: "summary_large_image",
     type: "website",
   };

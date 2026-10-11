@@ -36,6 +36,14 @@ describe("work link previews", () => {
     expect(variation.description).toMatch(/^@alice’s variation of CR 101-001\./u);
   });
 
+  it("show the model photo once it's ready, and the design until then", () => {
+    const photo = "https://img.example.com/works/101/001/photos/1/medium.webp";
+    const worn = workShareCard({ ...item, photoMediumUrl: photo, photoState: "succeeded" });
+    expect(worn.image).toBe(photo);
+    expect(worn.imageAlt).toBe("Someone wearing Night Market by @alice");
+    expect(workShareCard({ ...item, photoMediumUrl: photo, photoState: "pending" }).image).toBe(item.artMediumUrl);
+  });
+
   it("only ever point crawlers at absolute images", () => {
     expect(workShareCard({ ...item, artMediumUrl: "/img/abc" }).image).toBe(`${SITE_URL}/img/abc`);
     expect(workShareCard({ ...item, artMediumUrl: undefined }).image).toBe(item.artUrl);
