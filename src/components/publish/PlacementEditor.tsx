@@ -1,7 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "convex/react";
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -111,7 +111,7 @@ function EditorDialog({
   };
 
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/80 md:items-center md:p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -191,7 +191,7 @@ function EditorDialog({
           </div>
         </div>
       </div>
-    </motion.div>
+    </m.div>
   );
 }
 

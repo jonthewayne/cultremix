@@ -2,7 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "convex/react";
 import { Heart } from "lucide-react";
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
 import { showMutationError, useMemberAction } from "./useSignIn";
@@ -52,7 +52,7 @@ export function HeartButton({
         className,
       )}
     >
-      <motion.span
+      <m.span
         key={hearted ? "on" : "off"}
         initial={hearted ? { scale: 0.6 } : false}
         animate={{ scale: 1 }}
@@ -66,7 +66,7 @@ export function HeartButton({
           fill={hearted ? "currentColor" : "none"}
           color={hearted ? "#e11d48" : "currentColor"}
         />
-      </motion.span>
+      </m.span>
       <span>{count}</span>
     </button>
   );

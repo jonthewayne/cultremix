@@ -1,4 +1,5 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useRef } from "react";
 import type { PaginationStatus } from "convex/react";
 import type { Tile } from "~/components/studio/design";
@@ -45,7 +46,7 @@ export function FavoritesTray({
 
   const more = status === "CanLoadMore" || status === "LoadingMore";
   return (
-    <motion.aside
+    <m.aside
       aria-label="Favorites"
       className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-foreground bg-background/95 pb-[env(safe-area-inset-bottom)] text-foreground backdrop-blur"
       initial={{ y: "100%" }}
@@ -70,7 +71,7 @@ export function FavoritesTray({
             {favorites.map((tile) => {
               const order = picks.indexOf(tile.generationId);
               return (
-                <motion.button
+                <m.button
                   key={tile.generationId}
                   type="button"
                   layout
@@ -93,7 +94,7 @@ export function FavoritesTray({
                       {order + 1}
                     </span>
                   )}
-                </motion.button>
+                </m.button>
               );
             })}
           </AnimatePresence>
@@ -127,6 +128,6 @@ export function FavoritesTray({
           )}
         </div>
       </div>
-    </motion.aside>
+    </m.aside>
   );
 }

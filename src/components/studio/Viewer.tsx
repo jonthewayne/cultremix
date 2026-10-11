@@ -1,7 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { PaginationStatus } from "convex/react";
@@ -339,7 +339,7 @@ export function Viewer({
   );
 
   return (
-    <motion.div
+    <m.div
       ref={dialog}
       tabIndex={-1}
       className={cn("fixed inset-0 z-50 flex flex-col outline-none", checker && "checker")}
@@ -379,7 +379,7 @@ export function Viewer({
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 md:px-20">
         {tile && finished(tile) ? (
-          <motion.div
+          <m.div
             key={id}
             className="flex h-full w-full touch-none items-center justify-center"
             initial={{ x: direction * 48 }}
@@ -409,7 +409,7 @@ export function Viewer({
                 tile.rejected && "opacity-40",
               )}
             />
-          </motion.div>
+          </m.div>
         ) : needBatch && linked === null ? (
           <div className="text-center">
             <p className="text-2xl font-black">This design isn’t here.</p>
@@ -418,7 +418,7 @@ export function Viewer({
             </button>
           </div>
         ) : (
-          <motion.span
+          <m.span
             className="h-3 w-3"
             style={{ background: ink }}
             animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
@@ -462,6 +462,6 @@ export function Viewer({
           </button>
         </div>
       </div>
-    </motion.div>
+    </m.div>
   );
 }

@@ -2,7 +2,8 @@ import { convexQuery } from "@convex-dev/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAction, useMutation, usePaginatedQuery } from "convex/react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
@@ -820,7 +821,7 @@ function StudioPage() {
           {s && session !== null && batchPages.status === "LoadingFirstPage" && <BatchSkeleton />}
           <AnimatePresence initial={false}>
             {batches.map((batch) => (
-              <motion.div
+              <m.div
                 key={batch.batchId}
                 layout
                 initial={{ opacity: 0, y: 24 }}
@@ -908,7 +909,7 @@ function StudioPage() {
                       />
                     ))}
                 </div>
-              </motion.div>
+              </m.div>
             ))}
           </AnimatePresence>
           {session && batchPages.status === "LoadingMore" && <BatchSkeleton />}
@@ -1059,7 +1060,7 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
   }, [onClose]);
 
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 md:items-center md:p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -1071,7 +1072,7 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
       aria-modal="true"
       aria-label="Ideas"
     >
-      <motion.div
+      <m.div
         className="max-h-[88svh] w-full max-w-4xl overflow-y-auto rounded-t-3xl bg-white p-6 text-black md:rounded-3xl md:p-10"
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -1100,8 +1101,8 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
             </section>
           ))}
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 
@@ -1237,7 +1238,7 @@ function TileCard({
         </div>
       ) : (
         <div className="absolute inset-0" aria-label="Designing" role="status">
-          <motion.div
+          <m.div
             aria-hidden
             className="absolute inset-y-0 left-0 w-2/3"
             style={{ background: `linear-gradient(100deg, transparent, ${ink}12, transparent)` }}
@@ -1246,7 +1247,7 @@ function TileCard({
             transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.3 }}
           />
           <div className="absolute inset-0 flex items-center justify-center">
-            <motion.span
+            <m.span
               aria-hidden
               className="h-3 w-3"
               style={{ background: ink }}

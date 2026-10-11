@@ -1,13 +1,8 @@
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useRef, useState } from "react";
+import { useFadeIn } from "~/hooks/use-fade-in";
 import { isPreloaded } from "~/lib/imagePreload";
 import { cn } from "~/lib/utils";
-
-// Set once the page has hydrated. Art on the server-rendered page shows as soon as the browser loads
-// it, without waiting for JavaScript (it used to start invisible and fade in after hydration, which
-// held back the page's largest image); art that mounts later (client navigation, a feed's next page)
-// fades in.
-let appHydrated = false;
 
 // Renders a stored image, or a drawn placeholder for the dev stand-in ("fake:" keys). With
 // fullUrl, it shows url (a smaller copy) first and switches to fullUrl once that has loaded, or
@@ -27,11 +22,8 @@ export function Art({
   instant?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
-  // False during the server render and hydration, so both draw the same visible image.
-  const [fadeIn] = useState(() => appHydrated);
-  useEffect(() => {
-    appHydrated = true;
-  }, []);
+  // Art on the server-rendered page shows as soon as it loads; art that mounts later fades in.
+  const fadeIn = useFadeIn();
   const imgRef = useRef<HTMLImageElement>(null);
   // A server-rendered image can finish loading before React hydrates and attaches onLoad, so
   // check once on mount; otherwise it would stay invisible.
@@ -58,7 +50,7 @@ export function Art({
   if (instant) return <img src={src} alt={alt} draggable={false} decoding="sync" className={className} />;
   if (!fadeIn) return <img src={src} alt={alt} draggable={false} className={className} />;
   return (
-    <motion.img
+    <m.img
       ref={imgRef}
       src={src}
       alt={alt}

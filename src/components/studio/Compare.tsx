@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Size } from "~/lib/compare";
 import type { Tile } from "~/components/studio/design";
@@ -168,7 +168,7 @@ export function Compare({
   const canRemove = tiles.length > 2;
 
   return (
-    <motion.div
+    <m.div
       ref={dialog}
       tabIndex={-1}
       className="fixed inset-0 z-50 flex flex-col bg-background text-foreground outline-none"
@@ -198,7 +198,7 @@ export function Compare({
         </p>
       )}
 
-      <motion.div
+      <m.div
         key={current}
         className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-2 pt-2 md:flex-row md:gap-4 md:px-8 md:pb-4"
         initial={{ x: direction * 48, opacity: direction ? 0.6 : 1 }}
@@ -266,7 +266,7 @@ export function Compare({
             </section>
           );
         })}
-      </motion.div>
+      </m.div>
 
       <p className="hidden pb-4 text-center text-xs font-semibold text-muted-foreground md:block [@media(pointer:coarse)]:hidden">
         Same scale, each on its own background · T transparency · Esc close
@@ -298,6 +298,6 @@ export function Compare({
           </button>
         </div>
       )}
-    </motion.div>
+    </m.div>
   );
 }

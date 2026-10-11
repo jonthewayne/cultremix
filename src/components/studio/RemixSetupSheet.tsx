@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useRef } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -32,14 +32,14 @@ export function RemixSetupSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
     >
-      <motion.div
+      <m.div
         ref={dialog}
         tabIndex={-1}
         role="dialog"
@@ -71,8 +71,8 @@ export function RemixSetupSheet({
         <div className="mt-4">
           <RemixableParts target={{ generationId }} editing bare onTry={onTry} />
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 

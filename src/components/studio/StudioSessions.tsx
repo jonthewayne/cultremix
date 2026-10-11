@@ -1,5 +1,6 @@
 import { useMutation, usePaginatedQuery } from "convex/react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../../convex/_generated/api";
@@ -283,7 +284,7 @@ export function DesignMenu({
         createPortal(
           <AnimatePresence>
             {sheet ? (
-              <motion.div
+              <m.div
                 key="sheet"
                 className="fixed inset-0 z-[60] flex items-end bg-black/50"
                 initial={{ opacity: 0 }}
@@ -292,7 +293,7 @@ export function DesignMenu({
                   if (e.target === e.currentTarget) toggle(false);
                 }}
               >
-                <motion.div
+                <m.div
                   ref={panel}
                   role="menu"
                   className="w-full rounded-t-3xl bg-white pb-[max(env(safe-area-inset-bottom),12px)] pt-2 text-black"
@@ -305,11 +306,11 @@ export function DesignMenu({
                   <button type="button" onClick={() => toggle(false)} className={cn(row, "justify-center text-neutral-500")}>
                     Cancel
                   </button>
-                </motion.div>
-              </motion.div>
+                </m.div>
+              </m.div>
             ) : (
               place && (
-                <motion.div
+                <m.div
                   key="menu"
                   ref={panel}
                   role="menu"
@@ -320,7 +321,7 @@ export function DesignMenu({
                   transition={{ duration: 0.12 }}
                 >
                   {list}
-                </motion.div>
+                </m.div>
               )
             )}
           </AnimatePresence>,

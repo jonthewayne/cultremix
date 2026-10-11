@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import {
@@ -211,7 +211,7 @@ export function PublishDialog({
 
   if (result?.kept) {
     return (
-      <motion.div
+      <m.div
         className="fixed inset-0 z-50 flex flex-col justify-between gap-8 overflow-y-auto bg-black p-6 text-white md:p-12"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -222,7 +222,7 @@ export function PublishDialog({
       >
         <p className="text-sm font-bold uppercase tracking-[0.3em]">Kept just for you</p>
         <div className="flex flex-col items-start gap-6 md:flex-row md:items-end">
-          <motion.div
+          <m.div
             className="flex h-56 w-56 shrink-0 items-center justify-center overflow-hidden rounded-3xl p-4 md:h-80 md:w-80"
             style={{ background: result.lead }}
             initial={{ y: 60, opacity: 0 }}
@@ -230,7 +230,7 @@ export function PublishDialog({
             transition={{ type: "spring", stiffness: 170, damping: 20 }}
           >
             <Art url={tile.mediumUrl ?? tile.url} alt="Design" className="h-full w-auto max-w-full object-contain" />
-          </motion.div>
+          </m.div>
           <div>
             {title && <p className="text-3xl font-bold md:text-5xl">{title}</p>}
             <p className="mt-3 max-w-md text-base text-neutral-300">
@@ -247,13 +247,13 @@ export function PublishDialog({
             Keep creating
           </button>
         </div>
-      </motion.div>
+      </m.div>
     );
   }
 
   if (result) {
     return (
-      <motion.div
+      <m.div
         className="fixed inset-0 z-50 flex flex-col justify-between gap-8 overflow-y-auto bg-black p-6 text-white md:p-12"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -264,22 +264,22 @@ export function PublishDialog({
       >
         <p className="text-sm font-bold uppercase tracking-[0.3em]">Published</p>
         <div>
-          <motion.div
+          <m.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ type: "spring", stiffness: 170, damping: 20 }}
           >
             <CrMark cr={result.cr} className="whitespace-nowrap text-[14vw] md:text-[16vw]" />
-          </motion.div>
+          </m.div>
           {title && (
-            <motion.p
+            <m.p
               className="mt-4 text-3xl font-bold md:text-5xl"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.35 }}
             >
               {title}
-            </motion.p>
+            </m.p>
           )}
         </div>
         {/* What people who remix it can change, once the words are read. */}
@@ -307,12 +307,12 @@ export function PublishDialog({
             </button>
           </div>
         </div>
-      </motion.div>
+      </m.div>
     );
   }
 
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/80 md:items-center md:p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -324,7 +324,7 @@ export function PublishDialog({
       aria-modal="true"
       aria-label="Publish"
     >
-      <motion.div
+      <m.div
         className="grid w-full max-w-5xl overflow-y-auto bg-white text-black md:h-[min(92svh,860px)] md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden md:rounded-3xl"
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -606,8 +606,8 @@ export function PublishDialog({
             </button>
           </div>
         </form>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { usePaginatedQuery } from "convex/react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -60,9 +61,9 @@ function Thumb({ url, className }: { url: string; className?: string }) {
 function Dots() {
   return (
     <span aria-hidden="true" className="inline-flex w-4">
-      <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity }}>
+      <m.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity }}>
         …
-      </motion.span>
+      </m.span>
     </span>
   );
 }
@@ -288,7 +289,7 @@ function StyleRow({
         </p>
         <AnimatePresence mode="wait" initial={false}>
           {!settled || justCaptured ? (
-            <motion.p
+            <m.p
               key={justCaptured ? "captured" : "working"}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -297,9 +298,9 @@ function StyleRow({
             >
               {justCaptured ? "Style captured ✓" : slot.uploading ? "Uploading" : "Analyzing"}
               {!justCaptured && <Dots />}
-            </motion.p>
+            </m.p>
           ) : (
-            <motion.div key="slider" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3">
+            <m.div key="slider" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3">
               <input
                 type="range"
                 min={0}
@@ -313,7 +314,7 @@ function StyleRow({
               />
               <span className="w-9 shrink-0 text-right font-mono text-xs">{alone ? 100 : slot.weight}</span>
               <span className="w-12 shrink-0 text-right text-sm font-bold">{share > 0 ? `${share}%` : "off"}</span>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
         {current === "failed" && !justCaptured && (
@@ -397,7 +398,7 @@ export function StyleMixer({
       </button>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div
+          <m.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -463,7 +464,7 @@ export function StyleMixer({
                 <p className="mt-3 text-sm text-neutral-500">Up to {MAX_STYLES} styles in a mix.</p>
               )}
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
@@ -532,7 +533,7 @@ export function StyleLibrary({
   );
 
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 md:items-center md:p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -544,7 +545,7 @@ export function StyleLibrary({
       aria-modal="true"
       aria-label="Add a style image"
     >
-      <motion.div
+      <m.div
         className={cn(
           "max-h-[88svh] w-full max-w-4xl overflow-y-auto rounded-t-3xl bg-white p-6 text-black md:rounded-3xl md:p-10",
           dragging && "ring-4 ring-black",
@@ -610,7 +611,7 @@ export function StyleLibrary({
             </>
           )}
         </section>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }

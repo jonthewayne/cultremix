@@ -7,6 +7,7 @@ import {
   useRouteContext,
 } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { LazyMotion } from "motion/react";
 import { Toaster } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
@@ -90,6 +91,10 @@ export const Route = createRootRouteWithContext<{
   component: RootComponent,
 });
 
+// Animation features load in their own chunk (src/lib/motionFeatures.ts); strict makes any full
+// motion.* component an error, so nothing pulls the whole library back into the main bundle.
+const loadMotionFeatures = () => import("~/lib/motionFeatures").then((mod) => mod.default);
+
 function RootComponent() {
   const context = useRouteContext({ from: Route.id });
   return (
@@ -99,8 +104,10 @@ function RootComponent() {
         authClient={convexAuthClient}
         initialToken={context.token}
       >
-        <OnboardingGuard />
-        <Outlet />
+        <LazyMotion features={loadMotionFeatures} strict>
+          <OnboardingGuard />
+          <Outlet />
+        </LazyMotion>
       </ConvexBetterAuthProvider>
     </RootDocument>
   );

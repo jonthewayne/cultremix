@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import * as m from "motion/react-m";
 import type { ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
@@ -12,6 +12,7 @@ import { HeartButton } from "~/components/social/HeartButton";
 import { LoadMore } from "~/components/social/LoadMore";
 import type { FeedItem } from "~/components/social/WorkGrid";
 import { useMemberAction } from "~/components/social/useSignIn";
+import { useFadeIn } from "~/hooks/use-fade-in";
 import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
 import type { PagedStatus } from "~/hooks/use-paged-query";
 import { remixOfLabel } from "~/lib/familyTree";
@@ -166,9 +167,11 @@ function FeedList({
 }
 
 function FeedRow({ item, index }: { item: FeedItem; index: number }) {
+  // Rows on the server-rendered page show at once; rows that page in later rise into view.
+  const fadeIn = useFadeIn();
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 30 }}
+    <m.article
+      initial={fadeIn ? { opacity: 0, y: 30 } : false}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.5, delay: Math.min(index % PAGE_SIZE, 3) * 0.05, ease: [0.2, 0.8, 0.2, 1] }}
@@ -218,7 +221,7 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
           </div>
         </div>
       </div>
-    </motion.article>
+    </m.article>
   );
 }
 
@@ -241,7 +244,7 @@ export function PhotoSquare({ item, large = false }: { item: FeedItem; large?: b
   return (
     <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 text-white">
       {!failed && !waiting && (
-        <motion.div
+        <m.div
           className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-950 to-neutral-800"
           animate={{ opacity: [0.4, 0.9, 0.4] }}
           transition={{ duration: 2.4, repeat: Infinity }}
