@@ -14,7 +14,8 @@ import { inheritOnPublish } from "./remixFields";
 import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
 import { activePalette } from "./merch";
-import { chosenProducts, offeredShopProducts } from "./lib/shopProduct";
+import { chosenProducts, offeredShopProducts, retireKeptListings } from "./lib/shopProduct";
+import { crNumber } from "./lib/shopify/productSync";
 import type { ShopProduct } from "./lib/shopProduct";
 import { garmentKindValidator, relativePlacementValidator } from "./schema/merch";
 import { DEFAULT_PLACEMENT, clampRelative, sameRelative } from "../src/lib/print/shirtPlacement";
@@ -421,6 +422,10 @@ export const shareKeep = mutation({
       status: "preparing",
     });
     if (startsFamily) await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: 2, rootWorkId: work._id });
+    // What it sold to its creator alone comes off sale, and Shopify archives those products; once
+    // shared, it sells under its public number after an admin approves it.
+    const retired = await retireKeptListings(ctx, work._id, crNumber(crFamily, crExpression));
+    if (retired.length > 0) await ctx.scheduler.runAfter(0, internal.shopify.archiveProducts, { productIds: retired });
     await ctx.scheduler.runAfter(0, internal.imageGen.publishAssets, { workId: work._id });
     return { workId: work._id, cr: formatCr(crFamily, crExpression) };
   },

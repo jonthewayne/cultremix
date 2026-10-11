@@ -5,7 +5,7 @@ import type { ActionCtx, QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { getViewerUser } from "./identity";
 import { createShopifyAdmin, shopifyAdminConfigFromEnv, type FetchLike } from "./lib/shopify/adminClient";
-import { crNumber, syncProduct } from "./lib/shopify/productSync";
+import { archiveProduct, crNumber, syncProduct, variantSku } from "./lib/shopify/productSync";
 import { commerceOpen } from "./lib/shopFlags";
 import { listingsOf } from "./lib/shopProduct";
 import { publicUrl } from "./lib/r2";
@@ -244,6 +244,26 @@ export const syncListing = internalAction({
   },
 });
 
+// Archives the Shopify products of a kept design that was shared with the world
+// (publish.shareKeep): they were for its creator alone, and the shared design sells under its
+// public number once an admin approves it. Best effort: the cart only adds what a work offers now.
+export const archiveProducts = internalAction({
+  args: { productIds: v.array(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const admin = shopifyAdminForAction(ctx);
+    if (!admin) return null;
+    for (const productId of args.productIds) {
+      try {
+        await archiveProduct(admin, productId);
+      } catch (error) {
+        console.warn(`Archiving ${productId} failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return null;
+  },
+});
+
 // Cron: retries listings whose sync is due (failed with backoff, or waiting for configuration).
 // Runs while checkout is off too, so approved works reach the store before buying opens.
 export const retryDueProducts = internalMutation({
@@ -335,11 +355,17 @@ async function offerOf(ctx: QueryCtx, work: Doc<"works">) {
     .withIndex("by_work", (q) => q.eq("workId", work._id))
     .take(500);
   const products = [];
+  const cr = crNumber(work.crFamily, work.crExpression);
   for (const row of rows) {
     const listing = row.listing!;
     // Only the listing's colors are sold: rows for any other color (kept so old orders still
-    // resolve) are never offered, so the cart refuses them.
-    const mine = variants.filter((variant) => variant.listingId === row._id);
+    // resolve) are never offered, so the cart refuses them. The same goes for rows under another
+    // number: a kept design shared with the world keeps its kept product's rows for the orders
+    // that used them, and sells only under its public number.
+    const mine = variants.filter(
+      (variant) =>
+        variant.listingId === row._id && variant.sku === variantSku(cr, variant.color, variant.size, listing.printfulProductId),
+    );
     const colors = listing.colors.filter((color) => mine.some((variant) => variant.color === color.code));
     const sold = mine.filter((variant) => colors.some((color) => color.code === variant.color));
     if (sold.length === 0) continue;
@@ -361,6 +387,6 @@ async function offerOf(ctx: QueryCtx, work: Doc<"works">) {
     });
   }
   if (products.length === 0) return null;
-  return { workId: work._id, cr: crNumber(work.crFamily, work.crExpression), products };
+  return { workId: work._id, cr, products };
 }
 

@@ -492,7 +492,8 @@ describe("a kept design, printed for its creator alone", () => {
     await approveAndPrepare(t, admin, workId);
     expect((await creator.query(api.keeps.get, { workId }))?.ordering).toBe("preparing");
     const listings = await rows(t, workId);
-    expect(listings.map((row) => row.handle).sort()).toEqual(["cr-000-001-146", "cr-000-001-586"]);
+    // Its handle is its work's ID, which nobody can guess, rather than its family-0 number.
+    expect(listings.map((row) => row.handle).sort()).toEqual([`kept-${workId}-146`, `kept-${workId}-586`]);
     // Its Shopify product is named for what it is; it has no public number.
     const job = await t.query(internal.shopify.listingForSync, { listingId: listings[0]._id });
     expect(job).toMatchObject({ kept: true, cr: "000-001" });
@@ -543,6 +544,63 @@ describe("a kept design, printed for its creator alone", () => {
     expect(shopifyCalls).toHaveLength(0);
     await expect(addToCart(cart(CREATOR), line)).rejects.toBeTruthy();
     expect(shopifyCalls).toHaveLength(1);
+  });
+
+  // Each listing's Shopify variants as saveSynced takes them, with SKUs under the given number.
+  async function synced(t: T, workId: Id<"works">, cr: string, product: string) {
+    for (const row of await rows(t, workId)) {
+      const pid = row.listing!.printfulProductId;
+      const sold = row.listing!.colors.flatMap((color) =>
+        color.variants.map((variant, i) => ({
+          color: color.code,
+          size: variant.size,
+          sku: `CR-${cr}-${pid}-${color.code}-${variant.size}`,
+          priceCents: row.listing!.priceCents,
+          printfulVariantId: variant.id,
+          shopifyVariantId: `gid://shopify/ProductVariant/${product}${pid}${color.code}${i}`,
+        })),
+      );
+      await t.mutation(internal.shopify.saveSynced, { listingId: row._id, productId: `gid://shopify/Product/${product}${pid}`, variants: sold });
+    }
+  }
+
+  it("comes off sale when its creator shares it, and sells again only under its public number", async () => {
+    const { t, admin, workId } = await keptShop();
+    const creator = t.withIdentity(CREATOR);
+    await setFlag(t, "commerce.checkout", true);
+    await setFlag(t, "publishing", true);
+    await creator.mutation(api.keeps.requestPrint, { workId });
+    await approveAndPrepare(t, admin, workId);
+    await synced(t, workId, "000-001", "kept");
+    expect(await creator.query(api.shopify.keptOffer, { workId })).not.toBeNull();
+
+    const { cr } = await creator.mutation(api.publish.shareKeep, { workId });
+    // Its kept products come off sale, and their handles become the public number's.
+    const paused = await rows(t, workId);
+    expect(paused.map((row) => row.status)).toEqual(["paused", "paused"]);
+    expect(paused.every((row) => row.shopifyProductId === undefined)).toBe(true);
+    expect(paused.map((row) => row.handle).sort()).toEqual([`cr-${cr}-146`, `cr-${cr}-586`]);
+    expect(await creator.query(api.shopify.keptOffer, { workId })).toBeNull();
+    // Shopify archives the kept products.
+    const jobs = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+    const archive = jobs.find((job) => job.name.includes("archiveProducts"));
+    expect((archive?.args[0] as { productIds: Array<string> }).productIds.sort()).toEqual([
+      "gid://shopify/Product/kept146",
+      "gid://shopify/Product/kept586",
+    ]);
+
+    // Once published, nothing sells until an admin resumes it; then only the public product's
+    // variants are offered, never the kept product's, though their rows stay for old orders.
+    await t.run((ctx) => ctx.db.patch("works", workId, { status: "published" }));
+    expect(await t.query(api.shopify.offer, { cr })).toBeNull();
+    await admin.mutation(api.sales.resume, { workId });
+    await synced(t, workId, cr, "public");
+    const offer = await t.query(api.shopify.offer, { cr });
+    const sold = offer!.products.flatMap((product) => product.variants.map((variant) => variant.merchandiseId));
+    expect(sold.length).toBeGreaterThan(0);
+    expect(sold.every((id) => id.includes("/public"))).toBe(true);
+    const all = await t.run((ctx) => ctx.db.query("workVariants").withIndex("by_work", (q) => q.eq("workId", workId)).collect());
+    expect(all.some((variant) => variant.shopifyVariantId.includes("/kept"))).toBe(true);
   });
 });
 

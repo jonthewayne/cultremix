@@ -12,7 +12,7 @@ import { commerceOpen, simulatesTestOrders } from "./lib/shopFlags";
 import { chosenProducts, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
 import type { ShopProduct } from "./lib/shopProduct";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
-import { crNumber, productHandle } from "./lib/shopify/productSync";
+import { crNumber, keptHandle, productHandle } from "./lib/shopify/productSync";
 import { MAX_VERSIONS, UPSCALE_MAX_SIDE } from "./print";
 import { garmentKindValidator, printAreaValidator, printSideValidator, relativePlacementValidator } from "./schema/merch";
 import { listingFileValidator } from "./schema/shop";
@@ -363,7 +363,10 @@ export const approve = mutation({
         id = await ctx.db.insert("shopProducts", {
           workId: work._id,
           productKey: product.key,
-          handle: productHandle(cr, product.printfulProductId),
+          handle:
+            work.status === "private"
+              ? keptHandle(work._id, product.printfulProductId)
+              : productHandle(cr, product.printfulProductId),
           ...fields,
         });
       }

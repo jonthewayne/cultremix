@@ -9,7 +9,8 @@ import { METAFIELD_NAMESPACE } from "../../../shared/config/shopify";
 import type { ShopifyAdmin } from "./adminClient";
 
 // Builds the productSet input for one listing, a published work on one product
-// (convex/lib/shopProduct.ts): handle cr-FFF-EEE-<printful id>, every color it is sold in times
+// (convex/lib/shopProduct.ts): handle cr-FFF-EEE-<printful id> (a kept design: kept-<work id>-<printful
+// id>, unlisted), every color it is sold in times
 // every size the color comes in, on every call (productSet replaces what it is given, so a color no
 // longer sold leaves the store), inventory untracked with CONTINUE as a backstop (KTD-17), and
 // metafields that point back to the work and the product.
@@ -20,6 +21,13 @@ export function crNumber(family: number, expression: number): string {
 
 export function productHandle(cr: string, printfulProductId?: number): string {
   return printfulProductId === undefined ? `cr-${cr}` : `cr-${cr}-${printfulProductId}`;
+}
+
+// A kept design's handle: its work's ID instead of its family-0 number, which counts up and could
+// be guessed. Shopify still opens an unlisted product by its handle, so the handle has to be the
+// secret part.
+export function keptHandle(workId: string, printfulProductId?: number): string {
+  return printfulProductId === undefined ? `kept-${workId}` : `kept-${workId}-${printfulProductId}`;
 }
 
 // A kept design has no public number, so its product (what its creator sees at checkout and in
@@ -90,11 +98,16 @@ export function buildProductSetInput(args: {
   const sizes = PRINT_SIZES.filter((size) => variants.some((v) => v.size === size));
   const title = productTitle(args.cr, args.title, args.listing.name, args.kept);
   return {
-    handle: productHandle(args.cr, args.listing.printfulProductId),
+    handle: args.kept
+      ? keptHandle(args.workId, args.listing.printfulProductId)
+      : productHandle(args.cr, args.listing.printfulProductId),
     title,
     vendor: PRINT_PRODUCT.vendor,
     productType: GARMENT_KINDS[args.listing.kind]?.label ?? PRINT_PRODUCT.productType,
-    status: "ACTIVE",
+    // A kept design sells to its creator alone, so its product is unlisted: Shopify leaves it out
+    // of product lists, search, collections, recommendations, and the sitemap, while carts and
+    // checkout treat it like an active product (Admin API 2025-10 and later).
+    status: args.kept ? "UNLISTED" : "ACTIVE",
     productOptions: [
       { name: "Color", values: colors.map((c) => ({ name: c.name })) },
       { name: "Size", values: sizes.map((s) => ({ name: s })) },
@@ -149,6 +162,10 @@ export const PUBLISH_MUTATION = `mutation CultRemixPublish($id: ID!, $input: [Pu
   publishablePublish(id: $id, input: $input) { userErrors { field message } }
 }`;
 
+export const ARCHIVE_MUTATION = `mutation CultRemixArchive($product: ProductUpdateInput!) {
+  productUpdate(product: $product) { product { id status } userErrors { field message } }
+}`;
+
 export type VariantNode = { id: string; sku: string | null; selectedOptions: Array<{ name: string; value: string }> };
 
 type ProductSetResult = {
@@ -176,6 +193,17 @@ export function matchVariants(cr: string, nodes: Array<VariantNode>, listing: Sa
     out.push({ ...variant, shopifyVariantId: node.id });
   }
   return out;
+}
+
+// Archives a product CultRemix no longer sells (a kept design's, once it's shared with the world):
+// Shopify keeps it for the orders that used it, and nothing can buy it anymore.
+export async function archiveProduct(admin: ShopifyAdmin, productId: string): Promise<void> {
+  const data = await admin.graphql<{ productUpdate: { userErrors: Array<{ message: string }> } }>(ARCHIVE_MUTATION, {
+    product: { id: productId, status: "ARCHIVED" },
+  });
+  if (data.productUpdate.userErrors.length) {
+    throw new Error(`Archiving refused: ${data.productUpdate.userErrors.map((e) => e.message).join("; ")}`);
+  }
 }
 
 // Writes the product (by handle) and publishes it to the Headless channel the Storefront token

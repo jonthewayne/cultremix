@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  archiveProduct,
   buildProductSetInput,
   crNumber,
   matchVariants,
@@ -104,6 +105,14 @@ describe("buildProductSetInput", () => {
     ]);
   });
 
+  it("lists a kept design for its creator alone: unlisted, under a handle made from its work's ID", () => {
+    const kept = buildProductSetInput({ workId: "k57a9x2", cr: "000-002", title: "Grow Slow", listing: LAUNCH, kept: true });
+    expect(kept.status).toBe("UNLISTED");
+    expect(kept.handle).toBe("kept-k57a9x2-586");
+    expect(kept.title).toBe(`Kept design · Grow Slow · ${NAME}`);
+    expect(input.status).toBe("ACTIVE");
+  });
+
   it("adds images when given", () => {
     const withImages = buildProductSetInput({ workId: "w", cr: "101-002", imageUrls: ["https://media/a.png"], listing: LAUNCH });
     expect(withImages.files).toEqual([{ originalSource: "https://media/a.png", contentType: "IMAGE", alt: `CR 101-002 · ${NAME}` }]);
@@ -175,6 +184,23 @@ describe("syncProduct", () => {
     const publish = JSON.parse(calls[3].body) as { variables: { input: Array<{ publicationId: string }> } };
     expect(publish.variables.input).toEqual([{ publicationId: "gid://shopify/Publication/2" }]);
     expect(calls[1].url).toBe("https://cultremix-dev.myshopify.com/admin/api/2026-07/graphql.json");
+  });
+
+  it("archives a product by its id", async () => {
+    const bodies: Array<string> = [];
+    const admin = createShopifyAdmin({
+      config: { shopDomain: "s.myshopify.com", clientId: "id", clientSecret: "secret" },
+      fetch: async (url, init) => {
+        if (url.endsWith("access_token")) return Response.json({ access_token: "tok", expires_in: 86399 });
+        bodies.push(String(init?.body));
+        return Response.json({ data: { productUpdate: { product: { id: "gid://shopify/Product/9", status: "ARCHIVED" }, userErrors: [] } } });
+      },
+      tokenStore: { get: async () => null, set: async () => {} },
+    });
+    await archiveProduct(admin, "gid://shopify/Product/9");
+    const call = JSON.parse(bodies[0]) as { query: string; variables: unknown };
+    expect(call.query).toContain("productUpdate(product: $product)");
+    expect(call.variables).toEqual({ product: { id: "gid://shopify/Product/9", status: "ARCHIVED" } });
   });
 
   it("surfaces productSet userErrors", async () => {

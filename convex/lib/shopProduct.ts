@@ -10,6 +10,7 @@ import {
 import { DEFAULT_PLACEMENT, clampRelative } from "../../src/lib/print/shirtPlacement";
 import { GARMENT_COLORS, colorKey } from "./garments";
 import { colorCode } from "./shopColors";
+import { productHandle } from "./shopify/productSync";
 import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -232,6 +233,27 @@ export async function listingsOf(ctx: Ctx, workId: Id<"works">) {
     .query("shopProducts")
     .withIndex("by_work", (q) => q.eq("workId", workId))
     .take(20);
+}
+
+// Sharing a kept design with the world (publish.shareKeep) takes what it sold to its creator alone
+// off sale: each listing pauses under the handle of its new public number, so an admin's approval
+// makes public products, and the kept products' ids come back for archiving in Shopify. Their
+// variant rows stay for the orders that used them; the offer only sells the current number's.
+export async function retireKeptListings(ctx: MutationCtx, workId: Id<"works">, cr: string) {
+  const now = Date.now();
+  const productIds: Array<string> = [];
+  for (const row of await listingsOf(ctx, workId)) {
+    if (row.shopifyProductId) productIds.push(row.shopifyProductId);
+    await ctx.db.patch("shopProducts", row._id, {
+      status: "paused",
+      handle: productHandle(cr, row.listing?.printfulProductId),
+      shopifyProductId: undefined,
+      nextAttemptAt: undefined,
+      renderStartedAt: undefined,
+      updatedAt: now,
+    });
+  }
+  return productIds;
 }
 
 // What the Print Studio places for: the front of the first product the work sells on.
