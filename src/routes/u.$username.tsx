@@ -172,11 +172,10 @@ function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: "work
   const { items, status, loadMore } = usePagedQuery(api.social.works, { username, shelf }, PAGE_SIZE);
   if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
   if (items.length === 0 && status === "Exhausted") {
+    if (shelf === "works") return <NoOriginals username={username} isSelf={isSelf} />;
     return (
       <div className="mt-8">
-        <p className="text-xl font-semibold text-neutral-400">
-          {shelf === "works" ? "No designs published yet." : "No remixes yet."}
-        </p>
+        <p className="text-xl font-semibold text-neutral-400">No remixes yet.</p>
         {isSelf && (
           <Link to="/studio" className="mt-3 inline-block font-bold underline underline-offset-4">
             Make one in the studio
@@ -189,6 +188,34 @@ function ShelfGrid({ username, shelf, isSelf }: { username: string; shelf: "work
     <div className="mt-8">
       <WorkGrid items={items} showCreator={false} />
       <LoadMore status={status} loadMore={loadMore} className="mt-12" />
+    </div>
+  );
+}
+
+// An empty Works shelf: a member whose designs are all remixes shows those here instead of
+// "nothing published".
+function NoOriginals({ username, isSelf }: { username: string; isSelf: boolean }) {
+  const { items, status, loadMore } = usePagedQuery(api.social.works, { username, shelf: "remixes" }, PAGE_SIZE);
+  if (status === "LoadingFirstPage") return <p className="mt-8 text-neutral-500">Loading…</p>;
+  if (items.length === 0) {
+    return (
+      <div className="mt-8">
+        <p className="text-xl font-semibold text-neutral-400">No designs published yet.</p>
+        {isSelf && (
+          <Link to="/studio" className="mt-3 inline-block font-bold underline underline-offset-4">
+            Make one in the studio
+          </Link>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-8">
+      <p className="text-xl font-semibold text-neutral-400">{isSelf ? "No originals yet. Your remixes:" : "No originals yet. Their remixes:"}</p>
+      <div className="mt-6">
+        <WorkGrid items={items} showCreator={false} />
+        <LoadMore status={status} loadMore={loadMore} className="mt-12" />
+      </div>
     </div>
   );
 }
