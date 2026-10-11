@@ -140,16 +140,19 @@ function AdminOrdersPage() {
                         </div>
                         <span
                           className={`rounded-full px-3 py-1 text-sm font-bold ${
-                            ALERT.has(order.fulfillmentState) ? "bg-destructive text-white" : "bg-muted text-foreground"
+                            ALERT.has(order.fulfillmentState) || order.late ? "bg-destructive text-white" : "bg-muted text-foreground"
                           }`}
                         >
                           {order.fulfillmentState === "waiting" && order.paid
-                            ? "Paid, going to print"
+                            ? order.late
+                              ? "Paid, not at Printful"
+                              : "Paid, going to print"
                             : (STATE_LABEL[order.fulfillmentState] ?? order.fulfillmentState)}
                         </span>
                       </div>
                       {order.attentionReason && <p className="mt-2 font-semibold">{order.attentionReason}</p>}
-                      {order.retrying && <p className="mt-2 text-sm text-muted-foreground">Trying again: {order.retrying}</p>}
+                      {order.late && <p className="mt-2 font-semibold">{order.late}</p>}
+                      {order.retrying && !order.late && <p className="mt-2 text-sm text-muted-foreground">Trying again: {order.retrying}</p>}
                       {order.disputes.map((dispute, index) => (
                         <p key={index} className={`mt-2 text-sm font-semibold ${dispute.effect === "release" ? "text-muted-foreground" : "text-destructive"}`}>
                           {dispute.label}

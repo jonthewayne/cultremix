@@ -81,7 +81,7 @@ Each environment has its own Shopify store and Printful store. Set the same name
 - Fulfillment runs in Convex: `PRINTFUL_API_TOKEN` and `PRINTFUL_STORE_ID`. Without them, paid orders wait and the 30-minute sweep picks them up once they are set. Then **Connect Printful** in Admin, For sale sets the store's webhooks and keeps the signing key; until then (or a `PRINTFUL_WEBHOOK_SECRET`), `/webhooks/printful` answers 503. **Check with Printful** in Admin, Products reads each product's print areas from its print files.
 - **Connect Shopify** in Admin, For sale checks the store and its Headless channel and subscribes the order webhooks (`orders/paid`, `orders/cancelled`, `refunds/create`) to this deployment. The three privacy webhooks are set in the app's settings.
 - Print files go to Printful by their public address, so `R2_PUBLIC_URL` must be set wherever orders are fulfilled.
-- Drafts are confirmed only when `DEPLOYMENT_ENV=prod` and `PRINTFUL_AUTO_CONFIRM=true`, and the `fulfillment.autoConfirm` flag isn't turned off (turning it off pauses confirmation). Never set `PRINTFUL_AUTO_CONFIRM` in dev or staging; it has no effect there.
+- Drafts are confirmed only when `DEPLOYMENT_ENV=prod` and `PRINTFUL_AUTO_CONFIRM=true`, and the `fulfillment.autoConfirm` flag isn't turned off (Admin, Switches, **Send paid orders to print**; turning it off pauses confirmation, and the owner hears about any draft an hour past its hold). Never set `PRINTFUL_AUTO_CONFIRM` in dev or staging; it has no effect there.
 - Test orders (Shopify `test`) make labeled test earnings and Printful drafts in dev and staging, and nothing at all in production. An unset or unrecognized `DEPLOYMENT_ENV` is treated like production for test orders and never confirms.
 
 ## Chain (Monad)

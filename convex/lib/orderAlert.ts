@@ -17,6 +17,74 @@ export function alertKey(state: StuckState, reason: string | undefined) {
   return `${state}:${stuckReason(state, reason)}`.slice(0, 600);
 }
 
+// A paid order reaches Printful within minutes, and production confirms its draft when the hour's
+// hold ends (convex/fulfillment.ts). An order still waiting an hour after payment, or a production
+// draft an hour past its hold, can't go on by itself either: Printful isn't connected, its calls keep
+// failing, or confirming is off. Those alert like a stuck order, once per kind of trouble, so a retry
+// that fails with a new message doesn't alert again.
+export const LATE_MS = 60 * 60 * 1000;
+const HOLD_MS = 60 * 60 * 1000;
+// fulfillment.run's error while PRINTFUL_API_TOKEN or PRINTFUL_STORE_ID is missing.
+export const NOT_CONFIGURED = "Printful is not configured yet.";
+
+export type LateFields = {
+  fulfillmentState: string;
+  economicEventAt?: number;
+  holdUntil?: number;
+  cancelled: boolean;
+  isTest: boolean;
+  simulated: boolean;
+  fulfillmentError?: string;
+};
+
+// Whether this deployment confirms drafts by itself: production (prod), PRINTFUL_AUTO_CONFIRM=true
+// (env), and the Send paid orders to print switch on (flag).
+export type Confirming = { prod: boolean; env: boolean; flag: boolean };
+
+export function lateTrouble(order: LateFields, now: number, confirming: Confirming): { key: string; reason: string } | null {
+  const paidAt = order.economicEventAt;
+  if (paidAt === undefined || order.cancelled || (order.isTest && !order.simulated)) return null;
+  if (order.fulfillmentState === "waiting") {
+    if (now - paidAt < LATE_MS) return null;
+    if (order.fulfillmentError === NOT_CONFIGURED) {
+      return {
+        key: "late:unconfigured",
+        reason:
+          "It's paid, but Printful isn't connected here (PRINTFUL_API_TOKEN and PRINTFUL_STORE_ID), so it can't go to print. It goes on by itself once Printful is connected.",
+      };
+    }
+    const error = order.fulfillmentError?.trim();
+    return {
+      key: "late:waiting",
+      reason: error
+        ? `It was paid over an hour ago and still hasn't reached Printful. The last try said: ${error}`
+        : "It was paid over an hour ago and still hasn't reached Printful.",
+    };
+  }
+  if (order.fulfillmentState === "draft" && confirming.prod) {
+    if (now - (order.holdUntil ?? paidAt + HOLD_MS) < LATE_MS) return null;
+    if (!confirming.env) {
+      return {
+        key: "late:draft-env",
+        reason:
+          "Its Printful draft is waiting to be confirmed, and production doesn't confirm drafts by itself until PRINTFUL_AUTO_CONFIRM is true. Confirm it in Printful, or ask Ops to set it.",
+      };
+    }
+    if (!confirming.flag) {
+      return {
+        key: "late:draft-paused",
+        reason:
+          "Its Printful draft is waiting to be confirmed, and Send paid orders to print is off in Admin, Switches. Confirm it in Printful, or turn the switch back on.",
+      };
+    }
+    return {
+      key: "late:draft",
+      reason: "Its Printful draft should have been confirmed when its hold ended, an hour after payment, and still hasn't been. Check it in Printful.",
+    };
+  }
+  return null;
+}
+
 function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

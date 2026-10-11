@@ -13,7 +13,8 @@ import {
   listUpdatedOrders,
 } from "./lib/shopify/reconcile";
 import { resolveLineage } from "./lib/shopLineage";
-import { simulatesTestOrders } from "./lib/shopFlags";
+import { autoConfirmAllowedByEnv, autoConfirmFlagAllows, deploymentEnv, simulatesTestOrders } from "./lib/shopFlags";
+import { lateTrouble } from "./lib/orderAlert";
 import { disputeEffect, disputeLabel } from "./lib/disputes";
 import { crNumber } from "./lib/shopify/productSync";
 import { chosenProducts, offeredShopProducts } from "./lib/shopProduct";
@@ -577,6 +578,8 @@ const adminOrderValidator = v.object({
   // Why sending it to print is being tried again (Printful not set up, unreachable, or a print
   // file that couldn't be read to check it), while it waits to go.
   retrying: v.union(v.string(), v.null()),
+  // Why a paid order is late going to print, as its alert said (lib/orderAlert.ts lateTrouble).
+  late: v.union(v.string(), v.null()),
   totalCents: v.number(),
   poolCents: v.number(),
   ref: v.union(v.string(), v.null()),
@@ -623,6 +626,8 @@ export const adminList = query({
     const viewer = await getViewerUser(ctx);
     if (!viewer || !isOwner(viewer)) throw new ConvexError({ code: "FORBIDDEN", message: "Owner only." });
     const orders = await ctx.db.query("orders").order("desc").take(50);
+    const now = Date.now();
+    const confirming = { prod: deploymentEnv() === "prod", env: autoConfirmAllowedByEnv(), flag: await autoConfirmFlagAllows(ctx) };
     const out = [];
     for (const order of orders) {
       const items = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", order._id)).take(100);
@@ -663,6 +668,7 @@ export const adminList = query({
           (order.fulfillmentState === "waiting" || order.fulfillmentState === "creating") && order.fulfillmentError
             ? order.fulfillmentError
             : null,
+        late: lateTrouble(order, now, confirming)?.reason ?? null,
         totalCents: order.totalCents,
         poolCents: items.reduce((sum, item) => sum + item.poolCents, 0),
         ref: order.ref ?? null,

@@ -33,6 +33,13 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
     defaultOn: false,
   },
   {
+    key: "fulfillment.autoConfirm",
+    label: "Send paid orders to print",
+    description:
+      "Production confirms each paid order's Printful draft for printing when its hour's hold ends. Off pauses that: drafts wait in Printful until it's back on or you confirm them there, and the owner hears about any an hour past its hold. Production also needs PRINTFUL_AUTO_CONFIRM=true; dev and staging never confirm.",
+    defaultOn: true,
+  },
+  {
     key: "chain.writes",
     label: "Monad records",
     description:
