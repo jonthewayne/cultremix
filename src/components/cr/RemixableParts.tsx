@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { errorMessage } from "~/lib/imagePrep";
+import { offerLine, wordsLine } from "~/lib/remixOffer";
 import { cn } from "~/lib/utils";
 
 // Remixable words and parts (convex/remixParts.ts): what people who remix a design may change. The
@@ -404,6 +405,28 @@ function useNow(ticking: boolean) {
     return () => window.clearInterval(timer);
   }, [ticking]);
   return now;
+}
+
+// Under Remix this on a work page: what a remix of it can change, its remixable words and parts, so
+// a visitor knows before starting. Works signed out. Its creator and admins see the editor above
+// instead (RemixableParts), so it stays out of their way.
+export function RemixOffer({ workId }: { workId: Id<"works"> }) {
+  const words = useQuery(convexQuery(api.remixFields.forWork, { workId })).data?.fields;
+  const parts = useQuery(convexQuery(api.remixParts.forWork, { workId })).data?.parts;
+  const editor = useQuery(convexQuery(api.remixParts.editor, { target: { workId } }));
+  if (!editor.isSuccess || editor.data || !words || !parts) return null;
+  if (words.length === 0 && parts.length === 0) return null;
+  return (
+    <div className="-mt-2 text-sm">
+      <p className="font-bold uppercase tracking-wider">A remix can change</p>
+      <ul className="mt-1 space-y-0.5 text-neutral-700">
+        {words.length > 0 && <li>The words {wordsLine(words.map((word) => word.text))}</li>}
+        {parts.map((part) => (
+          <li key={part.id}>{offerLine(part)}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // Under a remix's lineage: the parts it changed from its parent. Works signed out.

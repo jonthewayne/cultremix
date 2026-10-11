@@ -16,7 +16,7 @@ import { FamilyView } from "~/components/cr/FamilyView";
 import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { PhotoRetry } from "~/components/cr/PhotoRetry";
 import { WordChangesNote } from "~/components/cr/RemixableWords";
-import { PartChangesNote, RemixableParts } from "~/components/cr/RemixableParts";
+import { PartChangesNote, RemixOffer, RemixableParts } from "~/components/cr/RemixableParts";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { TakeDown } from "~/components/cr/TakeDown";
@@ -190,6 +190,7 @@ function ShopPage() {
             >
               Remix this
             </Link>
+            <RemixOffer workId={item.workId} />
             <RemixableParts target={{ workId: item.workId }} />
             <EconomicsPanel cr={item.cr} />
             {contentHash && (
