@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <div className="flex h-16 items-center gap-3 px-4 md:px-6">
-              <Link to="/studio" className="md:hidden">
+              <Link to="/studio" className="md:hidden" aria-label="CultRemix studio">
                 <BrandMark showName={false} />
               </Link>
               <div className="hidden min-w-0 items-center gap-3 md:flex">
