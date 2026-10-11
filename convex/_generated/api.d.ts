@@ -132,6 +132,7 @@ import type * as lib_username from "../lib/username.js";
 import type * as lineage from "../lineage.js";
 import type * as merch from "../merch.js";
 import type * as metrics from "../metrics.js";
+import type * as moderation from "../moderation.js";
 import type * as notifications from "../notifications.js";
 import type * as orders from "../orders.js";
 import type * as organizations from "../organizations.js";
@@ -307,6 +308,7 @@ declare const fullApi: ApiFromModules<{
   lineage: typeof lineage;
   merch: typeof merch;
   metrics: typeof metrics;
+  moderation: typeof moderation;
   notifications: typeof notifications;
   orders: typeof orders;
   organizations: typeof organizations;

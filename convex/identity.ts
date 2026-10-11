@@ -29,6 +29,8 @@ export const viewerValidator = v.object({
   canPickModel: v.optional(v.boolean()),
   // Any admin (support, ops, owner): the header menu links to Admin.
   isAdmin: v.optional(v.boolean()),
+  // Admins who manage (ops, owner): they can take a design down from its page.
+  canManage: v.optional(v.boolean()),
 });
 
 export async function getViewerUser(ctx: Ctx): Promise<Doc<"users"> | null> {
@@ -84,6 +86,7 @@ async function toViewer(ctx: Ctx, user: Doc<"users">) {
     unlimited: isOwner(user),
     canPickModel: adminAllows(user.platformRole, "manage"),
     isAdmin: adminAllows(user.platformRole, "view"),
+    canManage: adminAllows(user.platformRole, "manage"),
   };
 }
 

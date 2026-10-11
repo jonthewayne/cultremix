@@ -195,15 +195,21 @@ export function matchVariants(cr: string, nodes: Array<VariantNode>, listing: Sa
   return out;
 }
 
-// Archives a product CultRemix no longer sells (a kept design's, once it's shared with the world):
-// Shopify keeps it for the orders that used it, and nothing can buy it anymore.
-export async function archiveProduct(admin: ShopifyAdmin, productId: string): Promise<void> {
+// Sets a product's status: ARCHIVED for one CultRemix no longer sells (a kept design's, once it's
+// shared with the world), DRAFT for one taken off sale for now (a design taken down, which an
+// approval can make ACTIVE again). Shopify keeps either for the orders that used it, and nothing can
+// buy it.
+export async function setProductStatus(admin: ShopifyAdmin, productId: string, status: "ARCHIVED" | "DRAFT"): Promise<void> {
   const data = await admin.graphql<{ productUpdate: { userErrors: Array<{ message: string }> } }>(ARCHIVE_MUTATION, {
-    product: { id: productId, status: "ARCHIVED" },
+    product: { id: productId, status },
   });
   if (data.productUpdate.userErrors.length) {
-    throw new Error(`Archiving refused: ${data.productUpdate.userErrors.map((e) => e.message).join("; ")}`);
+    throw new Error(`Shopify refused ${status.toLowerCase()}: ${data.productUpdate.userErrors.map((e) => e.message).join("; ")}`);
   }
+}
+
+export async function archiveProduct(admin: ShopifyAdmin, productId: string): Promise<void> {
+  await setProductStatus(admin, productId, "ARCHIVED");
 }
 
 // Writes the product (by handle) and publishes it to the Headless channel the Storefront token

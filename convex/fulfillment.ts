@@ -81,6 +81,15 @@ function printfulVariantFor(variant: Doc<"workVariants">): number | null {
   return catalogColorByCode(variant.color)?.printfulVariantIds[variant.size as PrintSize] ?? null;
 }
 
+// "CR 101-002" for the first design on the order that was taken down, or null.
+async function withdrawnWorkIn(db: Db, items: Array<Doc<"orderItems">>): Promise<string | null> {
+  for (const item of items) {
+    const work = item.workId ? await db.get("works", item.workId) : null;
+    if (work?.status === "withdrawn") return `CR ${crNumber(work.crFamily, work.crExpression)}`;
+  }
+  return null;
+}
+
 // A print file the order sends, with the fingerprint it must still have (INV-10).
 const fileValidator = v.object({ url: v.string(), sha256: v.string(), label: v.string() });
 type FileCheck = Infer<typeof fileValidator>;
@@ -102,6 +111,10 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
     const variant = item.variantId ? await db.get("workVariants", item.variantId) : null;
     if (!work || !variant) return { ok: false, state: "needs_attention", reason: "A line isn't a CultRemix design." };
     const cr = `CR ${crNumber(work.crFamily, work.crExpression)}`;
+    // A design taken down never goes to print on its own (INV-27); the owner decides.
+    if (work.status === "withdrawn") {
+      return { ok: false, state: "needs_attention", reason: `${cr} was taken down. Refund the buyer, or make the order in Printful by hand if it should still ship.` };
+    }
     // The listing's print file and side; variants from before products could be chosen use the
     // work's Print Studio file on the front.
     const listing = variant.listingId ? await db.get("shopProducts", variant.listingId) : null;
@@ -318,6 +331,12 @@ export const advance = internalMutation({
         if (pending.some((r) => now - r.createdAt > REFUND_PENDING_LIMIT_MS)) {
           await setAttention(ctx, order, "A refund has been pending for over a day; the draft is waiting on it.", now);
         }
+        return null;
+      }
+      // A design taken down after the order was made: the draft isn't confirmed on its own (INV-27).
+      const takenDown = await withdrawnWorkIn(ctx.db, items);
+      if (takenDown) {
+        await setAttention(ctx, order, `${takenDown} was taken down after this order was placed. Cancel the draft in Printful, or confirm it there by hand.`, now);
         return null;
       }
       if (order.holdUntil !== undefined && now < order.holdUntil) return null;

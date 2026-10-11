@@ -545,6 +545,33 @@ describe("orders that can't go to Printful automatically", () => {
   });
 });
 
+describe("a design taken down (INV-27)", () => {
+  it("never goes to print on its own: a new order waits for the owner", async () => {
+    const t = newTest();
+    const { work } = await onSale(t);
+    await t.run((ctx) => ctx.db.patch("works", work, { status: "withdrawn" }));
+    await paid(t);
+    expect(creates()).toBe(0);
+    expect(await theOrder(t)).toMatchObject({ fulfillmentState: "needs_attention" });
+    expect((await theOrder(t)).attentionReason).toMatch(/^CR 101-002 was taken down\./u);
+  });
+
+  it("holds a production draft whose design came down after it was ordered, instead of confirming it", async () => {
+    prod();
+    const t = newTest();
+    const { work } = await onSale(t);
+    await paid(t, { paidAt: "2026-10-02T00:00:00Z" }, { now: true });
+    expect((await theOrder(t)).fulfillmentState).toBe("draft");
+    await t.run((ctx) => ctx.db.patch("works", work, { status: "withdrawn" }));
+    await settle(t, 60 * MINUTE);
+    await t.action(internal.fulfillment.reconcile, {});
+    await settle(t);
+    expect(confirms()).toBe(0);
+    expect(await theOrder(t)).toMatchObject({ fulfillmentState: "needs_attention" });
+    expect((await theOrder(t)).attentionReason).toMatch(/^CR 101-002 was taken down after this order was placed\./u);
+  });
+});
+
 describe("the hold and confirmation", () => {
   it("production confirms after the 1-hour hold", async () => {
     prod();

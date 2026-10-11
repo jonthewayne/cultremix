@@ -91,21 +91,23 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
   // (or a work since withdrawn).
   const target = item.work;
   const isSale = item.kind === "sale";
+  // Sales and takedowns come from CultRemix, not a member: a mark instead of an avatar and name.
+  const fromCultRemix = isSale || item.kind === "takedown";
   const body = (
     <>
-      {isSale ? (
+      {fromCultRemix ? (
         <span
           aria-hidden
           className="inline-flex size-11 shrink-0 items-center justify-center rounded-[22%] bg-black text-2xl font-black text-white md:size-12"
         >
-          $
+          {isSale ? "$" : "!"}
         </span>
       ) : (
         <Avatar username={name ?? "?"} image={item.actor.image} className="size-11 md:size-12" />
       )}
       <span className="min-w-0 flex-1">
         <span className="block leading-snug">
-          {isSale ? (
+          {fromCultRemix ? (
             <Message item={item} />
           ) : (
             <>
@@ -185,6 +187,18 @@ function Message({ item }: { item: Notification }) {
       );
     case "sale":
       return <SaleMessage item={item} />;
+    case "takedown":
+      return item.takedown ? (
+        <>
+          Your design <Cr work={{ cr: item.takedown.cr, title: item.takedown.title, thumbUrl: undefined }} /> was taken down: {item.takedown.reason} If you think that's a mistake, write to{" "}
+          <a href="mailto:heyyo@cultremix.com" className="font-semibold underline underline-offset-4">
+            heyyo@cultremix.com
+          </a>
+          .
+        </>
+      ) : (
+        <>One of your designs was taken down.</>
+      );
   }
 }
 

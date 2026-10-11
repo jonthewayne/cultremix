@@ -58,6 +58,22 @@ async function bumpUnread(ctx: MutationCtx, userId: Id<"users">) {
   }
 }
 
+// Tells a creator that an admin took their design down, and why (convex/moderation.ts).
+export async function notifyTakedown(
+  ctx: MutationCtx,
+  args: { recipientId: Id<"users">; workId: Id<"works">; reason: string; at?: number },
+) {
+  const id = await ctx.db.insert("notifications", {
+    recipientId: args.recipientId,
+    kind: "takedown",
+    workId: args.workId,
+    note: args.reason,
+    createdAt: args.at ?? Date.now(),
+  });
+  await bumpUnread(ctx, args.recipientId);
+  return id;
+}
+
 // How far up a remix's parents to look for the recipient's own design.
 const MAX_LINEAGE_STEPS = 50;
 

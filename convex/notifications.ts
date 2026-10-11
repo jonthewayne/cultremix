@@ -26,6 +26,8 @@ const notificationItem = v.object({
   sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean(), held: v.optional(v.boolean()) })),
   // For a sale of a kept design (just for its creator): it's never named, only called a private remix.
   privateRemix: v.optional(v.boolean()),
+  // For a takedown: your design that came down, and why.
+  takedown: v.optional(v.object({ cr: v.string(), title: v.optional(v.string()), reason: v.string() })),
 });
 
 // The bell: how many are unread, and when the viewer last opened the list. Signed out, nothing.
@@ -77,6 +79,9 @@ export const list = query({
           parent: await reference(parent),
           sale: row.sale,
           ...(row.kind === "sale" && work?.status === "private" ? { privateRemix: true } : {}),
+          ...(row.kind === "takedown" && work
+            ? { takedown: { cr: formatCr(work.crFamily, work.crExpression), title: work.title, reason: row.note ?? "" } }
+            : {}),
         };
       }),
     );

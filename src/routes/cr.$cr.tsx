@@ -19,6 +19,7 @@ import { WordChangesNote } from "~/components/cr/RemixableWords";
 import { PartChangesNote, RemixableParts } from "~/components/cr/RemixableParts";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { TakeDown } from "~/components/cr/TakeDown";
 import { WorkPageSkeleton } from "~/components/cr/PageSkeletons";
 import { Backers } from "~/components/work/Backers";
 import { FollowButton } from "~/components/social/FollowButton";
@@ -209,6 +210,7 @@ function ShopPage() {
             <Backers workId={item.workId} cr={item.cr} />
             <PrintEntry cr={item.cr} />
             <PlacementEditor workId={item.workId} artUrl={item.artMediumUrl ?? item.artUrl} colors={data.colors} />
+            <TakeDown workId={item.workId} cr={item.cr} />
           </div>
         </section>
 

@@ -297,6 +297,10 @@ export const cultremixTables = {
     // Chosen in the publish dialog: kept just for the creator. Set while preparing, so the art
     // finishes as "private" instead of "published".
     keep: v.optional(v.literal("private")),
+    // Taken down by an admin (convex/moderation.ts): when, by whom, and why; its creator is told why.
+    withdrawnAt: v.optional(v.number()),
+    withdrawnBy: v.optional(v.id("users")),
+    withdrawReason: v.optional(v.string()),
     // A kept design's creator asked to have it printed (keeps.requestPrint); an admin approves it
     // for its creator alone in Admin, For sale.
     printRequestedAt: v.optional(v.number()),

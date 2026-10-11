@@ -24,6 +24,8 @@ export const notificationKindValidator = v.union(
   v.literal("follow"),
   v.literal("back"),
   v.literal("sale"),
+  // Your design was taken down (convex/moderation.ts); note says why.
+  v.literal("takedown"),
 );
 
 export const socialTables = {
@@ -96,6 +98,8 @@ export const socialTables = {
     workId: v.optional(v.id("works")),
     ownWorkId: v.optional(v.id("works")),
     sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean(), held: v.optional(v.boolean()) })),
+    // For a takedown: why the design came down.
+    note: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_recipient_created", ["recipientId", "createdAt"])

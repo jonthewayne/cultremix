@@ -5,7 +5,7 @@ import type { ActionCtx, QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { getViewerUser } from "./identity";
 import { createShopifyAdmin, shopifyAdminConfigFromEnv, type FetchLike } from "./lib/shopify/adminClient";
-import { archiveProduct, crNumber, syncProduct, variantSku } from "./lib/shopify/productSync";
+import { archiveProduct, crNumber, setProductStatus, syncProduct, variantSku } from "./lib/shopify/productSync";
 import { commerceOpen } from "./lib/shopFlags";
 import { listingsOf } from "./lib/shopProduct";
 import { publicUrl } from "./lib/r2";
@@ -258,6 +258,26 @@ export const archiveProducts = internalAction({
         await archiveProduct(admin, productId);
       } catch (error) {
         console.warn(`Archiving ${productId} failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return null;
+  },
+});
+
+// Drafts the Shopify products of a design taken down (convex/moderation.ts), so nothing can buy it
+// even from a cart made before; approving it again after it's back up makes them active. Best effort,
+// like archiving: the cart and fulfillment also refuse it on our side.
+export const draftProducts = internalAction({
+  args: { productIds: v.array(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const admin = shopifyAdminForAction(ctx);
+    if (!admin) return null;
+    for (const productId of args.productIds) {
+      try {
+        await setProductStatus(admin, productId, "DRAFT");
+      } catch (error) {
+        console.warn(`Drafting ${productId} failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     return null;

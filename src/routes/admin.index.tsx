@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import { AdminSection, Toggle, adminButton, adminInput } from "~/components/admin/AdminSection";
+import { AdminSection, Toggle, adminButton, adminInput, adminQuietButton } from "~/components/admin/AdminSection";
 import { BudgetCard } from "~/components/admin/BudgetCard";
 import { errorMessage } from "~/lib/imagePrep";
 
@@ -18,7 +18,65 @@ function AdminOverview() {
       <BudgetCard />
       <FlagsSection flags={overview.flags} canManage={overview.canManage} />
       <SettingsSection settings={overview.settings} canManage={overview.canManage} />
+      <TakenDownSection />
     </div>
+  );
+}
+
+// Designs an admin took down from their pages (convex/moderation.ts), with Put it back up.
+function TakenDownSection() {
+  const data = useQuery(api.moderation.withdrawn, {});
+  const restore = useMutation(api.moderation.restore);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  if (!data) return null;
+
+  const putBack = async (workId: (typeof data.works)[number]["workId"]) => {
+    setError("");
+    setBusy(workId);
+    try {
+      await restore({ workId });
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <AdminSection
+      title="Taken down"
+      description="Designs taken down with Take this design down on their pages. Putting one back up publishes it again; selling it takes a new approval in For sale."
+    >
+      {data.works.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing has been taken down.</p>
+      ) : (
+        <ul className="grid gap-3">
+          {data.works.map((work) => (
+            <li key={work.workId} className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-border p-3">
+              {work.thumbUrl && <img src={work.thumbUrl} alt="" className="size-12 shrink-0 rounded-lg object-contain" />}
+              <div className="min-w-0 flex-1">
+                <p className="font-black">
+                  CR {work.cr}
+                  {work.title ? ` · ${work.title}` : ""}
+                  {work.creator && <span className="font-normal text-muted-foreground"> by @{work.creator}</span>}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {work.reason}
+                  {work.withdrawnAt ? ` · ${new Date(work.withdrawnAt).toLocaleDateString()}` : ""}
+                </p>
+              </div>
+              {data.canManage && (
+                <button type="button" className={adminQuietButton} disabled={busy !== null} onClick={() => void putBack(work.workId)}>
+                  {busy === work.workId ? "Putting it back…" : "Put it back up"}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="mt-3 text-sm font-semibold text-destructive">{error}</p>}
+    </AdminSection>
   );
 }
 

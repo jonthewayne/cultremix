@@ -81,7 +81,7 @@ Both target your dev deployment by default and production with `--prod` (they as
 
 `/admin` is for the owner and staff:
 
-- **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Sale emails, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day).
+- **Overview**: switches for each part of the product (Studio, Publishing, Checkout, Monad records, Backs, Sale emails, Print-size art) and app settings (signup credits, the daily image budget, photo shoots per member per day). **Taken down** lists designs taken down from their pages, with **Put it back up**. Owner and ops staff see **Take this design down** at the bottom of every work page: it asks why, hides the design's page and feed rows, stops its sale (its listings pause and Shopify drafts its products; Printful gets no new order for it), and tells its creator the reason. Its CR number, lineage, and Monad record stay.
 - **Members**: search by username, email, or creator number; give credits; turn creator access on or off.
 - **Metrics**: counts by day and in total (members, members who generated, batches, designs, published works, remixes, families, credits used, model photos).
 - **Judges**: make a judge account with a password (owner only).
