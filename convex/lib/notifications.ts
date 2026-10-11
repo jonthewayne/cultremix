@@ -42,15 +42,64 @@ export async function notify(
     workId: args.workId,
     createdAt,
   });
+  await bumpUnread(ctx, args.recipientId);
+  return id;
+}
+
+async function bumpUnread(ctx: MutationCtx, userId: Id<"users">) {
   const state = await ctx.db
     .query("notificationState")
-    .withIndex("by_user", (q) => q.eq("userId", args.recipientId))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .unique();
   if (state) {
     await ctx.db.patch("notificationState", state._id, { unread: state.unread + 1 });
   } else {
-    await ctx.db.insert("notificationState", { userId: args.recipientId, unread: 1, lastReadAt: 0 });
+    await ctx.db.insert("notificationState", { userId, unread: 1, lastReadAt: 0 });
   }
+}
+
+// How far up a remix's parents to look for the recipient's own design.
+const MAX_LINEAGE_STEPS = 50;
+
+// Tells a member that a work they share in sold: "Slow Roll CR 106-001 sold. You earn $4.20." Called
+// by earnings (convex/earnings.ts) once per order, recipient, and work, when the order's sale rows
+// are first written, so replays of the same order never notify twice. When the work sold isn't the
+// recipient's, the notification also names the recipient's own design it was remixed from.
+export async function notifySale(
+  ctx: MutationCtx,
+  args: {
+    recipientId: Id<"users">;
+    workId: Id<"works">;
+    cents: number;
+    units: number;
+    test: boolean;
+    at?: number;
+  },
+) {
+  const work = await ctx.db.get("works", args.workId);
+  if (!work) return null;
+  let ownWorkId: Id<"works"> | undefined;
+  if (work.creatorId !== args.recipientId) {
+    let parentId = work.parentWorkId;
+    for (let step = 0; parentId && step < MAX_LINEAGE_STEPS; step++) {
+      const parent: Doc<"works"> | null = await ctx.db.get("works", parentId);
+      if (!parent) break;
+      if (parent.creatorId === args.recipientId) {
+        ownWorkId = parent._id;
+        break;
+      }
+      parentId = parent.parentWorkId;
+    }
+  }
+  const id = await ctx.db.insert("notifications", {
+    recipientId: args.recipientId,
+    kind: "sale",
+    workId: work._id,
+    ownWorkId,
+    sale: { cents: args.cents, units: args.units, test: args.test },
+    createdAt: args.at ?? Date.now(),
+  });
+  await bumpUnread(ctx, args.recipientId);
   return id;
 }
 

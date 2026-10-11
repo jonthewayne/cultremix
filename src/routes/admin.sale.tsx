@@ -93,7 +93,7 @@ function AdminSale() {
       </AdminSection>
 
       {(list?.page ?? []).map((row) => (
-        <WorkRow key={row.workId} row={row} />
+        <WorkRow key={row.workId} row={row} canSimulate={overview?.canSimulate ?? false} />
       ))}
       {list && list.page.length === 0 && <p className="text-muted-foreground">Nothing published yet.</p>}
       <div className="flex gap-3">
@@ -190,10 +190,11 @@ function Flag({ on, label, note }: { on: boolean; label: string; note: string })
   );
 }
 
-function WorkRow({ row }: { row: Row }) {
+function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
   const approve = useMutation(api.sales.approve);
   const pause = useMutation(api.sales.pause);
   const resume = useMutation(api.sales.resume);
+  const simulateSale = useMutation(api.orders.simulateSale);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const run = async (work: () => Promise<unknown>) => {
@@ -242,6 +243,26 @@ function WorkRow({ row }: { row: Row }) {
           {paused.length > 0 && selling.length === 0 && (
             <button type="button" disabled={busy} onClick={() => void run(() => resume({ workId: row.workId }))} className={adminButton}>
               Put back on sale
+            </button>
+          )}
+          {canSimulate && (
+            <button
+              type="button"
+              disabled={busy}
+              title="Dev and staging only: a Test order with Test earnings and notifications, never paid or printed"
+              onClick={() =>
+                void run(async () => {
+                  const sale = await simulateSale({ workId: row.workId });
+                  const shared =
+                    sale.recipients === 1
+                      ? "for its creator, who got a notification"
+                      : `split among ${sale.recipients} creators, each notified`;
+                  return `Simulated a ${formatPrice(sale.totalCents)} sale: ${formatPrice(sale.poolCents)} in Test earnings ${shared}.`;
+                })
+              }
+              className={adminButton}
+            >
+              Simulate a sale
             </button>
           )}
         </div>

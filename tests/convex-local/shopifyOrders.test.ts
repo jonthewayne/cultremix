@@ -179,6 +179,35 @@ describe("POST /webhooks/shopify", () => {
       ["sale", 270, "reversed"],
       ["reversal", -270, "reversed"],
     ]);
+    // A sale cancelled before it was paid tells nobody it sold.
+    expect(await t.run((ctx) => ctx.db.query("notifications").collect())).toHaveLength(0);
+  });
+
+  it("tells each person a sale pays what it earned them, once", async () => {
+    const t = newTest();
+    const { a, b, work } = await variationOnSale(t);
+    // 2 x $36 with $7.20 off: A (the family's original) and B (the remixer) each earn 243 per unit.
+    shopify.set(rawOrder({ lines: [line(2, { discount: "7.20" })] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+
+    const rows = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(rows).toHaveLength(2);
+    const root = (await t.run((ctx) => ctx.db.get("works", work)))?.parentWorkId;
+    const toB = rows.find((r) => r.recipientId === b);
+    const toA = rows.find((r) => r.recipientId === a);
+    expect(toB).toMatchObject({ kind: "sale", workId: work, sale: { cents: 486, units: 2, test: false } });
+    expect(toB?.actorId).toBeUndefined();
+    expect(toB?.ownWorkId).toBeUndefined();
+    expect(toA).toMatchObject({ kind: "sale", workId: work, ownWorkId: root, sale: { cents: 486, units: 2, test: false } });
+
+    const viewer = t.withIdentity({ subject: "auth-b" });
+    expect(await viewer.query(api.notifications.status, {})).toMatchObject({ unread: 1 });
+    const list = await viewer.query(api.notifications.list, { paginationOpts: { numItems: 10, cursor: null } });
+    expect(list.page).toHaveLength(1);
+    expect(list.page[0]).toMatchObject({ kind: "sale", work: { cr: "101-002" }, sale: { cents: 486, units: 2, test: false } });
+    expect(list.page[0].actor.username).toBeUndefined();
+    expect(list.page[0].parent).toBeUndefined();
   });
 
   it("handles refund before paid, reversing only the refunded unit", async () => {
@@ -207,6 +236,12 @@ describe("POST /webhooks/shopify", () => {
     const refunds = await t.run((ctx) => ctx.db.query("refunds").collect());
     expect(refunds).toHaveLength(1);
     expect(refunds[0].lines[0]).toMatchObject({ quantity: 1, amountCents: 3600 });
+    // The sale notification counts only the shirt that wasn't refunded.
+    const sold = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(sold.map((r) => r.sale)).toEqual([
+      { cents: 270, units: 1, test: false },
+      { cents: 270, units: 1, test: false },
+    ]);
   });
 
   it("holds a unit while its refund is pending and releases it when the refund fails", async () => {
@@ -267,6 +302,8 @@ describe("POST /webhooks/shopify", () => {
     expect(mine?.testTotals.pendingCents).toBe(270);
     expect(mine?.entries[0]).toMatchObject({ test: true, status: "Pending", cr: "101-002", kind: "sale" });
     expect((await earningsFor(t, b))[0].simulated).toBe(true);
+    const sold = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(sold.map((r) => r.sale?.test)).toEqual([true, true]);
   });
 
   it("holds shares for members without creator access until released", async () => {
@@ -376,5 +413,36 @@ describe("orders.adminList", () => {
     const list = await t.withIdentity({ subject: "owner" }).query(api.orders.adminList, {});
     expect(list.orders[0]).toMatchObject({ name: "#1001", paid: true, fulfillmentState: "waiting", poolCents: 1080 });
     expect(list.orders[0].lines).toEqual([{ cr: "101-002", sku: null, quantity: 2, refunded: 0 }]);
+  });
+});
+
+describe("orders.simulateSale", () => {
+  it("rehearses a sale outside production: Test earnings and notifications, nothing to print", async () => {
+    const t = newTest();
+    await makeUser(t, { authId: "owner", platformRole: "super_admin_owner" });
+    const { a, b, work } = await variationOnSale(t);
+    const owner = t.withIdentity({ subject: "owner" });
+
+    const sale = await owner.mutation(api.orders.simulateSale, { workId: work, quantity: 2 });
+    expect(sale).toMatchObject({ orderName: "Simulated sale of CR 101-002", recipients: 2 });
+    expect(sale.poolCents).toBeGreaterThan(0);
+    expect(await onlyOrder(t)).toMatchObject({ isTest: true, simulated: true, fulfillmentState: "test_ignored" });
+    for (const who of [a, b]) {
+      const rows = await earningsFor(t, who);
+      expect(rows.map((r) => [r.kind, r.state, r.simulated])).toEqual([
+        ["sale", "pending", true],
+        ["sale", "pending", true],
+      ]);
+    }
+    const notes = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(notes.map((n) => [n.kind, n.sale?.units, n.sale?.test])).toEqual([
+      ["sale", 2, true],
+      ["sale", 2, true],
+    ]);
+
+    // Members can't, and production refuses even the owner.
+    await expect(t.withIdentity({ subject: "auth-b" }).mutation(api.orders.simulateSale, { workId: work })).rejects.toThrow();
+    vi.stubEnv("DEPLOYMENT_ENV", "prod");
+    await expect(owner.mutation(api.orders.simulateSale, { workId: work })).rejects.toThrow(/dev and staging/);
   });
 });

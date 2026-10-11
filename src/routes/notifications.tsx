@@ -10,6 +10,7 @@ import { SiteHeader } from "~/components/cr/SiteHeader";
 import { Avatar } from "~/components/social/Avatar";
 import { LoadMore } from "~/components/social/LoadMore";
 import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
+import { formatCents } from "~/lib/money";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { cn } from "~/lib/utils";
 
@@ -59,7 +60,8 @@ function NotificationsPage() {
           <div className="mt-8">
             <p className="text-xl font-semibold text-neutral-400">Nothing yet.</p>
             <p className="mt-2 text-neutral-600">
-              When someone follows you, or hearts, remixes, or Backs your work, you’ll hear about it here.
+              When someone follows you, hearts, remixes, or Backs your work, or buys a design you share in,
+              you’ll hear about it here.
             </p>
           </div>
         ) : (
@@ -85,18 +87,40 @@ function NotificationsPage() {
 function NotificationRow({ item, isNew, now }: { item: Notification; isNew: boolean; now: number | null }) {
   const name = item.actor.username;
   const who = name ? `@${name}` : "Someone";
-  // Where the row goes: the work it's about, or the person for a follow (or a work since withdrawn).
+  // Where the row goes: your earnings for a sale, the work it's about, or the person for a follow
+  // (or a work since withdrawn).
   const target = item.work;
+  const isSale = item.kind === "sale";
   const body = (
     <>
-      <Avatar username={name ?? "?"} image={item.actor.image} className="size-11 md:size-12" />
+      {isSale ? (
+        <span
+          aria-hidden
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-[22%] bg-black text-2xl font-black text-white md:size-12"
+        >
+          $
+        </span>
+      ) : (
+        <Avatar username={name ?? "?"} image={item.actor.image} className="size-11 md:size-12" />
+      )}
       <span className="min-w-0 flex-1">
         <span className="block leading-snug">
-          <span className="font-black">{who}</span> <Message item={item} />
+          {isSale ? (
+            <Message item={item} />
+          ) : (
+            <>
+              <span className="font-black">{who}</span> <Message item={item} />
+            </>
+          )}
         </span>
         <span className="mt-0.5 flex items-center gap-2 text-sm text-neutral-500">
           {isNew && (
             <span className="rounded-full bg-black px-2 text-[11px] font-black uppercase leading-5 text-white">New</span>
+          )}
+          {item.sale?.test && (
+            <span className="rounded-full border border-neutral-300 px-2 text-[11px] font-black uppercase leading-5 text-neutral-500">
+              Test
+            </span>
           )}
           {now !== null && ago(item.createdAt, now)}
         </span>
@@ -112,7 +136,11 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
 
   return (
     <li>
-      {target ? (
+      {isSale ? (
+        <Link to="/me/earnings" className={cn(rowClass, "hover:bg-neutral-50")}>
+          {body}
+        </Link>
+      ) : target ? (
         <Link to="/cr/$cr" params={{ cr: target.cr }} className={cn(rowClass, "hover:bg-neutral-50")}>
           {body}
         </Link>
@@ -155,7 +183,37 @@ function Message({ item }: { item: Notification }) {
       ) : (
         <>backed your work.</>
       );
+    case "sale":
+      return <SaleMessage item={item} />;
   }
+}
+
+// "Someone bought Slow Roll CR 106-001. You earn $4.20." Buyers check out on Shopify, so they're
+// never named. For a remix of your design, it names both.
+function SaleMessage({ item }: { item: Notification }) {
+  const units = item.sale?.units ?? 1;
+  const bought = units > 1 ? `Someone bought ${units} of ` : "Someone bought ";
+  const earned = item.sale ? (
+    <>
+      {" "}
+      You earn <span className="font-black">{formatCents(item.sale.cents)}</span>.
+    </>
+  ) : null;
+  if (!item.work) {
+    return <>Someone bought a design you share in.{earned}</>;
+  }
+  return (
+    <>
+      {bought}
+      <Cr work={item.work} />
+      {item.parent && (
+        <>
+          , a remix of your <Cr work={item.parent} />
+        </>
+      )}
+      .{earned}
+    </>
+  );
 }
 
 function Cr({ work }: { work: WorkRef }) {

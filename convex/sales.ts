@@ -8,7 +8,7 @@ import { imageUrlReader } from "./lib/imageUrls";
 import { printfulConfigFromEnv } from "./lib/printful/client";
 import { topazWorstCaseCents } from "./lib/pricing";
 import { publicUrl } from "./lib/r2";
-import { commerceOpen } from "./lib/shopFlags";
+import { commerceOpen, simulatesTestOrders } from "./lib/shopFlags";
 import { chosenProducts, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
 import { crNumber, productHandle } from "./lib/shopify/productSync";
@@ -555,6 +555,8 @@ export const overview = query({
     upscaleOn: v.boolean(),
     shopify: v.boolean(),
     printful: v.boolean(),
+    // Dev and staging: the owner can simulate a sale (orders.simulateSale).
+    canSimulate: v.boolean(),
   }),
   handler: async (ctx) => {
     await requireAdmin(ctx, "view");
@@ -575,6 +577,7 @@ export const overview = query({
       upscaleOn: await flagEnabled(ctx, "gen.upscale"),
       shopify: shopifyAdminConfigFromEnv() !== null,
       printful: printfulConfigFromEnv() !== null,
+      canSimulate: simulatesTestOrders(),
     };
   },
 });

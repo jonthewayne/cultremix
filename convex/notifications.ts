@@ -20,8 +20,10 @@ const notificationItem = v.object({
   actor: v.object({ username: v.optional(v.string()), image: v.optional(v.string()) }),
   // The work it's about (your work, or the new remix), while it's still published.
   work: v.optional(workRef),
-  // For a remix: your work it was made from.
+  // For a remix: your work it was made from. For a sale of someone's remix: your design it came from.
   parent: v.optional(workRef),
+  // For a sale: what you earn from the order (before the return window), and whether it was a test.
+  sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean() })),
 });
 
 // The bell: how many are unread, and when the viewer last opened the list. Signed out, nothing.
@@ -59,10 +61,11 @@ export const list = query({
     };
     const page = await Promise.all(
       result.page.map(async (row) => {
-        const actor = await ctx.db.get("users", row.actorId);
+        const actor = row.actorId ? await ctx.db.get("users", row.actorId) : null;
         const work = row.workId ? await ctx.db.get("works", row.workId) : null;
-        const parent =
-          row.kind === "remix" && work?.parentWorkId ? await ctx.db.get("works", work.parentWorkId) : null;
+        const parentId =
+          row.kind === "remix" ? work?.parentWorkId : row.kind === "sale" ? row.ownWorkId : undefined;
+        const parent = parentId ? await ctx.db.get("works", parentId) : null;
         return {
           id: row._id,
           kind: row.kind,
@@ -70,6 +73,7 @@ export const list = query({
           actor: { username: actor?.username, image: safeImageUrl(actor?.image) },
           work: await reference(work),
           parent: await reference(parent),
+          sale: row.sale,
         };
       }),
     );

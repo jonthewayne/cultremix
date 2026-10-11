@@ -16,12 +16,14 @@ export const shelfValidator = v.union(v.literal("works"), v.literal("remixes"));
 // An event's profile list: a published work's shelf, or "backed" for a work the member Backed.
 export const activityShelfValidator = v.union(v.literal("works"), v.literal("remixes"), v.literal("backed"));
 
-// What a notification is about (convex/lib/notifications.ts). "back" is written by Backs.
+// What a notification is about (convex/lib/notifications.ts). "back" is written by Backs; "sale"
+// by earnings when an order is paid (notifySale).
 export const notificationKindValidator = v.union(
   v.literal("remix"),
   v.literal("heart"),
   v.literal("follow"),
   v.literal("back"),
+  v.literal("sale"),
 );
 
 export const socialTables = {
@@ -84,12 +86,16 @@ export const socialTables = {
     .index("by_lastActive", ["lastActiveAt"]),
 
   // Something another member did to you or your work. workId is your work for a heart or a back,
-  // and the new remix for a remix; a follow has none.
+  // and the new remix for a remix; a follow has none. A sale has no actor (buyers check out on
+  // Shopify): workId is the work sold, ownWorkId the recipient's own work it came through when
+  // that's an earlier design in its lineage, and sale what the recipient earns from the order.
   notifications: defineTable({
     recipientId: v.id("users"),
-    actorId: v.id("users"),
+    actorId: v.optional(v.id("users")),
     kind: notificationKindValidator,
     workId: v.optional(v.id("works")),
+    ownWorkId: v.optional(v.id("works")),
+    sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean() })),
     createdAt: v.number(),
   })
     .index("by_recipient_created", ["recipientId", "createdAt"])

@@ -5,6 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { ECONOMIC_CONFIG_V1, type EconomicConfig, type RecipientShare } from "./lib/economics";
 import { saleSplits, type LineLedger, type UnitStatus } from "./lib/creatorPool";
 import { crNumber } from "./lib/shopify/productSync";
+import { notifySale } from "./lib/notifications";
 import { getViewerUser } from "./identity";
 
 // Creator earnings (KTD-18). One sale row per (order line, unit, recipient), plus negative
@@ -136,14 +137,16 @@ async function setGroupState(
 }
 
 // Brings an order's earnings up to date with its stored inputs. Safe to call any number of times.
-export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">): Promise<void> {
+// Returns the sale rows it wrote, for notifyNewSales once the caller has applied everything.
+export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">): Promise<Array<Id<"earnings">>> {
   const order = await ctx.db.get("orders", orderId);
-  if (!order || order.economicEventAt === undefined) return;
+  if (!order || order.economicEventAt === undefined) return [];
   // A production test order never creates earnings.
-  if (order.isTest && !order.simulated) return;
+  if (order.isTest && !order.simulated) return [];
   const now = Date.now();
   const { items, refunds, shipments, rows } = await loadOrder(ctx, orderId);
   const groups = new Map<string, Group>();
+  const fresh: Array<Id<"earnings">> = [];
   const groupFor = (key: string) => {
     let group = groups.get(key);
     if (!group) {
@@ -213,6 +216,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
           };
           const id = await ctx.db.insert("earnings", fields);
           group.sale = { _id: id, _creationTime: now, ...fields };
+          fresh.push(id);
         } else if (maturesAt !== undefined && group.sale.maturesAt === undefined) {
           await ctx.db.patch("earnings", group.sale._id, { maturesAt, updatedAt: now });
           group.sale.maturesAt = maturesAt;
@@ -294,6 +298,47 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
     const net = sale.amountCents + group.reversals.reduce((sum, r) => sum + r.amountCents, 0);
     if (net <= 0 && group.reversals.length > 0) await setGroupState(ctx, group, "reversed", undefined, now);
   }
+
+  return fresh;
+}
+
+// One "sold" notification per recipient and work for sale rows just written (the ids
+// syncOrderEarnings returned), once the caller has applied the whole snapshot, refunds included.
+// Each says what the recipient nets after refunds already applied; units a pending refund holds, or
+// that a refund or cancellation reversed, don't count, and a cancelled order tells nobody. Rows are
+// written once, so replays of the same order never notify twice.
+export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, freshSaleIds: Array<Id<"earnings">>) {
+  if (freshSaleIds.length === 0) return;
+  const order = await ctx.db.get("orders", orderId);
+  if (!order || order.cancelled) return;
+  const { items, rows } = await loadOrder(ctx, orderId);
+  const fresh = new Set<string>(freshSaleIds);
+  const workOf = new Map(items.map((item) => [item._id as string, item.workId]));
+  const totals = new Map<string, { recipientId: Id<"users">; workId: Id<"works">; cents: number; units: number }>();
+  for (const sale of rows) {
+    if (sale.kind !== "sale" || !fresh.has(sale._id)) continue;
+    if (sale.state === "reversed" || (sale.state === "held" && sale.holdReason === "refund")) continue;
+    const workId = workOf.get(sale.orderItemId);
+    if (!workId) continue;
+    const reversed = rows
+      .filter(
+        (r) =>
+          r.kind === "reversal" &&
+          r.orderItemId === sale.orderItemId &&
+          r.unit === sale.unit &&
+          r.recipientId === sale.recipientId,
+      )
+      .reduce((sum, r) => sum + r.amountCents, 0);
+    const net = sale.amountCents + reversed;
+    if (net <= 0) continue;
+    const key = `${sale.recipientId}|${workId}`;
+    const total = totals.get(key) ?? { recipientId: sale.recipientId, workId, cents: 0, units: 0 };
+    total.cents += net;
+    total.units += 1;
+    totals.set(key, total);
+  }
+  const now = Date.now();
+  for (const total of totals.values()) await notifySale(ctx, { ...total, test: order.simulated, at: now });
 }
 
 // ---- Crons and hooks ----

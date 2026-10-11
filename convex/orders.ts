@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalMutation, internalQuery, query } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { orderGid } from "../shared/config/shopify";
@@ -15,7 +15,8 @@ import {
 import { resolveLineage } from "./lib/shopLineage";
 import { simulatesTestOrders } from "./lib/shopFlags";
 import { crNumber } from "./lib/shopify/productSync";
-import { configFor, orderLedger, syncOrderEarnings } from "./earnings";
+import { chosenProducts, offeredShopProducts } from "./lib/shopProduct";
+import { configFor, notifyNewSales, orderLedger, syncOrderEarnings } from "./earnings";
 import { retryDelay, shopifyAdminForAction } from "./shopify";
 import { getViewerUser, isOwner } from "./identity";
 
@@ -251,7 +252,6 @@ async function createItem(
   line: HydratedOrder["lines"][number],
   now: number,
 ): Promise<void> {
-  const config = configFor(1);
   // The variant decides the work; the cart attributes are only a cross-check.
   const variant = line.variantId
     ? await ctx.db
@@ -260,6 +260,19 @@ async function createItem(
         .first()
     : null;
   const work = variant ? await ctx.db.get("works", variant.workId) : null;
+  await insertItem(ctx, orderId, line, work, variant, now);
+}
+
+// One order line, with its lineage, recipients, and creator pool frozen now.
+async function insertItem(
+  ctx: MutationCtx,
+  orderId: Id<"orders">,
+  line: HydratedOrder["lines"][number],
+  work: Doc<"works"> | null,
+  variant: Doc<"workVariants"> | null,
+  now: number,
+): Promise<void> {
+  const config = configFor(1);
   const pool = linePool(
     { unitPriceCents: line.unitPriceCents, quantity: line.quantity, discountCents: line.discountCents },
     config,
@@ -372,7 +385,8 @@ export const applyHydratedOrder = internalMutation({
     for (const line of snapshot.lines) {
       if (!existing.some((item) => item.shopifyLineItemId === line.lineItemId)) await createItem(ctx, orderId, line, now);
     }
-    await syncOrderEarnings(ctx, orderId);
+    // Sale rows written while applying this snapshot; their recipients hear about them at the end.
+    const freshSales = await syncOrderEarnings(ctx, orderId);
 
     // Refunds, oldest first: allocation is fixed at first sight; only the status moves after.
     const refunds = [...snapshot.refunds].sort((a, b) => a.createdAt - b.createdAt);
@@ -413,9 +427,10 @@ export const applyHydratedOrder = internalMutation({
         shippingCents: allocation.shippingCents,
       });
       // Holds and reversals for this refund before the next one is allocated.
-      await syncOrderEarnings(ctx, orderId);
+      freshSales.push(...(await syncOrderEarnings(ctx, orderId)));
     }
-    await syncOrderEarnings(ctx, orderId);
+    freshSales.push(...(await syncOrderEarnings(ctx, orderId)));
+    await notifyNewSales(ctx, orderId, freshSales);
 
     // Before Printful is involved, the order's state follows from the snapshot.
     if (order.printfulOrderId === undefined && (order.fulfillmentState === "waiting" || order.fulfillmentState === "needs_attention")) {
@@ -656,5 +671,73 @@ export const adminList = query({
       }
     }
     return { orders: out, inbox };
+  },
+});
+
+// ---- Dev and staging: a simulated sale ----
+
+const MAX_SIMULATED_QUANTITY = 3;
+
+// Lets the owner rehearse what a sale does before Shopify exists: a Test order with one line for the
+// work at its lowest price, the Test earnings its lineage splits, and each creator's "Someone bought"
+// notification. Refused in production. Nothing goes to Printful (fulfillment ignores it as a test),
+// and Test earnings are never paid.
+export const simulateSale = mutation({
+  args: { workId: v.id("works"), quantity: v.optional(v.number()) },
+  returns: v.object({ orderName: v.string(), totalCents: v.number(), poolCents: v.number(), recipients: v.number() }),
+  handler: async (ctx, args) => {
+    const viewer = await getViewerUser(ctx);
+    if (!viewer || !isOwner(viewer)) throw new ConvexError({ code: "FORBIDDEN", message: "Owner only." });
+    if (!simulatesTestOrders()) {
+      throw new ConvexError({ code: "FORBIDDEN", message: "Simulated sales are for dev and staging only." });
+    }
+    const work = await ctx.db.get("works", args.workId);
+    if (!work || work.status !== "published") {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Only a published work can be sold." });
+    }
+    const quantity = Math.min(MAX_SIMULATED_QUANTITY, Math.max(1, Math.floor(args.quantity ?? 1)));
+    const prices = chosenProducts(work, await offeredShopProducts(ctx)).map(
+      ({ product, placement }) => product.priceCents + (placement.side === "back" ? product.backExtraCents : 0),
+    );
+    const unitPriceCents = prices.length > 0 ? Math.min(...prices) : 3600;
+    const now = Date.now();
+    const cr = crNumber(work.crFamily, work.crExpression);
+    const orderName = `Simulated sale of CR ${cr}`;
+    const orderId = await ctx.db.insert("orders", {
+      shopifyOrderId: `simulated-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      orderName,
+      shopDomain: "simulated",
+      isTest: true,
+      simulated: true,
+      economicEventAt: now,
+      financialState: "PAID",
+      cancelled: false,
+      currency: "USD",
+      totalCents: unitPriceCents * quantity,
+      configVersion: configFor(1).version,
+      fulfillmentState: "test_ignored",
+      createdAt: now,
+      updatedAt: now,
+    });
+    const line = {
+      lineItemId: "simulated-1",
+      variantId: null,
+      sku: null,
+      quantity,
+      unitPriceCents,
+      discountCents: 0,
+      workIdAttr: work._id,
+      crAttr: cr,
+    };
+    await insertItem(ctx, orderId, line, work, null, now);
+    const fresh = await syncOrderEarnings(ctx, orderId);
+    await notifyNewSales(ctx, orderId, fresh);
+    const [item] = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(1);
+    return {
+      orderName,
+      totalCents: unitPriceCents * quantity,
+      poolCents: item?.poolCents ?? 0,
+      recipients: item?.recipients.length ?? 0,
+    };
   },
 });
