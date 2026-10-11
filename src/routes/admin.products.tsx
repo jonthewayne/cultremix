@@ -70,7 +70,7 @@ function AdminProducts() {
         <div className="flex flex-wrap gap-3">
           {(palette?.colors ?? []).map((color) => (
             <span key={color.key} className="flex w-16 flex-col items-center gap-1 text-center text-[11px] font-semibold leading-tight">
-              <span className="h-10 w-10 rounded-full border border-black/20" style={{ background: color.hex }} />
+              <span className="h-10 w-10 rounded-full border border-black/20 ring-1 ring-white/25" style={{ background: color.hex }} />
               {color.name}
             </span>
           ))}
