@@ -22,6 +22,11 @@ const GROUPS: Array<{ group: Group; title: string; about: string }> = [
     about: "Whether a remix keeps its original's look and layout (a variation, even with a new subject or words) or restyles or rebuilds it (it may be a fork).",
   },
   {
+    group: "parts",
+    title: "Remixable parts (GPT-6 Luna)",
+    about: "The characters, people, and groups the parts reader proposes from a design's notes, and the part it writes from a creator's words in Add a part.",
+  },
+  {
     group: "spelling",
     title: "Spelling check (Gemini 3.1 Pro)",
     about:
@@ -109,8 +114,9 @@ export function renderCatalog(cases: Array<Case> = CASES) {
     for (const c of list) {
       out.push(`### \`${c.id}\`: ${c.title}${c.status === "known-limit" ? " (known limit)" : ""}`, "", c.supports, "");
       if (c.kind === "generate" || c.kind === "photo") for (const line of generateLines(c)) out.push(`- ${line}`);
-      if (c.kind === "notes") {
+      if (c.kind === "notes" || c.kind === "parts") {
         out.push(`- Image: \`${c.fixture}\`, ${fixture(c.fixture).what}`);
+        if (c.kind === "parts" && c.words) out.push(`- The creator's words: "${c.words}"`);
         for (const e of c.expect) out.push(`- Checks: ${e.describe}`);
       }
       out.push(`- First tested ${c.since}`, "");

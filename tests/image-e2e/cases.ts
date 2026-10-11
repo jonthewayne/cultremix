@@ -4,12 +4,12 @@ import type { RemixPart } from "../../convex/lib/remixParts";
 import { fixSpellingRequest } from "../../src/lib/spelling";
 
 // Every capability the image pipeline aims to support, as cases the suite can rerun: the image model
-// with our prompts (generate, photo), the GPT-6 Luna steps around it (notes, reader, compare), and
-// the studio's spelling check (spelling).
+// with our prompts (generate, photo), the GPT-6 Luna steps around it (notes, reader, compare, and
+// the remixable parts reader), and the studio's spelling check (spelling).
 // Each case says what it supports, when we first tested it, and how a run checks it. CASES.md is
 // rendered from this file (bun run test:image --catalog).
 
-export type Group = "words" | "styles" | "people" | "remix" | "layout" | "photo" | "notes" | "reader" | "compare" | "spelling";
+export type Group = "words" | "styles" | "people" | "remix" | "layout" | "photo" | "notes" | "reader" | "compare" | "parts" | "spelling";
 // known-limit: tracked for future models; failing doesn't fail a run.
 export type Status = "supported" | "known-limit";
 
@@ -114,7 +114,16 @@ export type SpellingCase = Base & {
   flags: Array<string>;
 };
 
-export type Case = GenerateCase | PhotoCase | NotesCase | ReaderCase | CompareCase | SpellingCase;
+// The remixable parts reader on a fixture's notes: the parts it proposes, or, with words, the one
+// part it writes from a creator's Add a part. Each try (two by default) must pass every check.
+export type PartsCase = Base & {
+  kind: "parts";
+  fixture: string;
+  words?: string;
+  expect: Array<{ id: string; describe: string; test: (parts: Array<RemixPart>) => boolean }>;
+};
+
+export type Case = GenerateCase | PhotoCase | NotesCase | ReaderCase | CompareCase | PartsCase | SpellingCase;
 
 const section = (n: Notes, name: string) => noteSections(n.notes).find((s) => s.name === name)?.text ?? "";
 const quotedPieces = (text: string) => text.split("\n").filter((line) => /["“„«]/u.test(line)).length;
@@ -882,6 +891,7 @@ export const CASES: Array<Case> = [
   },
   ...readerCases(),
   ...compareCases(),
+  ...partsCases(),
   ...spellingCases(),
 ];
 
@@ -975,6 +985,108 @@ function compareCases(): Array<CompareCase> {
     remix,
     expect,
   }));
+}
+
+// The remixable parts reader (convex/lib/partsReader.ts), 2026-10-11: the parts it proposes from a
+// design's notes, and the one part it writes from a creator's words in Add a part. People and groups
+// are described by role and outfit only, since a remix gives them someone else's looks.
+function partsCases(): Array<PartsCase> {
+  const LOOKS = /\b(beard|bearded|hair|haired|face|faces|bald|wrinkl\w*|elderly|aged?|young|old|skin)\b/iu;
+  const byLooks = (parts: Array<RemixPart>) => parts.filter((p) => p.kind !== "character").every((p) => !LOOKS.test(p.text));
+  const has = (parts: Array<RemixPart>, kind: RemixPart["kind"], label: RegExp) => parts.some((p) => p.kind === kind && label.test(p.label));
+  return [
+    {
+      kind: "parts",
+      id: "parts-santa-elves",
+      group: "parts",
+      title: "Santa, Mrs. Claus, and three elves",
+      supports: "Proposed parts: Santa and Mrs. Claus as people, and the elves as a group of three a remix can resize.",
+      since: "2026-10-11",
+      fixture: "santa-elves",
+      expect: [
+        { id: "santa", describe: "Santa is a person", test: (parts) => has(parts, "person", /santa/iu) },
+        { id: "mrs-claus", describe: "Mrs. Claus is a person", test: (parts) => has(parts, "person", /mrs\.? claus/iu) },
+        { id: "elves", describe: "the elves are a group of 3", test: (parts) => parts.some((p) => p.kind === "group" && /elves/iu.test(p.label) && p.count === 3) },
+        { id: "role-only", describe: "people and groups are described by role and outfit, never their looks", test: byLooks },
+      ],
+    },
+    {
+      kind: "parts",
+      id: "parts-lion",
+      group: "parts",
+      title: "A lion-head graphic",
+      supports: "Proposed parts: the lion as a character to swap, and no people.",
+      since: "2026-10-11",
+      fixture: "lion",
+      expect: [
+        { id: "lion", describe: "the lion is a character", test: (parts) => has(parts, "character", /lion/iu) },
+        { id: "no-people", describe: "no people or groups", test: (parts) => parts.every((p) => p.kind === "character") },
+      ],
+    },
+    {
+      kind: "parts",
+      id: "parts-raccoon",
+      group: "parts",
+      title: "The crowned raccoon",
+      supports: "Proposed parts: the raccoon as a character, and its lettering left to the word boxes.",
+      since: "2026-10-11",
+      fixture: "trash-royalty",
+      expect: [
+        { id: "raccoon", describe: "the raccoon is a character", test: (parts) => has(parts, "character", /raccoon/iu) },
+        { id: "no-words", describe: "no part for its words", test: (parts) => parts.every((p) => !/trash|royalty|word|letter|text/iu.test(p.label)) },
+      ],
+    },
+    {
+      kind: "parts",
+      id: "parts-words-only",
+      group: "parts",
+      title: "A typography design",
+      supports: "A design that's mostly lettering gets no people or groups; its words are remixed by the word boxes.",
+      since: "2026-10-11",
+      fixture: "offline-luxury",
+      expect: [{ id: "no-people", describe: "no people or groups", test: (parts) => parts.every((p) => p.kind === "character") }],
+    },
+    {
+      kind: "parts",
+      id: "parts-add-elves",
+      group: "parts",
+      title: "\"Let people add their family as elves, up to 8\"",
+      supports: "Add a part: the creator's words become the elves as a group of three, with the most a remix may have.",
+      since: "2026-10-11",
+      fixture: "santa-elves",
+      words: "let people add their family as elves, up to 8",
+      expect: [
+        { id: "group", describe: "a group labeled elves", test: (parts) => has(parts, "group", /elves/iu) },
+        { id: "count", describe: "3 in the design, at most 8", test: (parts) => parts[0]?.count === 3 && parts[0]?.max === 8 },
+        { id: "role-only", describe: "described by role and outfit only", test: byLooks },
+      ],
+    },
+    {
+      kind: "parts",
+      id: "parts-add-santa",
+      group: "parts",
+      title: "\"People can put themselves in as Santa\"",
+      supports: "Add a part: the creator's words become Santa as a person drawn from a remixer's photo.",
+      since: "2026-10-11",
+      fixture: "santa-elves",
+      words: "people can put themselves in as Santa",
+      expect: [
+        { id: "person", describe: "a person labeled Santa", test: (parts) => has(parts, "person", /santa/iu) },
+        { id: "role-only", describe: "described by role and outfit only", test: byLooks },
+      ],
+    },
+    {
+      kind: "parts",
+      id: "parts-add-animal",
+      group: "parts",
+      title: "\"Swap the lion for any animal\"",
+      supports: "Add a part: the creator's words become the lion as a character to swap.",
+      since: "2026-10-11",
+      fixture: "lion-sketch",
+      words: "people can swap the lion for any animal they like",
+      expect: [{ id: "character", describe: "a character labeled lion", test: (parts) => has(parts, "character", /lion/iu) }],
+    },
+  ];
 }
 
 // The spelling check, 2026-10-11: three designs whose lettering leaked from a style image (TRASH

@@ -2,9 +2,9 @@
 
 A rerunnable record of everything CultRemix's image pipeline aims to do, run against the real models: GPT Image 2.5 makes the images, and GPT-6 Luna writes each image's notes, reads what a request wants from each image, compares a remix with its original, and answers the checks' questions, while Gemini 3.1 Pro reads each design's words letter for letter. When a prompt changes or a new image model comes along, a run says which capabilities still work.
 
-Every case runs through production's own code. Prompts come from `convex/lib/batchPrompt.ts` (the request reader plus `studioPrompt`), remix word boxes from `convex/lib/remixFields.ts`, notes from `convex/lib/notesWriter.ts`, the remix comparison from `convex/lib/remixCompare.ts`, the spelling check from `convex/lib/spelling.ts` and `convex/lib/wordReader.ts`, and the image call from `convex/lib/imageCalls.ts`, the same function production calls. The suite cuts each grid with the production cutter, then checks each design: a checker answers the case's questions, a word reader spells out its lettering, and for a remix that should keep its design, production's own remix comparison looks at it next to the original.
+Every case runs through production's own code. Prompts come from `convex/lib/batchPrompt.ts` (the request reader plus `studioPrompt`), remix word boxes from `convex/lib/remixFields.ts`, notes from `convex/lib/notesWriter.ts`, the remix comparison from `convex/lib/remixCompare.ts`, the remixable parts from `convex/lib/partsReader.ts`, the spelling check from `convex/lib/spelling.ts` and `convex/lib/wordReader.ts`, and the image call from `convex/lib/imageCalls.ts`, the same function production calls. The suite cuts each grid with the production cutter, then checks each design: a checker answers the case's questions, a word reader spells out its lettering, and for a remix that should keep its design, production's own remix comparison looks at it next to the original.
 
-[CASES.md](CASES.md) lists every case: what it supports, its inputs, how it's checked, and when we first tested it. It covers words, styles and style mixes, people, remixes, the grid and layout, the model photo, image notes, the request reader, the remix comparison, and the studio's spelling check.
+[CASES.md](CASES.md) lists every case: what it supports, its inputs, how it's checked, and when we first tested it. It covers words, styles and style mixes, people, remixes, the grid and layout, the model photo, image notes, the request reader, the remix comparison, the remixable parts reader, and the studio's spelling check.
 
 ## Running it
 
@@ -37,6 +37,7 @@ The suite and production draw on the same CultRemix Gateway credit. A run checks
 - **Model photo:** the same checks on the one photo.
 - **Notes:** what the notes say about the image, such as quoting its words or describing a style's hair.
 - **Request reader and remix comparison:** two tries each (`--trials` changes it), both answering as expected unless the case allows one miss.
+- **Remixable parts:** two tries of the parts reader on each fixture's notes, each passing every check: Santa and Mrs. Claus as people and the elves as a group of three, a lion or raccoon as a character, no people on a typography design, and Add a part turning a creator's words into the part they mean ("up to 8" elves). People and groups must be described by role and outfit only, never their looks, since a remix gives them someone else's.
 - **Spelling check:** two readings of each finished design (`--trials` changes it), each flagging exactly the case's words, as the studio's Typo? chip would: TRASH for the designs drawn TrROH, TRROSH, and TRROW, and nothing for lettering spelled right. A reading that fails is tried once more, as in production (`convex/spellingCheck.ts`).
 
 The checker is a vision model and can misread a design, so look at a failing case's board first. Each answer had to be calibrated, and these are the lessons:
@@ -69,6 +70,7 @@ From seven full runs on 2026-10-05 and targeted reruns after each fix (boards in
   - A new known limit: a quieter style can't lead a louder one (`mix-quiet-lead`). With the pop-art portrait at 50% and GROW SLOW at 30%, no design was mostly pop-art.
 - **Added 2026-10-11:**
   - The studio's spelling check (`--group spelling`, 16 cases, about 9¢). Two runs (`20261011-2117`, `-2119`) read each design four times with the same answer every time: the three designs whose TRASH leaked from the GROW SLOW style were flagged on every reading (read as TRROH, TRROSH, and TRROW; TRROW is three letters off, the most the check allows for a five-letter word with the same first letter), and none of the 13 spelled right was flagged, in arched, distressed, neon, wave, and hand lettering, digits, an ampersand, and lettering read in pieces.
+  - The remixable parts reader (`--group parts`, 7 cases, a few cents): two runs (`20261011-2249`, `-2250`) passed 7 of 7, with fresh notes each time. Santa was described by his red coat and cap, never his beard.
   - Fix the spelling (`words-fix-spelling`, about 14¢): the studio's request on the TrROH raccoon spelled TRASH right in all 8 designs of two grids, and 6 of the 8 kept the design (run `20261011-1808-fix-spelling-4` was 4 of 4 on both). The wordings tried are in the [notebook](../../docs/image-generation/style-mixing.md).
 
 ## Pinned to GPT Image 2.5

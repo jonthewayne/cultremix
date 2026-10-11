@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words, for the checker and the spelling check.
 
-100 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna), 16 spelling check (gemini 3.1 pro).
+107 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna), 7 remixable parts (gpt-6 luna), 16 spelling check (gemini 3.1 pro).
 
 ## Words
 
@@ -576,6 +576,77 @@ Whether a remix keeps its original's look and layout (a variation, even with a n
 | A photo redrawn as a full-body cartoon | `person` | `person-cartoon` | fork | 2026-10-05 |
 | A photo redrawn as a 70s poster | `person` | `person-70s` | fork | 2026-10-05 |
 | An unrelated design | `grow-slow` | `slow-roll-night` | fork | 2026-10-05 |
+
+## Remixable parts (GPT-6 Luna)
+
+The characters, people, and groups the parts reader proposes from a design's notes, and the part it writes from a creator's words in Add a part.
+
+### `parts-santa-elves`: Santa, Mrs. Claus, and three elves
+
+Proposed parts: Santa and Mrs. Claus as people, and the elves as a group of three a remix can resize.
+
+- Image: `santa-elves`, a vintage storybook Santa, Mrs. Claus, and three elves over a MERRY & BRIGHT banner
+- Checks: Santa is a person
+- Checks: Mrs. Claus is a person
+- Checks: the elves are a group of 3
+- Checks: people and groups are described by role and outfit, never their looks
+- First tested 2026-10-11
+
+### `parts-lion`: A lion-head graphic
+
+Proposed parts: the lion as a character to swap, and no people.
+
+- Image: `lion`, a distressed lion-head t-shirt graphic with arched lettering KING OF THE BLOCK
+- Checks: the lion is a character
+- Checks: no people or groups
+- First tested 2026-10-11
+
+### `parts-raccoon`: The crowned raccoon
+
+Proposed parts: the raccoon as a character, and its lettering left to the word boxes.
+
+- Image: `trash-royalty`, a graffiti raccoon in a crown and sunglasses, TRASH ROYALTY (CR 103-001)
+- Checks: the raccoon is a character
+- Checks: no part for its words
+- First tested 2026-10-11
+
+### `parts-words-only`: A typography design
+
+A design that's mostly lettering gets no people or groups; its words are remixed by the word boxes.
+
+- Image: `offline-luxury`, a vintage ocean-wave typography graphic, OFFLINE IS THE NEW LUXURY (CR 102-001)
+- Checks: no people or groups
+- First tested 2026-10-11
+
+### `parts-add-elves`: "Let people add their family as elves, up to 8"
+
+Add a part: the creator's words become the elves as a group of three, with the most a remix may have.
+
+- Image: `santa-elves`, a vintage storybook Santa, Mrs. Claus, and three elves over a MERRY & BRIGHT banner
+- The creator's words: "let people add their family as elves, up to 8"
+- Checks: a group labeled elves
+- Checks: 3 in the design, at most 8
+- Checks: described by role and outfit only
+- First tested 2026-10-11
+
+### `parts-add-santa`: "People can put themselves in as Santa"
+
+Add a part: the creator's words become Santa as a person drawn from a remixer's photo.
+
+- Image: `santa-elves`, a vintage storybook Santa, Mrs. Claus, and three elves over a MERRY & BRIGHT banner
+- The creator's words: "people can put themselves in as Santa"
+- Checks: a person labeled Santa
+- Checks: described by role and outfit only
+- First tested 2026-10-11
+
+### `parts-add-animal`: "Swap the lion for any animal"
+
+Add a part: the creator's words become the lion as a character to swap.
+
+- Image: `lion-sketch`, a pencil sketch of a lion's head under hand-lettered WILD AT HEART
+- The creator's words: "people can swap the lion for any animal they like"
+- Checks: a character labeled lion
+- First tested 2026-10-11
 
 ## Spelling check (Gemini 3.1 Pro)
 

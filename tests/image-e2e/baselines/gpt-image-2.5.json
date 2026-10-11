@@ -7,7 +7,7 @@
   "vision": "openai/gpt-6-luna",
   "words": "google/gemini-3.1-pro-preview"
  },
- "recordedAt": "2026-10-11T21:19:55.037Z",
+ "recordedAt": "2026-10-11T22:50:45.352Z",
  "cases": {
   "words-from-text": {
    "passed": true,
@@ -751,6 +751,56 @@
    "passed": true,
    "checks": {
     "flags": "2/2: none; none"
+   }
+  },
+  "parts-santa-elves": {
+   "passed": true,
+   "checks": {
+    "santa": "2/2",
+    "mrs-claus": "2/2",
+    "elves": "2/2",
+    "role-only": "2/2"
+   }
+  },
+  "parts-lion": {
+   "passed": true,
+   "checks": {
+    "lion": "2/2",
+    "no-people": "2/2"
+   }
+  },
+  "parts-raccoon": {
+   "passed": true,
+   "checks": {
+    "raccoon": "2/2",
+    "no-words": "2/2"
+   }
+  },
+  "parts-words-only": {
+   "passed": true,
+   "checks": {
+    "no-people": "2/2"
+   }
+  },
+  "parts-add-elves": {
+   "passed": true,
+   "checks": {
+    "group": "2/2",
+    "count": "2/2",
+    "role-only": "2/2"
+   }
+  },
+  "parts-add-santa": {
+   "passed": true,
+   "checks": {
+    "person": "2/2",
+    "role-only": "2/2"
+   }
+  },
+  "parts-add-animal": {
+   "passed": true,
+   "checks": {
+    "character": "2/2"
    }
   }
  }

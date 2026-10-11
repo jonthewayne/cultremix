@@ -21,7 +21,7 @@ describe("the image test suite's catalog", () => {
       if (c.kind === "notes") used.add(c.fixture);
       if (c.kind === "reader") for (const id of [...c.images, ...(c.mixer ?? [])]) used.add(id);
       if (c.kind === "compare") for (const id of [c.original, c.remix]) used.add(id);
-      if (c.kind === "spelling") used.add(c.fixture);
+      if (c.kind === "spelling" || c.kind === "parts") used.add(c.fixture);
     }
     const known = new Set(FIXTURES.map((f) => f.id));
     for (const id of used) {

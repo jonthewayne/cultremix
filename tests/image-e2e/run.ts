@@ -28,13 +28,15 @@ import { checkWordChanges, proposeRemixFields, wordChangeInstruction } from "../
 import type { RemixField } from "../../convex/lib/remixFields";
 import { allowedChangesNote, checkPartChanges, partChangeInstruction } from "../../convex/lib/remixParts";
 import { decodeToRgba, encodePng } from "../../convex/lib/resize";
+import { describePart, proposeParts } from "../../convex/lib/partsReader";
+import type { RemixPart } from "../../convex/lib/remixParts";
 import { readRoles } from "../../convex/lib/roleReader";
 import { spellingMisses, wordsToCheck } from "../../convex/lib/spelling";
 import type { SpellingMiss } from "../../convex/lib/spelling";
 import { readDesignWords } from "../../convex/lib/wordReader";
 import { caseBoard } from "./board";
 import { CASES, keepsParts } from "./cases";
-import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PhotoCase, ReaderCase, SpellingCase, WordsCheck } from "./cases";
+import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PartsCase, PhotoCase, ReaderCase, SpellingCase, WordsCheck } from "./cases";
 import { renderCatalog } from "./catalog";
 import { fixture, fixturePath } from "./fixtures";
 import { checkImage, readWords, throttled, wordsMatch } from "./judge";
@@ -590,6 +592,45 @@ async function runCompare(c: CompareCase, ctx: Context): Promise<CaseResult> {
   };
 }
 
+// The remixable parts reader on a fixture's notes, as production runs it (convex/lib/partsReader.ts):
+// the parts it proposes, or the one part a creator's words describe. Every try must pass every check.
+async function runParts(c: PartsCase, ctx: Context): Promise<CaseResult> {
+  const started = Date.now();
+  const base = { id: c.id, group: c.group, kind: c.kind, status: c.status ?? "supported", title: c.title } as const;
+  const notes = ctx.notes.get(c.fixture);
+  if (!notes) return { ...base, passed: false, checks: [], seconds: 0, costCents: 0, error: "No notes were written." };
+  const trials = ctx.args.trials ?? 2;
+  const tries = await Promise.all(
+    Array.from({ length: trials }, async () => {
+      const read = await throttled(async () =>
+        c.words === undefined ? await proposeParts(notes.notes) : await describePart(notes.notes, c.words, []).then((part) => (part ? [part] : null)),
+      );
+      return read;
+    }),
+  );
+  const answered = tries.filter((parts): parts is Array<RemixPart> => parts !== null);
+  const checks = c.expect.map((e) => {
+    const matched = answered.filter((parts) => {
+      try {
+        return e.test(parts);
+      } catch {
+        return false;
+      }
+    }).length;
+    return { id: e.id, label: e.describe, passed: matched === trials, detail: `${matched}/${trials}` };
+  });
+  const shown = answered.map((parts) => parts.map((p) => `${p.kind} ${p.label}${p.count ? ` (${p.count}${p.max ? `, up to ${p.max}` : ""})` : ""}: ${p.text}`).join("; ") || "none");
+  return {
+    ...base,
+    passed: answered.length === trials && checks.every((check) => check.passed),
+    checks,
+    seconds: (Date.now() - started) / 1000,
+    costCents: 0,
+    note: shown[0],
+    error: answered.length < trials ? "The parts reader didn't answer every try." : undefined,
+  };
+}
+
 // The studio's spelling check on a finished design, as convex/spellingCheck.ts runs it: the words its
 // request asked for, its lettering read back (a failed reading tried once more), and the asked words
 // it drew a letter or two off. Every try (two by default) must flag exactly the case's words.
@@ -731,7 +772,7 @@ async function main() {
   const needNotes = new Set<string>();
   for (const c of cases) {
     if (c.kind === "generate") for (const id of [...(c.images ?? []), ...(c.mixer ?? []).map((m) => m.fixture)]) needNotes.add(id);
-    if (c.kind === "notes") needNotes.add(c.fixture);
+    if (c.kind === "notes" || c.kind === "parts") needNotes.add(c.fixture);
   }
   const notes = new Map<string, Notes>();
   await pool([...needNotes], 6, async (id) => {
@@ -764,7 +805,9 @@ async function main() {
                 ? await runReader(c, ctx)
                 : c.kind === "compare"
                   ? await runCompare(c, ctx)
-                  : await runSpelling(c, ctx);
+                  : c.kind === "parts"
+                    ? await runParts(c, ctx)
+                    : await runSpelling(c, ctx);
       const mark = result.error ? "ERROR" : result.passed ? "PASS" : result.status === "known-limit" ? "LIMIT" : "FAIL";
       const detail = result.error ?? result.checks.filter((k) => !k.passed).map((k) => `${k.id} ${k.detail}`).join("; ");
       console.log(`${mark.padEnd(5)} ${c.id.padEnd(44)} ${detail}`);
