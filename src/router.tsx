@@ -5,7 +5,7 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { ConvexProvider } from "convex/react";
 import { routeTree } from "./routeTree.gen";
 import { ErrorPage, NotFoundPage } from "~/components/app/not-found";
-import { pageHasSession } from "~/lib/sessionMeta";
+import { pageHasSession, resumeWithoutAuthAfter } from "~/lib/sessionMeta";
 
 export function getRouter() {
   const convexUrl = import.meta.env.VITE_CONVEX_URL;
@@ -16,9 +16,11 @@ export function getRouter() {
   // results are anonymous (the viewer reads as signed out), overwrite what the server sent, and
   // the page hydrates as a different page. Better Auth hands the token over as soon as React
   // mounts, and setting it always resumes the paused socket.
+  const waitForAuth = pageHasSession();
   const convexQueryClient = new ConvexQueryClient(convexUrl ?? "", {
-    expectAuth: pageHasSession(),
+    expectAuth: waitForAuth,
   });
+  if (waitForAuth) resumeWithoutAuthAfter(convexQueryClient.convexClient);
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
