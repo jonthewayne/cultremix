@@ -39,6 +39,7 @@ function SettingsPage() {
           {viewer?.creatorNumber ? <Row label="Creator" value={`№ ${viewer.creatorNumber}`} /> : null}
         </dl>
         {viewer?.username && <BioEditor username={viewer.username} />}
+        <SaleEmails />
         {(isOwner || viewer?.canClaimOwner || message) && (
           <section className="mt-12">
             <h2 className="text-2xl font-black tracking-tight">Owner</h2>
@@ -63,6 +64,38 @@ function SettingsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+// Email me when something sells: shown while sale emails are switched on (convex/saleEmails.ts).
+function SaleEmails() {
+  const preference = useQuery(convexQuery(api.saleEmails.preference, {})).data;
+  const setPreference = useMutation(api.saleEmails.setPreference);
+  const [saving, setSaving] = useState(false);
+  if (!preference?.available) return null;
+  const toggle = async () => {
+    setSaving(true);
+    try {
+      await setPreference({ on: !preference.on });
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="mt-12">
+      <h2 className="text-2xl font-black tracking-tight">Emails</h2>
+      <label className="mt-4 flex cursor-pointer items-center gap-3 text-lg">
+        <input
+          type="checkbox"
+          checked={preference.on}
+          disabled={saving}
+          onChange={() => void toggle()}
+          className="size-6 accent-black"
+        />
+        Email me when someone buys a design I share in
+      </label>
+      <p className="mt-2 text-neutral-600">You'll still see it in your notifications either way.</p>
+    </section>
   );
 }
 

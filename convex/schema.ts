@@ -74,6 +74,8 @@ export default defineSchema({
     walletError: v.optional(v.string()),
     // A short public bio for /u/<username>, set in settings (convex/social.ts setBio).
     bio: v.optional(v.string()),
+    // False when the member turned off sale emails in Settings (convex/saleEmails.ts).
+    saleEmails: v.optional(v.boolean()),
   })
     .index("by_authId", ["authId"])
     .index("by_email", ["email"])

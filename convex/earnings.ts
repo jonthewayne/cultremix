@@ -6,6 +6,7 @@ import { ECONOMIC_CONFIG_V1, type EconomicConfig, type RecipientShare } from "./
 import { saleSplits, type LineLedger, type UnitStatus } from "./lib/creatorPool";
 import { crNumber } from "./lib/shopify/productSync";
 import { notifySale } from "./lib/notifications";
+import { scheduleSaleEmail } from "./saleEmails";
 import { getViewerUser } from "./identity";
 
 // Creator earnings (KTD-18). One sale row per (order line, unit, recipient), plus negative
@@ -343,12 +344,20 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
     totals.set(key, total);
   }
   const now = Date.now();
+  // What each recipient gets an email about (real orders, shares they can be paid).
+  const emails = new Map<Id<"users">, Array<{ workId: Id<"works">; cents: number; units: number }>>();
   for (const total of totals.values()) {
     // A kept design sells only to its creator, so they bought it themselves: no "someone bought".
     const work = await ctx.db.get("works", total.workId);
     if (work?.status === "private" && work.creatorId === total.recipientId) continue;
     await notifySale(ctx, { ...total, test: order.simulated, at: now });
+    if (!order.simulated && !total.held) {
+      const list = emails.get(total.recipientId) ?? [];
+      list.push({ workId: total.workId, cents: total.cents, units: total.units });
+      emails.set(total.recipientId, list);
+    }
   }
+  for (const [recipientId, list] of emails) await scheduleSaleEmail(ctx, recipientId, list);
 }
 
 // ---- Crons and hooks ----

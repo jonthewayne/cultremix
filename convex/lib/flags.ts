@@ -46,6 +46,13 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
     defaultOn: false,
   },
   {
+    key: "email.sales",
+    label: "Sale emails",
+    description:
+      "Creators get an email when a design they share in sells (one per order, from the sign-in address), as well as the notification. Test orders never email. Members can turn these off in Settings.",
+    defaultOn: false,
+  },
+  {
     key: "gen.upscale",
     label: "Print-size art",
     description: "Creators can upscale art to print size in the Print Studio (2 credits; the owner is exempt). Off refuses new upscales.",

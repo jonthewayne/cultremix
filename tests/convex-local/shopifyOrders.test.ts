@@ -211,6 +211,47 @@ describe("POST /webhooks/shopify", () => {
     expect(list.page[0].parent).toBeUndefined();
   });
 
+  it("emails each person a real sale pays while sale emails are on, unless they turned them off", async () => {
+    const saleEmailJobs = async (t: T) =>
+      (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((job) => job.name.includes("saleEmails"));
+    // Off by default: notifications only.
+    const off = newTest();
+    vi.stubEnv("DEPLOYMENT_ENV", "prod");
+    await variationOnSale(off);
+    shopify.set(rawOrder({ lines: [line(1)] }));
+    await deliver(off, { topic: "orders/paid", body: { id: ORDER_ID } });
+    expect(await saleEmailJobs(off)).toHaveLength(0);
+
+    // On: one email per person with an address; B turned them off.
+    const t = newTest();
+    const { a, b } = await variationOnSale(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("featureFlags", { key: "email.sales", enabled: true });
+      await ctx.db.patch("users", a, { email: "a@example.com" });
+      await ctx.db.patch("users", b, { email: "b@example.com", saleEmails: false });
+    });
+    shopify.set(rawOrder({ lines: [line(1)] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+    const jobs = await saleEmailJobs(t);
+    expect(jobs.map((job) => (job.args[0] as { to: string }).to)).toEqual(["a@example.com"]);
+    expect((jobs[0].args[0] as { lines: Array<{ cr: string; from?: { cr: string } }> }).lines).toEqual([
+      expect.objectContaining({ cr: "101-002", from: expect.objectContaining({ cr: "101-001" }) }),
+    ]);
+  });
+
+  it("never emails about a test order", async () => {
+    const t = newTest();
+    const { a } = await variationOnSale(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("featureFlags", { key: "email.sales", enabled: true });
+      await ctx.db.patch("users", a, { email: "a@example.com" });
+    });
+    shopify.set(rawOrder({ test: true, lines: [line(1)] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+    const jobs = (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((job) => job.name.includes("saleEmails"));
+    expect(jobs).toHaveLength(0);
+  });
+
   it("never tells a kept design's creator that someone bought it (they did), but tells the original's", async () => {
     const t = newTest();
     const { a, b, work } = await variationOnSale(t);
