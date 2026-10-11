@@ -4,6 +4,7 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { getViewerUser } from "./identity";
 import { ensureUserImage } from "./images";
 import { adminAllows } from "./lib/adminAccess";
+import { checkRateLimit } from "./lib/authRateLimit";
 import { MAX_LABEL_LENGTH, proposeRemixFields } from "./lib/remixFields";
 import type { RemixField } from "./lib/remixFields";
 import { MAX_GROUP, MAX_PART_LABEL, MAX_PART_NOTE, inheritParts, normalizeParts, partSummary } from "./lib/remixParts";
@@ -135,6 +136,20 @@ export const viewerId = internalQuery({
   args: {},
   returns: v.union(v.null(), v.id("users")),
   handler: async (ctx) => (await getViewerUser(ctx))?._id ?? null,
+});
+
+// Lets "Add a part" ask the model: at most 30 an hour per member (lib/authRateLimit.ts).
+export const admitDescribe = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      await checkRateLimit(ctx, "studio:describe_part", args.userId);
+    } catch {
+      throw new ConvexError({ code: "RATE_LIMITED", message: "That's a lot of new parts for one hour. Try again in a little while." });
+    }
+    return null;
+  },
 });
 
 // For remixPartsActions.backfillWorks: published works with notes and no parts yet.

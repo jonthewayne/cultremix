@@ -56,6 +56,12 @@ export const RATE_LIMITS = {
     windowMs: 60 * 60 * 1000,
     blockMs: 60 * 60 * 1000,
   },
+  // "Add a part" (remixPartsActions.describe): each one asks a model to read the description.
+  "studio:describe_part": {
+    maxAttempts: 30,
+    windowMs: 60 * 60 * 1000,
+    blockMs: 60 * 60 * 1000,
+  },
 } as const satisfies Record<
   string,
   { maxAttempts: number; windowMs: number; blockMs: number }

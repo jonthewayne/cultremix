@@ -60,6 +60,7 @@ export const describe = action({
     if (!user) throw new ConvexError({ code: "SIGNED_OUT", message: "Sign in first." });
     const job = await ctx.runQuery(internal.remixParts.describeJob, { target: args.target, userId: user });
     if (!job) throw new ConvexError({ code: "NOT_READY", message: "Still reading the design." });
+    await ctx.runMutation(internal.remixParts.admitDescribe, { userId: user });
     const part = await describePart(job.notes, words, job.parts);
     if (!part) return { added: false };
     const added = await ctx.runMutation(internal.remixParts.addPart, { target: args.target, part });
