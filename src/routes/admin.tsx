@@ -17,7 +17,9 @@ const tabs = [
   { to: "/admin/lineage", label: "Lineage", exact: false },
   { to: "/admin/products", label: "Products", exact: false },
   { to: "/admin/sale", label: "For sale", exact: false },
+  { to: "/admin/orders", label: "Orders", exact: false },
   { to: "/admin/waitlist", label: "Waitlist", exact: false },
+  { to: "/admin/chain", label: "Monad", exact: false },
 ] as const;
 
 function AdminLayout() {

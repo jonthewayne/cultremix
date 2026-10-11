@@ -36,7 +36,7 @@ function EarningsPage() {
       <main className="max-w-4xl px-4 pb-24 md:px-10">
         <h1 className="pt-6 text-[16vw] font-black leading-[0.8] tracking-[-0.06em] md:pt-10 md:text-[8vw]">Earnings</h1>
         <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-          Every time someone buys a tee with your design on it, a share comes to you. It becomes Available 30 days after the tee ships.
+          Every time someone buys something with your design on it, a share comes to you. It can be paid out 30 days after the order ships, once returns have had time to come in.
         </p>
 
         <section className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-3">

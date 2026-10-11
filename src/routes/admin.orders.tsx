@@ -4,13 +4,10 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { CrMark } from "~/components/cr/CrMark";
-import { SiteHeader } from "~/components/cr/SiteHeader";
 import { useCurrentUser } from "~/hooks/use-auth";
 import { formatCents } from "~/lib/money";
-import { requireAuthenticatedRoute } from "~/lib/route-guards";
 
-export const Route = createFileRoute("/admin_/orders")({
-  beforeLoad: requireAuthenticatedRoute,
+export const Route = createFileRoute("/admin/orders")({
   head: () => ({ meta: [{ title: "Orders · CultRemix" }] }),
   component: AdminOrdersPage,
 });
@@ -41,10 +38,7 @@ function AdminOrdersPage() {
   const markDone = useMutation(api.privacy.markDone);
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
-      <SiteHeader />
-      <main className="px-4 pb-24 md:px-10">
-        <h1 className="pt-6 text-[16vw] font-black leading-[0.8] tracking-[-0.06em] md:pt-10 md:text-[8vw]">Orders</h1>
+    <div className="pb-24">
         {!isOwner ? (
           <div className="mt-10">
             <p className="text-lg">Only the owner can see orders.</p>
@@ -55,7 +49,7 @@ function AdminOrdersPage() {
         ) : (
           <>
             {privacy && privacy.length > 0 && (
-              <section className="mt-10">
+              <section className="mt-2">
                 <h2 className="border-t-2 border-foreground pt-4 text-sm font-bold uppercase tracking-wider">Privacy requests</h2>
                 <p className="mt-2 max-w-prose text-sm text-muted-foreground">
                   From Shopify. A data request asks for what CultRemix holds about a customer: send them what's listed here within 30
@@ -239,7 +233,6 @@ function AdminOrdersPage() {
             </section>
           </>
         )}
-      </main>
     </div>
   );
 }

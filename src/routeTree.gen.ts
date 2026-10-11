@@ -27,11 +27,11 @@ import { Route as AdminJudgesRouteImport } from './routes/admin.judges'
 import { Route as AdminLineageRouteImport } from './routes/admin.lineage'
 import { Route as AdminMembersRouteImport } from './routes/admin.members'
 import { Route as AdminMetricsRouteImport } from './routes/admin.metrics'
+import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as AdminProductsRouteImport } from './routes/admin.products'
 import { Route as AdminSaleRouteImport } from './routes/admin.sale'
 import { Route as AdminWaitlistRouteImport } from './routes/admin.waitlist'
 import { Route as AdminChainRouteImport } from './routes/admin_.chain'
-import { Route as AdminOrdersRouteImport } from './routes/admin_.orders'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as EconomicsFileRouteImport } from './routes/economics.$file'
@@ -136,6 +136,11 @@ const AdminMetricsRoute = AdminMetricsRouteImport.update({
   path: '/metrics',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
   id: '/products',
   path: '/products',
@@ -154,11 +159,6 @@ const AdminWaitlistRoute = AdminWaitlistRouteImport.update({
 const AdminChainRoute = AdminChainRouteImport.update({
   id: '/admin_/chain',
   path: '/admin/chain',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminOrdersRoute = AdminOrdersRouteImport.update({
-  id: '/admin_/orders',
-  path: '/admin/orders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCompleteRoute = AuthCompleteRouteImport.update({
@@ -245,11 +245,11 @@ export interface FileRoutesByFullPath {
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/sale': typeof AdminSaleRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin/chain': typeof AdminChainRoute
-  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
@@ -282,11 +282,11 @@ export interface FileRoutesByTo {
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/sale': typeof AdminSaleRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin/chain': typeof AdminChainRoute
-  '/admin/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
@@ -321,11 +321,11 @@ export interface FileRoutesById {
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
   '/admin/metrics': typeof AdminMetricsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/sale': typeof AdminSaleRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin_/chain': typeof AdminChainRoute
-  '/admin_/orders': typeof AdminOrdersRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
@@ -361,11 +361,11 @@ export interface FileRouteTypes {
     | '/admin/lineage'
     | '/admin/members'
     | '/admin/metrics'
+    | '/admin/orders'
     | '/admin/products'
     | '/admin/sale'
     | '/admin/waitlist'
     | '/admin/chain'
-    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
@@ -398,11 +398,11 @@ export interface FileRouteTypes {
     | '/admin/lineage'
     | '/admin/members'
     | '/admin/metrics'
+    | '/admin/orders'
     | '/admin/products'
     | '/admin/sale'
     | '/admin/waitlist'
     | '/admin/chain'
-    | '/admin/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
@@ -436,11 +436,11 @@ export interface FileRouteTypes {
     | '/admin/lineage'
     | '/admin/members'
     | '/admin/metrics'
+    | '/admin/orders'
     | '/admin/products'
     | '/admin/sale'
     | '/admin/waitlist'
     | '/admin_/chain'
-    | '/admin_/orders'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
@@ -472,7 +472,6 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
   AdminChainRoute: typeof AdminChainRoute
-  AdminOrdersRoute: typeof AdminOrdersRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   EconomicsFileRoute: typeof EconomicsFileRoute
@@ -616,6 +615,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMetricsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/orders': {
+      id: '/admin/orders'
+      path: '/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/products': {
       id: '/admin/products'
       path: '/products'
@@ -642,13 +648,6 @@ declare module '@tanstack/react-router' {
       path: '/admin/chain'
       fullPath: '/admin/chain'
       preLoaderRoute: typeof AdminChainRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin_/orders': {
-      id: '/admin_/orders'
-      path: '/admin/orders'
-      fullPath: '/admin/orders'
-      preLoaderRoute: typeof AdminOrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/complete': {
@@ -750,6 +749,7 @@ interface AdminRouteChildren {
   AdminLineageRoute: typeof AdminLineageRoute
   AdminMembersRoute: typeof AdminMembersRoute
   AdminMetricsRoute: typeof AdminMetricsRoute
+  AdminOrdersRoute: typeof AdminOrdersRoute
   AdminProductsRoute: typeof AdminProductsRoute
   AdminSaleRoute: typeof AdminSaleRoute
   AdminWaitlistRoute: typeof AdminWaitlistRoute
@@ -761,6 +761,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminLineageRoute: AdminLineageRoute,
   AdminMembersRoute: AdminMembersRoute,
   AdminMetricsRoute: AdminMetricsRoute,
+  AdminOrdersRoute: AdminOrdersRoute,
   AdminProductsRoute: AdminProductsRoute,
   AdminSaleRoute: AdminSaleRoute,
   AdminWaitlistRoute: AdminWaitlistRoute,
@@ -784,7 +785,6 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
   AdminChainRoute: AdminChainRoute,
-  AdminOrdersRoute: AdminOrdersRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   EconomicsFileRoute: EconomicsFileRoute,
