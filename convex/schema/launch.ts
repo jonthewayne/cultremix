@@ -17,6 +17,14 @@ export const launchTables = {
     note: v.optional(v.string()),
   }).index("by_user_active", ["userId", "active"]),
 
+  // Operational alerts and the level each was last told at (convex/opsAlerts.ts), so a drop is
+  // told once: "gateway-credit" with ok, low, or out.
+  opsAlerts: defineTable({
+    key: v.string(),
+    level: v.string(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   // One row per model photo started for a member (at publish or a reshoot), so the daily
   // limit counts today's through an index (convex/lib/photoShoots.ts).
   photoShootStarts: defineTable({

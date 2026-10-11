@@ -93,7 +93,8 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
   const isSale = item.kind === "sale";
   // Sales, takedowns, and kept designs ready come from CultRemix, not a member: a mark instead of an
   // avatar and name.
-  const fromCultRemix = isSale || item.kind === "takedown" || item.kind === "kept_ready" || item.kind === "order_attention";
+  const fromCultRemix =
+    isSale || item.kind === "takedown" || item.kind === "kept_ready" || item.kind === "order_attention" || item.kind === "ops_alert";
   const body = (
     <>
       {fromCultRemix ? (
@@ -155,6 +156,10 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
         <Link to="/admin/orders" className={cn(rowClass, "hover:bg-neutral-50")}>
           {body}
         </Link>
+      ) : item.kind === "ops_alert" ? (
+        <Link to="/admin" className={cn(rowClass, "hover:bg-neutral-50")}>
+          {body}
+        </Link>
       ) : target ? (
         <Link to="/cr/$cr" params={{ cr: target.cr }} className={cn(rowClass, "hover:bg-neutral-50")}>
           {body}
@@ -200,6 +205,8 @@ function Message({ item }: { item: Notification }) {
       );
     case "sale":
       return <SaleMessage item={item} />;
+    case "ops_alert":
+      return <>{item.alert || "Something needs you in Admin."}</>;
     case "order_attention":
       return item.order ? (
         <>

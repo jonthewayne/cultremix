@@ -107,6 +107,18 @@ export async function notifyOrderAttention(ctx: MutationCtx, args: { recipientId
   return id;
 }
 
+// Tells an admin about something that needs them (convex/opsAlerts.ts).
+export async function notifyOpsAlert(ctx: MutationCtx, args: { recipientId: Id<"users">; message: string }) {
+  const id = await ctx.db.insert("notifications", {
+    recipientId: args.recipientId,
+    kind: "ops_alert",
+    note: args.message.slice(0, 500),
+    createdAt: Date.now(),
+  });
+  await bumpUnread(ctx, args.recipientId);
+  return id;
+}
+
 // How far up a remix's parents to look for the recipient's own design.
 const MAX_LINEAGE_STEPS = 50;
 

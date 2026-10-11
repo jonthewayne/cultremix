@@ -30,6 +30,9 @@ export const notificationKindValidator = v.union(
   v.literal("kept_ready"),
   // For the owner and ops: an order can't go on by itself (convex/orderAlerts.ts); note says why.
   v.literal("order_attention"),
+  // For the owner and ops: something about running CultRemix needs them, such as the image credit
+  // running low (convex/opsAlerts.ts); note says what.
+  v.literal("ops_alert"),
 );
 
 export const socialTables = {

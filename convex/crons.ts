@@ -30,6 +30,9 @@ crons.daily("buyer address sweep", { hourUTC: 9, minuteUTC: 30 }, internal.priva
 // (convex/budget.ts sweep).
 crons.interval("sweep paid calls", { minutes: 10 }, internal.budget.sweep, {});
 
+// The image credit: tell the owner and ops when it runs low (convex/gatewayCredit.ts watch).
+crons.hourly("watch gateway credit", { minuteUTC: 20 }, internal.gatewayCredit.watch, {});
+
 // Trending: days that leave the 7-day window come off works' scores (convex/trending.ts).
 crons.hourly("expire trending attention", { minuteUTC: 3 }, internal.trending.expire, {});
 

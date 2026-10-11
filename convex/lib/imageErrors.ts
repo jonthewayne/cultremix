@@ -12,6 +12,13 @@ export const NO_IMAGE_REPLY = "The image service answered without an image:";
 export const GRID_MERGED = "Grid: two designs ran together.";
 export const GRID_EMPTY = "Grid: this quarter came back empty.";
 
+// The gateway refused the call because the account's credit ran out.
+const OUT_OF_CREDIT = [/credit balance/i, /insufficient (?:funds|credits?|balance)/i, /\b402\b/, /payment required/i];
+
+export function isOutOfCreditError(error: string | undefined) {
+  return Boolean(error) && OUT_OF_CREDIT.some((pattern) => pattern.test(error!));
+}
+
 export function isBlockedError(error: string | undefined) {
   if (!error) return false;
   if (FILTER_PATTERNS.some((pattern) => pattern.test(error))) return true;
@@ -29,5 +36,6 @@ export function publicTileError(error: string | undefined) {
   if (error.startsWith("Image unavailable") || error.startsWith("Image fetch failed")) {
     return "One of the images couldn't be loaded.";
   }
+  if (isOutOfCreditError(error)) return "The studio can't make designs right now. Try again in a little while.";
   return "The image service had a problem.";
 }

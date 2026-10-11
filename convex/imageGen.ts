@@ -8,7 +8,7 @@ import { clearShare, keyOut } from "./lib/chromaKey";
 import { cutGrid } from "./lib/gridCut";
 import type { Rgba } from "./lib/gridCut";
 import { gatewayImage, nanoBananaImage, recraftImage } from "./lib/imageCalls";
-import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY } from "./lib/imageErrors";
+import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY, isOutOfCreditError } from "./lib/imageErrors";
 import { imageTypeOf, mimeOf } from "./lib/mime";
 import {
   DEFAULT_QUALITY,
@@ -514,6 +514,10 @@ export const runBatch = internalAction({
     } catch (error) {
       console.error("runBatch failed", batchId, error);
       const message = readableError(error);
+      // Out of image credit: the owner and ops hear now, not at the next hourly check.
+      if (isOutOfCreditError(error instanceof Error ? error.message : String(error))) {
+        await ctx.scheduler.runAfter(0, internal.gatewayCredit.watch, {});
+      }
       await ctx.runMutation(internal.studio.finishBatch, {
         batchId,
         results: indexes.map((index) => ({ index, error: message })),
