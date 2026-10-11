@@ -881,6 +881,9 @@ function StudioPage() {
                     onToggle={() => setShowDismissed(!showDismissed)}
                   />
                 </div>
+                {batch.tiles.some((t) => t.status === "queued" || t.status === "dispatched") && (
+                  <DesignHint since={batch.createdAt} withImages={batch.images.length > 0 || batch.styles.length > 0} />
+                )}
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
                   {batch.tiles
                     .filter((tile) => showDismissed || !tile.rejected)
@@ -1326,6 +1329,27 @@ function TileCard({
         )
       )}
     </div>
+  );
+}
+
+// Under a batch that's still designing: how long it usually takes, once the wait is long enough to
+// wonder (designs with images take about twice as long as from words alone).
+function DesignHint({ since, withImages }: { since: number; withImages: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = (now - since) / 1000;
+  if (seconds < 15) return null;
+  return (
+    <p className="-mt-1 mb-3 text-sm text-neutral-500">
+      {seconds < 120
+        ? withImages
+          ? "Designs with images usually take about a minute. All four arrive together."
+          : "Usually about 30 seconds. All four arrive together."
+        : "Taking longer than usual. They'll still arrive, and credits come back for any that don't."}
+    </p>
   );
 }
 
