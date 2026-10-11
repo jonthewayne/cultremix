@@ -25,6 +25,7 @@ import type * as earnings from "../earnings.js";
 import type * as email from "../email.js";
 import type * as feed from "../feed.js";
 import type * as fulfillment from "../fulfillment.js";
+import type * as gatewayCredit from "../gatewayCredit.js";
 import type * as http from "../http.js";
 import type * as identity from "../identity.js";
 import type * as imageGen from "../imageGen.js";
@@ -206,6 +207,7 @@ declare const fullApi: ApiFromModules<{
   email: typeof email;
   feed: typeof feed;
   fulfillment: typeof fulfillment;
+  gatewayCredit: typeof gatewayCredit;
   http: typeof http;
   identity: typeof identity;
   imageGen: typeof imageGen;

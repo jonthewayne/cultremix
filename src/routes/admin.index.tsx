@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { AdminSection, Toggle, adminButton, adminInput, adminQuietButton } from "~/components/admin/AdminSection";
 import { BudgetCard } from "~/components/admin/BudgetCard";
+import { GatewayCredit } from "~/components/admin/GatewayCredit";
 import { errorMessage } from "~/lib/imagePrep";
 
 export const Route = createFileRoute("/admin/")({
@@ -16,6 +17,7 @@ function AdminOverview() {
   return (
     <div className="space-y-6">
       <BudgetCard />
+      <GatewayCredit />
       <FlagsSection flags={overview.flags} canManage={overview.canManage} />
       <SettingsSection settings={overview.settings} canManage={overview.canManage} />
       <TakenDownSection />

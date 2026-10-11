@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
-import { creditBalance, getAppSettings } from "./identity";
+import { internalQuery, mutation, query } from "./_generated/server";
+import { creditBalance, getAppSettings, getViewerUser } from "./identity";
 import { adminAllows, requireAdmin } from "./lib/adminAccess";
 import { memberSpendToday } from "./lib/budget";
 import { isCreator, setCreatorAccess } from "./lib/creators";
@@ -100,6 +100,16 @@ export const overview = query({
         updatedAt: settings.updatedAt,
       },
     };
+  },
+});
+
+// For admin actions: whether the signed-in member is an admin (support, ops, or owner).
+export const viewerIsAdmin = internalQuery({
+  args: {},
+  returns: v.boolean(),
+  handler: async (ctx) => {
+    const user = await getViewerUser(ctx);
+    return Boolean(user && adminAllows(user.platformRole, "view"));
   },
 });
 
