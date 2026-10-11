@@ -6,7 +6,8 @@ import { createMiddleware, createStart } from "@tanstack/react-start";
 // ask for the camera, microphone, or location. The Content-Security-Policy sets only framing, the
 // base URL, and plugins: limiting scripts, styles, images, and connections would need every
 // Convex, R2, and Shopify origin listed and tested first. HSTS goes out only on cultremix.com, so
-// a dev host on the tailnet isn't pinned to HTTPS.
+// a dev host on the tailnet isn't pinned to HTTPS, and leaves subdomains out: a year is hard to take
+// back, and a subdomain pointed at another service later shouldn't inherit it.
 export const SECURITY_HEADERS: Record<string, string> = {
   "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
   "X-Frame-Options": "DENY",
@@ -14,7 +15,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
 };
-const HSTS = "max-age=31536000; includeSubDomains";
+const HSTS = "max-age=31536000";
 
 export function securityHeadersFor(url: string): Record<string, string> {
   const host = new URL(url).hostname;

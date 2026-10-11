@@ -7,7 +7,7 @@ describe("security headers", () => {
     expect(prod["X-Frame-Options"]).toBe("DENY");
     expect(prod["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
     expect(prod["X-Content-Type-Options"]).toBe("nosniff");
-    expect(prod["Strict-Transport-Security"]).toContain("max-age=31536000");
+    expect(prod["Strict-Transport-Security"]).toBe("max-age=31536000");
     expect(securityHeadersFor("https://www.cultremix.com/")["Strict-Transport-Security"]).toBeDefined();
     // A dev host keeps plain HTTP possible.
     expect(securityHeadersFor("https://mighteous.tailb6e2ea.ts.net:3000/")).toEqual(SECURITY_HEADERS);
