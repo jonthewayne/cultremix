@@ -502,9 +502,10 @@ export const keptOffer = query({
 });
 
 // Whether a published work has a live product to sell, whatever the Checkout switch says (the
-// early-access email counts who will hear before checkout opens, and writes only once it has).
+// early-access email counts who will hear before checkout opens, and writes only once it has). A
+// live listing always has its variants (saveSynced writes them first), so its listings are enough.
 export async function onSaleNow(ctx: QueryCtx, work: Doc<"works">) {
-  return work.status === "published" && (await offerOf(ctx, work)) !== null;
+  return work.status === "published" && (await listingsOf(ctx, work._id)).some((row) => row.status === "live" && row.listing);
 }
 
 // What a work sells now: each live product with its colors, sizes, prices, and side.

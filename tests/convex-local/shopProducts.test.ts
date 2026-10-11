@@ -388,6 +388,14 @@ describe("selling it", () => {
     expect(mapped.every((row) => row.listingId && row.productKey)).toBe(true);
   });
 
+  it("drafts a paused product in Shopify, so an old cart can't buy it", async () => {
+    const { t, admin, workId } = await shop();
+    await live(t, admin, workId);
+    const [row] = await rows(t, workId);
+    await admin.mutation(api.sales.pause, { workId, productKey: row.productKey });
+    expect((await jobs(t, "draftProducts")).map((job) => job.args[0])).toEqual([{ productIds: [row.shopifyProductId] }]);
+  });
+
   it("takes one product off sale and puts it back", async () => {
     const { t, admin, workId } = await shop();
     await live(t, admin, workId);

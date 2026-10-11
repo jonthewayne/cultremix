@@ -376,11 +376,14 @@ export const approve = mutation({
       if (status === "preparing") prepare = true;
       else await ctx.scheduler.runAfter(0, internal.shopify.syncListing, { listingId: id });
     }
-    // Products no longer picked or offered come off sale.
+    // Products no longer picked or offered come off sale, in Shopify too.
+    const dropped = [];
     for (const row of rows) {
       if (row.productKey && kept.has(row.productKey)) continue;
       if (row.status !== "paused") await ctx.db.patch("shopProducts", row._id, { status: "paused", nextAttemptAt: undefined, updatedAt: now });
+      dropped.push(row);
     }
+    await draftInShopify(ctx, dropped);
     if (products.length === 0) {
       throw new ConvexError({ code: "NO_COLORS", message: "None of this design's colors come in the products it was picked for." });
     }
@@ -401,9 +404,17 @@ export const pause = mutation({
     for (const row of rows) {
       await ctx.db.patch("shopProducts", row._id, { status: "paused", nextAttemptAt: undefined, renderStartedAt: undefined, updatedAt: now });
     }
+    // Shopify drafts them too, so even a cart made before the pause can't check out; resuming syncs
+    // them again, which makes them sellable.
+    await draftInShopify(ctx, rows);
     return null;
   },
 });
+
+async function draftInShopify(ctx: MutationCtx, rows: Array<Doc<"shopProducts">>) {
+  const productIds = rows.flatMap((row) => (row.shopifyProductId ? [row.shopifyProductId] : []));
+  if (productIds.length > 0) await ctx.scheduler.runAfter(0, internal.shopify.draftProducts, { productIds });
+}
 
 export const resume = mutation({
   args: { workId: v.id("works"), productKey: v.optional(v.string()) },
