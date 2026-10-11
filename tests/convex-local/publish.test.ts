@@ -156,7 +156,12 @@ describe("the publish preview", () => {
     expect(before?.remix).toBeUndefined();
     expect(before?.defaultColors).toHaveLength(4);
 
-    const root = await alice.as.mutation(api.publish.quick, { requestId: requestId(), generationId, title: "Tide" });
+    const root = await alice.as.mutation(api.publish.quick, {
+      requestId: requestId(),
+      generationId,
+      title: "Tide",
+      printPlacement: { side: "back", size: 0.65, drop: 0.2 },
+    });
     await t.run((ctx) => ctx.db.patch("works", root.workId, { status: "published", publishedAt: Date.now() }));
 
     const remix = await tile(t, bob.userId, "#ffffff", root.workId);
@@ -165,6 +170,9 @@ describe("the publish preview", () => {
       newFamilyCr: "102-001",
       remix: { parentCr: "101-001", variationCr: "101-002", summary: "A remix of CR 101-001 “Tide” by @alice." },
     });
+    // The remix starts where its parent sits, on what it comes on.
+    expect(preview?.remix?.setup.printPlacement).toEqual({ side: "back", size: 0.65, drop: 0.2 });
+    expect(preview?.remix?.setup.printProducts.length).toBeGreaterThan(0);
     // Only the tile's owner sees it.
     expect(await alice.as.query(api.publish.preview, { generationId: remix })).toBeNull();
     expect(await t.query(api.publish.preview, { generationId: remix })).toBeNull();

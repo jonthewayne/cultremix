@@ -128,6 +128,21 @@ export function PublishDialog({
     setOwn(next);
   };
   const previewPlacement = focusedProduct ? placementOn(focusedProduct, shared, own) : shared;
+  // A remix starts from what its parent comes on and where it sits (once, before the member picks).
+  const parentSetup = preview?.remix?.setup;
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!parentSetup || seeded.current) return;
+    seeded.current = true;
+    if (pickedProducts !== null || Object.keys(own).length > 0 || parentSetup.printProducts.length === 0) return;
+    setShared(parentSetup.printPlacement);
+    setOwn(
+      Object.fromEntries(
+        parentSetup.printProducts.flatMap((pick) => (pick.placement ? [[pick.productId, pick.placement] as const] : [])),
+      ),
+    );
+    setPickedProducts(parentSetup.printProducts.map((pick) => pick.productId));
+  }, [parentSetup, pickedProducts, own]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

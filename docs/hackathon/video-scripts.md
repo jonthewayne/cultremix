@@ -7,23 +7,25 @@ Two videos for the submission: a demo of 3 minutes or less, and a pitch of 2 min
 | Time | On screen | Say |
 | --- | --- | --- |
 | 0:00–0:10 | The home feed on a phone, scrolling past a family of remixes with their CR numbers | "Every great shirt is a remix. CultRemix makes the remix the product, and pays the people it came from." |
-| 0:10–0:28 | Studio: add a portrait as image 1 and a 70s concert poster as image 2; open the Style mixer and set the poster to 70; type "Draw image 1 as a concert poster that says FAR OUT" | "Add a few images, mix their styles, and say what you want. Here: my photo, drawn like this poster, with the words FAR OUT." |
+| 0:10–0:28 | Studio: add a portrait as image 1; open the Style mixer and upload a 70s concert poster as its style ("Style captured"); type "Draw image 1 as a concert poster that says FAR OUT" | "Add your images, give it a style, and say what you want. Here: my photo, drawn like this poster, with the words FAR OUT." |
 | 0:28–0:40 | Press Generate; cut to the four designs filling in together; heart two; open one full screen and swipe | "One press, four print-ready designs, with transparent backgrounds, ready for a shirt." |
-| 0:40–1:05 | Publish: pick shirt colors; under Comes on, the tee and the hoodie are ticked; on the drawn tee, tap Medium, then nudge Height; open the hoodie and tap Back | "Publishing is where it becomes a product. Pick the colors, pick what it comes on, and place it once. Medium on the chest fits the tee, and the same choice fits the hoodie. Here I put it big on the back instead." |
-| 1:05–1:20 | The full-screen CR number reveal; the work page as the model photo arrives | "It gets a permanent number, CR 107-001, and a photo of someone wearing it." |
-| 1:20–1:45 | Signed in as a second member: **Remix this**; the design's words appear as boxes; change FAR OUT to STAY WEIRD; Generate; publish one; the next number, CR 107-002 | "Anyone can remix it. Its words are boxes: change them and keep the art. The remix joins the family as the next number, so every shirt carries its lineage." |
+| 0:40–1:05 | Publish: pick shirt colors; under Comes on, the tee and the hoodie are ticked; on the drawn tee, tap Medium, then nudge Height; tap the hoodie's card, tick "Place it separately on the hoodie", then tap Back and Large | "Publishing is where it becomes a product. Pick the colors, pick what it comes on, and place it once. Medium on the chest fits the tee, and the same choice fits the hoodie. Here I put it big on the back instead." |
+| 1:05–1:20 | The full-screen CR number reveal; the work page as the model photo arrives | "It gets a permanent CR number, and a photo of someone wearing it." |
+| 1:20–1:45 | Signed in as a second member: **Remix this**; the design's words appear as boxes; change FAR OUT to STAY WEIRD; Generate; publish one as the family's next number (it ends in -002) | "Anyone can remix it. Its words are boxes: change them and keep the art. The remix joins the family as the next number, so every shirt carries its lineage." |
 | 1:45–2:05 | The remix's page: Lineage, the family tree, then the Economics panel and its rules file | "Every sale sets aside 15% for the people behind the design: the remixer and the original's creator. The rules are a public file anyone can check." |
 | 2:05–2:25 | The work's record on monadscan.com, its fingerprint matching the work page; then /onchain | "And each design's fingerprint and family tree are recorded on Monad, so anyone can see where a design came from, and prove it." |
 | 2:25–2:40 | The buy box: Style (tee or hoodie), color, size, Add to cart; Shopify checkout opens | "When it's for sale, buyers pick the style, color, and size. Each shirt is printed to order, with the design exactly where its creator put it." |
-| 2:40–2:50 | The creator's profile with both works | "Remix culture, get paid. This is CultRemix." |
+| 2:40–2:50 | The original creator's notifications: "Someone bought … a remix of your … You earn $2.70." (or, before a real order, their profile with both works) | "When the remix sells, the original's creator gets paid too. Remix culture, get paid. This is CultRemix." |
 
 Recording notes:
 
-- Generate takes 20 to 40 seconds. Record the press, then cut to the finished designs.
+- Generate takes about 30 seconds from words alone and about a minute with images (in the October 11 rehearsal: 60 seconds for the portrait and poster, 85 for the remix). Record the press, then cut to the finished designs.
+- A lone style in the mixer always sets the whole look, so its slider stays at 100%. Sliders matter once a second style is added.
 - A design's remixable words appear a few seconds after it's published. Wait for them before recording the remix.
 - Use images you have the rights to: a portrait and a poster with strong, simple shapes.
 - The Monad record needs the mainnet registry and the **Monad records** switch on. If it isn't ready, show the fingerprint and the rules file's hash instead, and say "These go on Monad."
 - The buy box needs Checkout on and the design approved in Admin, For sale. If checkout isn't open yet, show the drawn shirts from Publish and say "Buying opens soon."
+- The closing notification needs a real order of the remix. Every person who shares in a sale gets one ("Someone bought CR …. You earn $2.70."), so buy the remix once and record the original creator's bell. Rehearse it on dev with **Simulate a sale** in Admin, For sale; dev marks those Test.
 
 ## Pitch (about 1:45)
 

@@ -433,6 +433,9 @@ export const availability = query({
   handler: async (ctx) => ({ publishing: await isFlagOn(ctx, "publishing") }),
 });
 
+// The products a work comes on, each with its own placement when it has one.
+const printProductsValidator = v.array(v.object({ productId: v.number(), placement: v.optional(relativePlacementValidator) }));
+
 // What the publish dialog shows before confirming: the CR number the design would get (a new
 // family, or the parent family's next number for a variation), a one-line lineage summary for a
 // remix, and the colors it starts with. Numbers are a preview; publishing allocates them.
@@ -451,6 +454,8 @@ export const preview = query({
           // How it relates (remixRelation): the dialog offers a fork for "fork" (suggested) and
           // "failed" (the remixer chooses); otherwise it's a variation.
           relation: v.object({ status: relationStatus, reason: v.optional(v.string()) }),
+          // What the parent comes on and where it sits, still on offer: where the remix starts.
+          setup: v.object({ printPlacement: relativePlacementValidator, printProducts: printProductsValidator }),
         }),
       ),
       defaultColors: v.array(v.string()),
@@ -481,6 +486,7 @@ export const preview = query({
         variationCr: formatCr(parent.crFamily, family ? family.nextExpression : parent.crExpression + 1),
         summary: `A remix of CR ${parentCr}${name}${by}.`,
         relation: remixRelation(generation, batch, parent),
+        setup: workSetup(parent, await offeredShopProducts(ctx)),
       };
     }
     return {
@@ -511,7 +517,17 @@ function pickPrintProducts(
   return out;
 }
 
-const printProductsValidator = v.array(v.object({ productId: v.number(), placement: v.optional(relativePlacementValidator) }));
+// Where a work sits (its shared placement) and the products on offer it comes on, each with its own
+// placement only when that differs.
+function workSetup(work: Doc<"works">, offered: ReadonlyArray<ShopProduct>) {
+  const shared = clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT);
+  return {
+    printPlacement: shared,
+    printProducts: chosenProducts(work, offered).map(({ product, placement }) =>
+      sameRelative(placement, shared) ? { productId: product.printfulProductId } : { productId: product.printfulProductId, placement },
+    ),
+  };
+}
 
 // Where a work sits and what it comes on, for its creator (and the owner) to change after
 // publishing. Null for anyone else. onSale: it has listings, so a change reaches the shop when an
@@ -527,17 +543,12 @@ export const printSetup = query({
     const work = await ctx.db.get("works", args.workId);
     if (!user || !work || (work.creatorId !== user._id && !isOwner(user))) return null;
     if (work.status !== "published" && work.status !== "private") return null;
-    const offered = await offeredShopProducts(ctx);
-    const shared = clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT);
     const listings = await ctx.db
       .query("shopProducts")
       .withIndex("by_work", (q) => q.eq("workId", work._id))
       .take(20);
     return {
-      printPlacement: shared,
-      printProducts: chosenProducts(work, offered).map(({ product, placement }) =>
-        sameRelative(placement, shared) ? { productId: product.printfulProductId } : { productId: product.printfulProductId, placement },
-      ),
+      ...workSetup(work, await offeredShopProducts(ctx)),
       onSale: listings.some((row) => row.listing !== undefined),
     };
   },
