@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 11, 2026, 5:20 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
+As of October 11, 2026, 8:45 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -58,7 +58,7 @@ As of October 11, 2026, 5:20 a.m. Pacific. The Monad submission is due **Tuesday
 14. ~~The launch checklist.~~ Rewritten October 10 for dev and production ([launch-checklist.md](../launch-checklist.md)).
 15. ~~The submission package.~~ Done October 10: logo PNGs (`cultremix-logo.png`, `cultremix-logo-wide.png`), README, submission, and judges docs, and the demo and pitch scripts.
 
-**If time allows:** ~~a list of kept designs~~ and ~~signed-in end-to-end tests~~ are done (October 10). October 11 added a demo rehearsal with its fixes, clean hydration on signed-in pages, an accessibility check (`bun run test:a11y`), loading skeletons, a fingerprint check on /onchain, and faster pages (Lighthouse mobile home 60 to 92). The production build was also run in the Workers runtime: it needs production's Convex deployed first, which the Ops message now says. Since then: **Try again** on a batch whose designs all failed (a filter block), Admin in the site's own header and light page with its tabs kept on the Monad tab, an Admin link in the account menu, and the last 40 px tap targets from the QA report.
+**If time allows:** ~~a list of kept designs~~ and ~~signed-in end-to-end tests~~ are done (October 10). October 11 added a demo rehearsal with its fixes, clean hydration on signed-in pages, an accessibility check (`bun run test:a11y`), loading skeletons, a fingerprint check on /onchain, and faster pages (Lighthouse mobile home 60 to 92). The production build was also run in the Workers runtime: it needs production's Convex deployed first, which the Ops message now says. Since then: **Try again** on a batch whose designs all failed (a filter block), Admin in the site's own header and light page with its tabs kept on the Monad tab, an Admin link in the account menu, and the last 40 px tap targets from the QA report. Kept designs stay private past checkout: their Shopify products are unlisted under unguessable handles, sharing one archives them, and a kept design's sale never names it to the original's creator ("Someone bought a private remix of your …"). The signed-in pages passed an accessibility check, now part of the signed-in e2e, after two fixes. And Printful only gets the approved print file (the plan's INV-10): each file is checked against its fingerprint just before an order is made, and a changed one is made again before the order goes.
 
 **The V1 plan, checked October 11.** Its requirements (R1–R44) against the build: everything is built except the per-member ChatGPT connection (R30–R32), which the September 29 sprint plan deferred and no later plan picked up, so every design is made through the CultRemix Gateway. R44's "staging link on testnet" became production on mainnet with the October 7 decision; dev stays the testnet rehearsal.
 
