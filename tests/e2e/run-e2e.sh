@@ -113,9 +113,13 @@ if [[ -n "${fingerprint:-}" ]]; then
     if agent-browser eval "(() => { const el = document.querySelector('input[placeholder^=\"SHA-256\"]'); return Boolean(el) && Object.keys(el).some((key) => key.startsWith('__reactProps')); })()" | grep -q true; then break; fi
     sleep 0.5
   done
-  agent-browser find placeholder "SHA-256, 64 characters" fill "$fingerprint" >/dev/null
   matched=""
-  for _ in $(seq 1 40); do
+  for attempt in $(seq 1 60); do
+    # A late render can clear the box (once, right after a production build): fill it again
+    # whenever it doesn't hold the fingerprint.
+    if (( attempt % 6 == 1 )) && ! agent-browser eval "document.querySelector('input[placeholder^=\"SHA-256\"]')?.value === '$fingerprint'" | grep -q true; then
+      agent-browser find placeholder "SHA-256, 64 characters" fill "$fingerprint" >/dev/null
+    fi
     if agent-browser eval "document.body.innerText.includes('It matches CR $cr')" | grep -q true; then matched=yes; break; fi
     sleep 0.5
   done
