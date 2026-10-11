@@ -27,6 +27,8 @@ function dateText(ms: number) {
 
 function EarningsPage() {
   const result = useQuery(convexQuery(api.earnings.mine, {}));
+  // Money sent to you for Available earnings (convex/payouts.ts).
+  const payouts = useQuery(convexQuery(api.payouts.mine, {})).data ?? [];
   const data = result.data;
   const hasTest = data ? Object.values(data.testTotals).some((cents) => cents !== 0) : false;
 
@@ -50,6 +52,23 @@ function EarningsPage() {
             <span className="font-bold text-foreground">Test</span> orders add {formatCents(data.testTotals.pendingCents + data.testTotals.availableCents)} here
             for practice. They never pay out.
           </p>
+        )}
+
+        {payouts.length > 0 && (
+          <section className="mt-14">
+            <h2 className="border-t-2 border-foreground pt-4 text-sm font-bold uppercase tracking-wider">Payouts</h2>
+            <ul className="mt-2 divide-y-2 divide-border">
+              {payouts.map((payout) => (
+                <li key={payout.paidAt} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-4">
+                  <span className="font-mono text-lg font-bold tabular-nums">{formatCents(payout.amountCents)}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {payout.method === "usdc" ? "USDC on Monad" : payout.method === "bank" ? "Bank transfer" : "Paid"} · {dateText(payout.paidAt)}
+                  </span>
+                  <span className="w-full break-all font-mono text-xs text-muted-foreground">{payout.reference}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <section className="mt-14">

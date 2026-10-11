@@ -131,6 +131,7 @@ import type * as metrics from "../metrics.js";
 import type * as notifications from "../notifications.js";
 import type * as orders from "../orders.js";
 import type * as organizations from "../organizations.js";
+import type * as payouts from "../payouts.js";
 import type * as phoneVerification from "../phoneVerification.js";
 import type * as photos from "../photos.js";
 import type * as print from "../print.js";
@@ -300,6 +301,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   orders: typeof orders;
   organizations: typeof organizations;
+  payouts: typeof payouts;
   phoneVerification: typeof phoneVerification;
   photos: typeof photos;
   print: typeof print;

@@ -274,6 +274,22 @@ export const shopTables = {
     .index("by_fulfillmentState_updated", ["fulfillmentState", "updatedAt"])
     .index("by_redactRequested", ["redactRequestedAt"]),
 
+  // Money sent to a creator for their Available earnings (convex/payouts.ts): the owner sends it
+  // (USDC on Monad, a bank transfer, or another way), then records it here with its reference, and
+  // the earnings it covered become Paid.
+  payouts: defineTable({
+    recipientId: v.id("users"),
+    amountCents: v.number(),
+    rows: v.number(),
+    method: v.union(v.literal("usdc"), v.literal("bank"), v.literal("other")),
+    // A transaction hash, transfer id, or note.
+    reference: v.string(),
+    paidBy: v.id("users"),
+    paidAt: v.number(),
+  })
+    .index("by_recipient_paidAt", ["recipientId", "paidAt"])
+    .index("by_paidAt", ["paidAt"]),
+
   // What the last "Connect Printful" or "Connect Shopify" in Admin found (convex/integrations.ts),
   // and Printful's webhook signing key from its webhook setup. Internal only: no public function
   // returns webhookSecret. PRINTFUL_WEBHOOK_SECRET in the env, when set, wins over it.
@@ -388,6 +404,8 @@ export const shopTables = {
     holdReason: v.optional(v.union(v.literal("refund"), v.literal("not_creator"))),
     simulated: v.boolean(),
     maturesAt: v.optional(v.number()),
+    // The payout that paid it (convex/payouts.ts), once paid.
+    payoutId: v.optional(v.id("payouts")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
