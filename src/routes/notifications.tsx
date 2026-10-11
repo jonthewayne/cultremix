@@ -61,7 +61,7 @@ function NotificationsPage() {
             <p className="text-xl font-semibold text-neutral-500">Nothing yet.</p>
             <p className="mt-2 text-neutral-600">
               When someone follows you, hearts, remixes, or Backs your work, or buys a design you share in,
-              you’ll hear about it here.
+              you’ll hear about it here, and when a design you kept is ready to print.
             </p>
           </div>
         ) : (
@@ -91,8 +91,9 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
   // (or a work since withdrawn).
   const target = item.work;
   const isSale = item.kind === "sale";
-  // Sales and takedowns come from CultRemix, not a member: a mark instead of an avatar and name.
-  const fromCultRemix = isSale || item.kind === "takedown";
+  // Sales, takedowns, and kept designs ready come from CultRemix, not a member: a mark instead of an
+  // avatar and name.
+  const fromCultRemix = isSale || item.kind === "takedown" || item.kind === "kept_ready";
   const body = (
     <>
       {fromCultRemix ? (
@@ -100,7 +101,7 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
           aria-hidden
           className="inline-flex size-11 shrink-0 items-center justify-center rounded-[22%] bg-black text-2xl font-black text-white md:size-12"
         >
-          {isSale ? "$" : "!"}
+          {isSale ? "$" : item.kind === "kept_ready" ? "✓" : "!"}
         </span>
       ) : (
         <Avatar username={name ?? "?"} image={item.actor.image} className="size-11 md:size-12" />
@@ -127,11 +128,15 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
           {now !== null && ago(item.createdAt, now)}
         </span>
       </span>
-      {target && (
+      {target ? (
         <span className="size-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100 md:size-14">
           <Art url={target.thumbUrl} alt={target.title ?? `CR ${target.cr}`} className="h-full w-full object-cover" />
         </span>
-      )}
+      ) : item.kept ? (
+        <span className="size-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100 md:size-14">
+          <Art url={item.kept.thumbUrl} alt={item.kept.title ?? "Your kept design"} className="h-full w-full object-cover" />
+        </span>
+      ) : null}
     </>
   );
   const rowClass = "flex items-center gap-3 py-4 md:gap-4";
@@ -140,6 +145,10 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
     <li>
       {isSale ? (
         <Link to="/me/earnings" className={cn(rowClass, "hover:bg-neutral-50")}>
+          {body}
+        </Link>
+      ) : item.kept ? (
+        <Link to="/keep/$workId" params={{ workId: item.kept.workId }} className={cn(rowClass, "hover:bg-neutral-50")}>
           {body}
         </Link>
       ) : target ? (
@@ -187,6 +196,14 @@ function Message({ item }: { item: Notification }) {
       );
     case "sale":
       return <SaleMessage item={item} />;
+    case "kept_ready":
+      return item.kept ? (
+        <>
+          Your design <span className="font-black">{item.kept.title ?? "kept just for you"}</span> is ready to print, just for you.
+        </>
+      ) : (
+        <>A design you kept is ready to print.</>
+      );
     case "takedown":
       return item.takedown ? (
         <>

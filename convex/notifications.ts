@@ -28,6 +28,8 @@ const notificationItem = v.object({
   privateRemix: v.optional(v.boolean()),
   // For a takedown: your design that came down, and why.
   takedown: v.optional(v.object({ cr: v.string(), title: v.optional(v.string()), reason: v.string() })),
+  // For kept_ready: your kept design, by its private page (it has no public number).
+  kept: v.optional(v.object({ workId: v.id("works"), title: v.optional(v.string()), thumbUrl: v.optional(v.string()) })),
 });
 
 // The bell: how many are unread, and when the viewer last opened the list. Signed out, nothing.
@@ -81,6 +83,10 @@ export const list = query({
           ...(row.kind === "sale" && work?.status === "private" ? { privateRemix: true } : {}),
           ...(row.kind === "takedown" && work
             ? { takedown: { cr: formatCr(work.crFamily, work.crExpression), title: work.title, reason: row.note ?? "" } }
+            : {}),
+          // Only its own creator gets this, and only while it's still kept.
+          ...(row.kind === "kept_ready" && work?.status === "private" && work.creatorId === viewer._id
+            ? { kept: { workId: work._id, title: work.title, thumbUrl: (await urls(work.artKey)).thumbUrl } }
             : {}),
         };
       }),

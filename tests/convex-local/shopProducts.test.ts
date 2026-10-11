@@ -528,6 +528,12 @@ describe("a kept design, printed for its creator alone", () => {
     }
     expect((await creator.query(api.keeps.get, { workId }))?.ordering).toBe("ready");
     expect(await creator.query(api.shopify.keptOffer, { workId })).toBeNull();
+    // Its creator hears once that it's ready, with a link to its private page, however many
+    // products came back.
+    const bell = await creator.query(api.notifications.list, { paginationOpts: { numItems: 10, cursor: null } });
+    expect(bell.page.filter((item) => item.kind === "kept_ready")).toMatchObject([{ kept: { workId, title: "Grow Slow" } }]);
+    expect(bell.page.find((item) => item.kind === "kept_ready")?.work).toBeUndefined();
+    expect(await t.withIdentity(SOMEONE).query(api.notifications.list, { paginationOpts: { numItems: 10, cursor: null } })).toMatchObject({ page: [] });
 
     await setFlag(t, "commerce.checkout", true);
     const offer = await creator.query(api.shopify.keptOffer, { workId });

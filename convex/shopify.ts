@@ -8,6 +8,7 @@ import { createShopifyAdmin, shopifyAdminConfigFromEnv, type FetchLike } from ".
 import { archiveProduct, crNumber, setProductStatus, syncProduct, variantSku, type ProductStatus } from "./lib/shopify/productSync";
 import { commerceOpen } from "./lib/shopFlags";
 import { listingsOf } from "./lib/shopProduct";
+import { notifyKeptReady } from "./lib/notifications";
 import { publicUrl } from "./lib/r2";
 import { PRINT_SIZES } from "../shared/config/print-products";
 import { garmentKindValidator, printAreaValidator, printSideValidator, relativePlacementValidator } from "./schema/merch";
@@ -193,6 +194,10 @@ export const saveSynced = internalMutation({
       syncedAt: now,
       updatedAt: now,
     });
+    // A kept design's first product: its creator asked to have it printed, and it's ready for them.
+    if (work?.status === "private" && status === "live") {
+      await notifyKeptReady(ctx, { recipientId: work.creatorId, workId: work._id });
+    }
     // Taken down while it synced (convex/moderation.ts): Shopify made this product active after the
     // takedown drafted the others (a first sync had no product to draft yet), so it's drafted too.
     if (withdrawn) {

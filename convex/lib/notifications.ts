@@ -74,6 +74,26 @@ export async function notifyTakedown(
   return id;
 }
 
+// Tells a creator that the kept design they asked to have printed is ready: its first product came
+// back from Shopify (convex/shopify.ts saveSynced). Once per design.
+export async function notifyKeptReady(ctx: MutationCtx, args: { recipientId: Id<"users">; workId: Id<"works"> }) {
+  const sent = await ctx.db
+    .query("notifications")
+    .withIndex("by_repeat", (q) =>
+      q.eq("recipientId", args.recipientId).eq("actorId", undefined).eq("kind", "kept_ready").eq("workId", args.workId),
+    )
+    .first();
+  if (sent) return null;
+  const id = await ctx.db.insert("notifications", {
+    recipientId: args.recipientId,
+    kind: "kept_ready",
+    workId: args.workId,
+    createdAt: Date.now(),
+  });
+  await bumpUnread(ctx, args.recipientId);
+  return id;
+}
+
 // How far up a remix's parents to look for the recipient's own design.
 const MAX_LINEAGE_STEPS = 50;
 

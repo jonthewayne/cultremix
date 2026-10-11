@@ -26,6 +26,8 @@ export const notificationKindValidator = v.union(
   v.literal("sale"),
   // Your design was taken down (convex/moderation.ts); note says why.
   v.literal("takedown"),
+  // Your kept design is ready to print and order, for you alone (convex/shopify.ts saveSynced).
+  v.literal("kept_ready"),
 );
 
 export const socialTables = {
