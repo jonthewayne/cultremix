@@ -81,7 +81,7 @@ work_path=$(agent-browser eval "document.querySelector('main a[href^=\"/cr/\"]')
 if [[ -n "$work_path" ]]; then
   go "$BASE_URL$work_path"
   wait_text "Remix this"
-  agent-browser eval "if (!document.querySelector('[aria-label=\"Heart this design\"], [aria-label=\"Remove heart\"]')) throw new Error('No heart button'); true" >/dev/null
+  agent-browser eval "if (!document.querySelector('[aria-label^=\"Heart this design\"], [aria-label^=\"Remove heart\"]')) throw new Error('No heart button'); true" >/dev/null
   agent-browser find role link click --name "Remix this" >/dev/null
   started=""
   for _ in $(seq 1 60); do

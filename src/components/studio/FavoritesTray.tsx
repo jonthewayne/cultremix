@@ -59,9 +59,13 @@ export function FavoritesTray({
           type="button"
           onClick={() => favorites[0] && onOpen(favorites[0])}
           className="flex shrink-0 flex-col items-start leading-none"
-          aria-label="View favorites"
+          // Includes the count shown, so the name matches what's on the button.
+          aria-label={`View favorites, ${favorites.length}${more ? "+" : ""}`}
         >
-          <span className="text-2xl font-black">♥ {favorites.length}{more ? "+" : ""}</span>
+          <span aria-hidden className="text-2xl font-black">
+            ♥ {favorites.length}
+            {more ? "+" : ""}
+          </span>
           <span className="mt-1 hidden text-xs font-bold uppercase tracking-wider text-muted-foreground sm:block">
             {picking ? "Pick 2–4" : "Favorites"}
           </span>

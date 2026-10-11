@@ -135,7 +135,7 @@ function CreatorRow({ creator, minimumCents }: { creator: Creator; minimumCents:
     >
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <span>
-          Available <span className={cn("font-bold", creator.availableCents > 0 && "text-emerald-600")}>{formatCents(creator.availableCents)}</span>
+          Available <span className={cn("font-bold", creator.availableCents > 0 && "text-emerald-600 dark:text-emerald-400")}>{formatCents(creator.availableCents)}</span>
         </span>
         <span>
           Pending <span className="font-bold">{formatCents(creator.pendingCents)}</span>

@@ -45,7 +45,8 @@ export function HeartButton({
       type="button"
       onClick={onClick}
       aria-pressed={hearted}
-      aria-label={hearted ? "Remove heart" : "Heart this design"}
+      // The name includes the count shown, so voice control's "click 3" and screen readers agree.
+      aria-label={`${hearted ? "Remove heart" : "Heart this design"}, ${count} ${count === 1 ? "heart" : "hearts"}`}
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-black font-black tabular-nums transition-colors hover:bg-neutral-100",
         size === "sm" ? "h-10 px-3.5 text-sm" : "h-11 px-4 text-base",

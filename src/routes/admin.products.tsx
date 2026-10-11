@@ -96,7 +96,7 @@ function AdminProducts() {
             {busy === "search" ? "Searching…" : "Search"}
           </button>
         </form>
-        {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-sm font-semibold text-destructive">{error}</p>}
         {found && (
           <ul className="mt-4 divide-y divide-border">
             {found.length === 0 && <li className="py-3 text-sm text-muted-foreground">Nothing matches. Try a brand or a model number.</li>}
@@ -217,12 +217,12 @@ function ProductCard({ product }: { product: Product }) {
             Back to the launch colors
           </button>
         ) : (
-          <button type="button" disabled={busy} onClick={() => void run(() => remove({ productId: product._id as Id<"merchProducts"> }))} className="text-sm font-semibold text-red-600 underline underline-offset-4">
+          <button type="button" disabled={busy} onClick={() => void run(() => remove({ productId: product._id as Id<"merchProducts"> }))} className="text-sm font-semibold text-destructive underline underline-offset-4">
             Remove
           </button>
         )}
       </div>
-      {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm font-semibold text-destructive">{error}</p>}
       <SaleSettings product={product} />
     </AdminSection>
   );

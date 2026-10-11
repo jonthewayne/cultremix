@@ -190,7 +190,7 @@ function Connections() {
         </p>
       )}
       {status.printful.configured && status.printful.signingKey === "none" && (
-        <p className="font-semibold text-amber-700">Printful's webhooks need connecting before orders can update.</p>
+        <p className="font-semibold text-amber-700 dark:text-amber-400">Printful's webhooks need connecting before orders can update.</p>
       )}
       {note && <p className="font-semibold">{note}</p>}
     </div>
@@ -294,7 +294,7 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
         <div className="min-w-0 flex-1 space-y-2">
           {row.step && <p className="text-sm font-semibold">{row.step}…</p>}
           {row.changed && (
-            <p className="text-sm font-semibold text-amber-700">Its creator changed what it comes on or where it sits. Approve again to remake its print files.</p>
+            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Its creator changed what it comes on or where it sits. Approve again to remake its print files.</p>
           )}
           {!approved && <p className="text-sm text-muted-foreground">Not approved yet.</p>}
           {row.listings.map((listing) => (
@@ -314,8 +314,8 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
                   Print file · {listing.printFile.widthIn} in · {listing.printFile.dpi} DPI
                 </a>
               )}
-              {listing.prepError && <span className="w-full font-semibold text-red-700">{listing.prepError}</span>}
-              {listing.lastError && <span className="w-full text-red-700">{listing.lastError}</span>}
+              {listing.prepError && <span className="w-full font-semibold text-destructive">{listing.prepError}</span>}
+              {listing.lastError && <span className="w-full text-destructive">{listing.lastError}</span>}
             </div>
           ))}
           {note && <p className="text-sm font-semibold">{note}</p>}

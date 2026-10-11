@@ -120,7 +120,7 @@ function OnboardingGuard() {
 
 function RootDocument({ children, signedIn }: { children: React.ReactNode; signedIn: boolean }) {
   return (
-    <html suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* src/router.tsx reads it: a signed-in page's live queries wait for the member's token. */}
         {signedIn && <meta name={SESSION_META} content="1" />}
