@@ -1,5 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { cn } from "~/lib/utils";
 
@@ -15,6 +16,10 @@ export function NotFoundPage({
   message?: string;
   mono?: boolean;
 }) {
+  // An unknown path has no route head of its own, so the tab would keep the home page's title.
+  useEffect(() => {
+    document.title = "Not found · CultRemix";
+  }, []);
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />

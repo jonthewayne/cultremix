@@ -69,7 +69,7 @@ export function CartDrawer({
                         disabled={busy}
                         aria-label="One fewer"
                         onClick={() => onQuantity(line.id, line.quantity - 1)}
-                        className="h-9 w-9 rounded-lg border-2 border-foreground font-black disabled:opacity-40"
+                        className="h-10 w-10 rounded-lg border-2 border-foreground font-black disabled:opacity-40"
                       >
                         −
                       </button>
@@ -79,7 +79,7 @@ export function CartDrawer({
                         disabled={busy || line.quantity >= MAX}
                         aria-label="One more"
                         onClick={() => onQuantity(line.id, line.quantity + 1)}
-                        className="h-9 w-9 rounded-lg border-2 border-foreground font-black disabled:opacity-40"
+                        className="h-10 w-10 rounded-lg border-2 border-foreground font-black disabled:opacity-40"
                       >
                         +
                       </button>
@@ -87,7 +87,7 @@ export function CartDrawer({
                         type="button"
                         disabled={busy}
                         onClick={() => onRemove(line.id)}
-                        className="ml-auto text-sm font-semibold underline underline-offset-4 disabled:opacity-40"
+                        className="ml-auto inline-flex h-10 items-center px-1 text-sm font-semibold underline underline-offset-4 disabled:opacity-40"
                       >
                         Remove
                       </button>
