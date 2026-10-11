@@ -17,6 +17,7 @@ import { LineageNote, LineageSection } from "~/components/cr/LineageTrail";
 import { PhotoRetry } from "~/components/cr/PhotoRetry";
 import { WordChangesNote } from "~/components/cr/RemixableWords";
 import { PartChangesNote, RemixableParts } from "~/components/cr/RemixableParts";
+import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { Backers } from "~/components/work/Backers";
 import { FollowButton } from "~/components/social/FollowButton";
@@ -177,6 +178,7 @@ function ShopPage() {
         <DirectRemixes cr={item.cr} />
         <FamilyView cr={item.cr} />
       </main>
+      <SiteFooter />
     </div>
   );
 }

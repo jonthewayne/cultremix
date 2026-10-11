@@ -39,6 +39,7 @@ import { Route as FamilyFamilyRouteImport } from './routes/family.$family'
 import { Route as InviteAcceptRouteImport } from './routes/invite/accept'
 import { Route as KeepWorkIdRouteImport } from './routes/keep.$workId'
 import { Route as MeEarningsRouteImport } from './routes/me.earnings'
+import { Route as PoliciesSlugRouteImport } from './routes/policies.$slug'
 import { Route as PrintCrRouteImport } from './routes/print.$cr'
 import { Route as UUsernameRouteImport } from './routes/u.$username'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -195,6 +196,11 @@ const MeEarningsRoute = MeEarningsRouteImport.update({
   path: '/me/earnings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PoliciesSlugRoute = PoliciesSlugRouteImport.update({
+  id: '/policies/$slug',
+  path: '/policies/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrintCrRoute = PrintCrRouteImport.update({
   id: '/print/$cr',
   path: '/print/$cr',
@@ -251,6 +257,7 @@ export interface FileRoutesByFullPath {
   '/invite/accept': typeof InviteAcceptRoute
   '/keep/$workId': typeof KeepWorkIdRoute
   '/me/earnings': typeof MeEarningsRoute
+  '/policies/$slug': typeof PoliciesSlugRoute
   '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
@@ -287,6 +294,7 @@ export interface FileRoutesByTo {
   '/invite/accept': typeof InviteAcceptRoute
   '/keep/$workId': typeof KeepWorkIdRoute
   '/me/earnings': typeof MeEarningsRoute
+  '/policies/$slug': typeof PoliciesSlugRoute
   '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin': typeof AdminIndexRoute
@@ -325,6 +333,7 @@ export interface FileRoutesById {
   '/invite/accept': typeof InviteAcceptRoute
   '/keep/$workId': typeof KeepWorkIdRoute
   '/me/earnings': typeof MeEarningsRoute
+  '/policies/$slug': typeof PoliciesSlugRoute
   '/print/$cr': typeof PrintCrRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
@@ -364,6 +373,7 @@ export interface FileRouteTypes {
     | '/invite/accept'
     | '/keep/$workId'
     | '/me/earnings'
+    | '/policies/$slug'
     | '/print/$cr'
     | '/u/$username'
     | '/admin/'
@@ -400,6 +410,7 @@ export interface FileRouteTypes {
     | '/invite/accept'
     | '/keep/$workId'
     | '/me/earnings'
+    | '/policies/$slug'
     | '/print/$cr'
     | '/u/$username'
     | '/admin'
@@ -437,6 +448,7 @@ export interface FileRouteTypes {
     | '/invite/accept'
     | '/keep/$workId'
     | '/me/earnings'
+    | '/policies/$slug'
     | '/print/$cr'
     | '/u/$username'
     | '/admin/'
@@ -468,6 +480,7 @@ export interface RootRouteChildren {
   InviteAcceptRoute: typeof InviteAcceptRoute
   KeepWorkIdRoute: typeof KeepWorkIdRoute
   MeEarningsRoute: typeof MeEarningsRoute
+  PoliciesSlugRoute: typeof PoliciesSlugRoute
   PrintCrRoute: typeof PrintCrRoute
   UUsernameRoute: typeof UUsernameRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -687,6 +700,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MeEarningsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/policies/$slug': {
+      id: '/policies/$slug'
+      path: '/policies/$slug'
+      fullPath: '/policies/$slug'
+      preLoaderRoute: typeof PoliciesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/print/$cr': {
       id: '/print/$cr'
       path: '/print/$cr'
@@ -772,6 +792,7 @@ const rootRouteChildren: RootRouteChildren = {
   InviteAcceptRoute: InviteAcceptRoute,
   KeepWorkIdRoute: KeepWorkIdRoute,
   MeEarningsRoute: MeEarningsRoute,
+  PoliciesSlugRoute: PoliciesSlugRoute,
   PrintCrRoute: PrintCrRoute,
   UUsernameRoute: UUsernameRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

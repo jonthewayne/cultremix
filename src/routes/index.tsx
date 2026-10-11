@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
+import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ACTIVE_CREATORS_PAGE_SIZE, ActiveCreators } from "~/components/social/ActiveCreators";
 import { FollowButton } from "~/components/social/FollowButton";
@@ -64,6 +65,7 @@ function FeedPage() {
           {tab === "following" ? <FollowingFeed /> : tab === "trending" ? <TrendingFeed /> : <LatestFeed />}
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }

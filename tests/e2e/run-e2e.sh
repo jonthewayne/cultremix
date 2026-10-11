@@ -96,5 +96,14 @@ agent-browser wait 1500
 assert_text "On Monad"
 agent-browser screenshot body .tmp/screenshots/onchain.png
 
+# The store policies, linked from the footer.
+for policy in shipping returns privacy terms; do
+  agent-browser open "$BASE_URL/policies/$policy"
+  agent-browser wait 1000
+  assert_text "heyyo@cultremix.com"
+done
+assert_text "Terms"
+agent-browser screenshot body .tmp/screenshots/policies-terms.png
+
 
 echo "E2E smoke complete for $BASE_URL"

@@ -2,6 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
+import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 
 // /onchain: what CultRemix records on Monad, what it leaves off, and how to check a work.
@@ -124,6 +125,7 @@ function OnchainPage() {
           Back to the feed
         </Link>
       </main>
+      <SiteFooter />
     </div>
   );
 }
