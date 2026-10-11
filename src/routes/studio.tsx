@@ -1375,9 +1375,10 @@ function TileCard({
               onClick={onOpen}
               title={spellingNote(tile.spelling)}
               aria-label={`Check the spelling. ${spellingNote(tile.spelling)}`}
+              // Short enough to sit between the ⋯ menu and the heart on a 360 px phone's tile.
               className="absolute left-1/2 top-2 flex h-10 -translate-x-1/2 items-center whitespace-nowrap rounded-lg bg-amber-300 px-2 text-xs font-black text-black"
             >
-              Spelling?
+              Typo?
             </button>
           )}
           {tile.model && (
