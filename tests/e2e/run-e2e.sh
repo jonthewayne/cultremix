@@ -105,5 +105,10 @@ done
 assert_text "Terms"
 agent-browser screenshot body .tmp/screenshots/policies-terms.png
 
-
 echo "E2E smoke complete for $BASE_URL"
+
+# Signed in, against a local dev server only: it signs up a test member through the test helpers
+# (TEST_HELPER_SECRET in .env.local), and production refuses those.
+if [[ "$BASE_URL" == http://localhost* || "$BASE_URL" == http://127.0.0.1* ]] && grep -q '^TEST_HELPER_SECRET=.' .env.local 2>/dev/null; then
+  BASE_URL="$BASE_URL" bash tests/e2e/run-signed-in.sh
+fi

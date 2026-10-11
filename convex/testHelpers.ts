@@ -87,6 +87,60 @@ export const cleanupTestUser = mutation({
   },
 });
 
+// For the signed-in browser test (tests/e2e/run-signed-in.sh): a member signed up through the
+// real email code flow, found by email, gets a role, then is removed with what it made.
+export const setTestUserRole = mutation({
+  args: {
+    testSecret: v.string(),
+    email: v.string(),
+    platformRole: v.union(v.literal("user"), v.literal("super_admin_support"), v.literal("super_admin_ops"), v.literal("super_admin_owner")),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { testSecret, email, platformRole }) => {
+    requireTestSecret(testSecret);
+    if (!/^e2e\+[a-z0-9]+@example\.com$/u.test(email)) throw new Error("Only e2e+...@example.com test members.");
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+    if (!user) return false;
+    await ctx.db.patch("users", user._id, { platformRole });
+    return true;
+  },
+});
+
+export const cleanupTestUserByEmail = mutation({
+  args: { testSecret: v.string(), email: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { testSecret, email }) => {
+    requireTestSecret(testSecret);
+    if (!/^e2e\+[a-z0-9]+@example\.com$/u.test(email)) throw new Error("Only e2e+...@example.com test members.");
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .take(5);
+    for (const user of users) {
+      for (const session of await ctx.db
+        .query("creativeSessions")
+        .withIndex("by_owner_updated", (q) => q.eq("ownerId", user._id))
+        .take(50)) {
+        await ctx.db.delete("creativeSessions", session._id);
+      }
+      for (const row of await ctx.db.query("creditLedger").withIndex("by_user", (q) => q.eq("userId", user._id)).take(100)) {
+        await ctx.db.delete("creditLedger", row._id);
+      }
+      for (const membership of await ctx.db
+        .query("memberships")
+        .withIndex("by_userId", (q) => q.eq("userId", user._id))
+        .collect()) {
+        await ctx.db.delete("memberships", membership._id);
+      }
+      await ctx.db.delete("users", user._id);
+    }
+    return users.length;
+  },
+});
+
 export const seedTestOrganizationMembership = mutation({
   args: {
     testSecret: v.string(),
