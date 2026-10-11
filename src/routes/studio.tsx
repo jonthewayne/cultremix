@@ -656,6 +656,11 @@ function StudioPage() {
                   </div>
                 )}
               </div>
+            ) : remix && !error ? (
+              // A remix link before its session exists (studio.startRemix is on its way).
+              <p className="animate-pulse text-lg font-semibold" role="status">
+                Opening CR {remix} to remix…
+              </p>
             ) : (
               !loadingSession && <p className="text-lg text-neutral-600">New design. Your sessions are below.</p>
             )}

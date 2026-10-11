@@ -10,7 +10,9 @@ export function pageHasSession(doc: Pick<Document, "querySelector"> | undefined 
 }
 
 type AuthSource = (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>;
-type AuthClient = { setAuth: (fetchToken: AuthSource, onChange?: (isAuthenticated: boolean) => void) => void };
+type AuthClient = {
+  setAuth: (fetchToken: AuthSource, onChange?: (isAuthenticated: boolean) => void, onRefreshChange?: (isRefreshing: boolean) => void) => void;
+};
 
 // A client that waits for auth (expectAuth) stays paused until something sets an auth source, and
 // Better Auth sets one only once it knows the member. If it never does (the token and the session
@@ -19,9 +21,9 @@ type AuthClient = { setAuth: (fetchToken: AuthSource, onChange?: (isAuthenticate
 export function resumeWithoutAuthAfter(client: AuthClient, afterMs = AUTH_WAIT_MS) {
   const setAuth = client.setAuth.bind(client);
   let asked = false;
-  client.setAuth = (fetchToken, onChange) => {
+  client.setAuth = (fetchToken, onChange, onRefreshChange) => {
     asked = true;
-    setAuth(fetchToken, onChange);
+    setAuth(fetchToken, onChange, onRefreshChange);
   };
   const timer = setTimeout(() => {
     if (!asked) setAuth(async () => null);

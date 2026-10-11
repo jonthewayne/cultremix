@@ -37,6 +37,11 @@ agent workflow changes make the starter easier to use.
 - Launch scripts that call `bunx convex run` should target dev by default, staging through a per-command `CONVEX_DEPLOY_KEY`, and production only with `--prod` plus a typed confirmation; parse the JSON result after any `[CONVEX …]` log lines (`scripts/lib/convex-run.ts`).
 - Expose the environment to the browser through a public Convex query instead of a build-time `VITE_` value, so one Worker build can't show the wrong environment's label.
 
+### 2026-10-11
+
+- With `expectAuth: false` (public pages that load signed out), a signed-in page's first live Convex results come from an anonymous socket and overwrite the server-rendered cache, so React logs "Hydration failed" and rebuilds the page in the browser. Mark server pages rendered with a session (a `<meta>` in the root document) and create the `ConvexQueryClient` with `expectAuth` only when that mark is present; add a fallback that sets an empty auth source after about 10 s so a failed token fetch can't leave the socket paused (CultRemix `src/lib/sessionMeta.ts`, `src/router.tsx`). Have the signed-in browser test fail on any `Hydration failed` error.
+- In `convex-test`, a file's first HTTP route or scheduled-function call loads every Convex module and can pass vitest's 5 s default on a busy machine; set `testTimeout` once in the in-memory test config instead of per file.
+
 ## Still Worth Improving
 
 - Consider a `--show-secrets=false` setup mode for teams that prefer external commands to be written to a secure local file instead of printed in the terminal.
