@@ -1,7 +1,8 @@
-import { garmentColor, toLab } from "../../../convex/lib/garments";
+import { colorKey, garmentColor, toLab } from "../../../convex/lib/garments";
 import { PRINT_PRODUCT } from "../../../shared/config/print-products";
 import { parseHex } from "./knockout";
-import type { PrintProduct } from "../../../shared/config/print-products";
+
+type ProductColors = { colors: ReadonlyArray<{ name: string; hex: string }> };
 
 function labOf(hex: string): [number, number, number] | null {
   const rgb = parseHex(hex);
@@ -10,7 +11,9 @@ function labOf(hex: string): [number, number, number] | null {
 
 // The print product's color for one garment color: the same name when the product has it ("True
 // navy" is "True Navy"), else the nearest shade.
-function productColorFor(key: string, product: PrintProduct) {
+function productColorFor(key: string, product: ProductColors) {
+  const same = product.colors.find((color) => colorKey(color.name) === key);
+  if (same) return same;
   const garment = garmentColor(key);
   if (!garment) return undefined;
   const named = product.colors.find((color) => color.name.toLowerCase() === garment.name.toLowerCase());
@@ -31,7 +34,7 @@ function productColorFor(key: string, product: PrintProduct) {
 // The colors a work was published in (works.offeredColors, garment keys from
 // convex/lib/garments.ts), as the print product's color names, lead first. Repeats collapse.
 // Empty when the work has none; Print Studio then offers every product color.
-export function offeredPrintColors(keys: ReadonlyArray<string> | undefined, product: PrintProduct = PRINT_PRODUCT) {
+export function offeredPrintColors(keys: ReadonlyArray<string> | undefined, product: ProductColors = PRINT_PRODUCT) {
   const names: Array<string> = [];
   for (const key of keys ?? []) {
     const color = productColorFor(key, product);

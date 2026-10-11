@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { PrintProduct } from "../../../shared/config/print-products";
+import type { PrintGeometry } from "../../../shared/config/print-products";
 import { clampPlacement, placedHeight } from "~/lib/print/placement";
 import type { Placement } from "~/lib/print/placement";
 import { cn } from "~/lib/utils";
@@ -36,7 +36,7 @@ export function ShirtStage({
   locked = false,
   className,
 }: {
-  product: PrintProduct;
+  product: PrintGeometry & { name: string };
   shirtHex: string;
   imageUrl?: string;
   aspect: number;

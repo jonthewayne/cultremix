@@ -1,4 +1,4 @@
-import type { PrintProduct } from "../../../shared/config/print-products";
+import type { PrintGeometry } from "../../../shared/config/print-products";
 import { hazeShare } from "./alpha";
 import type { AlphaMetrics } from "./alpha";
 import { dpiGrade, sourceDpi } from "./dpi";
@@ -30,7 +30,7 @@ export type PrintCheck = {
 
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
 
-export function coverageShare(metrics: AlphaMetrics, placement: Placement, product: PrintProduct) {
+export function coverageShare(metrics: AlphaMetrics, placement: Placement, product: PrintGeometry) {
   const pixels = metrics.width * metrics.height;
   if (pixels === 0) return 0;
   const aspect = aspectOf(metrics.width, metrics.height);
@@ -39,7 +39,7 @@ export function coverageShare(metrics: AlphaMetrics, placement: Placement, produ
   return (metrics.solid / pixels) * (placedArea / printArea);
 }
 
-export function printCheck(metrics: AlphaMetrics, placement: Placement, product: PrintProduct): PrintCheck {
+export function printCheck(metrics: AlphaMetrics, placement: Placement, product: PrintGeometry): PrintCheck {
   const aspect = aspectOf(metrics.width, metrics.height);
   const heightIn = placedHeight(placement.widthIn, aspect);
   const dpi = sourceDpi(metrics.width, metrics.height, placement.widthIn, heightIn);

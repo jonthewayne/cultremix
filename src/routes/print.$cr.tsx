@@ -6,7 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { PRINT_PRODUCT, shirtColor } from "../../shared/config/print-products";
+import type { StudioProduct } from "../../shared/config/print-products";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { CompareView, CropZoom, useLoaded } from "~/components/print/CompareSlider";
@@ -43,7 +43,6 @@ export const Route = createFileRoute("/print/$cr")({
   component: PrintPage,
 });
 
-const product = PRINT_PRODUCT;
 // Mirrors UPSCALE_MAX_SIDE in convex/print.ts, which the browser can't import.
 const UPSCALE_MAX_SIDE = 1536;
 
@@ -58,12 +57,12 @@ const OP_LABEL: Record<Version["op"], string> = {
   upscale: "Upscaled 4×",
 };
 
-function closestColor(hex: string) {
+function closestColor(hex: string, colors: StudioProduct["colors"]) {
   const target = parseHex(hex);
-  if (!target) return product.colors[0].name;
-  let best = product.colors[0];
+  if (!target) return colors[0].name;
+  let best = colors[0];
   let bestDistance = Infinity;
-  for (const color of product.colors) {
+  for (const color of colors) {
     const rgb = parseHex(color.hex)!;
     const distance = (rgb.r - target.r) ** 2 + (rgb.g - target.g) ** 2 + (rgb.b - target.b) ** 2;
     if (distance < bestDistance) [best, bestDistance] = [color, distance];
@@ -130,6 +129,8 @@ function PrintPage() {
 
 function PrintStudio({ studio, error, setError }: { studio: Studio; error: string | null; setError: (error: string | null) => void }) {
   const cr = studio.cr;
+  // The front of the first product the work sells on (convex/print.ts studio).
+  const product = studio.product;
   const trim = useMutation(api.print.trim);
   const knockout = useMutation(api.print.knockout);
   const upscale = useMutation(api.print.upscale);
@@ -178,10 +179,10 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
     const aspect = aspectOf(selected.width, selected.height);
     const saved = studio.printFile?.placement ?? studio.placement;
     // A new placement starts on the work's lead shirt color, else the one nearest its background.
-    const color = studio.printFile?.color ?? studio.placement?.color ?? studio.offeredColors.at(0) ?? closestColor(studio.backgroundColor);
+    const color = studio.printFile?.color ?? studio.placement?.color ?? studio.offeredColors.at(0) ?? closestColor(studio.backgroundColor, product.colors);
     const base = saved ? { xIn: saved.xIn, yIn: saved.yIn, widthIn: saved.widthIn } : defaultPlacement(aspect, product);
     setDraft({ ...clampPlacement(base, aspect, product), color, versionId: selected.id });
-  }, [draft, selected, studio.placement, studio.printFile, studio.offeredColors, studio.backgroundColor]);
+  }, [draft, selected, studio.placement, studio.printFile, studio.offeredColors, studio.backgroundColor, product]);
 
   // A different version keeps the width but re-fits its own shape.
   useEffect(() => {
@@ -189,7 +190,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
     const aspect = aspectOf(selected.width, selected.height);
     dirty.current = true;
     setDraft({ ...draft, ...clampPlacement(draft, aspect, product), versionId: selected.id });
-  }, [selected, draft, locked]);
+  }, [selected, draft, locked, product]);
 
   const save = async (next: Draft) => {
     dirty.current = false;
@@ -224,7 +225,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
 
   const aspect = isReady(selected) ? aspectOf(selected.width, selected.height) : 1;
   const check = isReady(selected) && draft ? printCheck({ width: selected.width, height: selected.height, ...selected.metrics }, draft, product) : null;
-  const shirt = shirtColor(draft?.color);
+  const shirt = product.colors.find((color) => color.name === draft?.color) ?? product.colors[0];
   const rendering = studio.placement?.rendering ?? false;
   const upscaling = studio.versions.some((version) => version.upscaling);
 
@@ -332,7 +333,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                 )}
               </div>
             ) : (
-              <PrinterView studio={studio} selected={selected} draft={draft} byNumber={byNumber} shirtHex={shirt.hex} />
+              <PrinterView studio={studio} product={product} selected={selected} draft={draft} byNumber={byNumber} shirtHex={shirt.hex} />
             )}
           </section>
 
@@ -503,7 +504,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
                   <dt className="text-muted-foreground">Size</dt>
                   <dd>
-                    {studio.printFile.placement.widthIn} × {studio.printFile.placement.heightIn} in on {shirtColor(studio.printFile.color).name}
+                    {studio.printFile.placement.widthIn} × {studio.printFile.placement.heightIn} in on {studio.printFile.color}
                   </dd>
                   <dt className="text-muted-foreground">Sharpness</dt>
                   <dd>
@@ -545,12 +546,14 @@ function upscaleBlocked(version: Version | undefined, studio: Studio, upscaling:
 // the real print file.
 function PrinterView({
   studio,
+  product,
   selected,
   draft,
   byNumber,
   shirtHex,
 }: {
   studio: Studio;
+  product: StudioProduct;
   selected: Version | undefined;
   draft: Draft | null;
   byNumber: Map<number, Version>;

@@ -60,9 +60,14 @@ function shopify(handler: (call: Call) => unknown) {
 const OFFER: Offer = {
   workId: "w1",
   cr: "101-001",
-  variants: [
-    { color: "WHITE", size: "L", merchandiseId: "gid://shopify/ProductVariant/1003", priceCents: 3600 },
-    { color: "WHITE", size: "2XL", merchandiseId: "gid://shopify/ProductVariant/1005", priceCents: 3900 },
+  products: [
+    {
+      key: "printful-586",
+      variants: [
+        { color: "WHITE", size: "L", merchandiseId: "gid://shopify/ProductVariant/1003", priceCents: 3600 },
+        { color: "WHITE", size: "2XL", merchandiseId: "gid://shopify/ProductVariant/1005", priceCents: 3900 },
+      ],
+    },
   ],
 };
 
@@ -110,16 +115,19 @@ describe("first-touch ref", () => {
 
 describe("input checks", () => {
   it("accepts a sensible add and refuses the rest", () => {
-    expect(parseAddInput({ cr: "101-001", color: "WHITE", size: "L", quantity: 2 })).toEqual({
+    expect(parseAddInput({ cr: "101-001", product: "printful-586", color: "WHITE", size: "L", quantity: 2 })).toEqual({
       cr: "101-001",
+      product: "printful-586",
       color: "WHITE",
       size: "L",
       quantity: 2,
     });
-    expect(() => parseAddInput({ cr: "101-001", color: "WHITE", size: "L", quantity: 11 })).toThrow(CartError);
-    expect(() => parseAddInput({ cr: "101-001", color: "WHITE", size: "L", quantity: 1.5 })).toThrow(CartError);
-    expect(() => parseAddInput({ cr: "../x", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
+    expect(() => parseAddInput({ cr: "101-001", product: "printful-586", color: "WHITE", size: "L", quantity: 11 })).toThrow(CartError);
+    expect(() => parseAddInput({ cr: "101-001", product: "printful-586", color: "WHITE", size: "L", quantity: 1.5 })).toThrow(CartError);
+    expect(() => parseAddInput({ cr: "../x", product: "printful-586", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
     expect(() => parseAddInput(null)).toThrow(CartError);
+    expect(() => parseAddInput({ cr: "101-001", product: "hoodie", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
+    expect(() => parseAddInput({ cr: "101-001", color: "WHITE", size: "L", quantity: 1 })).toThrow(CartError);
     expect(() => parseLineInput({ lineId: "gid://shopify/Product/1", quantity: 1 })).toThrow(CartError);
     expect(parseLineInput({ lineId: LINE_ID, quantity: 0 }).quantity).toBe(0);
   });
@@ -130,6 +138,7 @@ describe("cart server functions", () => {
     const { fetchFake, calls } = shopify(() => ({ cartCreate: { cart: rawCart(), userErrors: [] } }));
     const result = await addToCart(context(fetchFake, "cr_ref=friend_42"), {
       cr: "101-001",
+      product: "printful-586",
       color: "WHITE",
       size: "L",
       quantity: 1,
@@ -165,6 +174,7 @@ describe("cart server functions", () => {
     }));
     const result = await addToCart(context(fetchFake, `cr_cart=${encodeURIComponent(CART_ID)}`), {
       cr: "101-001",
+      product: "printful-586",
       color: "WHITE",
       size: "2XL",
       quantity: 2,
@@ -182,6 +192,7 @@ describe("cart server functions", () => {
     );
     const result = await addToCart(context(fetchFake, `cr_cart=${encodeURIComponent(CART_ID)}`), {
       cr: "101-001",
+      product: "printful-586",
       color: "WHITE",
       size: "L",
       quantity: 1,
@@ -193,11 +204,14 @@ describe("cart server functions", () => {
   it("refuses variants the work doesn't offer, and everything while checkout is off", async () => {
     const { fetchFake, calls } = shopify(() => ({}));
     await expect(
-      addToCart(context(fetchFake, null), { cr: "101-001", color: "BLACK", size: "L", quantity: 1 }),
+      addToCart(context(fetchFake, null), { cr: "101-001", product: "printful-586", color: "BLACK", size: "L", quantity: 1 }),
     ).rejects.toMatchObject({ code: "UNAVAILABLE" });
     await expect(
-      addToCart(context(fetchFake, null, null), { cr: "101-001", color: "WHITE", size: "L", quantity: 1 }),
+      addToCart(context(fetchFake, null, null), { cr: "101-001", product: "printful-586", color: "WHITE", size: "L", quantity: 1 }),
     ).rejects.toMatchObject({ code: "CLOSED" });
+    await expect(
+      addToCart(context(fetchFake, null), { cr: "101-001", product: "printful-146", color: "WHITE", size: "L", quantity: 1 }),
+    ).rejects.toMatchObject({ code: "UNAVAILABLE", message: "That product isn't available." });
     expect(calls).toHaveLength(0);
   });
 
@@ -230,7 +244,7 @@ describe("cart server functions", () => {
 
   it("turns Shopify outages into a plain message", async () => {
     const ctx = context(vi.fn(async () => new Response("nope", { status: 502 })), null);
-    await expect(addToCart(ctx, { cr: "101-001", color: "WHITE", size: "L", quantity: 1 })).rejects.toMatchObject({
+    await expect(addToCart(ctx, { cr: "101-001", product: "printful-586", color: "WHITE", size: "L", quantity: 1 })).rejects.toMatchObject({
       code: "SHOPIFY",
       message: "The cart didn't respond. Try again in a moment.",
     });

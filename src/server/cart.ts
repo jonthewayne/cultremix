@@ -6,14 +6,14 @@ import {
 import { validRef } from "../lib/ref";
 import { StorefrontError, type CartView, type Storefront } from "./storefront";
 
-// The cart behind the work page's BuyBox. The browser only names a work, color, size, and
+// The cart behind the work page's BuyBox. The browser only names a work, product, color, size, and
 // quantity; the server finds the Shopify variant from the work's live offer, so every line
 // carries trustworthy _work_id and _cr attributes. The cart ID lives in an httpOnly cookie.
 
 export const MAX_LINE_QUANTITY = 10;
 
 export type OfferVariant = { color: string; size: string; merchandiseId: string; priceCents: number };
-export type Offer = { workId: string; cr: string; variants: Array<OfferVariant> } | null;
+export type Offer = { workId: string; cr: string; products: Array<{ key: string; variants: Array<OfferVariant> }> } | null;
 
 export type CartContext = {
   cookieHeader: string | null | undefined;
@@ -86,15 +86,16 @@ function record(input: unknown): Record<string, unknown> {
   return input as Record<string, unknown>;
 }
 
-export type AddInput = { cr: string; color: string; size: string; quantity: number };
+export type AddInput = { cr: string; product: string; color: string; size: string; quantity: number };
 
 export function parseAddInput(input: unknown): AddInput {
   const data = record(input);
-  const { cr, color, size } = data;
+  const { cr, product, color, size } = data;
   if (typeof cr !== "string" || !/^\d{3}-\d{3}$/u.test(cr)) throw new CartError("INVALID", "That design wasn't found.");
+  if (typeof product !== "string" || !/^printful-\d{1,9}$/u.test(product)) throw new CartError("INVALID", "Pick a product.");
   if (typeof color !== "string" || !/^[A-Z0-9_]{1,20}$/u.test(color)) throw new CartError("INVALID", "Pick a color.");
   if (typeof size !== "string" || !/^[A-Z0-9]{1,4}$/u.test(size)) throw new CartError("INVALID", "Pick a size.");
-  return { cr, color, size, quantity: quantityOf(data.quantity, 1) };
+  return { cr, product, color, size, quantity: quantityOf(data.quantity, 1) };
 }
 
 export type LineInput = { lineId: string; quantity: number };
@@ -132,7 +133,9 @@ export async function getCart(ctx: CartContext): Promise<CartResult> {
 export async function addToCart(ctx: CartContext, input: AddInput): Promise<CartResult> {
   const offer = await ctx.lookupOffer(input.cr);
   if (!offer || !ctx.storefront) throw new CartError("CLOSED", "Buying opens soon.");
-  const variant = offer.variants.find((v) => v.color === input.color && v.size === input.size);
+  const product = offer.products.find((p) => p.key === input.product);
+  if (!product) throw new CartError("UNAVAILABLE", "That product isn't available.");
+  const variant = product.variants.find((v) => v.color === input.color && v.size === input.size);
   if (!variant) throw new CartError("UNAVAILABLE", "That color and size isn't available.");
   const line = {
     merchandiseId: variant.merchandiseId,

@@ -14,6 +14,11 @@ import { inheritOnPublish } from "./remixFields";
 import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
 import { activePalette } from "./merch";
+import { chosenProducts, offeredShopProducts } from "./lib/shopProduct";
+import type { ShopProduct } from "./lib/shopProduct";
+import { garmentKindValidator, relativePlacementValidator } from "./schema/merch";
+import { DEFAULT_PLACEMENT, clampRelative, sameRelative } from "../src/lib/print/shirtPlacement";
+import type { RelativePlacement } from "../src/lib/print/shirtPlacement";
 import {
   BUDGET_RESTING,
   closeReservation,
@@ -273,6 +278,11 @@ export const quick = mutation({
     // "Keep it just for you": only its creator sees and orders it. No public number, feed, family,
     // onchain record, or shop listing; a remix's original still gets credit (its parent is kept).
     keep: v.optional(v.literal("private")),
+    // Where the design sits on the garments (src/lib/print/shirtPlacement.ts), and the products on
+    // offer it sells on, each with its own placement when adjusted. Omitted: the default placement
+    // on the default product.
+    printPlacement: v.optional(relativePlacementValidator),
+    printProducts: v.optional(v.array(v.object({ productId: v.number(), placement: v.optional(relativePlacementValidator) }))),
   },
   returns: v.object({ workId: v.id("works"), cr: v.string(), kept: v.optional(v.boolean()) }),
   handler: async (ctx, args) => {
@@ -310,6 +320,11 @@ export const quick = mutation({
     if (!colors.ok) throw new ConvexError({ code: "INVALID_COLORS", message: colors.message });
     // The lead color is the work's background: the feed, the model photo and remixes all use it.
     const backgroundColor = garmentColor(colors.keys[0], palette)!.hex;
+    const printPlacement = clampRelative(args.printPlacement ?? DEFAULT_PLACEMENT);
+    const printProducts = pickPrintProducts(args.printProducts, printPlacement, await offeredShopProducts(ctx));
+    if (printProducts.length === 0) {
+      throw new ConvexError({ code: "INVALID_PRODUCTS", message: "Pick at least one product it comes on." });
+    }
 
     // A remix is a variation (the parent's family, next expression) or a fork (a new family,
     // expression 1, crediting the parent). The parent must still have its public record.
@@ -352,6 +367,8 @@ export const quick = mutation({
       description,
       offeredColors: colors.keys,
       backgroundColor,
+      printPlacement,
+      printProducts,
       status: "preparing",
       ...(keep ? { keep: "private" as const } : {}),
     });
@@ -475,6 +492,33 @@ export const preview = query({
   },
 });
 
+// The products a publish may pick: products on offer, each once, at most MAX_PRINT_PRODUCTS. A
+// product's own placement is kept only when it differs from the work's. None picked: the default.
+const MAX_PRINT_PRODUCTS = 8;
+function pickPrintProducts(
+  picks: ReadonlyArray<{ productId: number; placement?: RelativePlacement }> | undefined,
+  shared: RelativePlacement,
+  offered: ReadonlyArray<ShopProduct>,
+) {
+  const chosen = picks ?? [{ productId: offered[0].printfulProductId }];
+  const out: Array<{ productId: number; placement?: RelativePlacement }> = [];
+  for (const pick of chosen) {
+    const product = offered.find((p) => p.printfulProductId === pick.productId);
+    if (!product || out.some((o) => o.productId === pick.productId) || out.length >= MAX_PRINT_PRODUCTS) continue;
+    const own = pick.placement ? clampRelative(pick.placement) : undefined;
+    out.push(own && !sameRelative(own, shared) ? { productId: product.printfulProductId, placement: own } : { productId: product.printfulProductId });
+  }
+  return out;
+}
+
+// What the model photo shows: the first product a work sells on, with the design where its creator put it.
+async function photoGarment(ctx: QueryCtx | MutationCtx, work: Doc<"works">) {
+  const [first] = chosenProducts(work, await offeredShopProducts(ctx));
+  return { kind: first?.product.kind ?? ("tee" as const), placement: first?.placement ?? clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT) };
+}
+
+const photoGarmentValidator = v.object({ kind: garmentKindValidator, placement: relativePlacementValidator });
+
 export const assetJob = internalQuery({
   args: { workId: v.id("works") },
   returns: v.union(
@@ -482,6 +526,7 @@ export const assetJob = internalQuery({
     v.object({
       fullKey: v.string(),
       backgroundColor: v.string(),
+      garment: photoGarmentValidator,
       crFamily: v.number(),
       crExpression: v.number(),
       // Kept just for its creator: its art stays at the design's own unguessable address.
@@ -496,6 +541,7 @@ export const assetJob = internalQuery({
     return {
       fullKey: generation.fullKey,
       backgroundColor: work.backgroundColor,
+      garment: await photoGarment(ctx, work),
       crFamily: work.crFamily,
       crExpression: work.crExpression,
       ...(work.keep === "private" ? { keep: true } : {}),
@@ -568,8 +614,6 @@ export const markPublished = internalMutation({
       state: allowed ? "pending" : "failed",
       reason: allowed ? undefined : DAILY_LIMIT,
     });
-    // Puts the work on sale in Shopify when checkout is open (convex/shopify.ts).
-    await ctx.scheduler.runAfter(0, internal.shopify.onPublished, { workId: work._id });
     // Past today's photo shoots, the work publishes now and its photo waits.
     if (!allowed) return null;
     const attempt = await reservePhoto(ctx, shootId, work.creatorId, now);
@@ -594,6 +638,7 @@ export const beginReshoot = internalMutation({
       shootId: v.id("shoots"),
       artKey: v.string(),
       backgroundColor: v.string(),
+      garment: photoGarmentValidator,
       look: lookValidator,
       crFamily: v.number(),
       crExpression: v.number(),
@@ -665,6 +710,7 @@ export const beginReshoot = internalMutation({
       shootId,
       artKey: work.artKey,
       backgroundColor: work.backgroundColor,
+      garment: await photoGarment(ctx, work),
       look,
       crFamily: work.crFamily,
       crExpression: work.crExpression,

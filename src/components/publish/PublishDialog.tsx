@@ -19,7 +19,12 @@ import { RemixableParts } from "~/components/cr/RemixableParts";
 import type { RemixKind } from "~/components/cr/RemixKindChoice";
 import { useDesignPixels } from "~/lib/designPixels";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
+import { garmentTones } from "~/lib/print/garmentMockup";
+import { DEFAULT_PLACEMENT, toInches } from "~/lib/print/shirtPlacement";
+import type { RelativePlacement } from "~/lib/print/shirtPlacement";
 import { cn } from "~/lib/utils";
+import { GarmentPreview, useImageAspect } from "./GarmentPreview";
+import { PrintChoices, areaOn, placementOn } from "./PrintChoices";
 
 export type PublishTile = {
   generationId: Id<"generations">;
@@ -30,8 +35,9 @@ export type PublishTile = {
 };
 
 // One sheet: title, a short note, the shirt colors (with a live preview on each and a heads-up
-// where the design would get lost), the CR number it will get, and for a remix how it relates.
-// Only confirming is required.
+// where the design would get lost), the products it comes on and where it sits on them (shown on a
+// drawn garment at real size), the CR number it will get, and for a remix how it relates. Only
+// confirming is required.
 export function PublishDialog({
   tile,
   onClose,
@@ -82,6 +88,43 @@ export function PublishDialog({
   const [focus, setFocus] = useState<string | null>(null);
   const shown = colorOf(focus ?? lead ?? "") ?? colorOf(suggested[0]) ?? palette[0];
 
+  // The products on offer (convex/merch.ts offered), and which ones it comes on: every product that
+  // carries one of its colors until the member picks. One placement fits them all; a product can
+  // be placed separately.
+  const offered = useQuery(api.merch.offered, {});
+  const products = useMemo(() => offered ?? [], [offered]);
+  const [pickedProducts, setPickedProducts] = useState<Array<number> | null>(null);
+  const chosenProducts =
+    pickedProducts ??
+    products
+      .filter((product, index) => index === 0 || product.colors.some((color) => selected.includes(color.key)))
+      .map((product) => product.productId);
+  const [shared, setShared] = useState<RelativePlacement>(DEFAULT_PLACEMENT);
+  const [own, setOwn] = useState<Record<number, RelativePlacement>>({});
+  const [focusedProductId, setFocusedProductId] = useState<number | null>(null);
+  const focusedProduct =
+    products.find((product) => product.productId === focusedProductId) ??
+    products.find((product) => chosenProducts.includes(product.productId)) ??
+    products[0];
+  const aspect = useImageAspect(tile.mediumUrl ?? tile.url);
+  const toggleProduct = (productId: number) => {
+    setFocusedProductId(productId);
+    setPickedProducts(chosenProducts.includes(productId) ? chosenProducts.filter((id) => id !== productId) : [...chosenProducts, productId]);
+  };
+  const changePlacement = (next: RelativePlacement) => {
+    if (focusedProduct && focusedProduct.productId in own) setOwn({ ...own, [focusedProduct.productId]: next });
+    else setShared(next);
+  };
+  const separate = (productId: number, on: boolean) => {
+    const product = products.find((p) => p.productId === productId);
+    if (!product) return;
+    const next = { ...own };
+    if (on) next[productId] = placementOn(product, shared, own);
+    else delete next[productId];
+    setOwn(next);
+  };
+  const previewPlacement = focusedProduct ? placementOn(focusedProduct, shared, own) : shared;
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !saving) onClose();
@@ -118,7 +161,7 @@ export function PublishDialog({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (selected.length === 0 || paused) return;
+    if (selected.length === 0 || paused || (offered && chosenProducts.length === 0)) return;
     setSaving(true);
     setError(null);
     try {
@@ -130,6 +173,14 @@ export function PublishDialog({
         remixKind: keep ? undefined : remixKind,
         offeredColors: selected,
         ...(keep ? { keep: "private" as const } : {}),
+        ...(offered
+          ? {
+              printPlacement: shared,
+              printProducts: chosenProducts.map((productId) =>
+                productId in own ? { productId, placement: own[productId] } : { productId },
+              ),
+            }
+          : {}),
       });
       setResult({ workId: published.workId, cr: published.cr, lead: colorOf(selected[0])?.hex ?? tile.backgroundColor, kept: published.kept });
     } catch (err) {
@@ -260,13 +311,34 @@ export function PublishDialog({
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
       >
-        <div
-          className="relative flex aspect-square max-h-[45svh] items-center justify-center p-[8%] transition-colors duration-300 md:aspect-auto md:h-full md:max-h-none md:p-[10%]"
-          style={{ background: shown.hex, color: inkOn(shown.hex) }}
-        >
-          <Art url={tile.mediumUrl ?? tile.url} alt={`Design on ${shown.name}`} className="h-full max-h-[70svh] w-auto max-w-full object-contain" />
-          <span className="absolute bottom-3 left-4 text-sm font-bold">{shown.name}</span>
-        </div>
+        {focusedProduct ? (
+          <div
+            className="relative flex aspect-square max-h-[45svh] items-center justify-center p-[3%] transition-colors duration-300 md:aspect-auto md:h-full md:max-h-none md:p-[5%]"
+            style={{ background: garmentTones(shown.hex).backdrop }}
+          >
+            <GarmentPreview
+              kind={focusedProduct.kind}
+              hex={shown.hex}
+              imageUrl={tile.mediumUrl ?? tile.url}
+              aspect={aspect}
+              placement={toInches(previewPlacement, aspect, areaOn(focusedProduct, previewPlacement.side))}
+              area={areaOn(focusedProduct, previewPlacement.side)}
+              className="max-h-[70svh]"
+            />
+            <span className="absolute bottom-3 left-4 text-sm font-bold text-black">
+              {shown.name} · {focusedProduct.name}
+              {previewPlacement.side === "back" ? " · back" : ""}
+            </span>
+          </div>
+        ) : (
+          <div
+            className="relative flex aspect-square max-h-[45svh] items-center justify-center p-[8%] transition-colors duration-300 md:aspect-auto md:h-full md:max-h-none md:p-[10%]"
+            style={{ background: shown.hex, color: inkOn(shown.hex) }}
+          >
+            <Art url={tile.mediumUrl ?? tile.url} alt={`Design on ${shown.name}`} className="h-full max-h-[70svh] w-auto max-w-full object-contain" />
+            <span className="absolute bottom-3 left-4 text-sm font-bold">{shown.name}</span>
+          </div>
+        )}
 
         <form onSubmit={submit} className="flex flex-col gap-7 p-5 pb-0 md:min-h-0 md:overflow-y-auto md:p-8 md:pb-0">
           <div className="flex items-start justify-between gap-4">
@@ -455,6 +527,23 @@ export function PublishDialog({
             </div>
           </fieldset>
 
+          {focusedProduct && (
+            <PrintChoices
+              products={products}
+              chosen={chosenProducts}
+              onToggle={toggleProduct}
+              focused={focusedProduct}
+              onFocus={setFocusedProductId}
+              shared={shared}
+              own={own}
+              onChange={changePlacement}
+              onSeparate={separate}
+              colorKeys={selected}
+              aspect={aspect}
+              disabled={saving}
+            />
+          )}
+
           {isRemix && !keep && (
             <div className="-mt-6">
               <RemixKindChoice
@@ -480,7 +569,7 @@ export function PublishDialog({
             )}
             <button
               type="submit"
-              disabled={saving || selected.length === 0 || paused}
+              disabled={saving || selected.length === 0 || paused || (Boolean(offered) && chosenProducts.length === 0)}
               className="h-14 w-full rounded-2xl bg-black px-8 text-lg font-black text-white disabled:opacity-40 md:w-auto md:self-start"
             >
               {keep ? (saving ? "Keeping…" : "Keep it") : saving ? "Publishing…" : crPreview ? `Publish as CR ${crPreview}` : "Publish"}

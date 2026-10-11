@@ -1,5 +1,7 @@
 # Print report (V1 U6, adapted by A2)
 
+> **Changed October 10:** the 1717's print area is Printful's regular 12 × 16 in front, not 15 × 17. The Print Studio places for the first product a work comes on. Selling no longer uses the Print Studio's one file: approval makes a file for each product from the Print Studio's placed version (or the published art). See [products.md](products.md).
+
 Branch `codex/print`. Five commits on top of `042efbd`, not pushed:
 - `d820d04`: shared helpers;
 - `53b5279`: Convex;

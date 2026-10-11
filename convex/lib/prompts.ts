@@ -7,6 +7,9 @@
 // (tests/unit/clientBoundary.test.ts).
 
 import { colorName } from "./colors";
+import { DEFAULT_PLACEMENT, sizeWords } from "../../src/lib/print/shirtPlacement";
+import type { RelativePlacement } from "../../src/lib/print/shirtPlacement";
+import type { GarmentKind } from "../../shared/config/print-products";
 import type { KeyColor } from "./chromaKey";
 
 // Ends the creator's text as a sentence whether or not they typed the period.
@@ -778,17 +781,32 @@ export function pickLook(
   };
 }
 
+// What the model wears: the first product a work sells on, and where its creator placed the design.
+export type PhotoGarment = { kind: GarmentKind; placement: RelativePlacement };
+
+const GARMENT_WORDS: Record<GarmentKind, string> = {
+  tee: "crew-neck t-shirt",
+  longsleeve: "long-sleeve crew-neck t-shirt",
+  sweatshirt: "crew-neck sweatshirt",
+  hoodie: "pullover hoodie, hood down",
+  tank: "tank top",
+};
+
 export function photoPrompt(
   backgroundColor: string,
   look: ShootLook = { casting: CASTING[0], pose: POSES[0], world: SETTINGS[0] },
+  garment: PhotoGarment = { kind: "tee", placement: DEFAULT_PLACEMENT },
 ) {
   const color = colorName(backgroundColor);
+  const back = garment.placement.side === "back";
+  // A back print is shown from behind; the pose keeps its attitude.
+  const pose = back ? `seen from behind, looking back over one shoulder, ${look.pose}` : look.pose;
   return (
-    `An editorial street-style fashion photograph of ${look.casting}, ${look.pose}, ${look.world}. ` +
+    `An editorial street-style fashion photograph of ${look.casting}, ${pose}, ${look.world}. ` +
     "The pose feels natural for the place. " +
-    `She wears a plain ${color} crew-neck t-shirt (color ${backgroundColor}) with this exact graphic printed large on the chest, ` +
-    "reproduced faithfully with no changes; no jacket or anything else covers the graphic. " +
+    `She wears a plain ${color} ${GARMENT_WORDS[garment.kind] ?? GARMENT_WORDS.tee} (color ${backgroundColor}) with this exact graphic printed as ${sizeWords(garment.placement)}, ` +
+    "reproduced faithfully with no changes and at that size; no jacket, hair, or anything else covers the graphic. " +
     "House style: raw on-camera flash, 35mm film grain, candid and confident, natural skin, minimal retouching. " +
-    "Framed from mid-thigh up, the shirt and print clearly visible."
+    `Framed from mid-thigh up, the ${back ? "back of the garment" : "garment"} and print clearly visible.`
   );
 }

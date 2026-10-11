@@ -95,8 +95,13 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
     const variant = item.variantId ? await db.get("workVariants", item.variantId) : null;
     if (!work || !variant) return { ok: false, state: "needs_attention", reason: "A line isn't a CultRemix design." };
     const cr = `CR ${crNumber(work.crFamily, work.crExpression)}`;
-    const url = publicUrl(work.printKey);
-    if (!work.printKey) return { ok: false, state: "needs_attention", reason: `${cr} has no print file.` };
+    // The listing's print file and side; variants from before products could be chosen use the
+    // work's Print Studio file on the front.
+    const listing = variant.listingId ? await db.get("shopProducts", variant.listingId) : null;
+    const printKey = variant.listingId ? listing?.printFile?.key : work.printKey;
+    const placement = listing?.listing?.placement.side ?? "front";
+    const url = publicUrl(printKey);
+    if (!printKey) return { ok: false, state: "needs_attention", reason: `${cr} has no print file.` };
     if (!url || !/^https?:\/\//u.test(url)) {
       return { ok: false, state: "needs_attention", reason: `${cr}'s print file isn't at a public address yet.` };
     }
@@ -104,7 +109,7 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
     if (catalogVariantId === null) {
       return { ok: false, state: "needs_attention", reason: `${cr} ${variant.color} ${variant.size} has no Printful variant yet.` };
     }
-    lines.push({ lineItemId: item.shopifyLineItemId, catalogVariantId, quantity, printUrl: url });
+    lines.push({ lineItemId: item.shopifyLineItemId, catalogVariantId, quantity, printUrl: url, placement });
   }
   if (lines.length === 0) return { ok: false, state: "canceled" };
   const r = order.recipient;
@@ -153,7 +158,7 @@ const requestValidator = v.object({
       external_id: v.string(),
       placements: v.array(
         v.object({
-          placement: v.literal("front"),
+          placement: v.union(v.literal("front"), v.literal("back")),
           technique: v.literal("dtg"),
           layers: v.array(v.object({ type: v.literal("file"), url: v.string() })),
         }),

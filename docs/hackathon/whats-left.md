@@ -35,8 +35,8 @@ As of October 7, 2026, 9 p.m. Pacific. The Monad submission is due **Tuesday, Oc
 
 **Live ordering:**
 
-1. Checkout sells the active shirt from `/admin/products`, with its real colors and Printful variant IDs, at a price set on that page.
-2. The owner approves each work for sale. Approving it makes the print file automatically (upscale, render, and print check) and creates the work's Shopify product.
+1. ~~Checkout sells the active shirt from `/admin/products`.~~ Done October 10, for several products: creators pick the products a design comes on and place it once; each product has its own prices, back-print extra, and print areas ([products.md](reports/products.md)).
+2. ~~The owner approves each work for sale.~~ Done October 10: approving makes a print file for each product (upscale, render, print check) and a Shopify product for each.
 3. Shopify's privacy webhooks are in place, and buyer addresses are kept only as long as fulfillment needs them.
 4. When Printful ships, a Shopify fulfillment with tracking is created, so buyers get Shopify's shipping emails.
 5. Store policies (shipping, returns, privacy, and terms) appear as pages on cultremix.com, for Jon to approve.

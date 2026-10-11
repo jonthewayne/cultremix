@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { provenanceStatusValidator } from "./chain";
+import { relativePlacementValidator } from "./merch";
 
 // A remixable piece of a published design (convex/lib/remixFields.ts). kind is "text" today;
 // other kinds (people, counts) can join the union later without a migration.
@@ -315,6 +316,15 @@ export const cultremixTables = {
     chainWriteId: v.optional(v.id("chainWrites")),
     chainTxHash: v.optional(v.string()),
     provenanceConfirmedAt: v.optional(v.number()),
+    // Where the design sits on the garments it sells on, chosen when publishing
+    // (src/lib/print/shirtPlacement.ts). The model photo, the print files, and orders follow it.
+    // Absent: the default placement.
+    printPlacement: v.optional(relativePlacementValidator),
+    // The products it sells on (Printful catalog ids, from the products on offer), each with its own
+    // placement when its creator adjusted that one. Absent: the default product.
+    printProducts: v.optional(
+      v.array(v.object({ productId: v.number(), placement: v.optional(relativePlacementValidator) })),
+    ),
     // The work's print file (Print Studio sets these once; the shop sends printKey to Printful).
     printKey: v.optional(v.string()),
     printSha256: v.optional(v.string()),

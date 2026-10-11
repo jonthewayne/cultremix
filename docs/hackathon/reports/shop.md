@@ -1,5 +1,7 @@
 # Shop report (V1 U9 and U10)
 
+> **Changed October 10:** works no longer go on sale at publish. An admin approves each one, and it sells as one Shopify product per product its creator picked (handle `cr-FFF-EEE-<printful id>`), each with its own print file and side. `onPublished`, `syncWork`, and `syncAllPublished` are gone; `sales.approve` and `shopify.syncListing` replace them. See [products.md](products.md).
+
 Branch `codex/shop`, on top of `042efbd` (Economics: shared split rules). Not pushed.
 
 Every published work can now be bought, and each paid order goes to print and to creator earnings. All of it runs against faked Shopify and Printful clients. When the keys arrive, what's left is setting the env vars, registering the webhooks, filling in the Printful catalog IDs, and turning on `commerce.checkout`.

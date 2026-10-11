@@ -44,7 +44,7 @@ export function useCart() {
   const mutation = useMutation({
     mutationFn: async (
       change:
-        | { kind: "add"; cr: string; color: string; size: string; quantity: number }
+        | { kind: "add"; cr: string; product: string; color: string; size: string; quantity: number }
         | { kind: "update"; lineId: string; quantity: number }
         | { kind: "remove"; lineId: string },
     ) => {
@@ -62,7 +62,7 @@ export function useCart() {
     cart: cart.data ?? null,
     error,
     busy: mutation.isPending,
-    addLine: (line: { cr: string; color: string; size: string; quantity: number }) =>
+    addLine: (line: { cr: string; product: string; color: string; size: string; quantity: number }) =>
       mutation.mutateAsync({ kind: "add", ...line }),
     setQuantity: (lineId: string, quantity: number) => mutation.mutateAsync({ kind: "update", lineId, quantity }),
     removeLine: (lineId: string) => mutation.mutateAsync({ kind: "remove", lineId }),

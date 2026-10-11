@@ -247,6 +247,26 @@ describe("creating the Printful order", () => {
     expect(confirms()).toBe(0);
   });
 
+  it("sends a back print on the back, with that product's own print file", async () => {
+    const t = newTest();
+    const { work } = await onSale(t);
+    const backKey = "works/101/002/print-" + "q".repeat(26) + "/print.png";
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("shopProducts").withIndex("by_work", (q) => q.eq("workId", work)).unique();
+      await ctx.db.patch("shopProducts", row!._id, {
+        listing: { ...row!.listing!, placement: { side: "back", size: 0.9, drop: 0 } },
+        printFile: { ...row!.printFile!, key: backKey },
+      });
+    });
+    await paid(t);
+    const sent = printful.calls.find((c) => c.method === "POST" && c.path === "/v2/orders")!.body as {
+      order_items: Array<{ placements: Array<unknown> }>;
+    };
+    expect(sent.order_items[0].placements).toEqual([
+      { placement: "back", technique: "dtg", layers: [{ type: "file", url: `https://files.cultremix.test/${backKey}` }] },
+    ]);
+  });
+
   it("keeps one Printful order across replays, other topics, and reconciliation", async () => {
     const t = newTest();
     await onSale(t);

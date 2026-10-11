@@ -27,6 +27,7 @@ import { pageColors, selectedColor, type PickedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
 import { PhotoSquare } from "./index";
 import { BuyBox } from "~/components/commerce/BuyBox";
+import { formatPrice } from "../../shared/config/print-products";
 
 export const Route = createFileRoute("/cr/$cr")({
   loader: async ({ context, params }) => {
@@ -61,10 +62,14 @@ function ShopPage() {
   const page = useQuery(convexQuery(api.feed.byCr, { cr }));
   // Null until checkout opens and this work is on sale; the page is unchanged until then.
   const offer = useQuery(convexQuery(api.shopify.offer, { cr })).data;
+  // Until it's on sale: the default product and its price (convex/merch.ts offered).
+  const lead = useQuery(convexQuery(api.merch.offered, {})).data?.[0];
   const data = page.data;
   // The picked shirt color, remembered per work so moving to another CR starts on its lead. The
   // one selection for the art square, the swatches, and the buy box.
   const [picked, setPicked] = useState<PickedColor>(null);
+  // The picked product (tee, hoodie, ...), remembered per work the same way.
+  const [pickedProduct, setPickedProduct] = useState<{ cr: string; key: string } | null>(null);
 
   if (page.isLoading) {
     return (
@@ -75,7 +80,10 @@ function ShopPage() {
   }
   if (!data) return <WorkNotFound />;
   const { item, contentHash, description } = data;
-  const colors = pageColors(data.colors, offer);
+  const product = offer
+    ? (offer.products.find((p) => pickedProduct?.cr === item.cr && p.key === pickedProduct.key) ?? offer.products[0])
+    : undefined;
+  const colors = pageColors(data.colors, product);
   const color = selectedColor(colors, picked, item.cr);
   const pick = (key: string) => setPicked({ cr: item.cr, key });
   return (
@@ -113,13 +121,19 @@ function ShopPage() {
           </div>
 
           <div className="flex flex-col gap-6">
-            {offer ? (
-              <BuyBox offer={offer} colorKey={color?.key ?? ""} onColorChange={pick} />
+            {offer && product ? (
+              <BuyBox
+                offer={offer}
+                product={product}
+                onProductChange={(key) => setPickedProduct({ cr: item.cr, key })}
+                colorKey={color?.key ?? ""}
+                onColorChange={pick}
+              />
             ) : (
               <>
                 <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
-                  <span className="text-5xl font-black tracking-tight">$36</span>
-                  <span className="text-sm font-semibold">Heavyweight garment-dyed tee</span>
+                  <span className="text-5xl font-black tracking-tight">{lead ? formatPrice(lead.priceCents) : "$36"}</span>
+                  <span className="text-sm font-semibold">{lead?.name ?? "Heavyweight garment-dyed tee"}</span>
                 </div>
                 {color && <ColorSwatches colors={colors} value={color.key} onChange={pick} />}
                 <div>

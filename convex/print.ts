@@ -3,7 +3,6 @@ import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { PRINT_PRODUCT, shirtColor } from "../shared/config/print-products";
 import { printCheck } from "../src/lib/print/check";
 import { offeredPrintColors } from "../src/lib/print/colors";
 import { clampTolerance, parseHex } from "../src/lib/print/knockout";
@@ -15,6 +14,8 @@ import { EXPIRED_MESSAGE } from "./lib/paidAttempts";
 import type { Spend } from "./lib/paidAttempts";
 import { topazCents, topazWorstCaseCents } from "./lib/pricing";
 import { formatCr, parseCr, publicUrl } from "./lib/r2";
+import { nudgeSalePrep } from "./lib/salePrep";
+import { printTargetForWork } from "./lib/shopProduct";
 import { flagEnabled } from "./studio";
 
 // Print Studio (V1 U6): a published work's creator, or the owner, turns its art into a print file.
@@ -145,6 +146,15 @@ export const studio = query({
       credits: v.number(),
       upscaleCredits: v.number(),
       upscaleEnabled: v.boolean(),
+      // What it's placed for: the front of the first product it sells on.
+      product: v.object({
+        key: v.string(),
+        name: v.string(),
+        printArea: v.object({ widthIn: v.number(), heightIn: v.number() }),
+        safeInsetIn: v.number(),
+        dpi: v.number(),
+        colors: v.array(v.object({ name: v.string(), hex: v.string() })),
+      }),
       versions: v.array(
         v.object({
           id: v.id("printVersions"),
@@ -177,16 +187,18 @@ export const studio = query({
     const placement = await placementOf(ctx, work._id);
     const file = await printFileOf(ctx, work._id);
     const owner = isOwner(user);
+    const target = await printTargetForWork(ctx, work);
     return {
       workId: work._id,
       cr: formatCr(work.crFamily, work.crExpression),
       title: work.title,
       backgroundColor: work.backgroundColor,
-      offeredColors: offeredPrintColors(work.offeredColors),
+      offeredColors: offeredPrintColors(work.offeredColors, target),
       isOwner: owner,
       credits: await creditBalance(ctx, user._id),
       upscaleCredits: owner ? 0 : UPSCALE_CREDITS,
       upscaleEnabled: await flagEnabled(ctx, "gen.upscale"),
+      product: { ...target.geometry, name: target.name, colors: target.colors },
       versions: await Promise.all(
         versions.map(async (version) => {
           // Version 1 is the published art, which already has its medium copy.
@@ -426,13 +438,14 @@ export const savePlacement = mutation({
     const { user, work } = await requirePrinter(ctx, args.cr);
     requireUnlocked(work);
     const version = await readyVersion(ctx, work, args.versionId);
-    if (shirtColor(args.color).name !== args.color) {
+    const target = await printTargetForWork(ctx, work);
+    if (!target.colors.some((color) => color.name === args.color)) {
       throw new ConvexError({ code: "BAD_COLOR", message: "That shirt color isn't offered." });
     }
     const placed = clampPlacement(
       { xIn: args.xIn, yIn: args.yIn, widthIn: args.widthIn },
       aspectOf(version.width, version.height),
-      PRINT_PRODUCT,
+      target.geometry,
     );
     const existing = await placementOf(ctx, work._id);
     const row = { versionId: version._id, ...placed, color: args.color, updatedBy: user._id, updatedAt: Date.now() };
@@ -461,7 +474,8 @@ export const render = mutation({
       throw new ConvexError({ code: "BUSY", message: "The print file is being made." });
     }
     const version = await readyVersion(ctx, work, placement.versionId);
-    const check = printCheck({ width: version.width, height: version.height, ...version.metrics }, placement, PRINT_PRODUCT);
+    const { geometry } = await printTargetForWork(ctx, work);
+    const check = printCheck({ width: version.width, height: version.height, ...version.metrics }, placement, geometry);
     const refusal = check.items.find((item) => item.status === "refuse");
     if (refusal) throw new ConvexError({ code: "NOT_PRINTABLE", message: refusal.label });
     await ctx.db.patch("printPlacements", placement._id, { render: { status: "rendering", startedAt: Date.now() } });
@@ -526,6 +540,7 @@ export const recordVersion = internalMutation({
       finishedAt: Date.now(),
       ...(version.fal && args.latencyMs !== undefined ? { fal: { ...version.fal, latencyMs: args.latencyMs } } : {}),
     });
+    await nudgeSalePrep(ctx, version.workId);
     return true;
   },
 });
@@ -552,6 +567,7 @@ export async function failPrintVersion(ctx: MutationCtx, version: Doc<"printVers
     const sent = version.fal !== undefined && version.fal.state !== "queued";
     await closeReservation(ctx, version._id, spend ?? (sent ? { kind: "settle", reason: "failed" } : { kind: "release", reason: "not sent" }));
   }
+  await nudgeSalePrep(ctx, version.workId);
   return true;
 }
 
@@ -627,6 +643,12 @@ export const renderJob = internalQuery({
       expression: v.number(),
       locked: v.boolean(),
       placement: v.object({ xIn: v.number(), yIn: v.number(), widthIn: v.number(), color: v.string() }),
+      geometry: v.object({
+        key: v.string(),
+        printArea: v.object({ widthIn: v.number(), heightIn: v.number() }),
+        safeInsetIn: v.number(),
+        dpi: v.number(),
+      }),
       createdBy: v.id("users"),
       version: v.object({
         id: v.id("printVersions"),
@@ -649,6 +671,7 @@ export const renderJob = internalQuery({
       expression: work.crExpression,
       locked: Boolean(work.printKey),
       placement: { xIn: placement.xIn, yIn: placement.yIn, widthIn: placement.widthIn, color: placement.color },
+      geometry: (await printTargetForWork(ctx, work)).geometry,
       createdBy: placement.updatedBy,
       version: { id: version._id, key: version.key, width: version.width, height: version.height, metrics: version.metrics },
     };
@@ -667,6 +690,8 @@ export const recordRender = internalMutation({
     heightPx: v.number(),
     placement: v.object({ xIn: v.number(), yIn: v.number(), widthIn: v.number(), heightIn: v.number() }),
     rect: v.object({ left: v.number(), top: v.number(), width: v.number(), height: v.number() }),
+    // The geometry key it was made for.
+    product: v.string(),
     color: v.string(),
     dpi: v.number(),
     grade: v.union(v.literal("good"), v.literal("great")),
@@ -681,7 +706,7 @@ export const recordRender = internalMutation({
     if (!work || work.printKey || work.printSha256) return false;
     if (await printFileOf(ctx, work._id)) return false;
     const { workId, ...file } = args;
-    await ctx.db.insert("printFiles", { workId, product: PRINT_PRODUCT.key, ...file });
+    await ctx.db.insert("printFiles", { workId, ...file });
     await ctx.db.patch("works", work._id, { printKey: args.key, printSha256: args.sha256 });
     const placement = await placementOf(ctx, work._id);
     if (placement) await ctx.db.patch("printPlacements", placement._id, { render: undefined });

@@ -87,6 +87,11 @@ export type PrintfulRecipient = {
   email?: string;
 };
 
+// Printful's regular DTG placements. Each print file covers its placement's whole print area at
+// 300 DPI with the design where its creator put it (convex/printTools.ts renderListings), so no
+// position is sent: Printful fits the file to the area.
+export type PrintfulPlacement = "front" | "back";
+
 export type PrintfulOrderRequest = {
   external_id: string;
   shipping: "STANDARD";
@@ -96,7 +101,7 @@ export type PrintfulOrderRequest = {
     catalog_variant_id: number;
     quantity: number;
     external_id: string;
-    placements: Array<{ placement: "front"; technique: "dtg"; layers: Array<{ type: "file"; url: string }> }>;
+    placements: Array<{ placement: PrintfulPlacement; technique: "dtg"; layers: Array<{ type: "file"; url: string }> }>;
   }>;
 };
 
@@ -108,11 +113,11 @@ export function printfulConfigFromEnv(env: Record<string, string | undefined> = 
   return token && storeId ? { token, storeId } : null;
 }
 
-// The create body for one Shopify order: one catalog item per open line, front placement.
+// The create body for one Shopify order: one catalog item per open line, on its listing's side.
 export function buildOrderRequest(args: {
   shopifyOrderId: string;
   recipient: PrintfulRecipient;
-  lines: Array<{ lineItemId: string; catalogVariantId: number; quantity: number; printUrl: string }>;
+  lines: Array<{ lineItemId: string; catalogVariantId: number; quantity: number; printUrl: string; placement?: PrintfulPlacement }>;
 }): PrintfulOrderRequest {
   return {
     external_id: args.shopifyOrderId,
@@ -123,7 +128,7 @@ export function buildOrderRequest(args: {
       catalog_variant_id: line.catalogVariantId,
       quantity: line.quantity,
       external_id: line.lineItemId,
-      placements: [{ placement: "front", technique: "dtg", layers: [{ type: "file", url: line.printUrl }] }],
+      placements: [{ placement: line.placement ?? "front", technique: "dtg", layers: [{ type: "file", url: line.printUrl }] }],
     })),
   };
 }

@@ -5,11 +5,14 @@ import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { PRINT_PRODUCT } from "../shared/config/print-products";
+import type { PrintGeometry } from "../shared/config/print-products";
 import { hazeShare } from "../src/lib/print/alpha";
 import { HAZE_REFUSE, printCheck } from "../src/lib/print/check";
 import { parseHex } from "../src/lib/print/knockout";
 import { aspectOf, canvasPx, pixelRect, placedHeight } from "../src/lib/print/placement";
+import { areaPlacement, toInches } from "../src/lib/print/shirtPlacement";
+import type { PrintArea, RelativePlacement } from "../src/lib/print/shirtPlacement";
+import { geometryOf } from "./lib/shopProduct";
 import { knockoutImage, measureImage, previewWebp, renderPrintFile, sha256Of, trimImage } from "./lib/printImage";
 import { printFileKey, printPreviewKey, printVersionKey, randomCode } from "./lib/printKeys";
 import { storageMode } from "./lib/r2";
@@ -125,6 +128,7 @@ type RenderJob = {
   expression: number;
   locked: boolean;
   placement: { xIn: number; yIn: number; widthIn: number; color: string };
+  geometry: PrintGeometry;
   createdBy: Id<"users">;
   version: {
     id: Id<"printVersions">;
@@ -145,17 +149,17 @@ export const render = internalAction({
     if (!job || job.locked) return null;
     try {
       if (!storageMode()) throw new Error("Storage isn't set up.");
-      const { version, placement } = job;
+      const { version, placement, geometry } = job;
       const metrics = { width: version.width, height: version.height, ...version.metrics };
-      const check = printCheck(metrics, placement, PRINT_PRODUCT);
+      const check = printCheck(metrics, placement, geometry);
       const refusal = check.items.find((item) => item.status === "refuse");
       if (refusal || check.grade === "refused") throw new Error(refusal?.label ?? "Not printable yet.");
 
       const source = await fetchPublicImage(version.key, ctx);
       const aspect = aspectOf(version.width, version.height);
-      const rect = pixelRect(placement, aspect, PRINT_PRODUCT);
-      const canvas = canvasPx(PRINT_PRODUCT);
-      const rendered = await renderPrintFile(source, rect, canvas, PRINT_PRODUCT.dpi);
+      const rect = pixelRect(placement, aspect, geometry);
+      const canvas = canvasPx(geometry);
+      const rendered = await renderPrintFile(source, rect, canvas, geometry.dpi);
 
       // The server's readiness check, on the pixels that will print.
       if (!rendered.designMetrics.hasAlpha) throw new Error("The rendered file lost its transparency.");
@@ -182,6 +186,7 @@ export const render = internalAction({
           heightIn: Math.round(placedHeight(placement.widthIn, aspect) * 100) / 100,
         },
         rect,
+        product: geometry.key,
         color: placement.color,
         dpi: Math.round(check.dpi * 10) / 10,
         grade,
@@ -192,6 +197,75 @@ export const render = internalAction({
       });
     } catch (error) {
       await ctx.runMutation(internal.print.failRender, { workId: args.workId, error: readable(error) });
+    }
+    return null;
+  },
+});
+
+type ListingJob = {
+  family: number;
+  expression: number;
+  version: { id: Id<"printVersions">; key: string; width: number; height: number; metrics: { hasAlpha: boolean; solid: number; visible: number; haze: number } };
+  listings: Array<{ listingId: Id<"shopProducts">; productKey: string; placement: RelativePlacement; printArea: PrintArea }>;
+};
+
+// The print files for a work going on sale (convex/sales.ts): for each product, the art placed where
+// its creator chose on that product's whole print area at 300 DPI. A file covering the whole area is
+// what Printful expects for the placement, so it prints where the preview showed it, and when
+// Printful scales a print down for smaller sizes it scales as one piece and stays centered.
+export const renderListings = internalAction({
+  args: { workId: v.id("works"), versionId: v.id("printVersions"), listingIds: v.array(v.id("shopProducts")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const job: ListingJob | null = await ctx.runQuery(internal.sales.renderJob, args);
+    if (!job) return null;
+    const { version } = job;
+    const aspect = aspectOf(version.width, version.height);
+    let source: Uint8Array | null = null;
+    for (const listing of job.listings) {
+      try {
+        if (!storageMode()) throw new Error("Storage isn't set up.");
+        const geometry = geometryOf(listing.productKey, listing.printArea);
+        const placement = areaPlacement(toInches(listing.placement, aspect, listing.printArea), listing.printArea);
+        const metrics = { width: version.width, height: version.height, ...version.metrics };
+        const check = printCheck(metrics, placement, geometry);
+        const refusal = check.items.find((item) => item.status === "refuse");
+        if (refusal || check.grade === "refused") throw new Error(refusal?.label ?? "Not printable yet.");
+        source ??= await fetchPublicImage(version.key, ctx);
+        const rect = pixelRect(placement, aspect, geometry);
+        const canvas = canvasPx(geometry);
+        const rendered = await renderPrintFile(source, rect, canvas, geometry.dpi);
+        if (!rendered.designMetrics.hasAlpha) throw new Error("The rendered file lost its transparency.");
+        if (hazeShare(rendered.designMetrics) > HAZE_REFUSE) throw new Error("The rendered file has too much faint haze.");
+        const planned = printFileKey(job.family, job.expression, randomCode());
+        const [key, previewKey] = await Promise.all([
+          storeObject(ctx, planned, rendered.bytes, "image/png"),
+          previewWebp(rendered.bytes).then((webp) => storeObject(ctx, printPreviewKey(planned), webp, "image/webp")),
+        ]);
+        await ctx.runMutation(internal.sales.recordListingFile, {
+          listingId: listing.listingId,
+          file: {
+            key,
+            previewKey,
+            sha256: rendered.sha256,
+            widthPx: canvas.width,
+            heightPx: canvas.height,
+            versionId: version.id,
+            placement: {
+              xIn: placement.xIn,
+              yIn: placement.yIn,
+              widthIn: placement.widthIn,
+              heightIn: Math.round(placedHeight(placement.widthIn, aspect) * 100) / 100,
+            },
+            dpi: Math.round(check.dpi * 10) / 10,
+            grade: check.grade === "great" ? "great" : "good",
+            warnings: check.items.filter((item) => item.status === "warn").map((item) => item.label),
+            madeAt: Date.now(),
+          },
+        });
+      } catch (error) {
+        await ctx.runMutation(internal.sales.failListingFile, { listingId: listing.listingId, error: readable(error) });
+      }
     }
     return null;
   },

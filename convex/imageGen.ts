@@ -23,6 +23,7 @@ import {
 } from "./lib/models";
 import { stripPngMetadata } from "./lib/pngMeta";
 import { keyFor, keyedPrompt, photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
+import type { PhotoGarment } from "./lib/prompts";
 import type { ShootLook } from "./lib/prompts";
 import { callFailure } from "./lib/paidAttempts";
 import type { Spend } from "./lib/paidAttempts";
@@ -256,10 +257,11 @@ async function photoImage(
   backgroundColor: string,
   look: ShootLook,
   provider: Provider | null = imageProvider(),
+  garment?: PhotoGarment,
 ) {
   if (provider === "chatgpt") {
     return clean(await chatgptImage({
-      text: photoPrompt(backgroundColor, look),
+      text: photoPrompt(backgroundColor, look, garment),
       images: [art],
       background: "opaque",
       size: "1024x1024",
@@ -267,7 +269,7 @@ async function photoImage(
   }
   return clean(
     await gatewayImage({
-      text: photoPrompt(backgroundColor, look),
+      text: photoPrompt(backgroundColor, look, garment),
       images: [art],
       size: PHOTO_SIZE,
       background: "opaque",
@@ -617,7 +619,7 @@ export const publishAssets = internalAction({
         sent = { kind: "release", reason: "stand-in" };
       } else {
         const source = art ?? (await fetchPublicImage(artKey, ctx));
-        const paid = await paidCall(() => photoImage(source, job.backgroundColor, look));
+        const paid = await paidCall(() => photoImage(source, job.backgroundColor, look, imageProvider(), job.garment));
         sent = paid.spend;
         const { bytes } = paid.out;
         // The work's first model photo: works/<family>/<expression>/photos/1/.
@@ -728,6 +730,7 @@ export const reshoot = internalAction({
       shootId: Id<"shoots">;
       artKey: string;
       backgroundColor: string;
+      garment: PhotoGarment;
       look: ShootLook;
       crFamily: number;
       crExpression: number;
@@ -743,7 +746,7 @@ export const reshoot = internalAction({
         key = `fake:photo-${job.shootId}-${Date.now()}`;
       } else {
         const art = await fetchPublicImage(job.artKey, ctx);
-        const paid = await paidCall(() => photoImage(art, job.backgroundColor, job.look));
+        const paid = await paidCall(() => photoImage(art, job.backgroundColor, job.look, imageProvider(), job.garment));
         sent = paid.spend;
         // The next photo number, so the photo a page has cached never changes under its link.
         const n = (photoNumberOf(job.photoKey) ?? 0) + 1;

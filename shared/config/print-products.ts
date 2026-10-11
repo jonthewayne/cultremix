@@ -8,6 +8,69 @@ export type ShirtColor = {
   variants: { S: number; M: number; L: number; XL: number; "2XL": number };
 };
 
+// What placement, the print check, and rendering need from a product: its front print area,
+// the safe margin inside it, and the print file's DPI. Products from /admin/products carry their
+// own (convex/lib/shopProduct.ts); PRINT_PRODUCT is the fallback.
+export type PrintGeometry = {
+  key: string;
+  printArea: { widthIn: number; heightIn: number };
+  safeInsetIn: number;
+  dpi: number;
+};
+
+// The kinds of garment the shop can offer, each with the print areas a new product of that kind
+// starts with (an admin corrects them per product in Admin, Products). Inches; files are 300 DPI.
+// Checked 2026-10-10:
+// - Fronts: Printful's regular DTG front is 12 x 16 in (help.printful.com, "How do I transition my
+//   API integration to the 15 x 18 print area"). Its larger 15 x 18 front (front_large) exists on a
+//   few shirts and sizes only and costs $5.95 more, so the shop uses the regular front.
+// - Backs: 12 x 16 in, a 3600 x 4800 px file (help.printful.com, "How is my design scaled for
+//   different garment sizes").
+// - Hoodie fronts: up to 14 x 14 in on the largest sizes, a 4200 x 4200 px file (printful.com,
+//   Gildan 18500).
+// Printful scales a print down for smaller sizes. A file made for the whole print area scales as one
+// piece, so the design stays centered where its creator put it.
+export type GarmentKind = "tee" | "longsleeve" | "sweatshirt" | "hoodie" | "tank";
+export type PrintAreaInches = { widthIn: number; heightIn: number };
+export const REGULAR_FRONT_AREA: PrintAreaInches = { widthIn: 12, heightIn: 16 };
+export const BACK_AREA: PrintAreaInches = { widthIn: 12, heightIn: 16 };
+export const HOODIE_FRONT_AREA: PrintAreaInches = { widthIn: 14, heightIn: 14 };
+
+// Each kind's starting prices (S-XL, 2XL) until an admin sets a product's own: the tee's are the
+// launch prices; the rest keep a similar margin over what Printful charges for that kind.
+export const GARMENT_KINDS: Record<
+  GarmentKind,
+  { label: string; front: PrintAreaInches; back: PrintAreaInches; priceCents: number; largePriceCents: number }
+> = {
+  tee: { label: "T-shirt", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 3600, largePriceCents: 3900 },
+  longsleeve: { label: "Long sleeve", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 4200, largePriceCents: 4500 },
+  sweatshirt: { label: "Sweatshirt", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 5000, largePriceCents: 5400 },
+  hoodie: { label: "Hoodie", front: HOODIE_FRONT_AREA, back: BACK_AREA, priceCents: 5600, largePriceCents: 6000 },
+  tank: { label: "Tank top", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 3400, largePriceCents: 3700 },
+};
+export const GARMENT_KIND_KEYS = Object.keys(GARMENT_KINDS) as Array<GarmentKind>;
+
+export function isGarmentKind(value: string): value is GarmentKind {
+  return Object.prototype.hasOwnProperty.call(GARMENT_KINDS, value);
+}
+
+// A catalog product's kind, from its name ("Unisex Heavy Blend Hoodie | Gildan 18500").
+export function garmentKindOf(name: string): GarmentKind {
+  const text = name.toLowerCase();
+  if (/hoodie|hooded/u.test(text)) return "hoodie";
+  if (/tank/u.test(text)) return "tank";
+  if (/long[ -]?sleeve/u.test(text)) return "longsleeve";
+  if (/sweatshirt|fleece|pullover/u.test(text)) return "sweatshirt";
+  return "tee";
+}
+
+// What a back print adds to the price until an admin sets it: Printful charges $5.95 more for a
+// back print on the products checked (its public catalog, GET /products/586, /71, /146).
+export const BACK_EXTRA_CENTS = 600;
+
+// What the Print Studio places for (convex/print.ts studio): a product's front, with its colors.
+export type StudioProduct = PrintGeometry & { name: string; colors: Array<{ name: string; hex: string }> };
+
 export type PrintProduct = {
   key: string;
   // Shown to buyers.
@@ -30,9 +93,10 @@ export type PrintProduct = {
 // Comfort Colors 1717 through Printful (catalog product 586, "Unisex Garment-Dyed Heavyweight
 // T-Shirt | Comfort Colors 1717"; DTG front is its default placement).
 //
-// Print area: 15 x 17 in, from listings that give the 1717's front print file as 4500 x 5100 px
-// at 300 DPI. Unverified: Printful's printfile endpoint (GET /mockup-generator/printfiles/586)
-// needs a store token, which this project doesn't have yet. Check it once a Printful key exists.
+// Print area: Printful's regular DTG front, 12 x 16 in (REGULAR_FRONT_AREA); its catalog lists no
+// large front for this shirt. It was 15 x 17 in until 2026-10-10, from another print shop's
+// listing; Print Studio files made then are 4500 x 5100 px. Unverified for this product:
+// Printful's printfile endpoint (GET /mockup-generator/printfiles/586) needs a store token.
 //
 // Colors and variant IDs: Printful's public catalog, GET https://api.printful.com/products/586
 // (fetched 2026-10-03). Hex values are Printful's swatch colors.
@@ -42,14 +106,13 @@ export const COMFORT_COLORS_1717: PrintProduct = {
   vendor: "CultRemix",
   productType: "T-Shirt",
   printful: { productId: 586, model: "1717", technique: "DTG", placement: "front" },
-  printArea: { widthIn: 15, heightIn: 17 },
+  printArea: REGULAR_FRONT_AREA,
   safeInsetIn: 0.5,
   dpi: 300,
   verified: false,
   sources: [
     "https://api.printful.com/products/586 (product, variants, colors; public catalog)",
-    "https://mydesigns.io/product-catalog/t-shirts/product/comfort-colors-1717 (front print file 4500 x 5100 px)",
-    "https://dynamicmockups.com (Comfort Colors 1717 print file 15:17)",
+    "https://help.printful.com/hc/en-us/articles/50263208968209 (regular 12 x 16 in front; 15 x 18 on a few shirts)",
   ],
   colors: [
     { name: "Black", hex: "#1b1b1c", variants: { S: 15114, M: 15115, L: 15116, XL: 15117, "2XL": 15118 } },

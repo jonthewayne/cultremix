@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { garmentKindValidator, printAreaValidator, relativePlacementValidator } from "./merch";
 
 // Shop tables (V1 U9/U10): Shopify products and orders, Printful fulfillment, and creator
 // earnings. Names follow the V1 plan's data model; anything the plan doesn't name is noted here.
@@ -48,13 +49,78 @@ const unitCents = v.object({
   split: v.array(v.object({ who: v.id("users"), cents: v.number() })),
 });
 
+// What a work sells as on one product, fixed when the owner approves it for sale (convex/sales.ts):
+// the product, where the design sits on it, the print area on that side, its prices, and its colors
+// with their Printful variant ids. Approving again refreshes it; later product changes leave it alone.
+export const listingValidator = v.object({
+  merchProductId: v.optional(v.id("merchProducts")),
+  printfulProductId: v.number(),
+  // "printful-<id>" (convex/lib/shopProduct.ts).
+  productKey: v.string(),
+  kind: garmentKindValidator,
+  name: v.string(),
+  detail: v.optional(v.string()),
+  placement: relativePlacementValidator,
+  // The print area on the placement's side, in inches.
+  printArea: printAreaValidator,
+  // S-XL and 2XL, a back print's extra included.
+  priceCents: v.number(),
+  largePriceCents: v.number(),
+  colors: v.array(
+    v.object({
+      key: v.string(),
+      code: v.string(),
+      name: v.string(),
+      hex: v.string(),
+      variants: v.array(v.object({ size: v.string(), id: v.number() })),
+    }),
+  ),
+});
+
+// A listing's print file: the design placed on that product's whole print area at 300 DPI, the
+// size Printful expects for the placement, so Printful puts it where its creator did.
+export const listingFileValidator = v.object({
+  key: v.string(),
+  previewKey: v.optional(v.string()),
+  sha256: v.string(),
+  widthPx: v.number(),
+  heightPx: v.number(),
+  // The Print Studio version it was made from.
+  versionId: v.id("printVersions"),
+  placement: v.object({ xIn: v.number(), yIn: v.number(), widthIn: v.number(), heightIn: v.number() }),
+  dpi: v.number(),
+  grade: v.union(v.literal("good"), v.literal("great")),
+  warnings: v.array(v.string()),
+  madeAt: v.number(),
+});
+
 export const shopTables = {
-  // One Shopify product per published work, by handle cr-FFF-EEE. (The plan's works.commerceStatus
-  // lives here so the works table stays untouched.)
+  // One Shopify product per published work and product it's sold on, by handle
+  // cr-FFF-EEE-<printful id>. (The plan's works.commerceStatus lives here so the works table stays
+  // untouched.)
   shopProducts: defineTable({
     workId: v.id("works"),
     handle: v.string(),
-    status: v.union(v.literal("pending"), v.literal("live"), v.literal("failed")),
+    // "printful-<id>": the product this row sells the work on. Absent on rows from before products
+    // could be chosen.
+    productKey: v.optional(v.string()),
+    // preparing: approved, its print file is being made. pending: waiting for Shopify. live: on sale
+    // (once checkout is on). failed: Shopify refused; retried with backoff. paused: taken off sale.
+    status: v.union(
+      v.literal("preparing"),
+      v.literal("pending"),
+      v.literal("live"),
+      v.literal("failed"),
+      v.literal("paused"),
+    ),
+    listing: v.optional(listingValidator),
+    approvedAt: v.optional(v.number()),
+    approvedBy: v.optional(v.id("users")),
+    // Why the print file couldn't be made, while preparing.
+    prepError: v.optional(v.string()),
+    printFile: v.optional(listingFileValidator),
+    // Set while its print file is being made.
+    renderStartedAt: v.optional(v.number()),
     shopifyProductId: v.optional(v.string()),
     attempts: v.number(),
     lastError: v.optional(v.string()),
@@ -63,11 +129,16 @@ export const shopTables = {
     updatedAt: v.number(),
   })
     .index("by_work", ["workId"])
+    .index("by_work_product", ["workId", "productKey"])
     .index("by_status_next", ["status", "nextAttemptAt"]),
 
-  // Reverse lookup from a Shopify variant (GID) to the work, color, and size it prints.
+  // Reverse lookup from a Shopify variant (GID) to the work, product, color, and size it prints.
   workVariants: defineTable({
     workId: v.id("works"),
+    // The listing (shopProducts row) it belongs to, which holds the print file and side. Absent on
+    // rows from before products could be chosen.
+    listingId: v.optional(v.id("shopProducts")),
+    productKey: v.optional(v.string()),
     shopifyVariantId: v.string(),
     sku: v.string(),
     color: v.string(),

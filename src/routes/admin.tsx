@@ -16,6 +16,7 @@ const tabs = [
   { to: "/admin/judges", label: "Judges", exact: false },
   { to: "/admin/lineage", label: "Lineage", exact: false },
   { to: "/admin/products", label: "Products", exact: false },
+  { to: "/admin/sale", label: "For sale", exact: false },
   { to: "/admin/waitlist", label: "Waitlist", exact: false },
 ] as const;
 

@@ -4,14 +4,18 @@ import { action, internalMutation, internalQuery, mutation, query } from "./_gen
 import { requireAdmin } from "./lib/adminAccess";
 import { GARMENT_COLORS, colorKey } from "./lib/garments";
 import type { GarmentColor, Palette } from "./lib/garments";
-import { merchColor } from "./schema/merch";
+import { merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
+import { garmentKindValidator, merchColor, printAreaValidator } from "./schema/merch";
+import { garmentKindOf } from "../shared/config/print-products";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 // Print-on-demand products (merchProducts): an admin searches Printful's public catalog, adds a
-// product with its real colors, picks which colors are offered, and marks one product active. The
-// active product's offered colors are the palette the studio previews on and the publish dialog
-// offers (convex/lib/garments.ts takes it); without one, the launch colors stand in. Printful's
+// product with its real colors and print placements, picks which colors are offered, puts products
+// on offer, and sets how each sells (name, prices, back-print extra, print areas). Creators pick
+// from the products on offer when publishing. The active product is the default one: its offered
+// colors are the palette the studio previews on and the publish dialog offers
+// (convex/lib/garments.ts takes it); without one, the launch shirt and colors stand in. Printful's
 // catalog needs no account: GET https://api.printful.com/products and /products/<id>.
 
 type Ctx = QueryCtx | MutationCtx;
@@ -59,6 +63,43 @@ export const palette = query({
   },
 });
 
+// The products on offer, the default first, for Publish and the work page.
+export const offered = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      productId: v.number(),
+      key: v.string(),
+      kind: garmentKindValidator,
+      name: v.string(),
+      detail: v.optional(v.string()),
+      priceCents: v.number(),
+      largePriceCents: v.number(),
+      backExtraCents: v.number(),
+      front: printAreaValidator,
+      back: v.optional(printAreaValidator),
+      colors: v.array(v.object({ key: v.string(), name: v.string(), hex: v.string() })),
+      isDefault: v.boolean(),
+    }),
+  ),
+  handler: async (ctx) => {
+    return (await offeredShopProducts(ctx)).map((product) => ({
+      productId: product.printfulProductId,
+      key: product.key,
+      kind: product.kind,
+      name: product.name,
+      ...(product.detail ? { detail: product.detail } : {}),
+      priceCents: product.priceCents,
+      largePriceCents: product.largePriceCents,
+      backExtraCents: product.backExtraCents,
+      front: product.front,
+      ...(product.back ? { back: product.back } : {}),
+      colors: product.colors.map(({ key, name, hex }) => ({ key, name, hex })),
+      isDefault: product.isDefault,
+    }));
+  },
+});
+
 // ---- Admin ----
 
 const productView = v.object({
@@ -69,8 +110,22 @@ const productView = v.object({
   model: v.optional(v.string()),
   image: v.optional(v.string()),
   active: v.boolean(),
+  offered: v.boolean(),
   fetchedAt: v.number(),
   colors: v.array(v.object({ key: v.string(), name: v.string(), hex: v.string(), image: v.optional(v.string()), inStock: v.boolean(), offered: v.boolean(), sizes: v.array(v.string()) })),
+  // How it sells, with the defaults filled in, and which of those the admin set.
+  sale: v.object({
+    kind: garmentKindValidator,
+    name: v.string(),
+    priceCents: v.number(),
+    largePriceCents: v.number(),
+    backExtraCents: v.number(),
+    front: printAreaValidator,
+    back: v.optional(printAreaValidator),
+    custom: v.array(v.string()),
+  }),
+  // Printful's DTG placements for it, with what each adds to Printful's price.
+  placements: v.optional(v.array(v.object({ id: v.string(), extraCents: v.number() }))),
 });
 
 export const adminList = query({
@@ -89,11 +144,34 @@ export const adminList = query({
         model: p.model,
         image: p.image,
         active: p.active,
+        offered: p.active || Boolean(p.offered),
         fetchedAt: p.fetchedAt,
         colors: p.colors.map((c) => ({ key: c.key, name: c.name, hex: c.hex, image: c.image, inStock: c.inStock, offered: c.offered, sizes: c.variants.map((s) => s.size) })),
+        sale: saleView(p),
+        ...(p.placements ? { placements: p.placements } : {}),
       }));
   },
 });
+
+function saleView(product: Doc<"merchProducts">) {
+  const shop = merchShopProduct(product);
+  const custom = (["shopName", "kind", "priceCents", "largePriceCents", "backExtraCents", "frontArea", "backArea"] as const).filter(
+    (field) => product[field] !== undefined,
+  );
+  return {
+    kind: shop.kind,
+    name: shop.name,
+    priceCents: shop.priceCents,
+    largePriceCents: shop.largePriceCents,
+    backExtraCents: shop.backExtraCents,
+    front: shop.front,
+    ...(shop.back ? { back: shop.back } : {}),
+    custom: [...custom],
+  };
+}
+
+// The DTG placements CultRemix can print, from a catalog product's file types.
+const DTG_PLACEMENTS = new Set(["front", "back", "front_large"]);
 
 // Searches the catalog's apparel by words in the title, brand, or model ("1717", "comfort colors").
 export const adminSearch = action({
@@ -127,7 +205,14 @@ export const adminAdd = action({
     if (!response.ok) throw new ConvexError({ code: "CATALOG", message: `Printful's catalog answered ${response.status}.` });
     const data = (await response.json()) as {
       result?: {
-        product: { id: number; title: string; brand?: string; model?: string; image?: string };
+        product: {
+          id: number;
+          title: string;
+          brand?: string;
+          model?: string;
+          image?: string;
+          files?: Array<{ type?: string; additional_price?: string | null }>;
+        };
         variants: Array<{ id: number; size: string; color: string; color_code: string; image?: string; in_stock?: boolean }>;
       };
     };
@@ -143,6 +228,9 @@ export const adminAdd = action({
       byColor.set(key, color);
     }
     const colors = [...byColor].map(([key, c]) => ({ key, name: c.name, hex: c.hex, image: c.image, inStock: c.inStock, variants: c.variants, offered: false }));
+    const placements = (result.product.files ?? [])
+      .filter((file) => file.type && DTG_PLACEMENTS.has(file.type))
+      .map((file) => ({ id: file.type!, extraCents: Math.round(Number(file.additional_price ?? 0) * 100) || 0 }));
     await ctx.runMutation(internal.merch.saveProduct, {
       productId: result.product.id,
       name: result.product.title,
@@ -150,6 +238,7 @@ export const adminAdd = action({
       model: result.product.model,
       image: result.product.image,
       colors,
+      placements,
       addedBy: userId,
     });
     return { colors: colors.length };
@@ -171,6 +260,7 @@ export const saveProduct = internalMutation({
     model: v.optional(v.string()),
     image: v.optional(v.string()),
     colors: v.array(merchColor),
+    placements: v.optional(v.array(v.object({ id: v.string(), extraCents: v.number() }))),
     addedBy: v.id("users"),
   },
   returns: v.null(),
@@ -187,7 +277,15 @@ export const saveProduct = internalMutation({
     const colors = args.colors.map((color) => ({ ...color, offered: offeredNow.has(color.key) }));
     const now = Date.now();
     if (existing) {
-      await ctx.db.patch("merchProducts", existing._id, { name: args.name, brand: args.brand, model: args.model, image: args.image, colors, fetchedAt: now });
+      await ctx.db.patch("merchProducts", existing._id, {
+        name: args.name,
+        brand: args.brand,
+        model: args.model,
+        image: args.image,
+        colors,
+        ...(args.placements ? { placements: args.placements } : {}),
+        fetchedAt: now,
+      });
     } else {
       await ctx.db.insert("merchProducts", {
         provider: "printful",
@@ -198,6 +296,9 @@ export const saveProduct = internalMutation({
         image: args.image,
         colors,
         active: false,
+        offered: false,
+        kind: garmentKindOf(args.name),
+        ...(args.placements ? { placements: args.placements } : {}),
         fetchedAt: now,
         addedBy: args.addedBy,
       });
@@ -236,10 +337,91 @@ export const adminSetActive = mutation({
         throw new ConvexError({ code: "INVALID_INPUT", message: "Pick at least one color first." });
       }
     }
+    // The default stays on offer when another becomes the default.
     for (const row of await ctx.db.query("merchProducts").withIndex("by_active", (q) => q.eq("active", true)).collect()) {
-      if (row._id !== args.productId) await ctx.db.patch("merchProducts", row._id, { active: false });
+      if (row._id !== args.productId) await ctx.db.patch("merchProducts", row._id, { active: false, offered: true });
     }
-    if (args.productId) await ctx.db.patch("merchProducts", args.productId, { active: true });
+    if (args.productId) await ctx.db.patch("merchProducts", args.productId, { active: true, offered: true });
+    return null;
+  },
+});
+
+// Puts a product on offer to creators, or takes it off. Works already on sale keep selling it until
+// they're approved again.
+export const adminSetOffered = mutation({
+  args: { productId: v.id("merchProducts"), offered: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, "manage");
+    const product = await ctx.db.get("merchProducts", args.productId);
+    if (!product) throw new ConvexError({ code: "NOT_FOUND", message: "That product isn't here anymore." });
+    if (!args.offered && product.active) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Make another product the default first." });
+    }
+    if (args.offered && !product.colors.some((c) => c.offered)) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Pick at least one color first." });
+    }
+    await ctx.db.patch("merchProducts", product._id, { offered: args.offered });
+    return null;
+  },
+});
+
+const MIN_PRICE_CENTS = 500;
+const MAX_PRICE_CENTS = 50_000;
+
+function checkedArea(area: { widthIn: number; heightIn: number } | undefined, label: string) {
+  if (!area) return undefined;
+  const ok = (n: number) => Number.isFinite(n) && n >= 2 && n <= 30;
+  if (!ok(area.widthIn) || !ok(area.heightIn)) {
+    throw new ConvexError({ code: "INVALID_INPUT", message: `The ${label} print area should be 2 to 30 inches each way.` });
+  }
+  return { widthIn: Math.round(area.widthIn * 100) / 100, heightIn: Math.round(area.heightIn * 100) / 100 };
+}
+
+// How a product sells: the name buyers see, prices (S-XL and 2XL), what a back print adds, its kind,
+// and its print areas. A field left out goes back to its default.
+export const adminSetSale = mutation({
+  args: {
+    productId: v.id("merchProducts"),
+    shopName: v.optional(v.string()),
+    kind: v.optional(garmentKindValidator),
+    priceCents: v.optional(v.number()),
+    largePriceCents: v.optional(v.number()),
+    backExtraCents: v.optional(v.number()),
+    frontArea: v.optional(printAreaValidator),
+    backArea: v.optional(printAreaValidator),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, "manage");
+    const product = await ctx.db.get("merchProducts", args.productId);
+    if (!product) throw new ConvexError({ code: "NOT_FOUND", message: "That product isn't here anymore." });
+    const price = (cents: number | undefined, label: string) => {
+      if (cents === undefined) return undefined;
+      if (!Number.isInteger(cents) || cents < MIN_PRICE_CENTS || cents > MAX_PRICE_CENTS) {
+        throw new ConvexError({ code: "INVALID_INPUT", message: `${label} should be between $5 and $500.` });
+      }
+      return cents;
+    };
+    const priceCents = price(args.priceCents, "The price");
+    const largePriceCents = price(args.largePriceCents, "The 2XL price");
+    if (priceCents !== undefined && largePriceCents !== undefined && largePriceCents < priceCents) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "The 2XL price can't be lower than the price." });
+    }
+    const backExtraCents = args.backExtraCents;
+    if (backExtraCents !== undefined && (!Number.isInteger(backExtraCents) || backExtraCents < 0 || backExtraCents > 5_000)) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "A back print can add $0 to $50." });
+    }
+    const shopName = args.shopName?.trim().slice(0, 60) || undefined;
+    await ctx.db.patch("merchProducts", product._id, {
+      shopName,
+      kind: args.kind,
+      priceCents,
+      largePriceCents,
+      backExtraCents,
+      frontArea: checkedArea(args.frontArea, "front"),
+      backArea: checkedArea(args.backArea, "back"),
+    });
     return null;
   },
 });

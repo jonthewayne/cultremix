@@ -13,7 +13,8 @@ import {
 } from "../../convex/lib/printImage";
 import { crc32, pixelsPerMeter, readPrintTags, tagForPrint } from "../../convex/lib/printPng";
 
-const product = COMFORT_COLORS_1717;
+// A 15 x 17 in print area, so the canvas is 4500 x 5100 px at 300 DPI.
+const product = { ...COMFORT_COLORS_1717, printArea: { widthIn: 15, heightIn: 17 } };
 
 // A transparent design: a solid disc with soft edges, off center, with clear margins.
 async function design(width = 600, height = 400) {

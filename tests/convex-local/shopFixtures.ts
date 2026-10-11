@@ -4,7 +4,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import type { RawOrder } from "../../convex/lib/shopify/orderQuery";
 import type { newTest } from "./setup";
 import { variantList } from "../../convex/lib/shopify/productSync";
-import { sellableColors } from "../../convex/lib/shopColors";
+import { launchShopProduct, listingFor } from "../../convex/lib/shopProduct";
+import { DEFAULT_PLACEMENT } from "../../src/lib/print/shirtPlacement";
 
 type T = ReturnType<typeof newTest>;
 
@@ -101,24 +102,60 @@ export async function makeWork(
   });
 }
 
-// Puts a work on sale without Shopify: a live product and a variant per sellable color and size
-// (20 for the launch colors), numbered from base.
+// Puts a work on sale without Shopify: a live listing on the launch shirt (front print, the work's
+// print file as its file when it has one) and a variant per color and size (20 for the launch
+// colors), numbered from base.
 export async function makeOnSale(t: T, workId: Id<"works">, cr: string, base = 1000, printfulBase: number | null = 5000) {
-  await t.run(async (ctx) => {
+  return await t.run(async (ctx) => {
     const now = Date.now();
     const work = await ctx.db.get("works", workId);
-    await ctx.db.insert("shopProducts", {
+    if (!work) throw new Error("No work.");
+    const product = launchShopProduct();
+    const listing = listingFor({ offeredColors: work.offeredColors }, product, DEFAULT_PLACEMENT);
+    const versionId = await ctx.db.insert("printVersions", {
       workId,
-      handle: `cr-${cr}`,
+      number: 1,
+      op: "published",
+      status: "ready",
+      key: work.artKey,
+      width: 4096,
+      height: 4096,
+      upscaled: true,
+      charged: 0,
+      createdBy: work.creatorId,
+    });
+    const listingId = await ctx.db.insert("shopProducts", {
+      workId,
+      productKey: product.key,
+      handle: `cr-${cr}-${product.printfulProductId}`,
       status: "live",
+      listing,
+      ...(work.printKey
+        ? {
+            printFile: {
+              key: work.printKey,
+              sha256: "f".repeat(64),
+              widthPx: 3600,
+              heightPx: 4800,
+              versionId,
+              placement: { xIn: 1.33, yIn: 0.95, widthIn: 9.35, heightIn: 9.35 },
+              dpi: 438,
+              grade: "great" as const,
+              warnings: [],
+              madeAt: now,
+            },
+          }
+        : {}),
       shopifyProductId: `gid://shopify/Product/${base}`,
       attempts: 0,
       syncedAt: now,
       updatedAt: now,
     });
-    for (const [i, variant] of variantList(cr, sellableColors(work?.offeredColors)).entries()) {
+    for (const [i, variant] of variantList(cr, listing).entries()) {
       await ctx.db.insert("workVariants", {
         workId,
+        listingId,
+        productKey: product.key,
         shopifyVariantId: `gid://shopify/ProductVariant/${base + i}`,
         sku: variant.sku,
         color: variant.color,
@@ -127,6 +164,7 @@ export async function makeOnSale(t: T, workId: Id<"works">, cr: string, base = 1
         printfulVariantId: printfulBase === null ? undefined : printfulBase + i,
       });
     }
+    return listingId;
   });
 }
 

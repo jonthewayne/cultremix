@@ -26,7 +26,8 @@ import {
   randomCode,
 } from "../../convex/lib/printKeys";
 
-const product = COMFORT_COLORS_1717;
+// The placement math on a fixed 15 x 17 in print area (any product's area works the same way).
+const product = { ...COMFORT_COLORS_1717, printArea: { widthIn: 15, heightIn: 17 } };
 
 // A metrics record for an image with the given share of solid pixels and haze.
 function metrics(width: number, height: number, solidShare = 0.4, hazeShare = 0): AlphaMetrics {
@@ -307,7 +308,8 @@ describe("product", () => {
   it("names its sources and marks the print area unverified", () => {
     expect(product.verified).toBe(false);
     expect(product.sources.length).toBeGreaterThan(0);
-    expect(product.printArea).toEqual({ widthIn: 15, heightIn: 17 });
+    // Printful's regular DTG front; the 1717 has no large front placement.
+    expect(COMFORT_COLORS_1717.printArea).toEqual({ widthIn: 12, heightIn: 16 });
   });
 
   it("falls back to the first color", () => {

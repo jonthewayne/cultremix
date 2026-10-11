@@ -1,4 +1,4 @@
-import type { PrintProduct } from "../../../shared/config/print-products";
+import type { PrintGeometry } from "../../../shared/config/print-products";
 
 // Where a design sits in the shirt's front print area, in inches from the area's top-left corner.
 // Its height follows from its width and the design's shape (aspect = height / width).
@@ -19,13 +19,13 @@ export function placedHeight(widthIn: number, aspect: number) {
 }
 
 // The widest the design can go and still fit the area.
-export function maxWidthIn(aspect: number, product: PrintProduct) {
+export function maxWidthIn(aspect: number, product: PrintGeometry) {
   return Math.min(product.printArea.widthIn, product.printArea.heightIn / aspect);
 }
 
 // Keeps a placement inside the print area: the width between MIN_WIDTH_IN and what fits, the
 // design wholly inside. Values round to hundredths of an inch.
-export function clampPlacement(placement: Placement, aspect: number, product: PrintProduct): Placement {
+export function clampPlacement(placement: Placement, aspect: number, product: PrintGeometry): Placement {
   const area = product.printArea;
   const max = maxWidthIn(aspect, product);
   const finite = (n: number, fallback: number) => (Number.isFinite(n) ? n : fallback);
@@ -36,17 +36,17 @@ export function clampPlacement(placement: Placement, aspect: number, product: Pr
   return { xIn: Math.max(0, xIn), yIn: Math.max(0, yIn), widthIn };
 }
 
-export function centered(placement: Placement, product: PrintProduct): Placement {
+export function centered(placement: Placement, product: PrintGeometry): Placement {
   return { ...placement, xIn: round2((product.printArea.widthIn - placement.widthIn) / 2) };
 }
 
 // Printful places a file from the top of its print area; "Top" puts the design at the safe line.
-export function atTop(placement: Placement, product: PrintProduct): Placement {
+export function atTop(placement: Placement, product: PrintGeometry): Placement {
   return { ...placement, yIn: product.safeInsetIn };
 }
 
 // A new design: as wide as DEFAULT_WIDTH_IN allows inside the safe area, centered, at the top.
-export function defaultPlacement(aspect: number, product: PrintProduct): Placement {
+export function defaultPlacement(aspect: number, product: PrintGeometry): Placement {
   const inset = product.safeInsetIn;
   const safeWidth = product.printArea.widthIn - 2 * inset;
   const safeHeight = product.printArea.heightIn - 2 * inset;
@@ -55,7 +55,7 @@ export function defaultPlacement(aspect: number, product: PrintProduct): Placeme
 }
 
 // Whether the design stays inside the safe guides.
-export function insideSafeArea(placement: Placement, aspect: number, product: PrintProduct) {
+export function insideSafeArea(placement: Placement, aspect: number, product: PrintGeometry) {
   const inset = product.safeInsetIn;
   const eps = 0.005;
   return (
@@ -67,7 +67,7 @@ export function insideSafeArea(placement: Placement, aspect: number, product: Pr
 }
 
 // The print file's canvas: the whole print area at the product's DPI.
-export function canvasPx(product: PrintProduct) {
+export function canvasPx(product: PrintGeometry) {
   return {
     width: Math.round(product.printArea.widthIn * product.dpi),
     height: Math.round(product.printArea.heightIn * product.dpi),
@@ -75,7 +75,7 @@ export function canvasPx(product: PrintProduct) {
 }
 
 // The design's rectangle on that canvas, in whole pixels, always inside it.
-export function pixelRect(placement: Placement, aspect: number, product: PrintProduct) {
+export function pixelRect(placement: Placement, aspect: number, product: PrintGeometry) {
   const canvas = canvasPx(product);
   const width = Math.max(1, Math.min(canvas.width, Math.round(placement.widthIn * product.dpi)));
   const height = Math.max(1, Math.min(canvas.height, Math.round(placedHeight(placement.widthIn, aspect) * product.dpi)));

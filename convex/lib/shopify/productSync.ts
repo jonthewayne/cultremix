@@ -1,34 +1,46 @@
 import {
+  GARMENT_KINDS,
   PRINT_PRODUCT,
   PRINT_SIZES,
-  priceCentsFor,
+  type GarmentKind,
   type PrintSize,
 } from "../../../shared/config/print-products";
 import { METAFIELD_NAMESPACE } from "../../../shared/config/shopify";
 import type { ShopifyAdmin } from "./adminClient";
-import type { SellableColor } from "../shopColors";
 
-// Builds the productSet input for a published work: handle cr-FFF-EEE, every color it is sold in
-// (sellableColors, convex/lib/shopColors.ts) times every size on every call (productSet replaces
-// what it is given, so a color no longer sold leaves the store), inventory untracked with CONTINUE as
-// a backstop (KTD-17), and metafields that point back to the work.
+// Builds the productSet input for one listing, a published work on one product
+// (convex/lib/shopProduct.ts): handle cr-FFF-EEE-<printful id>, every color it is sold in times
+// every size the color comes in, on every call (productSet replaces what it is given, so a color no
+// longer sold leaves the store), inventory untracked with CONTINUE as a backstop (KTD-17), and
+// metafields that point back to the work and the product.
 
 export function crNumber(family: number, expression: number): string {
   return `${String(family).padStart(3, "0")}-${String(expression).padStart(3, "0")}`;
 }
 
-export function productHandle(cr: string): string {
-  return `cr-${cr}`;
+export function productHandle(cr: string, printfulProductId?: number): string {
+  return printfulProductId === undefined ? `cr-${cr}` : `cr-${cr}-${printfulProductId}`;
 }
 
-export function productTitle(cr: string, title?: string): string {
+export function productTitle(cr: string, title?: string, garment?: string): string {
   const name = title?.trim();
-  return name ? `CR ${cr} · ${name}` : `CR ${cr}`;
+  const base = name ? `CR ${cr} · ${name}` : `CR ${cr}`;
+  return garment ? `${base} · ${garment}` : base;
 }
 
-export function variantSku(cr: string, colorCode: string, size: PrintSize | string): string {
-  return `CR-${cr}-${colorCode}-${size}`;
+export function variantSku(cr: string, colorCode: string, size: PrintSize | string, printfulProductId?: number): string {
+  return printfulProductId === undefined ? `CR-${cr}-${colorCode}-${size}` : `CR-${cr}-${printfulProductId}-${colorCode}-${size}`;
 }
+
+// What a listing sells: the product, its prices, and its colors with their Printful variant ids.
+export type SaleListing = {
+  printfulProductId: number;
+  kind: GarmentKind;
+  name: string;
+  priceCents: number;
+  largePriceCents: number;
+  colors: ReadonlyArray<{ code: string; name: string; variants: ReadonlyArray<{ size: string; id: number }> }>;
+};
 
 export type PlannedVariant = {
   color: string; // color code
@@ -39,17 +51,19 @@ export type PlannedVariant = {
   printfulVariantId: number | null;
 };
 
-export function variantList(cr: string, colors: ReadonlyArray<SellableColor>): Array<PlannedVariant> {
+export function variantList(cr: string, listing: SaleListing): Array<PlannedVariant> {
   const out: Array<PlannedVariant> = [];
-  for (const color of colors) {
+  for (const color of listing.colors) {
     for (const size of PRINT_SIZES) {
+      const variant = color.variants.find((v) => v.size === size);
+      if (!variant) continue;
       out.push({
         color: color.code,
         colorName: color.name,
         size,
-        sku: variantSku(cr, color.code, size),
-        priceCents: priceCentsFor(size),
-        printfulVariantId: color.printfulVariantIds[size],
+        sku: variantSku(cr, color.code, size, listing.printfulProductId),
+        priceCents: size === "2XL" ? listing.largePriceCents : listing.priceCents,
+        printfulVariantId: variant.id,
       });
     }
   }
@@ -65,18 +79,21 @@ export function buildProductSetInput(args: {
   cr: string;
   title?: string;
   imageUrls?: Array<string>;
-  colors: ReadonlyArray<SellableColor>;
+  listing: SaleListing;
 }) {
-  const variants = variantList(args.cr, args.colors);
+  const variants = variantList(args.cr, args.listing);
+  const colors = args.listing.colors.filter((c) => variants.some((v) => v.color === c.code));
+  const sizes = PRINT_SIZES.filter((size) => variants.some((v) => v.size === size));
+  const title = productTitle(args.cr, args.title, args.listing.name);
   return {
-    handle: productHandle(args.cr),
-    title: productTitle(args.cr, args.title),
+    handle: productHandle(args.cr, args.listing.printfulProductId),
+    title,
     vendor: PRINT_PRODUCT.vendor,
-    productType: PRINT_PRODUCT.productType,
+    productType: GARMENT_KINDS[args.listing.kind]?.label ?? PRINT_PRODUCT.productType,
     status: "ACTIVE",
     productOptions: [
-      { name: "Color", values: args.colors.map((c) => ({ name: c.name })) },
-      { name: "Size", values: PRINT_SIZES.map((s) => ({ name: s })) },
+      { name: "Color", values: colors.map((c) => ({ name: c.name })) },
+      { name: "Size", values: sizes.map((s) => ({ name: s })) },
     ],
     variants: variants.map((variant) => ({
       optionValues: [
@@ -90,13 +107,19 @@ export function buildProductSetInput(args: {
     metafields: [
       { namespace: METAFIELD_NAMESPACE, key: "work_id", type: "single_line_text_field", value: args.workId },
       { namespace: METAFIELD_NAMESPACE, key: "cr_number", type: "single_line_text_field", value: args.cr },
+      {
+        namespace: METAFIELD_NAMESPACE,
+        key: "printful_product",
+        type: "single_line_text_field",
+        value: String(args.listing.printfulProductId),
+      },
     ],
     ...(args.imageUrls?.length
       ? {
           files: args.imageUrls.map((url, i) => ({
             originalSource: url,
             contentType: "IMAGE",
-            alt: `${productTitle(args.cr, args.title)}${i ? ` (${i + 1})` : ""}`,
+            alt: `${title}${i ? ` (${i + 1})` : ""}`,
           })),
         }
       : {}),
@@ -108,7 +131,7 @@ export const PRODUCT_SET_MUTATION = `mutation CultRemixProductSet($input: Produc
     product {
       id
       handle
-      variants(first: 50) { nodes { id sku selectedOptions { name value } } }
+      variants(first: 250) { nodes { id sku selectedOptions { name value } } }
     }
     userErrors { field message code }
   }
@@ -134,12 +157,8 @@ type ProductSetResult = {
 export type SyncedVariant = PlannedVariant & { shopifyVariantId: string };
 
 // Matches Shopify's variants back to the planned list by SKU, falling back to the options.
-export function matchVariants(
-  cr: string,
-  nodes: Array<VariantNode>,
-  colors: ReadonlyArray<SellableColor>,
-): Array<SyncedVariant> {
-  const planned = variantList(cr, colors);
+export function matchVariants(cr: string, nodes: Array<VariantNode>, listing: SaleListing): Array<SyncedVariant> {
+  const planned = variantList(cr, listing);
   const out: Array<SyncedVariant> = [];
   for (const variant of planned) {
     const node =
@@ -159,7 +178,7 @@ export function matchVariants(
 // reads from. Returns the product and every variant's GID.
 export async function syncProduct(
   admin: ShopifyAdmin,
-  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string>; colors: ReadonlyArray<SellableColor> },
+  args: { workId: string; cr: string; title?: string; imageUrls?: Array<string>; listing: SaleListing },
 ): Promise<{ productId: string; variants: Array<SyncedVariant> }> {
   const input = buildProductSetInput(args);
   const data = await admin.graphql<ProductSetResult>(PRODUCT_SET_MUTATION, {
@@ -170,7 +189,7 @@ export async function syncProduct(
   if (userErrors.length || !product) {
     throw new Error(`productSet refused: ${userErrors.map((e) => e.message).join("; ") || "no product"}`);
   }
-  const variants = matchVariants(args.cr, product.variants.nodes, args.colors);
+  const variants = matchVariants(args.cr, product.variants.nodes, args.listing);
   const publications = await admin.graphql<{ publications: { nodes: Array<{ id: string; name: string }> } }>(
     PUBLICATIONS_QUERY,
   );

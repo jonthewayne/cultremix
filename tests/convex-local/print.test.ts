@@ -445,6 +445,7 @@ describe("placement and the print file", () => {
     heightPx: 5100,
     placement: { xIn: 1.5, yIn: 0.5, widthIn: 12, heightIn: 12 },
     rect: { left: 450, top: 150, width: 3600, height: 3600 },
+    product: "printful-586",
     color: "Black",
     dpi: 85.3,
     grade: "good" as const,
@@ -457,10 +458,11 @@ describe("placement and the print file", () => {
     const { t } = await setup();
     const v1 = await openAndMeasure(t);
     const alice = t.withIdentity(ALICE);
+    // The launch shirt's regular 12 x 16 in front.
     expect(await alice.mutation(api.print.savePlacement, { cr: CR, versionId: v1, xIn: -5, yIn: 40, widthIn: 30, color: "Black" })).toEqual({
       xIn: 0,
-      yIn: 2,
-      widthIn: 15,
+      yIn: 4,
+      widthIn: 12,
     });
     await expect(
       alice.mutation(api.print.savePlacement, { cr: CR, versionId: v1, xIn: 1, yIn: 1, widthIn: 10, color: "Plaid" }),
