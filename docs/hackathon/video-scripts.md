@@ -20,6 +20,7 @@ Two videos for the submission: a demo of 3 minutes or less, and a pitch of 2 min
 Recording notes:
 
 - Generate takes about 30 seconds from words alone and about a minute with images (in the October 11 rehearsal: 60 seconds for the portrait and poster, 85 for the remix). Record the press, then cut to the finished designs.
+- Rehearsed again on October 11 at 7:20 p.m., the whole demo on a phone-sized screen on dev: the photo and the 70s poster uploaded and read in about 5 seconds, "Draw image 1 as a concert poster that says FAR OUT" made four designs in 87 seconds, and it published as CR 109-001 with the model photo arriving a minute later. As a second member, Remix this showed FAR OUT as a box; STAY WEIRD made four in 65 seconds, the batch said "Changed the words: FAR OUT to STAY WEIRD", and the publish dialog said "A variation of CR 109-001". CR 109-002's page split the 15% 50/50 between the two creators, and a simulated sale put "Someone bought CR 109-002, a remix of your CR 109-001. You earn $2.70." in the original creator's bell. The design's remixable parts also offered "The person: anyone, from a photo", so a remixer could put themselves in it.
 - A lone style in the mixer always sets the whole look, so its slider stays at 100%. Sliders matter once a second style is added.
 - A design's remixable words appear a few seconds after it's published. Wait for them before recording the remix.
 - Use images you have the rights to: a portrait and a poster with strong, simple shapes.

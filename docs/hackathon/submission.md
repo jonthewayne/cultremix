@@ -82,7 +82,7 @@ Signed out works for all of these unless noted.
 | Provenance is explained and checkable | `/onchain` lists what's recorded on Monad and walks through checking a design from its fingerprint (`workIdAt`, then `getWork` on the explorer). Once the registry is deployed, each work page links its registration transaction and the family tree marks recorded designs. |
 | The studio makes four print-ready designs at once | Signed in as a judge: add images, mix styles, press Generate. Four transparent designs arrive; 2 credits are used. |
 | Designs become print files | Signed in as a judge, publish a design and open **Prepare for print** on its page. Trim, knock out a flat color or remove any other background, place, and make the print file; the Print Studio shows its DPI and SHA-256. |
-| Prompts stay private | Watch the browser's network tab while generating: the prompt we build from your instruction and the notes we read from your style images never reach the browser. |
+| Prompts stay private | Watch the browser's network tab while generating: the prompt we build from your instruction and the notes we read from your style images never reach the browser. Checked October 11 by recording every message the studio received over its live connection while opening a session made with a photo and style images: the member's own request came through, and no notes or prompt text did. |
 
 ### When the registry is deployed
 

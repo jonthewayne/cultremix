@@ -34,11 +34,16 @@ export function missingPhotos(parts: Array<PublicPart>, values: Record<string, P
   return parts.filter((part) => part.kind === "person" && part.empty === "require" && !(values[part.id]?.photos.length ?? 0)).map((p) => p.label);
 }
 
+// A part's name inside a sentence: "The person" reads "the person" there; "Santa" stays "Santa".
+export function midSentence(label: string) {
+  return label.replace(/^(The|A|An) /u, (word) => word.toLowerCase());
+}
+
 function hint(part: PublicPart) {
   if (part.kind === "character") return "Type what to swap it for, or add a photo.";
   if (part.kind === "person") {
     const without = part.empty === "omit" ? "Without one, they're left out." : part.empty === "require" ? "The creator asks for one." : "Without one, the original stays.";
-    return `A photo of who should be ${part.label}. ${without}`;
+    return `A photo of who should be ${midSentence(part.label)}. ${without}`;
   }
   const stay = part.count ? `With none, the original ${part.count} stay. ` : "";
   return `One photo for each. ${stay}Up to ${part.max ?? 6}.`;
@@ -109,7 +114,7 @@ function PartRow({
           onChange={(e) => onTo(e.target.value)}
           maxLength={120}
           placeholder={`Swap ${part.label.toLowerCase()} for…`}
-          aria-label={`Swap ${part.label} for`}
+          aria-label={`Swap ${midSentence(part.label)} for`}
           className={cn(
             "mt-1 w-full border-b-2 bg-transparent py-1 text-xl font-semibold leading-tight outline-none md:text-2xl",
             value.to.trim() ? "border-black" : "border-neutral-300 focus:border-black",
@@ -133,7 +138,7 @@ function PartRow({
                 type="button"
                 onClick={() => onRemovePhoto(slot.id)}
                 className="group absolute right-0 top-0 flex h-10 w-10 items-center justify-center"
-                aria-label={`Remove photo ${i + 1} from ${part.label}`}
+                aria-label={`Remove photo ${i + 1} from ${midSentence(part.label)}`}
               >
                 <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs font-black ring-1 ring-black group-hover:bg-black group-hover:text-white">
                   ×

@@ -149,7 +149,10 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
 
   return (
     <li>
-      {isSale ? (
+      {item.kind === "takedown" ? (
+        // Its message has its own email link, and a link can't hold another, so this row isn't one.
+        <div className={rowClass}>{body}</div>
+      ) : isSale ? (
         <Link to="/me/earnings" className={cn(rowClass, "hover:bg-neutral-50")}>
           {body}
         </Link>

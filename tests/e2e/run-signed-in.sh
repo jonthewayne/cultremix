@@ -58,6 +58,11 @@ a11y() {
   agent-browser eval "$axe_source; 'loaded'" >/dev/null
   found=$(agent-browser eval "axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, resultTypes: ['violations'] }).then((r) => r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => v.impact + ' ' + v.id + ' (' + v.nodes.length + ') e.g. ' + v.nodes[0].target.join(' ').slice(0, 100)).join(' | '))" | tr -d '"')
   [[ -z "$found" ]] || fail "Accessibility: $found"
+  # A link or button inside another isn't valid HTML: the browser splits it, so the page the
+  # server drew never matches and React reports a hydration error (found October 11 on a takedown
+  # notification, whose row linked to the design and whose message had an email link).
+  nested=$(agent-browser eval "Array.from(document.querySelectorAll('a a, a button, button a, button button')).map((el) => el.tagName + ' ' + (el.textContent || '').trim().slice(0, 40)).join(' | ')" | tr -d '"')
+  [[ -z "$nested" ]] || fail "A link or button inside another: $nested"
 }
 # Opens a page and waits until it responds.
 go() {
