@@ -423,7 +423,7 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
   ]);
   const unchecked = designs.some((design, i) => design && (!answers[i] || (c.keeps && !kept[i])));
   const extra = await Promise.all(
-    answers.map((answer, i) => (designs[i] ? secondLook(ctx, { design: designs[i]!, refs, asks: c.asks, words: c.words, answer }) : 0)),
+    answers.map((answer, i) => (designs[i] ? secondLook(ctx, { design: designs[i], refs, asks: c.asks, words: c.words, answer }) : 0)),
   );
   cost += extra.reduce((sum, cents) => sum + cents, 0);
   checks.push(...wordsChecks(c.words, answers, 4), ...keepsChecks(c.keeps, kept, 4), ...askChecks(c.asks, answers, 4));
@@ -577,7 +577,7 @@ async function runCompare(c: CompareCase, ctx: Context): Promise<CaseResult> {
       try {
         const result = await compareWithRetries(original, remix);
         ctx.spent.cents += result.costCents ?? 0;
-        return { verdict: result.verdict as string, reason: result.reason };
+        return { verdict: result.verdict, reason: result.reason };
       } catch (error) {
         return { verdict: "error", reason: noteFailure(ctx, error) };
       }

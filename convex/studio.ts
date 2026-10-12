@@ -1206,7 +1206,7 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
     remixOfParent && batch.partChanges?.length
       ? partChangeInstruction(
           parts,
-          batch.partChanges.map((c) => ({ ...c, photos: c.photos.map((p) => ({ imageId: p.imageId as string, key: p.key })) })),
+          batch.partChanges.map((c) => ({ ...c, photos: c.photos.map((p) => ({ imageId: p.imageId, key: p.key })) })),
           photoNumbers,
         ) || undefined
       : undefined;

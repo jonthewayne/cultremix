@@ -181,12 +181,12 @@ function Connections() {
       </div>
       {status.printful.note && (
         <p className="text-muted-foreground">
-          Printful, {new Date(status.printful.connectedAt!).toLocaleString()}: {status.printful.note}
+          Printful, {new Date(status.printful.connectedAt).toLocaleString()}: {status.printful.note}
         </p>
       )}
       {status.shopify.note && (
         <p className="text-muted-foreground">
-          Shopify, {new Date(status.shopify.connectedAt!).toLocaleString()}: {status.shopify.note}
+          Shopify, {new Date(status.shopify.connectedAt).toLocaleString()}: {status.shopify.note}
         </p>
       )}
       {status.printful.configured && status.printful.signingKey === "none" && (

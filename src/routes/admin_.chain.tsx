@@ -298,7 +298,7 @@ function ChainAdminPage() {
                     disabled={busy}
                     onClick={() =>
                       run(async () => {
-                        await retryWrite({ writeId: write._id as Id<"chainWrites"> });
+                        await retryWrite({ writeId: write._id });
                         return `Queued ${write.subject} again.`;
                       })
                     }

@@ -169,7 +169,7 @@ export const describeJob = internalQuery({
   args: { target, userId: v.id("users") },
   returns: v.union(v.null(), v.object({ notes: v.string(), parts: v.array(remixPart) })),
   handler: async (ctx, args) => {
-    const t = args.target as Target;
+    const t = args.target;
     const user = await ctx.db.get("users", args.userId);
     if (!user) return null;
     if ("generationId" in t) {
@@ -188,7 +188,7 @@ export const addPart = internalMutation({
   args: { target, part: remixPart },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const t = args.target as Target;
+    const t = args.target;
     if ("generationId" in t) {
       const design = await ctx.db.get("generations", t.generationId);
       const setup = design?.remixSetup;
@@ -218,7 +218,7 @@ export const editor = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const found = await editable(ctx, args.target as Target);
+    const found = await editable(ctx, args.target);
     if (!found) return null;
     if (found.design) {
       const setup = found.design.remixSetup;
@@ -228,7 +228,7 @@ export const editor = query({
         parts: editorParts(setup?.parts),
       };
     }
-    const work = found.work!;
+    const work = found.work;
     // Ready once either list exists: works published before parts have words only until
     // remixPartsActions.backfillWorks proposes their parts.
     const ready = work.remixFields !== undefined || work.remixParts !== undefined;
@@ -260,11 +260,11 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const found = await editable(ctx, args.target as Target);
+    const found = await editable(ctx, args.target);
     if (!found) throw new ConvexError({ code: "FORBIDDEN", message: "Only the creator can change this." });
     const stored = found.design
       ? { fields: found.design.remixSetup?.fields, parts: found.design.remixSetup?.parts }
-      : { fields: found.work!.remixFields, parts: found.work!.remixParts };
+      : { fields: found.work.remixFields, parts: found.work.remixParts };
     if (found.design && found.design.remixSetup?.status !== "ready") {
       throw new ConvexError({ code: "NOT_READY", message: "Still reading the design." });
     }
@@ -274,8 +274,8 @@ export const update = mutation({
       const setup = found.design.remixSetup!;
       await ctx.db.patch("generations", found.design._id, { remixSetup: { ...setup, fields, parts, updatedAt: Date.now() } });
     } else {
-      await ctx.db.patch("works", found.work!._id, {
-        ...(found.work!.remixFields ? { remixFields: fields } : {}),
+      await ctx.db.patch("works", found.work._id, {
+        ...(found.work.remixFields ? { remixFields: fields } : {}),
         remixParts: parts,
       });
     }

@@ -113,7 +113,7 @@ export async function orderLedger(ctx: MutationCtx, orderId: Id<"orders">, now: 
       baseCents: item.baseCents,
       poolCents: item.poolCents,
       unitPoolCents: item.unitPoolCents,
-      recipients: item.recipients as Array<RecipientShare>,
+      recipients: item.recipients,
       unitStatus,
       consumed,
       refundedAmountCents,
@@ -199,7 +199,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
   for (const item of items) {
     if (item.recipients.length === 0) continue;
     const maturity = configFor(item.configVersion).maturityDays * DAY_MS;
-    const splits = saleSplits(item.unitPoolCents, item.recipients as Array<RecipientShare>);
+    const splits = saleSplits(item.unitPoolCents, item.recipients);
     for (const [index, parts] of splits.entries()) {
       const unit = index + 1;
       const shippedAt = shipped.get(item._id)?.get(unit);

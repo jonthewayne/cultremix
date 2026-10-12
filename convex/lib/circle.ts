@@ -197,7 +197,7 @@ export function spkiFromPem(pem: string): ArrayBuffer {
   if (!match) throw new CircleError("Circle's entity public key is not a PEM public key.", null, null);
   const der = base64ToBytes(match[2].replace(/\s+/gu, ""));
   const spki = match[1] ? wrapPkcs1(der) : der;
-  return spki.buffer.slice(spki.byteOffset, spki.byteOffset + spki.byteLength) as ArrayBuffer;
+  return spki.buffer.slice(spki.byteOffset, spki.byteOffset + spki.byteLength);
 }
 
 // SubjectPublicKeyInfo ::= SEQUENCE { AlgorithmIdentifier rsaEncryption NULL, BIT STRING pkcs1 }

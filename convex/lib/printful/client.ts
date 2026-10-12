@@ -168,7 +168,7 @@ export function createPrintful(deps: { config: PrintfulConfig; fetch?: FetchLike
     }
     if (!text) return null;
     const parsed = JSON.parse(text) as { data?: T; result?: T };
-    return ((envelope === "result" ? parsed.result : parsed.data) ?? null) as T | null;
+    return ((envelope === "result" ? parsed.result : parsed.data) ?? null);
   }
 
   return {

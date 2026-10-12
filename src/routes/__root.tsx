@@ -9,9 +9,9 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { LazyMotion } from "motion/react";
 import { Toaster } from "sonner";
+import { useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
-import { useEffect } from "react";
 import { convexAuthClient } from "~/lib/auth-client";
 import { installClientErrorReporting } from "~/lib/clientErrors";
 import { getTokenAndRenewSession } from "~/lib/auth-server";

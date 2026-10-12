@@ -165,12 +165,12 @@ function ProductCard({ product }: { product: Product }) {
               type="button"
               disabled={busy || dirty}
               aria-pressed={product.offered}
-              onClick={() => void run(() => setOffered({ productId: product._id as Id<"merchProducts">, offered: !product.offered }))}
+              onClick={() => void run(() => setOffered({ productId: product._id, offered: !product.offered }))}
               className={cn(adminButton, product.offered && "bg-foreground text-background")}
             >
               {product.offered ? "On offer" : "Put on offer"}
             </button>
-            <button type="button" disabled={busy || dirty} onClick={() => void run(() => setActive({ productId: product._id as Id<"merchProducts"> }))} className={adminButton}>
+            <button type="button" disabled={busy || dirty} onClick={() => void run(() => setActive({ productId: product._id }))} className={adminButton}>
               Make default
             </button>
           </div>
@@ -200,7 +200,7 @@ function ProductCard({ product }: { product: Product }) {
         })}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy || !dirty} onClick={() => void run(async () => { await setColors({ productId: product._id as Id<"merchProducts">, offered }); setDraft(null); })} className={adminButton}>
+        <button type="button" disabled={busy || !dirty} onClick={() => void run(async () => { await setColors({ productId: product._id, offered }); setDraft(null); })} className={adminButton}>
           Save colors
         </button>
         <button type="button" disabled={busy} onClick={() => setDraft(product.colors.filter((c) => c.inStock).map((c) => c.key))} className="text-sm font-semibold underline underline-offset-4">
@@ -217,7 +217,7 @@ function ProductCard({ product }: { product: Product }) {
             Back to the launch colors
           </button>
         ) : (
-          <button type="button" disabled={busy} onClick={() => void run(() => remove({ productId: product._id as Id<"merchProducts"> }))} className="text-sm font-semibold text-destructive underline underline-offset-4">
+          <button type="button" disabled={busy} onClick={() => void run(() => remove({ productId: product._id }))} className="text-sm font-semibold text-destructive underline underline-offset-4">
             Remove
           </button>
         )}
@@ -265,11 +265,11 @@ function SaleSettings({ product }: { product: Product }) {
     try {
       await save(
         reset
-          ? { productId: product._id as Id<"merchProducts"> }
+          ? { productId: product._id }
           : {
-              productId: product._id as Id<"merchProducts">,
+              productId: product._id,
               shopName: form.name,
-              kind: form.kind as GarmentKind,
+              kind: form.kind,
               priceCents: toCents(form.price),
               largePriceCents: toCents(form.large),
               backExtraCents: toCents(form.back),
@@ -320,7 +320,7 @@ function SaleSettings({ product }: { product: Product }) {
           onClick={() => {
             setBusy(true);
             setNote("");
-            checkAreas({ productId: product._id as Id<"merchProducts"> })
+            checkAreas({ productId: product._id })
               .then((areas) =>
                 setNote(
                   `Printful's print files: front ${areas.front?.widthIn} × ${areas.front?.heightIn} in${areas.back ? `, back ${areas.back.widthIn} × ${areas.back.heightIn} in` : ", no back"}.`,

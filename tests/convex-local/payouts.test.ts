@@ -68,7 +68,7 @@ async function ledger(t: T) {
     await row({ amountCents: 900, state: "pending" });
     await row({ amountCents: 1200, state: "paid" });
     await row({ amountCents: 7700, state: "available", simulated: true });
-    return { creator: creator as Id<"users"> };
+    return { creator: creator };
   });
 }
 

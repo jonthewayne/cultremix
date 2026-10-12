@@ -44,7 +44,7 @@ export type RegistryErrorName = Extract<(typeof registryAbi)[number], { type: "e
 export function decodeRegistryRevert(data: Hex | undefined | null): RegistryErrorName | null {
   if (!data || data === "0x") return null;
   try {
-    return decodeErrorResult({ abi: registryAbi, data }).errorName as RegistryErrorName;
+    return decodeErrorResult({ abi: registryAbi, data }).errorName;
   } catch {
     return null;
   }

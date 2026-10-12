@@ -33,17 +33,17 @@ export type FeeEstimate = { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }
 export type CallRequest = { from: Address; to: Address; data: Hex };
 
 export interface ChainRpc {
-  getChainId(): Promise<number>;
-  getBlock(ref: BlockRef): Promise<ChainBlock>;
-  getTransactionReceipt(hash: Hex): Promise<ChainReceipt | null>;
-  getTransactionCount(address: Address, tag: BlockTag): Promise<number>;
+  getChainId: () => Promise<number>;
+  getBlock: (ref: BlockRef) => Promise<ChainBlock>;
+  getTransactionReceipt: (hash: Hex) => Promise<ChainReceipt | null>;
+  getTransactionCount: (address: Address, tag: BlockTag) => Promise<number>;
   /** A revert comes back as { ok: false }; transport failures throw. */
-  estimateGas(request: CallRequest): Promise<GasEstimate>;
-  call(request: CallRequest, at: BlockRef): Promise<CallResult>;
-  estimateFees(): Promise<FeeEstimate>;
-  getBalance(address: Address): Promise<bigint>;
+  estimateGas: (request: CallRequest) => Promise<GasEstimate>;
+  call: (request: CallRequest, at: BlockRef) => Promise<CallResult>;
+  estimateFees: () => Promise<FeeEstimate>;
+  getBalance: (address: Address) => Promise<bigint>;
   /** Resolves to the transaction hash; node refusals ("nonce too low", …) throw. */
-  sendRawTransaction(raw: Hex): Promise<Hex>;
+  sendRawTransaction: (raw: Hex) => Promise<Hex>;
 }
 
 /** Revert data in a viem error, or undefined when the error wasn't a revert. */
@@ -64,7 +64,7 @@ export function revertOf(error: unknown): Reverted | undefined {
 
 export function viemRpc(rpcUrl: string, fetchImpl?: FetchLike): ChainRpc {
   const client = createPublicClient({
-    transport: http(rpcUrl, { retryCount: 1, timeout: 15_000, ...(fetchImpl ? { fetchFn: fetchImpl as typeof fetch } : {}) }),
+    transport: http(rpcUrl, { retryCount: 1, timeout: 15_000, ...(fetchImpl ? { fetchFn: fetchImpl } : {}) }),
   });
   return {
     getChainId: () => client.getChainId(),

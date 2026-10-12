@@ -104,7 +104,7 @@ export function parseAddInput(input: unknown): AddInput {
   if (typeof product !== "string" || !/^printful-\d{1,9}$/u.test(product)) throw new CartError("INVALID", "Pick a product.");
   if (typeof color !== "string" || !/^[A-Z0-9_]{1,20}$/u.test(color)) throw new CartError("INVALID", "Pick a color.");
   if (typeof size !== "string" || !/^[A-Z0-9]{1,4}$/u.test(size)) throw new CartError("INVALID", "Pick a size.");
-  const design = byCr ? { cr: cr as string } : { keep: keep as string };
+  const design = byCr ? { cr: cr } : { keep: keep as string };
   return { ...design, product, color, size, quantity: quantityOf(data.quantity, 1) };
 }
 

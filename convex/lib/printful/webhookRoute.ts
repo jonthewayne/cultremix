@@ -52,7 +52,7 @@ export async function handlePrintfulWebhook(ctx: ActionCtx, request: Request): P
   const order = payload.data?.order;
   const printfulOrderId = typeof order?.id === "number" ? order.id : undefined;
   const externalId = typeof order?.external_id === "string" && order.external_id ? order.external_id : undefined;
-  const eventKey = await printfulEventKey(payload as Record<string, unknown>, storeId, String(printfulOrderId ?? externalId ?? ""));
+  const eventKey = await printfulEventKey(payload, storeId, String(printfulOrderId ?? externalId ?? ""));
 
   if (storeId !== (process.env.PRINTFUL_STORE_ID ?? "").trim()) {
     await ctx.runMutation(internal.orders.recordIgnoredWebhook, { source: "printful", eventKey, topic: type, reason: "other store" });
