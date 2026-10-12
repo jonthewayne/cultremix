@@ -7,7 +7,9 @@
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from "vitest";
 import { createPublicClient, http, toHex } from "viem";
 import { api, internal } from "../../convex/_generated/api";
+import { privateKeyToAccount } from "viem/accounts";
 import { registryAbi } from "../../convex/lib/chain/abi";
+import { managedWalletPrivateKey } from "../../convex/lib/chain/custody";
 import {
   ZERO_BYTES32,
   configHashFor,
@@ -316,6 +318,18 @@ describe("chain writes on a local Monad node", () => {
     expect(await read("economicConfigHash", [1n])).toBe(v1);
     expect(await read("economicConfigHash", [2n])).toBe(v2);
     expect(await read("latestEconomicConfigVersion")).toBe(2n);
+  });
+
+  it("registers a work signed by a managed wallet (the stopgap until Circle)", async () => {
+    const secret = "m".repeat(32);
+    vi.stubEnv("MANAGED_WALLET_SECRET", secret);
+    const member = await insertMember(t, { walletReady: false });
+    const address = privateKeyToAccount(await managedWalletPrivateKey(secret, member.userId)).address;
+    await t.run((ctx) => ctx.db.patch("users", member.userId, { walletStatus: "ready", walletCustody: "managed", walletAddress: address }));
+    const workId = await insertWork(t, member.userId);
+    await t.run((ctx) => enqueueRegisterWork(asCtx(ctx), workId));
+    await settle(t, async () => (await workOf(t, workId)).provenanceStatus === "confirmed");
+    expect(((await read("getWork", [workIdFor(workId)])) as { creator: Address }).creator).toBe(address);
   });
 
   it("leaves the relayer's nonce in step with the chain and nothing stalled", async () => {
