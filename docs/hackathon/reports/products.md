@@ -20,7 +20,7 @@ The Print Studio (`/print/<cr>`) places the front of the work's first product in
 
 - Until a placement is saved in the Print Studio, it starts from the publish placement (`print.studio` returns it as `publishPlacement` when it's on the front). It used to start from its own default, up to 12 inches at the top, and the first adjustment saved that instead of the creator's choice.
 - Saving there writes the work's placement for that product (`withProductPlacement` in `convex/lib/shopProduct.ts`): the shared placement when it's the work's only product, else that product's own ("placed separately"). Relative placements are centered, so a sideways nudge stays in the Print Studio.
-- Changing the placement on the work page moves the Print Studio's to match, keeping its art version and color (`followPublishPlacement` in `convex/lib/printSync.ts`). Not once the Print Studio's own print file is made, while it renders, or when the product is printed on its back.
+- Changing the placement on the work page moves the Print Studio's to match, keeping its art version and color (`followPublishPlacement` in `convex/lib/printSync.ts`), even after the Print Studio's own print file is made: approval makes each product's print file from this placement, and the Print Studio's file (`works.printKey`, which never changes) is only the fallback for orders from before listings. Not while the Print Studio renders, or when the product is printed on its back.
 
 ## Products
 

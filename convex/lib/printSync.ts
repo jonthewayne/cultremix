@@ -8,11 +8,13 @@ import type { MutationCtx } from "../_generated/server";
 // src/lib/print/shirtPlacement.ts) describe the same print on the work's first product, so the
 // newest choice is what prints and what the work page says. Saving in the Print Studio writes the
 // work's placement (print.savePlacement); this is the other way: a placement changed on the work page
-// moves the Print Studio's to match, keeping its art version and color. Left alone once the Print
-// Studio's own print file is made, while it renders, and when the product is printed on its back.
+// moves the Print Studio's to match, keeping its art version and color. Approving the work for sale
+// makes each product's print file from this placement, so it follows even after the Print Studio's
+// own file is made (that file, works.printKey, never changes). Left alone while the Print Studio
+// renders, and when the product is printed on its back.
 export async function followPublishPlacement(ctx: MutationCtx, workId: Id<"works">, userId: Id<"users">) {
   const work = await ctx.db.get("works", workId);
-  if (!work || work.printKey) return;
+  if (!work) return;
   const placement = await ctx.db
     .query("printPlacements")
     .withIndex("by_work", (q) => q.eq("workId", workId))

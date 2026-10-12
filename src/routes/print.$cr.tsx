@@ -555,6 +555,12 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                     ))}
                   </ul>
                 )}
+                {studio.placement && movedSince(studio.placement, studio.printFile.placement) && (
+                  <p className="mt-3 text-sm">
+                    Its placement changed on the design’s page after this file was made. Approving it for sale makes each
+                    product’s print file the new way, {studio.placement.widthIn} in wide.
+                  </p>
+                )}
               </Panel>
             )}
           </aside>
@@ -562,6 +568,12 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
       </main>
     </div>
   );
+}
+
+// The placement moved since the print file was made (by a change on the work page, which the
+// Print Studio's placement follows; convex/lib/printSync.ts).
+function movedSince(now: { widthIn: number; yIn: number }, made: { widthIn: number; yIn: number }) {
+  return Math.abs(now.widthIn - made.widthIn) > 0.02 || Math.abs(now.yIn - made.yIn) > 0.02;
 }
 
 // Why "Remove background" can't run on this version right now, or null. It shares the Print-size art

@@ -196,6 +196,14 @@ describe("versions", () => {
     // A back print leaves it alone: the Print Studio places the front.
     await alice.mutation(api.publish.setPrintSetup, { workId, printPlacement: { side: "back", size: 0.9, drop: 0 }, printProducts: [{ productId }] });
     expect((await alice.query(api.print.studio, { cr: CR }))?.placement).toMatchObject({ widthIn: expected.widthIn, yIn: expected.yIn });
+    // Once the Print Studio's own file is made, it still follows: products' print files come from it.
+    await t.run(async (ctx) => ctx.db.patch("works", workId, { printKey: "fake:print.png", printSha256: "b".repeat(64) }));
+    const medium = { side: "front" as const, size: 0.65, drop: 0 };
+    await alice.mutation(api.publish.setPrintSetup, { workId, printPlacement: medium, printProducts: [{ productId }] });
+    expect((await alice.query(api.print.studio, { cr: CR }))?.placement).toMatchObject({
+      versionId: v1,
+      widthIn: toInches(medium, 1, studio!.product.printArea).widthIn,
+    });
   });
 
   it("offers the work's published colors first, as the print product's names", async () => {
