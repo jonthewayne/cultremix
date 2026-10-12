@@ -30,6 +30,8 @@
     "scripts",
     "vite.config.ts",
     "vitest.config.ts",
-    "vitest.convex.config.ts"
+    "vitest.convex.config.ts",
+    "vitest.convex-local.config.ts",
+    "vitest.chain-e2e.config.ts"
   ]
 }

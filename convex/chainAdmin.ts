@@ -143,8 +143,7 @@ export const overview = query({
 
     const published = await ctx.db
       .query("works")
-      .withIndex("by_status_publishedAt", (q) => q.eq("status", "published"))
-      .filter((q) => q.eq(q.field("chainWriteId"), undefined))
+      .withIndex("by_status_chainWrite", (q) => q.eq("status", "published").eq("chainWriteId", undefined))
       .take(COUNT_CAP);
 
     return {
@@ -231,8 +230,7 @@ export const queueEarlierWorks = mutation({
     await requirePlatformCapability(ctx, "chain:manage");
     const works = await ctx.db
       .query("works")
-      .withIndex("by_status_publishedAt", (q) => q.eq("status", "published"))
-      .filter((q) => q.eq(q.field("chainWriteId"), undefined))
+      .withIndex("by_status_chainWrite", (q) => q.eq("status", "published").eq("chainWriteId", undefined))
       .take(BACKFILL_BATCH + 1);
     let queued = 0;
     for (const work of works.slice(0, BACKFILL_BATCH)) {

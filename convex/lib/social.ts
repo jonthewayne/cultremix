@@ -28,13 +28,11 @@ export async function recordPublishActivity(ctx: MutationCtx, work: Doc<"works">
   if (work.status !== "published") return;
   const createdAt = work.publishedAt ?? work._creationTime;
   await touchCreatorActivity(ctx, work.creatorId, createdAt);
-  // The work's own event, not someone's Back of it.
-  const existing = await ctx.db
-    .query("activityEvents")
-    .withIndex("by_work", (q) => q.eq("workId", work._id))
-    .filter((q) => q.neq(q.field("verb"), "back"))
-    .first();
-  if (existing) return;
+  // The work's own event, not someone's Back of it. It's written at publishing, before any Back,
+  // so it's normally the first event the index returns.
+  for await (const event of ctx.db.query("activityEvents").withIndex("by_work", (q) => q.eq("workId", work._id))) {
+    if (event.verb !== "back") return;
+  }
   await ctx.db.insert("activityEvents", {
     actorId: work.creatorId,
     verb: verbForKind(work.kind),

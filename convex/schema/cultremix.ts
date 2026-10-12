@@ -361,6 +361,8 @@ export const cultremixTables = {
     printSha256: v.optional(v.string()),
   })
     .index("by_status_publishedAt", ["status", "publishedAt"])
+    // Published designs with no Monad record queued yet (Admin, Monad: the count and its Queue button).
+    .index("by_status_chainWrite", ["status", "chainWriteId"])
     .index("by_family_expression", ["crFamily", "crExpression"])
     .index("by_parent", ["parentWorkId"])
     .index("by_effectiveParent_status", ["effectiveParentWorkId", "status", "publishedAt"])
