@@ -26,6 +26,9 @@ export const FIXTURES: Array<Fixture> = [
   // Designs whose lettering leaked from their style image, GROW SLOW: TRASH drawn as TrROH, TRROW, and TRROSH.
   { id: "trash-royalty-trroh", kind: "art", what: "a psychedelic raccoon in a crown whose lettering reads TrROH ROYALTY, a misspelled TRASH ROYALTY", origin: "suite run 20261005-1915, words-not-from-style design 1" },
   { id: "trash-royalty-trrow", kind: "art", what: "the psychedelic raccoon in a crown with its lettering reading TRROW ROYALTY, TRASH three letters off", origin: "suite run 20261005-1915, words-not-from-style design 2" },
+  // Heavy script lettering that reads wrong without its request (WANDA as MAMA); the image model
+  // also drew the prompt's closing "Nothing else", which makes a third line the request never asked for.
+  { id: "wanda-knows-best", kind: "art", what: "heavy white brush-script lettering with black shadows and speckled grain: Wanda, Knows best, Nothing else", origin: "Flare, 2026-10-11" },
   { id: "trash-royalty-trrosh", kind: "art", what: "the psychedelic raccoon in a crown with its lettering reading TRROSH ROYALTY, TRASH two letters off", origin: "suite run 20261005-1915, words-not-from-style design 3" },
   // Remixes made on dev, for the remix comparison.
   { id: "since-1999", kind: "art", what: "GROW SLOW with SINCE 1999 added under the mushroom", origin: "dev studio, 2026-10-04" },

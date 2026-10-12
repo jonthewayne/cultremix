@@ -519,9 +519,14 @@ async function runPhoto(c: PhotoCase, ctx: Context): Promise<CaseResult> {
   };
 }
 
+// A notes case's reading: the fixture's shared notes, or its own when it has a request.
+function notesKey(c: NotesCase) {
+  return c.request ? `${c.fixture}#${c.id}` : c.fixture;
+}
+
 function runNotes(c: NotesCase, ctx: Context): CaseResult {
   const base = { id: c.id, group: c.group, kind: c.kind, status: c.status ?? "supported", title: c.title } as const;
-  const notes = ctx.notes.get(c.fixture);
+  const notes = ctx.notes.get(notesKey(c));
   if (!notes) return { ...base, passed: false, checks: [], seconds: 0, costCents: 0, error: "No notes were written." };
   const checks = c.expect.map((e) => {
     let passed = false;
@@ -532,7 +537,7 @@ function runNotes(c: NotesCase, ctx: Context): CaseResult {
     }
     return { id: e.id, label: e.describe, passed, detail: passed ? "yes" : "no" };
   });
-  return { ...base, passed: checks.every((check) => check.passed), checks, seconds: 0, costCents: 0, note: `notes/${c.fixture}.txt` };
+  return { ...base, passed: checks.every((check) => check.passed), checks, seconds: 0, costCents: 0, note: `notes/${c.request ? c.id : c.fixture}.txt` };
 }
 
 async function runReader(c: ReaderCase, ctx: Context): Promise<CaseResult> {
@@ -768,25 +773,28 @@ async function main() {
     return answer;
   };
 
-  // Notes for every image the cases use, written by production's notes writer.
+  // Notes for every image the cases use, written by production's notes writer. A notes case with a
+  // request gets its own reading, made with it, as a published design's notes are.
   const needNotes = new Set<string>();
   for (const c of cases) {
     if (c.kind === "generate") for (const id of [...(c.images ?? []), ...(c.mixer ?? []).map((m) => m.fixture)]) needNotes.add(id);
-    if (c.kind === "notes" || c.kind === "parts") needNotes.add(c.fixture);
+    if ((c.kind === "notes" && !c.request) || c.kind === "parts") needNotes.add(c.fixture);
   }
   const notes = new Map<string, Notes>();
-  await pool([...needNotes], 6, async (id) => {
-    const result = await writeNotes(await png(id), PIN.vision);
-    if (result.ok && result.notes) {
-      notes.set(id, { summary: result.summary, kind: result.kind, notes: result.notes });
-      writeFileSync(join(runDir, "notes", `${id}.txt`), `Summary: ${result.summary ?? ""}\nKind: ${result.kind ?? ""}\n\n${result.notes}\n`);
-    }
-  });
-  if (needNotes.size) console.log(`Notes written for ${notes.size} of ${needNotes.size} images.`);
+  const keep = (key: string, file: string, result: Awaited<ReturnType<typeof writeNotes>>) => {
+    if (!result.ok || !result.notes) return;
+    notes.set(key, { summary: result.summary, kind: result.kind, notes: result.notes });
+    writeFileSync(join(runDir, "notes", file), `Summary: ${result.summary ?? ""}\nKind: ${result.kind ?? ""}\n\n${result.notes}\n`);
+  };
+  await pool([...needNotes], 6, async (id) => keep(id, `${id}.txt`, await writeNotes(await png(id), PIN.vision)));
+  const withRequest = cases.filter((c): c is NotesCase => c.kind === "notes" && Boolean(c.request));
+  await pool(withRequest, 6, async (c) => keep(notesKey(c), `${c.id}.txt`, await writeNotes(await png(c.fixture), PIN.vision, c.request)));
+  if (needNotes.size) console.log(`Notes written for ${[...needNotes].filter((id) => notes.has(id)).length} of ${needNotes.size} images.`);
+  if (withRequest.length) console.log(`Notes with a request written for ${withRequest.filter((c) => notes.has(notesKey(c))).length} of ${withRequest.length} cases.`);
 
   const halt: Context["halt"] = {};
   const ctx: Context = { args, runDir, notes, png, check, spent, halt };
-  if (needNotes.size && notes.size < needNotes.size) console.log(`Notes missing for ${[...needNotes].filter((id) => !notes.has(id)).join(", ")}.`);
+  if ([...needNotes].some((id) => !notes.has(id))) console.log(`Notes missing for ${[...needNotes].filter((id) => !notes.has(id)).join(", ")}.`);
   const run = async (c: Case): Promise<CaseResult> => {
     const blank = { id: c.id, group: c.group, kind: c.kind, status: c.status ?? "supported", title: c.title, passed: false, checks: [], seconds: 0, costCents: 0 } as const;
     if (halt.reason) {

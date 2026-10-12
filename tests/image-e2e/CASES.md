@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words, for the checker and the spelling check.
 
-107 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 8 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna), 7 remixable parts (gpt-6 luna), 16 spelling check (gemini 3.1 pro).
+109 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 10 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna), 7 remixable parts (gpt-6 luna), 16 spelling check (gemini 3.1 pro).
 
 ## Words
 
@@ -476,6 +476,23 @@ The notes quote arched varsity lettering exactly.
 - Checks: Words quotes KING OF THE BLOCK
 - First tested 2026-10-01
 
+### `notes-words-script-request`: Notes read heavy script with the design's request
+
+A published design's notes, read with the request it was made from, quote a heavy brush-script name right, and still quote words the request never asked for.
+
+- Image: `wanda-knows-best`, heavy white brush-script lettering with black shadows and speckled grain: Wanda, Knows best, Nothing else
+- Checks: Words quotes WANDA
+- Checks: Words quotes KNOWS BEST and NOTHING ELSE, which the request didn't ask for
+- First tested 2026-10-11
+
+### `notes-words-script-plain`: Notes read heavy script without a request (known limit)
+
+The notes quote a heavy brush-script name right from the image alone. On 2026-10-11 they read WANDA as MAMA, the way production's script designs were misread, which is why published designs are read with their request.
+
+- Image: `wanda-knows-best`, heavy white brush-script lettering with black shadows and speckled grain: Wanda, Knows best, Nothing else
+- Checks: Words quotes WANDA
+- First tested 2026-10-11
+
 ### `notes-newspaper`: Notes list every piece of text
 
 On a newspaper page, the notes list the masthead, headline, and many separate pieces of text.
@@ -691,6 +708,7 @@ Reference images in [fixtures/](fixtures/), all made by CultRemix's own image ca
 | `cartoon-boys` | a cartoon of three tall boys with spiky hair, huge ears, and hoodies | dev studio, 2026-10-04 |
 | `trash-royalty-trroh` | a psychedelic raccoon in a crown whose lettering reads TrROH ROYALTY, a misspelled TRASH ROYALTY | suite run 20261005-1915, words-not-from-style design 1 |
 | `trash-royalty-trrow` | the psychedelic raccoon in a crown with its lettering reading TRROW ROYALTY, TRASH three letters off | suite run 20261005-1915, words-not-from-style design 2 |
+| `wanda-knows-best` | heavy white brush-script lettering with black shadows and speckled grain: Wanda, Knows best, Nothing else | Flare, 2026-10-11 |
 | `trash-royalty-trrosh` | the psychedelic raccoon in a crown with its lettering reading TRROSH ROYALTY, TRASH two letters off | suite run 20261005-1915, words-not-from-style design 3 |
 | `since-1999` | GROW SLOW with SINCE 1999 added under the mushroom | dev studio, 2026-10-04 |
 | `grow-wild-free` | the mushroom design reading GROW WILD AND FREE | dev studio, 2026-10-04 |

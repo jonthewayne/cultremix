@@ -82,6 +82,9 @@ export type Notes = { summary?: string; kind?: "photo" | "art"; notes: string };
 export type NotesCase = Base & {
   kind: "notes";
   fixture: string;
+  // A published design's request: production reads its lettering with it (requestHint in
+  // convex/lib/notesWriter.ts). Without one, the fixture's shared notes are checked.
+  request?: string;
   expect: Array<{ id: string; describe: string; test: (notes: Notes) => boolean }>;
 };
 
@@ -823,6 +826,35 @@ export const CASES: Array<Case> = [
     since: "2026-10-01",
     fixture: "lion",
     expect: [{ id: "words", describe: "Words quotes KING OF THE BLOCK", test: (n) => section(n, "Words").toUpperCase().includes("KING OF THE BLOCK") }],
+  },
+  {
+    kind: "notes",
+    id: "notes-words-script-request",
+    group: "notes",
+    title: "Notes read heavy script with the design's request",
+    supports: "A published design's notes, read with the request it was made from, quote a heavy brush-script name right, and still quote words the request never asked for.",
+    since: "2026-10-11",
+    fixture: "wanda-knows-best",
+    request: "Make a lettering design that says Wanda knows best",
+    expect: [
+      { id: "name", describe: "Words quotes WANDA", test: (n) => /\bWANDA\b/u.test(section(n, "Words").toUpperCase()) },
+      {
+        id: "rest",
+        describe: "Words quotes KNOWS BEST and NOTHING ELSE, which the request didn't ask for",
+        test: (n) => ["KNOWS", "BEST", "NOTHING", "ELSE"].every((w) => new RegExp(`\\b${w}\\b`, "u").test(section(n, "Words").toUpperCase())),
+      },
+    ],
+  },
+  {
+    kind: "notes",
+    id: "notes-words-script-plain",
+    group: "notes",
+    title: "Notes read heavy script without a request",
+    supports: "The notes quote a heavy brush-script name right from the image alone. On 2026-10-11 they read WANDA as MAMA, the way production's script designs were misread, which is why published designs are read with their request.",
+    since: "2026-10-11",
+    status: "known-limit",
+    fixture: "wanda-knows-best",
+    expect: [{ id: "name", describe: "Words quotes WANDA", test: (n) => /\bWANDA\b/u.test(section(n, "Words").toUpperCase()) }],
   },
   {
     kind: "notes",
