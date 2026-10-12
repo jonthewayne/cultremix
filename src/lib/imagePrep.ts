@@ -71,27 +71,48 @@ export function unreadableImageMessage(file: Pick<File, "name" | "type">) {
     : "We couldn't open that image. Try a PNG, JPEG, or WebP.";
 }
 
+type Decoded = { source: CanvasImageSource; width: number; height: number; release: () => void };
+
+// Opens an upload for drawing. createImageBitmap reads most images; Safari opens some only through
+// an <img> (a HEIC photo on a Mac), so that's the fallback before saying it can't be opened.
+async function decodeImage(file: File): Promise<Decoded> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
+  } catch {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      if (!img.naturalWidth || !img.naturalHeight) throw new Error("No pixels.");
+      return { source: img, width: img.naturalWidth, height: img.naturalHeight, release: () => URL.revokeObjectURL(url) };
+    } catch {
+      URL.revokeObjectURL(url);
+      throw new Error(unreadableImageMessage(file));
+    }
+  }
+}
+
 // Downsizes to at most 1024 px on the long side (the edit model's input
 // limit), keeps PNG for images that may carry transparency, and samples the
 // edge color from the original.
 export async function prepareInspiration(file: File) {
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(file);
-  } catch {
-    throw new Error(unreadableImageMessage(file));
-  }
-  const color = edgeColor(bitmap, bitmap.width, bitmap.height);
-  const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
-  const w = Math.max(1, Math.round(bitmap.width * scale));
-  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const image = await decodeImage(file);
+  const color = edgeColor(image.source, image.width, image.height);
+  const scale = Math.min(1, 1024 / Math.max(image.width, image.height));
+  const w = Math.max(1, Math.round(image.width * scale));
+  const h = Math.max(1, Math.round(image.height * scale));
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not read that image.");
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
+  if (!ctx) {
+    image.release();
+    throw new Error("Could not read that image.");
+  }
+  ctx.drawImage(image.source, 0, 0, w, h);
+  image.release();
   const keepAlpha = file.type === "image/png" || file.type === "image/webp" || file.type === "image/gif";
   const contentType = keepAlpha ? "image/png" : "image/jpeg";
   const blob = await new Promise<Blob>((resolve, reject) =>
