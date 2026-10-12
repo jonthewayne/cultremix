@@ -32,3 +32,44 @@ export function pickDesigns(designs: Array<LaunchDesign>, only: string | undefin
   }
   return picked;
 }
+
+// The launch set's remixes (its "Remixes, from the second account" table): which original, and
+// either a word box to change or a request for Anything else to change.
+export type LaunchRemix = {
+  original: string;
+  change: { kind: "words"; from: string; to: string } | { kind: "request"; text: string };
+  expect: string;
+};
+
+export function launchRemixes(markdown: string): Array<LaunchRemix> {
+  const start = markdown.indexOf("\n## Remixes");
+  if (start < 0) throw new Error("launch-set.md has no Remixes section.");
+  const next = markdown.indexOf("\n## ", start + 1);
+  const section = markdown.slice(start, next < 0 ? undefined : next);
+  const remixes: Array<LaunchRemix> = [];
+  for (const line of section.split("\n")) {
+    const cells = line.trim().match(/^\|(.*)\|$/u)?.[1].split("|").map((cell) => cell.trim());
+    if (!cells || cells.length !== 3) continue;
+    const [original, action, expect] = cells;
+    if (original === "Original" || /^-+$/u.test(original)) continue;
+    const words = /^Change the word box (.+?) to (.+)$/u.exec(action);
+    const request = /^In Anything else to change: "(.+)"$/u.exec(action);
+    if (words) remixes.push({ original, change: { kind: "words", from: words[1], to: words[2] }, expect });
+    else if (request) remixes.push({ original, change: { kind: "request", text: request[1] }, expect });
+    else throw new Error("launch-set.md: can't read what to do for " + original + ": " + action);
+  }
+  if (remixes.length === 0) throw new Error("launch-set.md's Remixes table has none.");
+  return remixes;
+}
+
+// A remix's session name: "Grow Slow: LOUD", or the request's first words.
+export function remixSessionTitle(remix: LaunchRemix) {
+  if (remix.change.kind === "words") return remix.original + ": " + remix.change.to;
+  const words = remix.change.text.split(/\s+/u);
+  let short = "";
+  for (const word of words) {
+    if ((short + " " + word).trim().length > 32) break;
+    short = (short + " " + word).trim();
+  }
+  return remix.original + ": " + short.replace(/[,.:;]$/u, "") + (short.length < remix.change.text.length ? "…" : "");
+}

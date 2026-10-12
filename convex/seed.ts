@@ -3,6 +3,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { DEFAULT_APP_SETTINGS } from "./identity";
 import { FIRST_ASSIGNED_CREATOR_NUMBER } from "./lib/creators";
 import { FEATURE_FLAGS } from "./lib/flags";
+import { formatCr } from "./lib/r2";
 
 // Idempotent setup for a fresh environment (scripts/seed-environment.ts). It only adds rows
 // that are missing and never changes or copies existing data, so it is safe to run again.
@@ -75,5 +76,23 @@ export const memberIdentity = internalQuery({
           .first();
     if (!user?.authId) return null;
     return { authId: user.authId, username: user.username ?? null };
+  },
+});
+
+// For scripts/launch-batches.ts --remixes: the first published work with this title (case doesn't
+// matter), so the launch set's remixes find their originals by name.
+export const publishedByTitle = internalQuery({
+  args: { title: v.string() },
+  returns: v.union(v.null(), v.object({ workId: v.id("works"), cr: v.string() })),
+  handler: async (ctx, args) => {
+    const wanted = args.title.trim().toLowerCase();
+    const works = await ctx.db
+      .query("works")
+      .withIndex("by_status_publishedAt", (q) => q.eq("status", "published"))
+      .order("asc")
+      .take(1000);
+    const work = works.find((row) => row.title?.trim().toLowerCase() === wanted);
+    if (!work) return null;
+    return { workId: work._id, cr: formatCr(work.crFamily, work.crExpression) };
   },
 });

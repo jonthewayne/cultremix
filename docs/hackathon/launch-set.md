@@ -4,7 +4,7 @@ Once production is deployed, publishing about ten designs and a few remixes of t
 
 ## Before you start
 
-- **Quickest:** `bun run launch:batches -- --prod` (Ops can run it, or you can from the repo; it asks you to type production) starts all nine originals below in @curiousentity's studio at once, each in its own session named for the design, a few seconds apart, about $1.20 of gateway credit in all. The next step is then only picking and publishing. `--list` shows what it would start, `--only "Grow Slow,Night Shift"` starts some, and `--as <username>` uses another account. On dev on October 12, Stay Sharp arrived as four designs in a session named Stay Sharp.
+- **Quickest:** `bun run launch:batches -- --prod` (Ops can run it, or you can from the repo; it asks you to type production) starts all nine originals below in @curiousentity's studio at once, each in its own session named for the design, a few seconds apart, about $1.20 of gateway credit in all. The next step is then only picking and publishing. `--list` shows what it would start, `--only "Grow Slow,Night Shift"` starts some, and `--as <username>` uses another account. On dev on October 12, Stay Sharp arrived as four designs in a session named Stay Sharp. Once the originals are published, `bun run launch:batches -- --prod --remixes --as <second account>` starts the remixes below the same way, as that account: each opens Remix this on its original and changes the word box or asks in Anything else to change, in a session named for it ("Night Shift: OWL"). On dev, Night Shift's SHIFT-to-OWL remix came back as four NIGHT OWL designs with the original's moon and lettering.
 - Sign in on cultremix.com as @curiousentity. The owner has unlimited credits, so nothing here spends credits, only gateway credit (Admin, Overview shows it).
 - For the remixes, sign in as a second member in another browser (another email of yours), so the remixes come from someone else, the way they would for a judge. It gets the starting credits every new member gets, and Admin, Members can add more.
 - Publish each design with a title. The originals go first, so they get the lowest numbers.
@@ -29,7 +29,7 @@ A design whose words come out a letter off shows **Typo?**; press **Fix the spel
 
 ## Remixes, from the second account
 
-Each starts with **Remix this** on the original's page. A remix that changes only word boxes is always a variation; for the rest, the publish dialog compares it with the original and suggests one. These are the results dev and the image test suite got.
+Each starts with **Remix this** on the original's page (or let `launch:batches -- --remixes --as <second account>` start them all). A remix that changes only word boxes is always a variation; for the rest, the publish dialog compares it with the original and suggests one. These are the results dev and the image test suite got.
 
 | Original | What to do | Expect |
 | --- | --- | --- |

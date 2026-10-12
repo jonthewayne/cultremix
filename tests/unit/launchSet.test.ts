@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { launchOriginals, pickDesigns } from "../../scripts/lib/launchSet";
+import { launchOriginals, launchRemixes, pickDesigns, remixSessionTitle } from "../../scripts/lib/launchSet";
 
 // The launch set's originals, read from docs/hackathon/launch-set.md (scripts/lib/launchSet.ts).
 const DOC = readFileSync(new URL("../../docs/hackathon/launch-set.md", import.meta.url), "utf8");
@@ -24,5 +24,17 @@ describe("the launch set", () => {
 
   it("refuses a doc without the table", () => {
     expect(() => launchOriginals("# Launch set\n")).toThrow(/no Originals section/);
+  });
+
+  it("reads the remixes: a word box to change, or a request", () => {
+    const remixes = launchRemixes(DOC);
+    expect(remixes.length).toBeGreaterThanOrEqual(5);
+    expect(remixes[0]).toMatchObject({ original: "Grow Slow", change: { kind: "words", from: "SLOW", to: "LOUD" } });
+    expect(remixes.find((r) => r.original === "Night Shift")?.change).toEqual({ kind: "words", from: "SHIFT", to: "OWL" });
+    const pixel = remixes.find((r) => r.change.kind === "request" && r.change.text.includes("8-bit"));
+    expect(pixel?.expect).toMatch(/fork/u);
+    expect(remixSessionTitle(remixes[0])).toBe("Grow Slow: LOUD");
+    expect(remixSessionTitle(pixel!)).toBe("Grow Slow: Redraw the whole design as an…");
+    expect(() => launchRemixes("# Launch set\n## Remixes\n| Original | What to do | Expect |\n| Grow Slow | Paint it blue | ? |\n")).toThrow(/can't read what to do/u);
   });
 });
