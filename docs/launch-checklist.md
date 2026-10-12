@@ -66,7 +66,7 @@ While judges use the site, [Judging days](hackathon/judging-runbook.md) says wha
 
 - [ ] Decide: the launch shirts and prices, $5.95 flat US shipping, and the 15% creator pool.
 - [ ] Sign up: Shopify Basic with Shopify Payments (as an individual for now; business details can change later), Printful billing, and Circle with a live key.
-- [ ] About 2 MON for production's relayer, and a backup of its key in the password manager. At mainnet's 102 gwei (October 12) the deploy burns about 0.2 MON (the script wants 0.47 on hand), each design's record about 0.021 MON, and a Back about 0.011, so 2 MON covers the deploy and about 85 records.
+- [ ] About 2 MON for production's relayer, and a backup of its key in the password manager. At mainnet's 102 gwei (October 12) the deploy burns about 0.2 MON (the script wants 0.47 on hand), each design's record about 0.021 MON, and a Back about 0.011, so 2 MON covers the deploy and about 85 records. At about 2.6¢ a MON (OKX, October 12), $5 buys some 190 MON.
 - [ ] Approve the store policies at /policies (they say "Draft, under review" until then), and paste the same text into Shopify's Settings, Policies.
 - [ ] Credit on the CultRemix Gateway account for the judging days: about $50. Admin, Overview shows what's left (Gateway credit); every design, note, and model photo is paid from it, about 13¢ a batch, and a judge using all 40 credits spends about $2.60.
 
