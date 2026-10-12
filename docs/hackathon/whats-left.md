@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 11, 2026, 5:00 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
+As of October 11, 2026, 6:00 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
 
 ## Decided October 7
 
