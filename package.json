@@ -34,6 +34,8 @@
     "test:chain:anvil": "vitest run --config vitest.chain-e2e.config.ts",
     "chain:deploy:testnet": "bun run scripts/chain/deploy-testnet.ts",
     "chain:deploy:mainnet": "bun run scripts/chain/deploy-testnet.ts --env prod",
+    "chain:verify:testnet": "bun run scripts/chain/verify-registry.ts",
+    "chain:verify:mainnet": "bun run scripts/chain/verify-registry.ts --env prod",
     "circle:setup": "bun run scripts/circle-setup.ts",
     "setup": "bun run scripts/setup.ts",
     "new-project": "bun run scripts/create-project.ts",

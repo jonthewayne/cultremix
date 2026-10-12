@@ -73,6 +73,8 @@ Rows set in GitHub (secrets and variables) or read by a workflow come from the s
 | `DEV_WALLET_SECRET` | Convex env (dev only) | no | yes | manual | dev member wallets made locally while the Circle keys and `MANAGED_WALLET_SECRET` are missing; refused outside dev |
 | `MONAD_RELAYER_PRIVATE_KEY_DEV` | `~/.config/cultremix/chain.env` | no | yes | manual | `bun run chain:deploy:testnet` deploys the dev registry with it; never printed |
 | `ANVIL_BIN` | shell (optional) | no | no | manual | `bun run test:chain:anvil` uses this anvil instead of `~/.foundry/bin/anvil` |
+| `ETHERSCAN_API_KEY` | `~/.config/cultremix/chain.env` (optional) | no | yes | manual | the registry deploy (and `bun run chain:verify:*`) also verifies the contract's source on Monadscan through Etherscan's v2 API; without it, only on Sourcify (MonadVision). Passed to forge in its environment, never on a command line |
+| `FORGE_BIN` | shell (optional) | no | no | manual | the verification uses this forge instead of `~/.foundry/bin/forge` |
 
 Image settings are explained in `docs/image-generation/README.md`.
 

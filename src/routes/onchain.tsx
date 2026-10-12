@@ -162,7 +162,10 @@ function OnchainPage() {
               On a design’s page, find its <span className="font-bold">Fingerprint</span>. It’s the SHA-256 of the design’s
               published image file, so anyone with the file can check it.
             </li>
-            <li>Open the registry on the explorer and find its Read Contract tab.</li>
+            <li>
+              Open the registry on an explorer that shows its source code (it’s verified on Sourcify, so MonadVision shows it)
+              and find its Read Contract tab.
+            </li>
             <li>
               Call <Code>workIdAt</Code> with the two parts of the CR number. For CR 101-002, that’s 101 and 2.
             </li>

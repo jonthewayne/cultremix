@@ -40,6 +40,8 @@ import {
   registerConfig,
 } from "./deployRegistry";
 import { registryAbi } from "./registryArtifact";
+import { chainEnvValue } from "./chainEnv";
+import { verifyEverywhere } from "./verifyRegistry";
 import type { RegistryTarget } from "./deployRegistry";
 import type { Address, Hex } from "viem";
 
@@ -93,21 +95,6 @@ function parseArgs(argv: Array<string>) {
   if (args.env === "prod" && args.broadcast && !args.confirmMainnet)
     fail("This spends real MON on Monad mainnet. Add --confirm-mainnet to go ahead.");
   return args;
-}
-
-/** A value from chain.env, or null. Error messages never include the value. */
-function chainEnvValue(name: string): string | null {
-  let text: string;
-  try {
-    text = readFileSync(KEY_FILE, "utf8");
-  } catch {
-    return null;
-  }
-  for (const line of text.split(/\r?\n/u)) {
-    const match = /^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*?)\s*$/u.exec(line);
-    if (match && match[1] === name) return match[2].replace(/^(["'])(.*)\1$/u, "$2");
-  }
-  return null;
 }
 
 /** The environment's relayer key from chain.env. Error messages never include the value. */
@@ -233,6 +220,23 @@ async function main() {
     console.log(
       `Config tx   ${local ? registered.txHash : explorerTxUrl(network, registered.txHash!)}`,
     );
+
+  // Explorers show the source and a Read Contract tab only for a verified contract, and /onchain
+  // tells people to use that tab. A failure here leaves the deploy as it is.
+  if (!local) {
+    const retry = `bun run chain:verify:${args.env === "prod" ? "mainnet" : "testnet"} --registry ${registry}`;
+    console.log("\nVerifying the registry's source code…");
+    try {
+      const results = await verifyEverywhere(
+        { chainId: network.chainId, registry, admin: relayer, relayer },
+        chainEnvValue("ETHERSCAN_API_KEY") ?? undefined,
+      );
+      for (const result of results) console.log(`  ${result.explorer}: ${result.detail.replace(/\n/gu, "\n    ")}`);
+      if (!results.some((result) => result.ok)) console.log(`  Not verified yet; the deploy itself is done. Try again: ${retry}`);
+    } catch (error) {
+      console.log(`  Couldn't verify (${error instanceof Error ? error.message : String(error)}); the deploy itself is done. Try again: ${retry}`);
+    }
+  }
 
   console.log("\nNext:");
   if (local) {
