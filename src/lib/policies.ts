@@ -103,7 +103,7 @@ export const POLICIES: Array<Policy> = [
       {
         heading: "Who helps us",
         body: [
-          "Shopify runs checkout and payments. Printful prints and ships orders and receives the shipping address to do it. Image services turn your prompts and uploads into designs. Cloudflare hosts the site and stores images. Convex stores the app's data. Circle holds creators' wallets. An email service sends sign-in codes and order emails.",
+          "Shopify runs checkout and payments. Printful prints and ships orders and receives the shipping address to do it. Image services turn your prompts and uploads into designs. Cloudflare hosts the site and stores images. Convex stores the app's data. CultRemix holds creators' wallets for them, through its wallet provider, Circle, where it's in use. An email service sends sign-in codes and order emails.",
           "Each uses your information only to do that work for us.",
         ],
       },
