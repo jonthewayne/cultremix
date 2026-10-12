@@ -41,7 +41,7 @@ Importing production's export into a fresh deployment worked in the October 11 r
 
 ## Rehearsing a big deploy
 
-Before the October deploy, the whole Ops sequence ran on a copy of production without touching it. Every step passed; the Ops message carries the numbers.
+Before the October deploy, the whole Ops sequence ran on a copy of production without touching it, on October 11 and again on October 12 from a fresh export. Every step passed; the Ops message carries the numbers. The second run also set `MANAGED_WALLET_SECRET` on the copy: within five minutes all 8 members had managed wallets, so the 11 earlier works' records would no longer wait for wallets. It also caught a check that only fails on production: the smoke test expects "Monad mainnet" on /onchain, which said "Monad" (fixed in 5ca3163).
 
 1. Export production, read-only: `bunx convex export --prod --include-file-storage --path <zip>`. It holds members' emails, so keep it private and delete it afterwards.
 2. In a worktree at production's commit, start a local backend with `CONVEX_AGENT_MODE=anonymous bunx convex dev < /dev/null` (without the redirect it waits at a first-run question). Give it production's env names with safe values: no Resend key, `AUTH_EMAIL_PROVIDER=console` (sign-in codes go to its log), and a fresh `AUTH_SECRET`. Then `bunx convex import --replace-all -y <zip>`.
