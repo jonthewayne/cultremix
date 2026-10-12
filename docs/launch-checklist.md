@@ -72,7 +72,7 @@ While judges use the site, [Judging days](hackathon/judging-runbook.md) says wha
 
 ### Deploy (Ops)
 
-- [ ] Follow the latest Ops message: pull, install, set production's env, back up production, build, `bunx convex deploy` and `wrangler deploy` back to back, then the seeds and backfills.
+- [ ] Follow the latest Ops message: pull, install, set production's env, back up production, build, `bunx convex deploy` and `wrangler deploy` back to back, then the seeds and backfills in one command (`bun run deploy:migrate -- --prod`).
 - [ ] Production's env for the shop: the live store's `SHOPIFY_*` values, Printful's live `PRINTFUL_API_TOKEN` and `PRINTFUL_STORE_ID`, and `PRINTFUL_AUTO_CONFIRM=true`. The live store's app has the same scopes as dev's, and its privacy webhooks point at `https://savory-tiger-504.convex.site/webhooks/shopify`.
 - [ ] On production's Admin, For sale: **Connect Printful** and **Connect Shopify**. In Admin, Products: **Check with Printful** on each product.
 
@@ -115,4 +115,3 @@ While judges use the site, [Judging days](hackathon/judging-runbook.md) says wha
 - [ ] After judging: turn off judges' creator access (Admin, Members).
 - [ ] Once real orders flow: turn on **Sale emails** in Admin, Overview, so creators get an email when a design they share in sells. They come from the sign-in address; members can turn them off in Settings.
 - [ ] From mid-November, pay creators from Admin, Payouts: it lists each creator's payable balance. Send the money by USDC or bank, then record it there with its reference (the amount has to match the balance shown).
-

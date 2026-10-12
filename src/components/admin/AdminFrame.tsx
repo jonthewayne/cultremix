@@ -1,4 +1,5 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { AppShell } from "~/components/app/app-shell";
 
@@ -19,11 +20,20 @@ const tabs = [
 // Admin's title and tabs around a tab's page. The Monad tab lives at its own route
 // (admin_.chain.tsx) and uses this frame too, so the tabs stay put on every tab.
 export function AdminFrame({ children }: { children: ReactNode }) {
+  const row = useRef<HTMLElement>(null);
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  // On a phone the tabs scroll sideways: center the open one, so Judges or Monad isn't cut off.
+  useEffect(() => {
+    const nav = row.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"], [data-status="active"]');
+    if (!nav || !active) return;
+    nav.scrollLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+  }, [path]);
   return (
     <AppShell>
       <div className="max-w-6xl space-y-6">
         <h1 className="text-4xl font-black tracking-tight md:text-5xl">Admin</h1>
-        <nav aria-label="Admin" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <nav ref={row} aria-label="Admin" className="relative -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {tabs.map((tab) => (
             <Link
               key={tab.to}
@@ -41,4 +51,3 @@ export function AdminFrame({ children }: { children: ReactNode }) {
     </AppShell>
   );
 }
-
