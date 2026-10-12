@@ -27,13 +27,38 @@ const TABLES = ["generations", "works", "shootPhotos", "userImages"] as const;
 // Stop well before the 10-minute action limit and continue in a new run.
 const BUDGET_MS = 6 * 60_000;
 
+// Where a long run stopped, for the deploy runner (scripts/deploy-migrate.ts) to call it again from.
+type BackfillResult = {
+  checked: number;
+  made: number;
+  failed: number;
+  continued: boolean;
+  next?: { table: number; cursor: string | null };
+};
+
 // Gives every stored image its copies: bunx convex run sizing:backfill
 // (production: bunx convex run --prod sizing:backfill). Safe to run again; it skips sized images.
+// A run that reaches its time budget schedules its own continuation (continued), or, with
+// returnNext, returns where it stopped as next for the caller to run from. budgetMs shortens the
+// budget to check that path; 0 stops after every page.
 export const backfill = internalAction({
-  args: { table: v.optional(v.number()), cursor: v.optional(v.union(v.string(), v.null())) },
-  returns: v.object({ checked: v.number(), made: v.number(), failed: v.number(), continued: v.boolean() }),
-  handler: async (ctx, args): Promise<{ checked: number; made: number; failed: number; continued: boolean }> => {
+  args: {
+    table: v.optional(v.number()),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    returnNext: v.optional(v.boolean()),
+    budgetMs: v.optional(v.number()),
+  },
+  returns: v.object({
+    checked: v.number(),
+    made: v.number(),
+    failed: v.number(),
+    continued: v.boolean(),
+    next: v.optional(v.object({ table: v.number(), cursor: v.union(v.string(), v.null()) })),
+  }),
+  handler: async (ctx, args): Promise<BackfillResult> => {
     const started = Date.now();
+    const budget = args.budgetMs ?? BUDGET_MS;
+    let pages = 0;
     let checked = 0;
     let made = 0;
     let failed = 0;
@@ -41,7 +66,9 @@ export const backfill = internalAction({
     for (let t = first; t < TABLES.length; t++) {
       let cursor: string | null = t === first ? (args.cursor ?? null) : null;
       for (;;) {
-        if (Date.now() - started > BUDGET_MS) {
+        // Every run gets through at least one page, so following next always moves forward.
+        if (pages > 0 && Date.now() - started >= budget) {
+          if (args.returnNext) return { checked, made, failed, continued: false, next: { table: t, cursor } };
           await ctx.scheduler.runAfter(0, internal.sizing.backfill, { table: t, cursor });
           console.log("sizing.backfill continues", { checked, made, failed });
           return { checked, made, failed, continued: true };
@@ -50,6 +77,7 @@ export const backfill = internalAction({
           internal.imageSizes.keysPage,
           { table: TABLES[t], cursor, numItems: 40 },
         );
+        pages++;
         for (const key of new Set(page.keys)) {
           checked++;
           if (await ctx.runQuery(internal.imageSizes.find, { key })) continue;
@@ -239,7 +267,7 @@ async function organizePage(ctx: ActionCtx, phase: Phase, cursor: string | null,
   return page;
 }
 
-type OrganizeResult = Counts & { continued: boolean };
+type OrganizeResult = Counts & { continued: boolean; next?: { phase: string; cursor: string | null } };
 type CleanupResult = {
   deletedR2: number;
   deletedConvex: number;
@@ -251,24 +279,39 @@ type CleanupResult = {
 // (production: --prod). Files in Convex storage and in older R2 layouts are copied to their new keys
 // (designs, model photos, grids, and published art without the image model's metadata) and each row
 // is patched as soon as its file is in place. Safe to run again: a second run reports moved 0. The
-// old files stay until sizing:cleanup.
+// old files stay until sizing:cleanup. returnNext and budgetMs work as in sizing:backfill.
 export const organize = internalAction({
-  args: { phase: v.optional(v.string()), cursor: v.optional(v.union(v.string(), v.null())) },
-  returns: v.object({ moved: v.number(), checked: v.number(), failed: v.number(), continued: v.boolean() }),
+  args: {
+    phase: v.optional(v.string()),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    returnNext: v.optional(v.boolean()),
+    budgetMs: v.optional(v.number()),
+  },
+  returns: v.object({
+    moved: v.number(),
+    checked: v.number(),
+    failed: v.number(),
+    continued: v.boolean(),
+    next: v.optional(v.object({ phase: v.string(), cursor: v.union(v.string(), v.null()) })),
+  }),
   handler: async (ctx, args): Promise<OrganizeResult> => {
     if (storageMode() !== "r2") throw new Error("R2 isn't configured on this deployment.");
     const started = Date.now();
+    const budget = args.budgetMs ?? BUDGET_MS;
+    let pages = 0;
     const counts: Counts = { moved: 0, checked: 0, failed: 0 };
     const first = Math.max(0, PHASES.indexOf((args.phase ?? "number") as Phase));
     for (let p = first; p < PHASES.length; p++) {
       let cursor: string | null = p === first ? (args.cursor ?? null) : null;
       for (;;) {
-        if (Date.now() - started > BUDGET_MS) {
+        if (pages > 0 && Date.now() - started >= budget) {
+          if (args.returnNext) return { ...counts, continued: false, next: { phase: PHASES[p], cursor } };
           await ctx.scheduler.runAfter(0, internal.sizing.organize, { phase: PHASES[p], cursor });
           console.log("sizing.organize continues", counts);
           return { ...counts, continued: true };
         }
         const page = await organizePage(ctx, PHASES[p], cursor, counts);
+        pages++;
         if (page.isDone) break;
         cursor = page.continueCursor;
       }
