@@ -13,6 +13,7 @@ import { CUTOUT_CENTS, topazCents, topazWorstCaseCents } from "./lib/pricing";
 import { formatCr, parseCr, publicUrl } from "./lib/r2";
 import { nudgeSalePrep } from "./lib/salePrep";
 import { printTargetForWork } from "./lib/shopProduct";
+import { relativePlacementValidator } from "./schema/merch";
 import { flagEnabled } from "./studio";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -155,6 +156,9 @@ export const studio = query({
         dpi: v.number(),
         colors: v.array(v.object({ name: v.string(), hex: v.string() })),
       }),
+      // Where the creator placed it on that product's front when publishing: the Print Studio starts
+      // there until a placement is saved here. Null for a back print or a product they didn't choose.
+      publishPlacement: v.union(v.null(), relativePlacementValidator),
       versions: v.array(
         v.object({
           id: v.id("printVersions"),
@@ -201,6 +205,7 @@ export const studio = query({
       upscaleCredits: owner ? 0 : UPSCALE_CREDITS,
       upscaleEnabled: await flagEnabled(ctx, "gen.upscale"),
       product: { ...target.geometry, name: target.name, colors: target.colors },
+      publishPlacement: target.placement?.side === "front" ? target.placement : null,
       versions: await Promise.all(
         versions.map(async (version) => {
           // Version 1 is the published art, which already has its medium copy.

@@ -259,11 +259,14 @@ export async function retireKeptListings(ctx: MutationCtx, workId: Id<"works">, 
 // What the Print Studio places for: the front of the first product the work sells on.
 export async function printTargetForWork(ctx: Ctx, work: Pick<Doc<"works">, "printPlacement" | "printProducts">) {
   const products = await offeredShopProducts(ctx);
-  const product = chosenProducts(work, products)[0]?.product ?? products[0];
+  const choice = chosenProducts(work, products)[0];
+  const product = choice?.product ?? products[0];
   return {
     geometry: geometryOf(product.key, product.front),
     name: product.name,
     colors: product.colors.map(({ name, hex }) => ({ name, hex })),
+    // Where its creator placed it on this product when publishing; null when it isn't one they chose.
+    placement: choice ? choice.placement : null,
   };
 }
 

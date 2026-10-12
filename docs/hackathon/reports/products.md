@@ -16,6 +16,8 @@ It's always centered left to right. Each product turns it into inches for its ow
 
 The work stores `printPlacement` (shared) and `printProducts` (the Printful product ids it comes on, each with its own placement when the creator chose "Place it separately"). Works published before this sell on the default product with the default placement.
 
+The Print Studio (`/print/<cr>`) places the front of the work's first product in inches, and a placement saved there wins over the publish placement for that product's front. Until one is saved, it starts from the publish placement (`print.studio` returns it as `publishPlacement` when it's on the front), so it shows the size the work page states; before October 12 it started from its own default, up to 12 inches at the top, and the first adjustment saved that instead of the creator's choice.
+
 ## Products
 
 `merchProducts` gained `offered` (several products can be on offer; the active one is the default, whose colors are the palette), `kind` (tee, long sleeve, sweatshirt, hoodie, tank), `shopName`, prices for S–XL and 2XL, `backExtraCents`, front and back print areas, and `placements` (the DTG placements Printful's public catalog lists, with what each adds). A product without a "back" placement sells front prints only.

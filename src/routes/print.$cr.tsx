@@ -31,6 +31,7 @@ import {
   pixelRect,
   placedHeight,
 } from "~/lib/print/placement";
+import { areaPlacement, toInches } from "~/lib/print/shirtPlacement";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { cn } from "~/lib/utils";
 
@@ -182,9 +183,12 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
     const saved = studio.printFile?.placement ?? studio.placement;
     // A new placement starts on the work's lead shirt color, else the one nearest its background.
     const color = studio.printFile?.color ?? studio.placement?.color ?? studio.offeredColors.at(0) ?? closestColor(studio.backgroundColor, product.colors);
-    const base = saved ? { xIn: saved.xIn, yIn: saved.yIn, widthIn: saved.widthIn } : defaultPlacement(aspect, product);
+    // Nothing saved here yet: where the creator placed it when publishing, so the print matches the
+    // work page ("about 9 inches wide on a large") until they change it.
+    const published = studio.publishPlacement && areaPlacement(toInches(studio.publishPlacement, aspect, product.printArea), product.printArea);
+    const base = saved ? { xIn: saved.xIn, yIn: saved.yIn, widthIn: saved.widthIn } : (published ?? defaultPlacement(aspect, product));
     setDraft({ ...clampPlacement(base, aspect, product), color, versionId: selected.id });
-  }, [draft, selected, studio.placement, studio.printFile, studio.offeredColors, studio.backgroundColor, product]);
+  }, [draft, selected, studio.placement, studio.printFile, studio.publishPlacement, studio.offeredColors, studio.backgroundColor, product]);
 
   // A different version keeps the width but re-fits its own shape.
   useEffect(() => {
