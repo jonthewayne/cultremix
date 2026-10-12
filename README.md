@@ -86,6 +86,7 @@ bun run typecheck    # TypeScript (and Convex, when a deployment is configured)
 bun run test         # unit tests and Convex tests on an in-memory backend
 bun run build        # production build
 bun run test:e2e     # browser smoke test
+bun run test:a11y    # accessibility rules on the public pages (axe-core)
 bun run test:chain:anvil  # the chain writer against a local Monad node (needs Foundry)
 bun run test:image   # the image pipeline against the real models: ~9 min, ~$2.85 (tests/image-e2e)
 ```
@@ -95,9 +96,10 @@ bun run test:image   # the image pipeline against the real models: ~9 min, ~$2.8
 ```bash
 bun run seed:environment                        # set up a fresh environment (safe to rerun)
 bun run judges:provision -- --file judges.txt   # make judge accounts with passwords
+bun run circle:setup --env dev --apply          # Circle's entity secret, wallet set, and env, from an API key
 ```
 
-Both target your dev deployment by default and production with `--prod` (they ask first). Neither ever copies data between environments. There are two environments: dev, the private rehearsal on Monad testnet, and production, cultremix.com on Monad mainnet. See [Judges](docs/judges.md) and the [Launch checklist](docs/launch-checklist.md).
+The first two target your dev deployment by default and production with `--prod` (they ask first); `circle:setup` takes `--env dev` or `--env prod` and asks before production. None ever copies data between environments. There are two environments: dev, the private rehearsal on Monad testnet, and production, cultremix.com on Monad mainnet. See [Judges](docs/judges.md), the [Launch checklist](docs/launch-checklist.md), and [Judging days](docs/hackathon/judging-runbook.md).
 
 ## Admin
 
