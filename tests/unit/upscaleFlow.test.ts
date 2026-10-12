@@ -1,9 +1,9 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { falClient } from "../../convex/lib/fal";
-import type { FetchLike } from "../../convex/lib/fal";
 import { pngCarriesAlpha } from "../../convex/lib/printImage";
 import { UPSCALE_TIMEOUT_MS, pollDelay, pollUpscale, submitFailureSpend, submitUpscale } from "../../convex/lib/upscaleFlow";
+import type { FetchLike } from "../../convex/lib/fal";
 import type { PollDeps, SubmitDeps } from "../../convex/lib/upscaleFlow";
 
 const json = (body: unknown, status = 200) =>

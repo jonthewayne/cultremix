@@ -1,4 +1,4 @@
-import { v, type Infer } from "convex/values";
+import { v } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { query } from "./_generated/server";
 import { getViewerUser } from "./identity";
@@ -17,6 +17,7 @@ import {
   encodeFeedCursor,
   workHeartCount,
 } from "./lib/social";
+import type { Infer } from "convex/values";
 import type { FeedPosition } from "./lib/social";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";

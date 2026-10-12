@@ -1,5 +1,4 @@
 import { internal } from "../../_generated/api";
-import type { ActionCtx } from "../../_generated/server";
 import {
   SHOPIFY_DISPUTE_TOPICS,
   SHOPIFY_PRIVACY_TOPICS,
@@ -8,6 +7,7 @@ import {
 } from "../../../shared/config/shopify";
 import { parseDispute } from "../disputes";
 import { verifyShopifyWebhook } from "./webhookVerify";
+import type { ActionCtx } from "../../_generated/server";
 
 // POST /webhooks/shopify (KTD-12). Order: size limit, HMAC over the raw body, shop domain, topic,
 // then the delivery is stored (event, payload, inbox entry) before the 200. Shopify retries

@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import type { PrintGeometry } from "../../../shared/config/print-products";
-import { clampPlacement, placedHeight } from "~/lib/print/placement";
 import type { Placement } from "~/lib/print/placement";
+import { clampPlacement, placedHeight } from "~/lib/print/placement";
 import { cn } from "~/lib/utils";
 
 // A drawn tee with the front print area on it. The design sits in the area at its placed size and

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeAbiParameters, encodeErrorResult, encodeEventTopics, keccak256, toHex, type Hex, type Log } from "viem";
+import { encodeAbiParameters, encodeErrorResult, encodeEventTopics, keccak256, toHex } from "viem";
 import { registryAbi } from "../../convex/lib/chain/abi";
 import {
   decodeRegistryCall,
@@ -21,6 +21,7 @@ import {
   workUri,
 } from "../../convex/lib/chain/ids";
 import { ECONOMIC_CONFIG_V1, canonicalConfigJson } from "../../convex/lib/economics";
+import type { Hex, Log } from "viem";
 
 const REGISTRY = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 const CREATOR = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";

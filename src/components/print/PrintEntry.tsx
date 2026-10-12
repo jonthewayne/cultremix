@@ -2,8 +2,8 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
-import { readyLine } from "~/lib/print/check";
 import type { CheckItem } from "~/lib/print/check";
+import { readyLine } from "~/lib/print/check";
 import { cn } from "~/lib/utils";
 
 // On the work page: the print file's status line, and a quiet "Prepare for print" link for the

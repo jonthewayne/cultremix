@@ -3,12 +3,12 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
 import { BIREFNET_V2, CUTOUT_INPUT, falClient } from "./lib/fal";
 import { pngCarriesAlpha } from "./lib/printImage";
 import { publicUrl } from "./lib/r2";
 import { pollUpscale, submitUpscale } from "./lib/upscaleFlow";
 import { storeVersion } from "./printTools";
+import type { Doc } from "./_generated/dataModel";
 
 // The Print Studio's fal tools: "Upscale for print" (Topaz Transparent 4x) and "Remove background"
 // (BiRefNet v2), chosen by the version's op (convex/lib/fal.ts). The flow itself is in

@@ -2,13 +2,14 @@
 // contracts/test/fixtures/eip712-vectors.json is checked by both the forge suite and
 // tests/unit/eip712.test.ts.
 import {
+  
+  
   getTypesForEIP712Domain,
   hashTypedData,
   recoverTypedDataAddress,
-  serializeTypedData,
-  type Address,
-  type Hex,
+  serializeTypedData
 } from "viem";
+import type { Address, Hex } from "viem";
 
 export const REGISTRY_DOMAIN_NAME = "CultRemixRegistry";
 export const REGISTRY_DOMAIN_VERSION = "1";

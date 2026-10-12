@@ -1,8 +1,8 @@
 import type { GarmentKind } from "../../../shared/config/print-products";
+import type { PrintArea, RelativePlacement } from "~/lib/print/shirtPlacement";
 import { GarmentPreview, useImageAspect } from "~/components/publish/GarmentPreview";
 import { garmentLabel, garmentTones } from "~/lib/print/garmentMockup";
 import { toInches } from "~/lib/print/shirtPlacement";
-import type { PrintArea, RelativePlacement } from "~/lib/print/shirtPlacement";
 
 // On the work page: the picked style drawn in the picked color, with the design at the size and on
 // the side its creator chose, so buyers see how big it prints and where.

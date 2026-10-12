@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import type { MutationCtx } from "../../convex/_generated/server";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { configHashFor } from "../../convex/lib/chain/ids";
 import { CHAIN_WRITES_FLAG, enqueueRegisterWork } from "../../convex/lib/chain/queue";
 import { canonicalConfigJson } from "../../convex/lib/economics";
-import { RELAYER, insertMember, insertOwner, insertWork, setChainWrites, useChainEnv, type Member } from "./chainFixtures";
+import { RELAYER, insertMember, insertOwner, insertWork, setChainWrites, useChainEnv } from "./chainFixtures";
 import { FakeChain } from "./fakeChain";
 import { newTest } from "./setup";
+import type { Member } from "./chainFixtures";
+import type { MutationCtx } from "../../convex/_generated/server";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type T = ReturnType<typeof newTest>;
 

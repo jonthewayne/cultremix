@@ -1,12 +1,13 @@
 // Queueing chain writes from mutations: one write per subject (work, Back, amendment, config
 // version), the readiness gates in front of it (the member's wallet, the parent's registration),
 // and promotion once a gate opens. The relayer engine that signs and sends lives in convex/chain.ts.
-import type { Hex } from "viem";
 import { internal } from "../../_generated/api";
+import { KIND_CODES, ZERO_BYTES32, registerWorkMessage, workIdFor } from "./ids";
+import { serializePayload } from "./writes";
+import type { WorkKind } from "./ids";
+import type { Hex } from "viem";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
-import { KIND_CODES, ZERO_BYTES32, registerWorkMessage, workIdFor, type WorkKind } from "./ids";
-import { serializePayload } from "./writes";
 
 export const CHAIN_WRITES_FLAG = "chain.writes";
 

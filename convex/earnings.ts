@@ -1,9 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import { ECONOMIC_CONFIG_V1, type EconomicConfig, type RecipientShare } from "./lib/economics";
-import { saleSplits, type LineLedger, type UnitStatus } from "./lib/creatorPool";
+import { ECONOMIC_CONFIG_V1 } from "./lib/economics";
+import { saleSplits } from "./lib/creatorPool";
 import { crNumber } from "./lib/shopify/productSync";
 import { notifySale } from "./lib/notifications";
 import { disputeEffect } from "./lib/disputes";
@@ -11,6 +9,10 @@ import { creatorEligibleAt } from "./lib/creators";
 import { openDisputeCheck } from "./lib/openDisputes";
 import { scheduleSaleEmail } from "./saleEmails";
 import { getViewerUser } from "./identity";
+import type { LineLedger, UnitStatus } from "./lib/creatorPool";
+import type { EconomicConfig, RecipientShare } from "./lib/economics";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 // Creator earnings (KTD-18). One sale row per (order line, unit, recipient), plus negative
 // reversal rows for refunds and cancellations. Everything here is recomputed idempotently from

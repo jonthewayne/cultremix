@@ -1,12 +1,12 @@
 // Shared setup for chain tests: env for a dev deployment on a local RPC, members with dev
 // wallets, and published works (a session, batch, and generation behind each).
 import { vi } from "vitest";
-import type { Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { devWalletPrivateKey } from "../../convex/lib/chain/custody";
 import { CHAIN_WRITES_FLAG } from "../../convex/lib/chain/queue";
 import { FAKE_REGISTRY } from "./fakeChain";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
+import type { Address } from "viem";
 import type { newTest } from "./setup";
 
 type T = ReturnType<typeof newTest>;

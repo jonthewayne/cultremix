@@ -8,8 +8,8 @@ import {
   partChangeInstruction,
   partSummary,
 } from "../../convex/lib/remixParts";
-import type { RemixPart } from "../../convex/lib/remixParts";
 import { studioPrompt } from "../../convex/lib/prompts";
+import type { RemixPart } from "../../convex/lib/remixParts";
 
 const parts: Array<RemixPart> = [
   { id: "p1", kind: "character", label: "The lion", text: "a pencil-sketch lion's head", on: true },

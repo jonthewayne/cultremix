@@ -1,22 +1,22 @@
 import { ConvexError, v } from "convex/values";
-import { internal } from "./_generated/api";
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { printCheck } from "../src/lib/print/check";
 import { offeredPrintColors } from "../src/lib/print/colors";
 import { clampTolerance, parseHex } from "../src/lib/print/knockout";
 import { aspectOf, clampPlacement } from "../src/lib/print/placement";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
 import { authorizeDispatch, closeReservation, hasRoom, openReservation, spendValidator } from "./lib/budget";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EXPIRED_MESSAGE } from "./lib/paidAttempts";
-import type { Spend } from "./lib/paidAttempts";
 import { CUTOUT_CENTS, topazCents, topazWorstCaseCents } from "./lib/pricing";
 import { formatCr, parseCr, publicUrl } from "./lib/r2";
 import { nudgeSalePrep } from "./lib/salePrep";
 import { printTargetForWork } from "./lib/shopProduct";
 import { flagEnabled } from "./studio";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { Spend } from "./lib/paidAttempts";
 
 // Print Studio (V1 U6): a published work's creator, or the owner, turns its art into a print file.
 // Version 1 is the published art; trim, knockout, "Remove background" and "Upscale for print" make

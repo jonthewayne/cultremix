@@ -1,22 +1,22 @@
 "use node";
 
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
-import type { ActionCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import type { PrintGeometry } from "../shared/config/print-products";
 import { hazeShare } from "../src/lib/print/alpha";
 import { HAZE_REFUSE, printCheck } from "../src/lib/print/check";
 import { parseHex } from "../src/lib/print/knockout";
 import { aspectOf, canvasPx, clampPlacement, pixelRect, placedHeight } from "../src/lib/print/placement";
 import { areaPlacement, toInches } from "../src/lib/print/shirtPlacement";
-import type { PrintArea, RelativePlacement } from "../src/lib/print/shirtPlacement";
+import { internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { geometryOf } from "./lib/shopProduct";
 import { knockoutImage, measureImage, previewWebp, renderPrintFile, sha256Of, trimImage } from "./lib/printImage";
 import { printFileKey, printPreviewKey, printVersionKey, randomCode } from "./lib/printKeys";
 import { storageMode } from "./lib/r2";
 import { fetchPublicImage, storeObject } from "./lib/storage";
+import type { PrintGeometry } from "../shared/config/print-products";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { ActionCtx } from "./_generated/server";
+import type { PrintArea, RelativePlacement } from "../src/lib/print/shirtPlacement";
 
 // Print Studio's sharp work: measuring version 1, making trim and knockout versions, and the print
 // file render. Every version and the print file sit behind a fresh random code in their path.

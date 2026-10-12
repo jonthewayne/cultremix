@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeOrder, moneyCents } from "../../convex/lib/shopify/orderQuery";
+import { moneyCents, normalizeOrder } from "../../convex/lib/shopify/orderQuery";
 import { listUpdatedOrders } from "../../convex/lib/shopify/reconcile";
 import { rawOrder } from "../fixtures/shopifyOrder";
 

@@ -1,16 +1,17 @@
-import type { FunctionReturnType } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import type { MutationCtx } from "../../convex/_generated/server";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { enqueueRegisterWork } from "../../convex/lib/chain/queue";
 import { registryWeek } from "../../convex/lib/chain/writes";
 import { BACK_WEIGHT } from "../../convex/lib/trending";
-import { RELAYER, insertMember, insertWork, setChainWrites, setFlag, useChainEnv, type Member } from "./chainFixtures";
+import { RELAYER, insertMember, insertWork, setChainWrites, setFlag, useChainEnv } from "./chainFixtures";
 import { FakeChain } from "./fakeChain";
 import { newTest } from "./setup";
 import { page } from "./socialFixtures";
+import type { Member } from "./chainFixtures";
+import type { MutationCtx } from "../../convex/_generated/server";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { FunctionReturnType } from "convex/server";
 
 // Backs in the social layer: a confirmed Back notifies the creator, shows in Following, joins the
 // backer's profile, and counts toward Trending. Backs come through the relayer and a fake chain,

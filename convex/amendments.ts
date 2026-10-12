@@ -1,11 +1,13 @@
 import { ConvexError, v } from "convex/values";
-import type { Hex } from "viem";
 import { internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx } from "./_generated/server";
-import { KIND_CODES, reasonHashFor, type WorkKind } from "./lib/chain/ids";
+import { internalMutation } from "./_generated/server";
+import { KIND_CODES, reasonHashFor } from "./lib/chain/ids";
 import { amendmentPayload, chainWritesEnabled, enqueueAmendment, writeBySubject } from "./lib/chain/queue";
 import { parsePayload } from "./lib/chain/writes";
+import type { WorkKind } from "./lib/chain/ids";
+import type { MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { Hex } from "viem";
 
 // Lineage corrections onchain (R19, the registry half). The registry admin appends amendment n to
 // a work's lineage; the original record stays. queueLineageAmendment checks a correction against

@@ -1,13 +1,13 @@
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
-import { internalAction, internalMutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { getViewerUser } from "./identity";
 import { DeploymentConfigError, assertDeploymentConsistency } from "../shared/config/chains";
+import { getViewerUser } from "./identity";
+import { internalAction, internalMutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { createMemberWallet } from "./lib/chain/custody";
 import { chainDeps } from "./lib/chain/deps";
 import { promoteForWallet } from "./lib/chain/queue";
 import { walletStatusValidator } from "./schema";
+import type { Id } from "./_generated/dataModel";
 
 // Member wallets: pending → provisioning → ready | failed. Provisioning starts when the user is
 // created and from the reconciliation cron (convex/crons.ts), which also backfills users made

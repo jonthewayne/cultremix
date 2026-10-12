@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { newTest } from "./setup";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // The database half of sizing.organize (convex/storageMoves.ts): batch numbers, where each old key
 // goes, and patching a batch's inputs.

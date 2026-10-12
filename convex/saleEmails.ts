@@ -1,14 +1,15 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
 import { sendEmail } from "./email";
 import { getViewerUser } from "./identity";
 import { isFlagOn } from "./lib/flagState";
 import { formatCr } from "./lib/r2";
-import { saleEmailContent, type SoldLine } from "./lib/saleEmail";
+import { saleEmailContent } from "./lib/saleEmail";
 import { requireMember } from "./studio";
+import type { SoldLine } from "./lib/saleEmail";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 // The "someone bought your design" email, alongside the notification, while the "Sale emails"
 // switch is on. One per recipient per order; never for test orders; never to a member who turned

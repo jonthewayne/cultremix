@@ -1,10 +1,10 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { getViewerUser, isOwner } from "./identity";
+import type { SHOPIFY_PRIVACY_TOPICS } from "../shared/config/shopify";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { getViewerUser, isOwner } from "./identity";
-import { SHOPIFY_PRIVACY_TOPICS } from "../shared/config/shopify";
 
 // Buyers' personal data (orders.recipient: name, address, phone, email; and the raw Shopify
 // webhook bodies, kept 30 days for replay) and Shopify's privacy webhooks:

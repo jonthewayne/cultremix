@@ -1,6 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
-import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { useQueries } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ConvexQueryClient } from "@convex-dev/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   FunctionArgs,
@@ -9,7 +10,6 @@ import type {
   PaginationOptions,
   PaginationResult,
 } from "convex/server";
-import { useCallback, useEffect, useRef, useState } from "react";
 
 // One pattern for every public list: each page is its own live query, so a heart or a new design
 // shows up without a refetch. Load more pins the last page at the cursor the next page starts

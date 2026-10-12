@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  
   CartError,
+  
   addToCart,
   cartCookie,
   clearCartCookie,
@@ -8,12 +10,11 @@ import {
   parseAddInput,
   parseLineInput,
   readCookie,
-  updateCartLine,
-  type CartContext,
-  type Offer,
+  updateCartLine
 } from "../../src/server/cart";
 import { createStorefront, storefrontConfigFromEnv, toCents } from "../../src/server/storefront";
 import { refCookieToSet, validRef } from "../../src/lib/ref";
+import type { CartContext, Offer } from "../../src/server/cart";
 
 const CART_ID = "gid://shopify/Cart/c1-abc123?key=k123";
 const LINE_ID = "gid://shopify/CartLine/l1?cart=c1-abc123";

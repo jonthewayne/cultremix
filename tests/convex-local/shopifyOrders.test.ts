@@ -1,12 +1,13 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { SHOPIFY_WEBHOOK_MAX_BYTES } from "../../shared/config/shopify";
-import { rawOrder, type FixtureLine } from "../fixtures/shopifyOrder";
+import { rawOrder } from "../fixtures/shopifyOrder";
 import { ensureCreatorNumber, setCreatorAccess } from "../../convex/lib/creators";
 import { newTest } from "./setup";
 import { SHOP_ENV, deliver, fakeShopify, makeOnSale, makeUser, makeWork } from "./shopFixtures";
+import type { FixtureLine } from "../fixtures/shopifyOrder";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type T = ReturnType<typeof newTest>;
 const DAY = 24 * 60 * 60 * 1000;

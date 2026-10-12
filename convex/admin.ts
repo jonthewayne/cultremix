@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { assertDeploymentConsistency } from "../shared/config/chains";
 import { internal } from "./_generated/api";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getAppSettings, getViewerUser } from "./identity";
@@ -9,11 +10,10 @@ import { FEATURE_FLAGS, flagDefault, flagDefinition } from "./lib/flags";
 import { isFlagOn } from "./lib/flagState";
 import { printfulConfigFromEnv } from "./lib/printful/client";
 import { readinessItems } from "./lib/readiness";
-import type { ReadinessInput } from "./lib/readiness";
 import { COMMERCE_FLAG, autoConfirmAllowedByEnv, autoConfirmFlagAllows, commerceOpen, deploymentEnv } from "./lib/shopFlags";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
 import { offeredShopProducts } from "./lib/shopProduct";
-import { assertDeploymentConsistency } from "../shared/config/chains";
+import type { ReadinessInput } from "./lib/readiness";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 

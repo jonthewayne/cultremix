@@ -1,9 +1,9 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { wordsToCheck } from "./lib/spelling";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { wordsToCheck } from "./lib/spelling";
 
 // The studio's spelling check. Once a batch's designs are in, each one's lettering is read back
 // (convex/spellingCheck.ts), and any asked-for word it drew a letter or two off is saved on it, so

@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
-import { sitemapXml } from "~/lib/sitemap";
 import type { SitemapEntries } from "~/lib/sitemap";
+import { sitemapXml } from "~/lib/sitemap";
 
 // /sitemap.xml: the home page, /onchain, the policies, and every published work, family, and creator.
 export const Route = createFileRoute("/sitemap.xml")({

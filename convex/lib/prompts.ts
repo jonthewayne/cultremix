@@ -6,8 +6,8 @@
 // Server only: Convex functions build every prompt, and no browser code imports this file
 // (tests/unit/clientBoundary.test.ts).
 
-import { colorName } from "./colors";
 import { DEFAULT_PLACEMENT, sizeWords } from "../../src/lib/print/shirtPlacement";
+import { colorName } from "./colors";
 import type { RelativePlacement } from "../../src/lib/print/shirtPlacement";
 import type { GarmentKind } from "../../shared/config/print-products";
 import type { KeyColor } from "./chromaKey";

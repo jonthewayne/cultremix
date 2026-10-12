@@ -11,13 +11,13 @@ import { topazWorstCaseCents } from "./lib/pricing";
 import { publicUrl } from "./lib/r2";
 import { commerceOpen, simulatesTestOrders } from "./lib/shopFlags";
 import { chosenProducts, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
-import type { ShopProduct } from "./lib/shopProduct";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
 import { crNumber, keptHandle, productHandle } from "./lib/shopify/productSync";
 import { MAX_VERSIONS, UPSCALE_MAX_SIDE } from "./print";
 import { garmentKindValidator, printAreaValidator, printSideValidator, relativePlacementValidator } from "./schema/merch";
 import { listingFileValidator } from "./schema/shop";
 import { flagEnabled } from "./studio";
+import type { ShopProduct } from "./lib/shopProduct";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 

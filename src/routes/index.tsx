@@ -1,7 +1,9 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import * as m from "motion/react-m";
-import type { ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
+import type { ReactNode } from "react";
+import type { FeedItem } from "~/components/social/WorkGrid";
+import type { PagedStatus } from "~/hooks/use-paged-query";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteFooter } from "~/components/cr/SiteFooter";
@@ -11,11 +13,9 @@ import { ACTIVE_CREATORS_PAGE_SIZE, ActiveCreators } from "~/components/social/A
 import { FollowButton } from "~/components/social/FollowButton";
 import { HeartButton } from "~/components/social/HeartButton";
 import { LoadMore } from "~/components/social/LoadMore";
-import type { FeedItem } from "~/components/social/WorkGrid";
 import { useMemberAction } from "~/components/social/useSignIn";
 import { useFadeIn } from "~/hooks/use-fade-in";
 import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
-import type { PagedStatus } from "~/hooks/use-paged-query";
 import { remixOfLabel } from "~/lib/familyTree";
 import { cn } from "~/lib/utils";
 

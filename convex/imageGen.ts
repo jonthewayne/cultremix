@@ -6,7 +6,6 @@ import { action, internalAction } from "./_generated/server";
 import { batchPrompt } from "./lib/batchPrompt";
 import { clearShare, keyOut } from "./lib/chromaKey";
 import { cutGrid } from "./lib/gridCut";
-import type { Rgba } from "./lib/gridCut";
 import { gatewayImage, nanoBananaImage, recraftImage } from "./lib/imageCalls";
 import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY, isOutOfCreditError } from "./lib/imageErrors";
 import { imageTypeOf, mimeOf } from "./lib/mime";
@@ -23,16 +22,16 @@ import {
 } from "./lib/models";
 import { stripPngMetadata } from "./lib/pngMeta";
 import { keyFor, keyedPrompt, photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
-import type { PhotoGarment } from "./lib/prompts";
-import type { ShootLook } from "./lib/prompts";
 import { callFailure } from "./lib/paidAttempts";
-import type { Spend } from "./lib/paidAttempts";
 import { gatewayCostCents } from "./lib/pricing";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
 import { decodeToRgba, encodePng } from "./lib/resize";
 import { randomCode } from "./lib/codes";
 import { designKey, gridKey as gridFileKey, photoNumberOf, testImageKey, uploadKey, workArtKey, workPhotoKey } from "./lib/sizes";
 import { copyImage, fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
+import type { Spend } from "./lib/paidAttempts";
+import type { PhotoGarment, ShootLook } from "./lib/prompts";
+import type { Rgba } from "./lib/gridCut";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 

@@ -1,5 +1,7 @@
-import { GARMENT_COLORS, type GarmentColor } from "./garments";
-import { PRINT_COLORS, PRINT_PRODUCT, type PrintColor } from "../../shared/config/print-products";
+import { PRINT_COLORS, PRINT_PRODUCT } from "../../shared/config/print-products";
+import { GARMENT_COLORS } from "./garments";
+import type { PrintColor } from "../../shared/config/print-products";
+import type { GarmentColor } from "./garments";
 
 // Which shirt colors a work can be sold in. Works store garment color keys (`works.offeredColors`,
 // convex/lib/garments.ts); Shopify and Printful need the print catalog's colors

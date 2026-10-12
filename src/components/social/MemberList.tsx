@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import type { FunctionReturnType } from "convex/server";
-import { api } from "../../../convex/_generated/api";
 import { Avatar } from "./Avatar";
 import { FollowButton } from "./FollowButton";
 import { LoadMore } from "./LoadMore";
+import type { api } from "../../../convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import type { PagedStatus } from "~/hooks/use-paged-query";
 
 export type MemberCard = FunctionReturnType<typeof api.social.followers>["page"][number];

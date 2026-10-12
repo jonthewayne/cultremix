@@ -1,7 +1,7 @@
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { MenuItem } from "~/components/studio/StudioSessions";
-import { designFilename, isTouchDevice, saveImage } from "~/lib/saveImage";
 import type { SpellingMiss } from "~/lib/spelling";
+import { designFilename, isTouchDevice, saveImage } from "~/lib/saveImage";
 
 // One design in a batch, as the studio shows it.
 export type Tile = {

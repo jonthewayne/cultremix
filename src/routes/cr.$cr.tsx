@@ -2,8 +2,11 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
+import { formatPrice } from "../../shared/config/print-products";
+import { PhotoSquare } from "./index";
+import type { FunctionReturnType } from "convex/server";
+import type { PickedColor } from "~/lib/pickedColor";
 import { NotFoundPage } from "~/components/app/not-found";
 import { Art } from "~/components/cr/Art";
 import { ChainStatus } from "~/components/cr/ChainStatus";
@@ -27,12 +30,10 @@ import { HeartButton } from "~/components/social/HeartButton";
 import { ShareButton } from "~/components/social/ShareButton";
 import { PrintEntry } from "~/components/print/PrintEntry";
 import { PlacementEditor } from "~/components/publish/PlacementEditor";
-import { pageColors, selectedColor, type PickedColor } from "~/lib/pickedColor";
+import { pageColors, selectedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
-import { PhotoSquare } from "./index";
 import { BuyBox } from "~/components/commerce/BuyBox";
 import { OnTheShirt } from "~/components/commerce/OnTheShirt";
-import { formatPrice } from "../../shared/config/print-products";
 
 export const Route = createFileRoute("/cr/$cr")({
   loader: async ({ context, params }) => {

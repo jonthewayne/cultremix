@@ -1,11 +1,11 @@
 import { createHash, createHmac } from "node:crypto";
 import { vi } from "vitest";
-import type { Id } from "../../convex/_generated/dataModel";
-import type { RawOrder } from "../../convex/lib/shopify/orderQuery";
-import type { newTest } from "./setup";
 import { variantList } from "../../convex/lib/shopify/productSync";
 import { launchShopProduct, listingFor } from "../../convex/lib/shopProduct";
 import { DEFAULT_PLACEMENT } from "../../src/lib/print/shirtPlacement";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { RawOrder } from "../../convex/lib/shopify/orderQuery";
+import type { newTest } from "./setup";
 
 type T = ReturnType<typeof newTest>;
 

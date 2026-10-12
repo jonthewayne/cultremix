@@ -1,9 +1,9 @@
-import type { PrintGeometry } from "../../../shared/config/print-products";
 import { hazeShare } from "./alpha";
-import type { AlphaMetrics } from "./alpha";
 import { dpiGrade, sourceDpi } from "./dpi";
-import type { DpiGrade } from "./dpi";
 import { aspectOf, insideSafeArea, placedHeight } from "./placement";
+import type { PrintGeometry } from "../../../shared/config/print-products";
+import type { AlphaMetrics } from "./alpha";
+import type { DpiGrade } from "./dpi";
 import type { Placement } from "./placement";
 
 // The print check (KTD-9), the same in the browser preview and in the server render.

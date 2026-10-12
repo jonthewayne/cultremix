@@ -10,23 +10,23 @@ import {
   garmentColor,
   visibilityOn,
 } from "../../../convex/lib/garments";
+import { GarmentPreview, useImageAspect } from "./GarmentPreview";
+import { PrintChoices, areaOn, placementOn } from "./PrintChoices";
 import type { Palette, Visibility } from "../../../convex/lib/garments";
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { RemixKind } from "~/components/cr/RemixKindChoice";
+import type { SpellingMiss } from "~/lib/spelling";
+import type { RelativePlacement } from "~/lib/print/shirtPlacement";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { RemixKindChoice } from "~/components/cr/RemixKindChoice";
 import { RemixableParts } from "~/components/cr/RemixableParts";
-import type { RemixKind } from "~/components/cr/RemixKindChoice";
 import { useDesignPixels } from "~/lib/designPixels";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
 import { spellingNote } from "~/lib/spelling";
-import type { SpellingMiss } from "~/lib/spelling";
 import { garmentTones } from "~/lib/print/garmentMockup";
 import { DEFAULT_PLACEMENT, toInches } from "~/lib/print/shirtPlacement";
-import type { RelativePlacement } from "~/lib/print/shirtPlacement";
 import { cn } from "~/lib/utils";
-import { GarmentPreview, useImageAspect } from "./GarmentPreview";
-import { PrintChoices, areaOn, placementOn } from "./PrintChoices";
 
 export type PublishTile = {
   generationId: Id<"generations">;

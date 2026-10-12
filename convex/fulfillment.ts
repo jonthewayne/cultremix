@@ -1,23 +1,19 @@
-import { v, type Infer } from "convex/values";
-import type { GenericDatabaseReader } from "convex/server";
+import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import type { PrintSize } from "../shared/config/print-products";
 import { shipmentUnits } from "./lib/creatorPool";
 import {
   PrintfulError,
+  
+  
+  
   buildOrderRequest,
   createPrintful,
   hasShipped,
-  shipmentFromPrintful,
   isForward,
   printfulConfigFromEnv,
-  stateForStatus,
-  type PrintfulOrder,
-  type PrintfulOrderRequest,
-  type ShipmentRecord,
+  shipmentFromPrintful,
+  stateForStatus
 } from "./lib/printful/client";
 import { publicUrl } from "./lib/r2";
 import { checkPrintFiles } from "./lib/printFingerprint";
@@ -27,6 +23,12 @@ import { catalogColorByCode } from "./lib/shopColors";
 import { crNumber } from "./lib/shopify/productSync";
 import { syncOrderEarnings } from "./earnings";
 import { PAYLOAD_TTL_MS } from "./orders";
+import type { PrintfulOrder, PrintfulOrderRequest, ShipmentRecord } from "./lib/printful/client";
+import type { PrintSize } from "../shared/config/print-products";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
+import type { Infer } from "convex/values";
+import type { MutationCtx } from "./_generated/server";
+import type { GenericDatabaseReader } from "convex/server";
 
 // Printful fulfillment (V1 U10). `advance` is the one place that decides what happens next for an
 // order; it claims a lease and schedules a single Printful call, whose outcome comes back through

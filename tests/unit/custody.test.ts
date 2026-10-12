@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { assertDeploymentConsistency, type ChainDeployment } from "../../shared/config/chains";
+import { assertDeploymentConsistency } from "../../shared/config/chains";
 import { createMemberWallet, devWalletPrivateKey, signForMember } from "../../convex/lib/chain/custody";
 import { backTypedData, registryDomain } from "../../convex/lib/chain/eip712";
+import type { ChainDeployment } from "../../shared/config/chains";
+import type { Hex } from "viem";
 
 const DEV_ENV = { DEPLOYMENT_ENV: "dev", DEV_WALLET_SECRET: "dev-only-secret" };
 const typed = backTypedData(registryDomain(10143, "0x5FbDB2315678afecb367f032d93F642f64180aa3"), {

@@ -1,10 +1,10 @@
-import type { FunctionReturnType } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { notifyBacked } from "../../convex/lib/notifications";
 import { newTest } from "./setup";
 import { addMember, addWork, page } from "./socialFixtures";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { FunctionReturnType } from "convex/server";
 
 const HOUR = 60 * 60 * 1000;
 

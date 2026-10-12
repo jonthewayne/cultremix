@@ -2,12 +2,12 @@ import { useMutation } from "convex/react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { ConvexError } from "convex/values";
 import { useEffect, useState } from "react";
+import { convexQuery } from "@convex-dev/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../../convex/_generated/api";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { useCurrentUser } from "~/hooks/use-auth";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
-import { convexQuery } from "@convex-dev/react-query";
-import { useQuery } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings · CultRemix" }] }),

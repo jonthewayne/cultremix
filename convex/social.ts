@@ -1,8 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
 import { activityItems, feedPage, publishedItems } from "./feed";
 import { getViewerUser } from "./identity";
 import { requireMember } from "./studio";
@@ -20,6 +18,8 @@ import {
 } from "./lib/social";
 import { notify } from "./lib/notifications";
 import { addAttention } from "./lib/trending";
+import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
 // A member's public profile (R25). Public fields only (INV-24): never email, ids, or roles.
 export const profile = query({

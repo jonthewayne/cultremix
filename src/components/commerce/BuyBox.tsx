@@ -1,13 +1,13 @@
 import { useCallback, useState } from "react";
 import { formatPrice } from "../../../shared/config/print-products";
+import { OnTheShirt } from "./OnTheShirt";
+import { CartDrawer } from "./CartDrawer";
+import { useCart } from "./useCart";
 import type { GarmentKind } from "../../../shared/config/print-products";
 import type { PrintArea, RelativePlacement } from "~/lib/print/shirtPlacement";
-import { OnTheShirt } from "./OnTheShirt";
 import { ColorSwatches } from "~/components/cr/ColorSwatches";
 import { useCaptureRef } from "~/lib/ref";
 import { cn } from "~/lib/utils";
-import { CartDrawer } from "./CartDrawer";
-import { useCart } from "./useCart";
 
 export type BuyProduct = {
   key: string;

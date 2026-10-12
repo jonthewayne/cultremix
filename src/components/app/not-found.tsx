@@ -1,6 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router";
-import type { ErrorComponentProps } from "@tanstack/react-router";
 import { useEffect } from "react";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { cn } from "~/lib/utils";
 

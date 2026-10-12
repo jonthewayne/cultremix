@@ -2,8 +2,8 @@
 
 import { readRoles } from "./roleReader";
 import { rolesFromWords, smallerStyles, studioPrompt, styleJobs, styleMixOf } from "./prompts";
-import type { ImageRole, StyleJob } from "./prompts";
 import { chooseStyleParts } from "./styleParts";
+import type { ImageRole, StyleJob } from "./prompts";
 
 // The prompt for a grid batch, exactly as convex/imageGen.ts runBatch sends it: GPT-6 Luna reads
 // what the request wants from each numbered image (convex/lib/roleReader.ts, about 2.5 s; told what

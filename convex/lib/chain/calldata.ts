@@ -1,6 +1,7 @@
 // Calldata for the four registry writes, and revert decoding.
-import { decodeErrorResult, decodeFunctionData, encodeFunctionData, type Hex } from "viem";
+import { decodeErrorResult, decodeFunctionData, encodeFunctionData } from "viem";
 import { registryAbi } from "./abi";
+import type { Hex } from "viem";
 import type { BackMessage, RegisterWorkMessage } from "./eip712";
 
 export type ChainWriteKind = "registerWork" | "back" | "amendLineage" | "registerEconomicConfig";

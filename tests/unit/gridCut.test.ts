@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cutGrid, decodeRgba, encodeRgba, type Rgba } from "../../convex/lib/gridCut";
+import { cutGrid, decodeRgba, encodeRgba } from "../../convex/lib/gridCut";
+import type { Rgba } from "../../convex/lib/gridCut";
 
 type Pixel = [number, number, number, number];
 const CLEAR: Pixel = [0, 0, 0, 0];

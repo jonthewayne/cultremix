@@ -1,8 +1,8 @@
 import { wordsToCheck } from "../../convex/lib/spelling";
 import { CASES, keepsParts } from "./cases";
-import type { Ask, Case, Group, KeepsCheck, WordsCheck } from "./cases";
 import { FIXTURES, fixture } from "./fixtures";
 import { PIN } from "./pin";
+import type { Ask, Case, Group, KeepsCheck, WordsCheck } from "./cases";
 
 // CASES.md, rendered from cases.ts: every case, what it supports, its inputs, and how it's checked.
 // tests/unit/imageSuite.test.ts fails when the file is out of date (bun run test:image --catalog).

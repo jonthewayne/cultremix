@@ -13,8 +13,8 @@ import {
   missingTopics,
   shopifyWebhookUri,
 } from "./lib/shopify/setup";
-import type { ShopCheck } from "./lib/shopify/setup";
 import { shopifyAdminForAction } from "./shopify";
+import type { ShopCheck } from "./lib/shopify/setup";
 
 // Connecting the shop's accounts from Admin, For sale, once their keys are in the env:
 // - Connect Printful checks the token and store, sets the store's webhooks to this deployment's

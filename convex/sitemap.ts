@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
 import { formatCr } from "./lib/r2";
+import type { Id } from "./_generated/dataModel";
 
 // What /sitemap.xml lists (src/routes/sitemap[.]xml.tsx): the newest published works, their
 // families, and their creators' profiles. Public facts only; kept designs never appear.

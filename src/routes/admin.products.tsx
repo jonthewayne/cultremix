@@ -1,10 +1,10 @@
 import { useAction, useMutation, useQuery } from "convex/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { GARMENT_KINDS, GARMENT_KIND_KEYS, formatPrice } from "../../shared/config/print-products";
+import type { FunctionReturnType } from "convex/server";
+import type { Id } from "../../convex/_generated/dataModel";
 import type { GarmentKind } from "../../shared/config/print-products";
 import { AdminSection, adminButton } from "~/components/admin/AdminSection";
 import { errorMessage } from "~/lib/imagePrep";

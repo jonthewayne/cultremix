@@ -9,10 +9,10 @@ import {
   requestedWords,
   rolesFromWords,
   signatureTraits,
-  styleMixOf,
-  styleJobs,
-  styleShares,
   studioPrompt,
+  styleJobs,
+  styleMixOf,
+  styleShares,
   withoutWords,
 } from "../../convex/lib/prompts";
 

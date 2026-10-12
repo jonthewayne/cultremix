@@ -15,7 +15,7 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { falClient } from "../../convex/lib/fal";
 import { measureImage, pngCarriesAlpha } from "../../convex/lib/printImage";
-import { pollDelay, UPSCALE_TIMEOUT_MS } from "../../convex/lib/upscaleFlow";
+import { UPSCALE_TIMEOUT_MS, pollDelay } from "../../convex/lib/upscaleFlow";
 
 const MAX_CALLS = 2;
 const PRICE_PER_24MP = 0.08;

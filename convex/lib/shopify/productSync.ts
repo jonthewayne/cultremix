@@ -1,11 +1,12 @@
 import {
   GARMENT_KINDS,
+  
   PRINT_PRODUCT,
-  PRINT_SIZES,
-  type GarmentKind,
-  type PrintSize,
+  PRINT_SIZES
+  
 } from "../../../shared/config/print-products";
 import { METAFIELD_NAMESPACE } from "../../../shared/config/shopify";
+import type { GarmentKind, PrintSize } from "../../../shared/config/print-products";
 import type { ShopifyAdmin } from "./adminClient";
 
 // Builds the productSet input for one listing, a published work on one product

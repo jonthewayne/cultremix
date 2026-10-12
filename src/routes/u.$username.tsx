@@ -1,8 +1,8 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import { NotFoundPage } from "~/components/app/not-found";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ProfileSkeleton, ShelfSkeleton } from "~/components/cr/PageSkeletons";

@@ -1,13 +1,13 @@
 import { v } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
 import { getViewerUser } from "./identity";
 import { imageUrlReader } from "./lib/imageUrls";
 import { formatCr } from "./lib/r2";
 import { clampPageSize, safeImageUrl } from "./lib/social";
 import { notificationKindValidator } from "./schema/social";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
 const workRef = v.object({ cr: v.string(), title: v.optional(v.string()), thumbUrl: v.optional(v.string()) });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CASTING, POSES, SETTINGS, pickLook, photoPrompt } from "../../convex/lib/prompts";
+import { CASTING, POSES, SETTINGS, photoPrompt, pickLook } from "../../convex/lib/prompts";
 
 describe("model photo looks", () => {
   it("picks the same look for the same seed", () => {

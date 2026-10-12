@@ -2,14 +2,15 @@
 // chain-write engine against an in-memory chain. The viem implementation runs in the default
 // Convex runtime.
 import {
+  
   BaseError,
-  createPublicClient,
-  http,
+  
+  
   TransactionReceiptNotFoundError,
-  type Address,
-  type Hex,
-  type Log,
+  createPublicClient,
+  http
 } from "viem";
+import type { Address, Hex, Log } from "viem";
 import type { FetchLike } from "../circle";
 
 export type BlockTag = "latest" | "finalized";

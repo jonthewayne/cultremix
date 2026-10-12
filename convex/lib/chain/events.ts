@@ -1,7 +1,8 @@
 // Registry events from transaction receipts. Only logs emitted by this environment's registry
 // count; a log from any other address is ignored.
-import { parseEventLogs, type Address, type Hex, type Log } from "viem";
+import { parseEventLogs } from "viem";
 import { registryAbi } from "./abi";
+import type { Address, Hex, Log } from "viem";
 
 export function decodeRegistryEvents(logs: Array<Log>, registryAddress: Address) {
   const own = logs.filter((log) => log.address.toLowerCase() === registryAddress.toLowerCase());

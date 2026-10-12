@@ -1,11 +1,12 @@
 import { ConvexError, v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
 import { chainWritesEnabled, enqueueBack } from "./lib/chain/queue";
 import { registryWeek } from "./lib/chain/writes";
 import { isFlagOn } from "./lib/flagState";
 import { backStatusValidator } from "./schema/chain";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 
 // Backs (R28/R29): a member's public, onchain show of support for a work, signed by their
 // wallet and sent by the relayer. A Back carries no money and no promise of any (KD8).

@@ -1,4 +1,5 @@
-import { splitUnit, type RecipientShare } from "./economics";
+import { splitUnit } from "./economics";
+import type { RecipientShare } from "./economics";
 
 // The creator-pool ledger math for orders (KTD-18), as pure functions over stored inputs so the
 // same numbers come out on every replay. Amounts are USD integer cents; units are 1-based.

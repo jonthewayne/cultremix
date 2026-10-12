@@ -1,12 +1,10 @@
 import { ConvexError, v } from "convex/values";
-import { internal } from "./_generated/api";
-import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
 import { orderGid } from "../shared/config/shopify";
+import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { linePool, recipientShares } from "./lib/economics";
 import { allocateRefund } from "./lib/creatorPool";
-import { ORDER_QUERY, normalizeOrder, type HydratedOrder, type RawOrder } from "./lib/shopify/orderQuery";
+import { ORDER_QUERY, normalizeOrder } from "./lib/shopify/orderQuery";
 import {
   RECONCILE_FIRST_LOOKBACK_MS,
   RECONCILE_OVERLAP_MS,
@@ -21,6 +19,9 @@ import { chosenProducts, offeredShopProducts } from "./lib/shopProduct";
 import { configFor, notifyNewSales, orderLedger, syncOrderEarnings } from "./earnings";
 import { retryDelay, shopifyAdminForAction } from "./shopify";
 import { getViewerUser, isOwner } from "./identity";
+import type { HydratedOrder, RawOrder } from "./lib/shopify/orderQuery";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 // Shopify orders (V1 U10, "Order ingestion"). Every webhook is stored in the order's shopifyInbox
 // entry with its payload before it's acknowledged; hydration then reads the whole order from the

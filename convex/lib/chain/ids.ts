@@ -4,7 +4,8 @@
 //   contentHash  the SHA-256 of the work's published art PNG (works.contentHash, plan amendment A3), as bytes32
 //   uriHash      keccak256 of the work page URL, `${SITE_URL}/cr/101-002`
 //   parentId     the parent work's workId, or zero for an original
-import { keccak256, sha256, toHex, type Address, type Hex } from "viem";
+import { keccak256, sha256, toHex } from "viem";
+import type { Address, Hex } from "viem";
 import type { RegisterWorkMessage } from "./eip712";
 
 export const ZERO_BYTES32 = `0x${"0".repeat(64)}` as Hex;

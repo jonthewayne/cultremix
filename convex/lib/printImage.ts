@@ -3,12 +3,12 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { measureAlpha, roundSolid } from "../../src/lib/print/alpha";
-import type { AlphaMetrics } from "../../src/lib/print/alpha";
 import { applyKnockout } from "../../src/lib/print/knockout";
-import type { KnockoutParams } from "../../src/lib/print/knockout";
 import { visibleBox } from "../../src/lib/print/trim";
-import type { Box } from "../../src/lib/print/trim";
 import { isPng, tagForPrint } from "./printPng";
+import type { AlphaMetrics } from "../../src/lib/print/alpha";
+import type { KnockoutParams } from "../../src/lib/print/knockout";
+import type { Box } from "../../src/lib/print/trim";
 
 // Print Studio's image work on the server, with sharp: measuring, trimming, knocking out, and the
 // print file render. Node actions only; tests/unit runs these directly.

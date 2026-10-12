@@ -3,12 +3,12 @@
 import { createHash } from "node:crypto";
 import { CopyObjectCommand, DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 import { internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
-import type { ActionCtx } from "../_generated/server";
 import { publicUrl, r2, storageMode } from "./r2";
 import { uprightSize, webpCopy } from "./resize";
-import type { ImageInput } from "./resize";
 import { folderOf, sizeKey } from "./sizes";
+import type { Id } from "../_generated/dataModel";
+import type { ActionCtx } from "../_generated/server";
+import type { ImageInput } from "./resize";
 
 // Storing and reading images, for Node actions only (resizing uses sharp, a native package listed
 // in convex.json). Images go to the environment's public R2 bucket in one folder per image

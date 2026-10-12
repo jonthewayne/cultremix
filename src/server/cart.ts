@@ -4,7 +4,8 @@ import {
   REF_COOKIE,
 } from "../../shared/config/shopify";
 import { validRef } from "../lib/ref";
-import { StorefrontError, type CartView, type Storefront } from "./storefront";
+import { StorefrontError } from "./storefront";
+import type { CartView, Storefront } from "./storefront";
 
 // The cart behind the work page's BuyBox. The browser only names a work, product, color, size, and
 // quantity; the server finds the Shopify variant from the work's live offer, so every line

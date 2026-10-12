@@ -4,13 +4,13 @@ import { useMutation } from "convex/react";
 import * as m from "motion/react-m";
 import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { GarmentPreview, useImageAspect } from "./GarmentPreview";
+import { PrintChoices, areaOn, placementOn } from "./PrintChoices";
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { RelativePlacement } from "~/lib/print/shirtPlacement";
 import { errorMessage } from "~/lib/imagePrep";
 import { garmentTones } from "~/lib/print/garmentMockup";
 import { toInches } from "~/lib/print/shirtPlacement";
-import type { RelativePlacement } from "~/lib/print/shirtPlacement";
-import { GarmentPreview, useImageAspect } from "./GarmentPreview";
-import { PrintChoices, areaOn, placementOn } from "./PrintChoices";
 
 // On a work's page, for its creator (and the owner): change what it comes on and where it sits,
 // after publishing. Saved on the work (convex/publish.ts setPrintSetup); when it's already on sale,

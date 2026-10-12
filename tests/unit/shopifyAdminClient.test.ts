@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  
   TOKEN_REFRESH_EARLY_MS,
   createShopifyAdmin,
-  shopifyAdminConfigFromEnv,
-  type CachedToken,
+  shopifyAdminConfigFromEnv
 } from "../../convex/lib/shopify/adminClient";
+import type { CachedToken } from "../../convex/lib/shopify/adminClient";
 
 const HOUR = 60 * 60 * 1000;
 

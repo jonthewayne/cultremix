@@ -1,9 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
 import { getViewerUser, isOwner } from "./identity";
 import { openDisputeCheck } from "./lib/openDisputes";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
 // Paying creators (from mid-November 2026). A creator's payable balance is the sum of their
 // Available earnings, real orders only: matured sales plus any refunds taken after a sale matured

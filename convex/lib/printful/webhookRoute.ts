@@ -1,7 +1,8 @@
 import { internal } from "../../_generated/api";
-import type { ActionCtx } from "../../_generated/server";
-import { PRINTFUL_WEBHOOK_MAX_BYTES, shipmentFromPrintful, type PrintfulOrder, type PrintfulShipment } from "./client";
+import { PRINTFUL_WEBHOOK_MAX_BYTES, shipmentFromPrintful } from "./client";
 import { printfulEventKey, verifyPrintfulWebhook } from "./webhookVerify";
+import type { PrintfulOrder, PrintfulShipment } from "./client";
+import type { ActionCtx } from "../../_generated/server";
 
 // POST /webhooks/printful. Order: size limit, signature over the raw body, store ID, then the
 // event is deduplicated by its body hash (without `retries`) and applied. Printful retries

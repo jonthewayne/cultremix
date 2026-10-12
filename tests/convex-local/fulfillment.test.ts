@@ -1,8 +1,7 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import { rawOrder, type FixtureLine, type FixtureRefund } from "../fixtures/shopifyOrder";
+import { rawOrder } from "../fixtures/shopifyOrder";
 import { newTest } from "./setup";
 import {
   PRINT_FILE_BYTES,
@@ -16,6 +15,8 @@ import {
   postShopifyWebhook,
   setFlag,
 } from "./shopFixtures";
+import type { FixtureLine, FixtureRefund } from "../fixtures/shopifyOrder";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // Printful fulfillment against a fake Printful v2 API and a fake Shopify Admin API. No network.
 

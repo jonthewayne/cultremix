@@ -3,11 +3,11 @@
 // same transaction. Convex mutations are serializable transactions that both read and write the
 // day's row, so two batches racing for the last of the budget can't both be admitted.
 import { v } from "convex/values";
-import type { Infer } from "convex/values";
 import { getAppSettings } from "../identity";
-import { budgetProvider } from "../schema/budget";
 import { PRICING_VERSION } from "./pricing";
 import { dayUtc } from "./paidAttempts";
+import type { budgetProvider } from "../schema/budget";
+import type { Infer } from "convex/values";
 import type { Spend } from "./paidAttempts";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";

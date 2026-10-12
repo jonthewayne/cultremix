@@ -1,8 +1,8 @@
 "use node";
 
 import sharp from "sharp";
-import type { Rgba } from "./gridCut";
 import { SIZES } from "./sizes";
+import type { Rgba } from "./gridCut";
 import type { SizeName } from "./sizes";
 
 // Node actions run with 512 MB; libvips' cache only holds memory between calls here.

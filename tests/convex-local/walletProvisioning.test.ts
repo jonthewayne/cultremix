@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { privateKeyToAccount } from "viem/accounts";
 import { internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { devWalletPrivateKey } from "../../convex/lib/chain/custody";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { WALLET_LEASE_MS, walletBackoffMs } from "../../convex/wallets";
 import { newTest } from "./setup";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const DEV_SECRET = "dev-only-secret";
 

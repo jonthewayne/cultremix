@@ -2,15 +2,16 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { StudioProduct } from "../../shared/config/print-products";
+import type { Layer, Region } from "~/components/print/CompareSlider";
+import type { Placement } from "~/lib/print/placement";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { CompareView, CropZoom, useLoaded } from "~/components/print/CompareSlider";
-import type { Layer, Region } from "~/components/print/CompareSlider";
 import { CHECKER, KnockoutTool } from "~/components/print/KnockoutTool";
 import { PrintCheckList } from "~/components/print/PrintEntry";
 import { ShirtStage } from "~/components/print/ShirtStage";
@@ -30,7 +31,6 @@ import {
   pixelRect,
   placedHeight,
 } from "~/lib/print/placement";
-import type { Placement } from "~/lib/print/placement";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { cn } from "~/lib/utils";
 

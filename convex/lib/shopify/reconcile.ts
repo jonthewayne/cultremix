@@ -1,6 +1,6 @@
 import { gidTail } from "../../../shared/config/shopify";
-import type { ShopifyAdmin } from "./adminClient";
 import { ORDERS_UPDATED_QUERY } from "./orderQuery";
+import type { ShopifyAdmin } from "./adminClient";
 
 // The 15-minute Shopify reconciliation (V1 plan, order ingestion): lists orders updated since the
 // cursor so a missed webhook still reaches the same hydration path.

@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { newTest } from "./setup";
 import { SHOP_ENV } from "./shopFixtures";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type T = ReturnType<typeof newTest>;
 

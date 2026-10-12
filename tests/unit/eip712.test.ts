@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashStruct, type Address, type Hex } from "viem";
+import { hashStruct } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import vectors from "../../contracts/test/fixtures/eip712-vectors.json";
 import {
@@ -14,6 +14,7 @@ import {
   typedDataDigest,
   typedDataJson,
 } from "../../convex/lib/chain/eip712";
+import type { Address, Hex } from "viem";
 
 // The same vectors are checked by the forge suite (test_SharedEip712Vectors), so the contract
 // and this code agree on the domain, the type strings, and the digests.

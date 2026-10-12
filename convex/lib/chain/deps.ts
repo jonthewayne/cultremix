@@ -1,7 +1,8 @@
 // The external clients chain work uses (Circle over fetch, Monad over JSON-RPC), in one place so
 // tests can replace them. Production code always calls chainDeps().
+import { viemRpc } from "./rpc";
+import type { ChainRpc } from "./rpc";
 import type { FetchLike } from "../circle";
-import { viemRpc, type ChainRpc } from "./rpc";
 
 export type ChainDeps = {
   fetch: FetchLike;

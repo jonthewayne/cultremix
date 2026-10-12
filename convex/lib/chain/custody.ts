@@ -1,10 +1,13 @@
 // Member wallets. Circle holds them in every environment that has Circle keys; the local signer
 // exists only for dev without Circle keys, and refuses to run anywhere else.
-import { recoverTypedDataAddress, type Address, type Hex } from "viem";
+import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { circleClient } from "../circle";
+import { isCanonicalSignature, normalizeSignature, typedDataJson } from "./eip712";
+import type { FetchLike } from "../circle";
+import type { RegistryTypedData } from "./eip712";
+import type { Address, Hex } from "viem";
 import type { ChainDeployment } from "../../../shared/config/chains";
-import { circleClient, type FetchLike } from "../circle";
-import { isCanonicalSignature, normalizeSignature, typedDataJson, type RegistryTypedData } from "./eip712";
 
 type Env = Record<string, string | undefined>;
 

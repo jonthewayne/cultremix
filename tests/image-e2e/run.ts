@@ -25,23 +25,23 @@ import { gatewayCostCents, gridWorstCaseCents, photoWorstCaseCents, qualityOf } 
 import { photoPrompt, pickLook } from "../../convex/lib/prompts";
 import { compareRemix } from "../../convex/lib/remixCompare";
 import { checkWordChanges, proposeRemixFields, wordChangeInstruction } from "../../convex/lib/remixFields";
-import type { RemixField } from "../../convex/lib/remixFields";
 import { allowedChangesNote, checkPartChanges, partChangeInstruction } from "../../convex/lib/remixParts";
 import { decodeToRgba, encodePng } from "../../convex/lib/resize";
 import { describePart, proposeParts } from "../../convex/lib/partsReader";
-import type { RemixPart } from "../../convex/lib/remixParts";
 import { readRoles } from "../../convex/lib/roleReader";
 import { spellingMisses, wordsToCheck } from "../../convex/lib/spelling";
-import type { SpellingMiss } from "../../convex/lib/spelling";
 import { readDesignWords } from "../../convex/lib/wordReader";
 import { caseBoard } from "./board";
 import { CASES, keepsParts } from "./cases";
-import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PartsCase, PhotoCase, ReaderCase, SpellingCase, WordsCheck } from "./cases";
 import { renderCatalog } from "./catalog";
 import { fixture, fixturePath } from "./fixtures";
 import { checkImage, readWords, throttled, wordsMatch } from "./judge";
-import type { Answers } from "./judge";
 import { PIN } from "./pin";
+import type { Answers } from "./judge";
+import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PartsCase, PhotoCase, ReaderCase, SpellingCase, WordsCheck } from "./cases";
+import type { SpellingMiss } from "../../convex/lib/spelling";
+import type { RemixPart } from "../../convex/lib/remixParts";
+import type { RemixField } from "../../convex/lib/remixFields";
 
 const SUITE_DIR = fileURLToPath(new URL(".", import.meta.url));
 const REPO_DIR = fileURLToPath(new URL("../..", import.meta.url));

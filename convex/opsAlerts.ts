@@ -1,10 +1,10 @@
 import { v } from "convex/values";
+import { BATCH_CENTS, creditLevel, creditWorsened } from "../shared/config/gatewayCredit";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
 import { sendEmail } from "./email";
 import { notifyOpsAlert } from "./lib/notifications";
-import { BATCH_CENTS, creditLevel, creditWorsened } from "../shared/config/gatewayCredit";
+import type { MutationCtx } from "./_generated/server";
 
 // The gateway credit watch (convex/gatewayCredit.ts watch reads the balance; this decides). When
 // the balance drops below $10, and again when it runs out, the owner and ops staff get a bell

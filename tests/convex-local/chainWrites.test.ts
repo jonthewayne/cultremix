@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { api, internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import type { MutationCtx } from "../../convex/_generated/server";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
-import { configHashFor, reasonHashFor, workIdFor, ZERO_BYTES32 } from "../../convex/lib/chain/ids";
+import { ZERO_BYTES32, configHashFor, reasonHashFor, workIdFor } from "../../convex/lib/chain/ids";
 import { enqueueAmendment, enqueueBack, enqueueConfig, enqueueRegisterWork } from "../../convex/lib/chain/queue";
 import { registryWeek } from "../../convex/lib/chain/writes";
 import {
+  
   RELAYER,
   RELAYER_KEY,
   RELAYER_LEASE_KEY,
@@ -17,11 +15,15 @@ import {
   insertWork,
   makeWalletReady,
   setChainWrites,
-  useChainEnv,
-  type Member,
+  useChainEnv
 } from "./chainFixtures";
-import { FAKE_REGISTRY, FakeChain, type FakeChainOptions } from "./fakeChain";
+import { FAKE_REGISTRY, FakeChain } from "./fakeChain";
 import { newTest } from "./setup";
+import type { Member } from "./chainFixtures";
+import type { FakeChainOptions } from "./fakeChain";
+import type { MutationCtx } from "../../convex/_generated/server";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { Hex } from "viem";
 
 type T = ReturnType<typeof newTest>;
 const GWEI = 1_000_000_000n;

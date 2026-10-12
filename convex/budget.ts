@@ -11,12 +11,12 @@ import {
   spendValidator,
 } from "./lib/budget";
 import { DISPATCHED_EXPIRE_MS, EXPIRED_MESSAGE, QUEUED_EXPIRE_MS, UNKNOWN_MESSAGE, dayUtc } from "./lib/paidAttempts";
-import type { Spend } from "./lib/paidAttempts";
 import { PRICING_VERSION } from "./lib/pricing";
 import { budgetProvider } from "./schema/budget";
 import { failAndRefund, flagEnabled, settleBatch } from "./studio";
 import { failShootPhoto } from "./publish";
 import { failPrintVersion } from "./print";
+import type { Spend } from "./lib/paidAttempts";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 

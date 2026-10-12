@@ -1,10 +1,10 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import { Art } from "~/components/cr/Art";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { Avatar } from "~/components/social/Avatar";

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COMFORT_COLORS_1717, shirtColor } from "../../shared/config/print-products";
 import { dilate, measureAlpha, roundSolid } from "../../src/lib/print/alpha";
-import type { AlphaMetrics } from "../../src/lib/print/alpha";
 import { printCheck, readyLine } from "../../src/lib/print/check";
 import { offeredPrintColors } from "../../src/lib/print/colors";
 import { dpiGrade, sourceDpi } from "../../src/lib/print/dpi";
@@ -25,6 +24,7 @@ import {
   printVersionKey,
   randomCode,
 } from "../../convex/lib/printKeys";
+import type { AlphaMetrics } from "../../src/lib/print/alpha";
 
 // The placement math on a fixed 15 x 17 in print area (any product's area works the same way).
 const product = { ...COMFORT_COLORS_1717, printArea: { widthIn: 15, heightIn: 17 } };

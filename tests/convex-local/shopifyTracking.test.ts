@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { internal } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { newTest } from "./setup";
 import { SHOP_ENV } from "./shopFixtures";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type T = ReturnType<typeof newTest>;
 

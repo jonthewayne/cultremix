@@ -1,5 +1,5 @@
-import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { publicUrl } from "./r2";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 // What pages load for a stored image: the original (download, "Open full size", publishing, the
 // print upscale) and its WebP thumbnail and medium (convex/lib/sizes.ts). Until an image's copies

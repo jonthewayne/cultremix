@@ -9,8 +9,8 @@ import {
   wordChangeInstruction,
   wordPieces,
 } from "../../convex/lib/remixFields";
-import type { RemixField } from "../../convex/lib/remixFields";
 import { studioPrompt } from "../../convex/lib/prompts";
+import type { RemixField } from "../../convex/lib/remixFields";
 
 const notes = (words: Array<string>) =>
   ["### Subject and layout", "A mushroom under a rainbow.", "### Words", ...words, "### Technique", "Screen print."].join("\n");

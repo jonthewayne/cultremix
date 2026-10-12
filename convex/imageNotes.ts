@@ -2,11 +2,11 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { VISION_MODEL } from "./lib/models";
 import { writeNotes } from "./lib/notesWriter";
 import { fetchPublicImage } from "./lib/storage";
+import type { Id } from "./_generated/dataModel";
 
 // Writes an image's notes once, when it first comes into the studio: what it shows (the people
 // and their likeness, the words) and how it looks (technique, color, line, lettering, signature

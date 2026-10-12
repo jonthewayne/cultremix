@@ -1,14 +1,14 @@
 import { ConvexError, v } from "convex/values";
+import { garmentKindOf } from "../shared/config/print-products";
 import { internal } from "./_generated/api";
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAccess";
 import { GARMENT_COLORS, colorKey } from "./lib/garments";
-import type { GarmentColor, Palette } from "./lib/garments";
 import { areaFor, chosenProducts, merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
 import { garmentKindValidator, merchColor, printAreaValidator, relativePlacementValidator } from "./schema/merch";
 import { createPrintful, printfulConfigFromEnv } from "./lib/printful/client";
 import { areasFromPrintfiles } from "./lib/printful/setup";
-import { garmentKindOf } from "../shared/config/print-products";
+import type { GarmentColor, Palette } from "./lib/garments";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 

@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { DEFAULT_PLACEMENT, clampRelative, sameRelative } from "../src/lib/print/shirtPlacement";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser, isOwner } from "./identity";
@@ -16,10 +17,7 @@ import { allowedChangesNote } from "./lib/remixParts";
 import { activePalette } from "./merch";
 import { chosenProducts, offeredShopProducts, retireKeptListings } from "./lib/shopProduct";
 import { crNumber } from "./lib/shopify/productSync";
-import type { ShopProduct } from "./lib/shopProduct";
 import { garmentKindValidator, relativePlacementValidator } from "./schema/merch";
-import { DEFAULT_PLACEMENT, clampRelative, sameRelative } from "../src/lib/print/shirtPlacement";
-import type { RelativePlacement } from "../src/lib/print/shirtPlacement";
 import {
   BUDGET_RESTING,
   closeReservation,
@@ -31,6 +29,8 @@ import {
 } from "./lib/budget";
 import { photoWorstCaseCents, qualityOf } from "./lib/pricing";
 import { DAILY_LIMIT, startPhotoShoot } from "./lib/photoShoots";
+import type { RelativePlacement } from "../src/lib/print/shirtPlacement";
+import type { ShopProduct } from "./lib/shopProduct";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 

@@ -7,8 +7,8 @@ import {
   carrierName,
   fulfillmentLines,
 } from "./lib/shopify/fulfillmentSync";
-import type { FulfillmentOrderNode } from "./lib/shopify/fulfillmentSync";
 import { shopifyAdminForAction } from "./shopify";
+import type { FulfillmentOrderNode } from "./lib/shopify/fulfillmentSync";
 
 // When Printful ships, Shopify gets a fulfillment with the carrier and tracking number, and sends
 // the buyer its shipping email (notifyCustomer). One per shipment, recorded on orderShipments;

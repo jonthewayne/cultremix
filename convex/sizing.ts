@@ -2,14 +2,14 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
-import type { ActionCtx } from "./_generated/server";
 import { randomCode } from "./lib/codes";
 import { stripPngMetadata } from "./lib/pngMeta";
 import { storageMode } from "./lib/r2";
 import { designKey, extensionOf, gridKey, sizeKey, uploadKey, workArtKey, workPhotoKey } from "./lib/sizes";
 import { copyObject, deleteKeys, fetchPublicImage, listKeys, makeSizes, sha256Hex, storeObject } from "./lib/storage";
+import type { ActionCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import type { MovePlace } from "./storageMoves";
 
 // Makes an image's thumbnail and medium after it's stored: uploads, and images stored before

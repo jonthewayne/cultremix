@@ -1,9 +1,9 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
-import type { Id } from "./_generated/dataModel";
 import { handleShopifyWebhook } from "./lib/shopify/webhookRoute";
 import { handlePrintfulWebhook } from "./lib/printful/webhookRoute";
+import type { Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 

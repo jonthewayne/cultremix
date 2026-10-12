@@ -1,18 +1,20 @@
 // What each chain write sends and how its outcome is read back: calldata, the event in a finalized
 // receipt, and the record in finalized contract state (for reconciling a duplicate or a nonce
 // consumed elsewhere). No Convex imports; the engine lives in convex/chain.ts.
-import { decodeFunctionResult, encodeFunctionData, type Address, type Hex, type Log } from "viem";
+import { decodeFunctionResult, encodeFunctionData } from "viem";
 import { registryAbi } from "./abi";
 import {
+  
+  
   encodeAmendLineage,
   encodeBack,
   encodeRegisterEconomicConfig,
-  encodeRegisterWork,
-  type AmendLineageArgs,
-  type ChainWriteKind,
+  encodeRegisterWork
 } from "./calldata";
-import type { BackMessage, RegisterWorkMessage } from "./eip712";
 import { findBacked, findEconomicConfigRegistered, findLineageAmended, findWorkRegistered } from "./events";
+import type { AmendLineageArgs, ChainWriteKind } from "./calldata";
+import type { Address, Hex, Log } from "viem";
+import type { BackMessage, RegisterWorkMessage } from "./eip712";
 import type { BlockRef, ChainRpc } from "./rpc";
 
 // Payloads without the signature deadline, which changes on every re-sign.

@@ -1,18 +1,20 @@
 import { v } from "convex/values";
+import { PRINT_SIZES } from "../shared/config/print-products";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, query } from "./_generated/server";
-import type { ActionCtx, QueryCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
 import { getViewerUser } from "./identity";
-import { createShopifyAdmin, shopifyAdminConfigFromEnv, type FetchLike } from "./lib/shopify/adminClient";
-import { archiveProduct, crNumber, setProductStatus, syncProduct, variantSku, type ProductStatus } from "./lib/shopify/productSync";
+import { createShopifyAdmin, shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
+import { archiveProduct, crNumber, setProductStatus, syncProduct, variantSku } from "./lib/shopify/productSync";
 import { commerceOpen } from "./lib/shopFlags";
 import { listingsOf } from "./lib/shopProduct";
 import { notifyKeptReady } from "./lib/notifications";
 import { publicUrl } from "./lib/r2";
-import { PRINT_SIZES } from "../shared/config/print-products";
 import { garmentKindValidator, printAreaValidator, printSideValidator, relativePlacementValidator } from "./schema/merch";
 import { listingValidator } from "./schema/shop";
+import type { ProductStatus } from "./lib/shopify/productSync";
+import type { FetchLike } from "./lib/shopify/adminClient";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { ActionCtx, QueryCtx } from "./_generated/server";
 
 // Shopify products for works on sale (V1 U9). An admin approves a work (convex/sales.ts); each of its
 // listings (the work on one product) becomes one Shopify product by productSet on its handle, then

@@ -1,7 +1,7 @@
 import { hairShape, noteSections } from "../../convex/lib/prompts";
+import { fixSpellingRequest } from "../../src/lib/spelling";
 import type { PhotoGarment } from "../../convex/lib/prompts";
 import type { RemixPart } from "../../convex/lib/remixParts";
-import { fixSpellingRequest } from "../../src/lib/spelling";
 
 // Every capability the image pipeline aims to support, as cases the suite can rerun: the image model
 // with our prompts (generate, photo), the GPT-6 Luna steps around it (notes, reader, compare, and

@@ -1,10 +1,10 @@
 import { useAction } from "convex/react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { BATCH_CENTS, LOW_CREDIT_CENTS } from "../../../shared/config/gatewayCredit";
 import { AdminSection, adminQuietButton } from "~/components/admin/AdminSection";
 import { formatDollars } from "~/components/admin/BudgetCard";
 
-import { BATCH_CENTS, LOW_CREDIT_CENTS } from "../../../shared/config/gatewayCredit";
 
 // The CultRemix Gateway account's balance (convex/gatewayCredit.ts). Every design, note, and model
 // photo is paid from it, and when it runs out every new design fails.
