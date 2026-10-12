@@ -5,6 +5,7 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { ConvexProvider } from "convex/react";
 import { routeTree } from "./routeTree.gen";
 import { ErrorPage, NotFoundPage } from "~/components/app/not-found";
+import { watchForNewBuild } from "~/lib/buildVersion";
 import { pageHasSession, resumeWithoutAuthAfter } from "~/lib/sessionMeta";
 
 export function getRouter() {
@@ -49,6 +50,8 @@ export function getRouter() {
   // Replaces the deprecated @tanstack/react-router-with-query, whose SSR hook
   // (router.serverSsr.isDehydrated) no longer exists in router-core 1.171.
   setupRouterSsrQueryIntegration({ router, queryClient });
+  // After a deploy, an open tab moves onto the new build at its next click.
+  watchForNewBuild(router);
 
   return router;
 }

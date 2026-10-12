@@ -24,6 +24,7 @@ import { Route as TeamRouteImport } from './routes/team'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VerifyPhoneRouteImport } from './routes/verify-phone'
+import { Route as VersionDotjsonRouteImport } from './routes/version[.]json'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminJudgesRouteImport } from './routes/admin.judges'
 import { Route as AdminLineageRouteImport } from './routes/admin.lineage'
@@ -122,6 +123,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
 const VerifyPhoneRoute = VerifyPhoneRouteImport.update({
   id: '/verify-phone',
   path: '/verify-phone',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VersionDotjsonRoute = VersionDotjsonRouteImport.update({
+  id: '/version.json',
+  path: '/version.json',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -261,6 +267,7 @@ export interface FileRoutesByFullPath {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/version.json': typeof VersionDotjsonRoute
   '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
@@ -301,6 +308,7 @@ export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/version.json': typeof VersionDotjsonRoute
   '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
@@ -343,6 +351,7 @@ export interface FileRoutesById {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
+  '/version.json': typeof VersionDotjsonRoute
   '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
   '/admin/members': typeof AdminMembersRoute
@@ -386,6 +395,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/version.json'
     | '/admin/judges'
     | '/admin/lineage'
     | '/admin/members'
@@ -426,6 +436,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/version.json'
     | '/admin/judges'
     | '/admin/lineage'
     | '/admin/members'
@@ -467,6 +478,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/verify-phone'
+    | '/version.json'
     | '/admin/judges'
     | '/admin/lineage'
     | '/admin/members'
@@ -509,6 +521,7 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyPhoneRoute: typeof VerifyPhoneRoute
+  VersionDotjsonRoute: typeof VersionDotjsonRoute
   AdminChainRoute: typeof AdminChainRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
@@ -630,6 +643,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-phone'
       fullPath: '/verify-phone'
       preLoaderRoute: typeof VerifyPhoneRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/version.json': {
+      id: '/version.json'
+      path: '/version.json'
+      fullPath: '/version.json'
+      preLoaderRoute: typeof VersionDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -847,6 +867,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyPhoneRoute: VerifyPhoneRoute,
+  VersionDotjsonRoute: VersionDotjsonRoute,
   AdminChainRoute: AdminChainRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,

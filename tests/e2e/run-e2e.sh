@@ -132,6 +132,10 @@ if ! curl -fsS "$BASE_URL/robots.txt" | grep -q "^Sitemap: "; then
   echo "robots.txt is missing or wrong on $BASE_URL"
   exit 1
 fi
+# Which build is live (src/routes/version[.]json.tsx): the git commit it was built from.
+live_build=$(curl -fsS "$BASE_URL/version.json" | sed -nE 's/.*"build":"([^"]+)".*/\1/p')
+[[ -n "$live_build" ]] || { echo "version.json is missing or wrong on $BASE_URL"; exit 1; }
+echo "Live build: $live_build"
 
 agent-browser open "$BASE_URL/onchain"
 agent-browser wait 1500

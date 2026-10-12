@@ -2,6 +2,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { isChunkLoadError, newerBuildLive, reloadOnce } from "~/lib/buildVersion";
 import { reportClientError } from "~/lib/clientErrors";
 import { cn } from "~/lib/utils";
 
@@ -49,7 +50,15 @@ export function NotFoundPage({
 export function ErrorPage({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   // The error behind it goes to Admin, Overview (src/lib/clientErrors.ts).
-  useEffect(() => reportClientError(error, "page"), [error]);
+  useEffect(() => {
+    reportClientError(error, "page");
+    // A deploy since this page loaded: its code files or functions changed under it, so it loads
+    // fresh (once a minute at most), after a moment for the report to go.
+    let timer: number | undefined;
+    if (isChunkLoadError(error)) timer = window.setTimeout(() => reloadOnce(), 500);
+    else void newerBuildLive().then((newer) => newer && reloadOnce());
+    return () => window.clearTimeout(timer);
+  }, [error]);
   return (
     <div className="min-h-svh bg-white px-4 py-16 text-black md:px-10">
       <Link to="/" className="text-base font-black uppercase tracking-[0.2em] md:text-lg">
@@ -61,6 +70,10 @@ export function ErrorPage({ error, reset }: ErrorComponentProps) {
         <button
           type="button"
           onClick={() => {
+            if (isChunkLoadError(error)) {
+              window.location.reload();
+              return;
+            }
             reset();
             void router.invalidate();
           }}
