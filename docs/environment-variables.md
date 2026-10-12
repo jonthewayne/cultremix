@@ -12,6 +12,8 @@ The setup wizard writes `.starter/setup-state.json` as a non-secret report of wh
 
 ## Matrix
 
+Rows set in GitHub (secrets and variables) or read by a workflow come from the starter. This repo has no GitHub Actions workflow, so nothing reads them here; see [Cloudflare deployment](deployment-cloudflare.md).
+
 | Variable | Where | Committed | Sensitive | Set By | Read By |
 | --- | --- | --- | --- | --- | --- |
 | `CONVEX_DEPLOYMENT` | `.env.local` | no | no | wizard/Convex CLI | Convex dev CLI |

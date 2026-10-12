@@ -23,7 +23,7 @@ Covered helpers:
 - the Convex React Query SSR auth handoff used by the router
 - the Better Auth client methods consumed by the Convex provider
 
-The GitHub deploy workflow runs the unit suite and typecheck before deployment. Convex integration tests remain opt-in because they need a dedicated deployment admin key and test secret.
+This repo has no GitHub deploy workflow, so nothing runs these checks automatically; the Builder runs the default checks on a commit before Ops deploys it (`docs/launch-checklist.md`, Every production deploy). Convex integration tests remain opt-in because they need a dedicated deployment admin key and test secret.
 
 Check the resolved Bun dependency graph for security advisories with:
 

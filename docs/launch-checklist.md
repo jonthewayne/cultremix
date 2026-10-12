@@ -19,6 +19,7 @@ There's no staging project. Nothing is copied between the two; each is set up by
 
 - [ ] `bun run typecheck`, `bun run test`, `bun run build`, and `bun run test:e2e` pass on the commit.
 - [ ] The Builder's Ops message names the commit, the schema changes, any env to set, and the jobs to run. It replaces earlier messages, so only the latest one is followed.
+- [ ] Ops backs up production first (`bunx convex export --prod --include-file-storage`), builds the Worker, then runs `bunx convex deploy` and `wrangler deploy` back to back, because production's old pages and new functions don't work together ([Cloudflare deployment](deployment-cloudflare.md#production-deploys)).
 - [ ] The build log (`docs/hackathon/log.md`) has an entry for it.
 - [ ] After the deploy: `BASE_URL=https://cultremix.com bun run test:e2e` ends with "E2E smoke complete", and the Ops message's checks pass.
 
@@ -67,7 +68,7 @@ Admin, Overview starts with **Ready to sell**: each piece below for real orders 
 
 ### Deploy (Ops)
 
-- [ ] Follow the latest Ops message: pull, install, set production's env, `bunx convex deploy`, seed and backfills, `bun run deploy:prod`.
+- [ ] Follow the latest Ops message: pull, install, set production's env, back up production, build, `bunx convex deploy` and `wrangler deploy` back to back, then the seeds and backfills.
 - [ ] Production's env for the shop: the live store's `SHOPIFY_*` values, Printful's live `PRINTFUL_API_TOKEN` and `PRINTFUL_STORE_ID`, and `PRINTFUL_AUTO_CONFIRM=true`. The live store's app has the same scopes as dev's, and its privacy webhooks point at `https://savory-tiger-504.convex.site/webhooks/shopify`.
 - [ ] On production's Admin, For sale: **Connect Printful** and **Connect Shopify**. In Admin, Products: **Check with Printful** on each product.
 

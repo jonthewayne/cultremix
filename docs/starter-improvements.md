@@ -41,6 +41,8 @@ agent workflow changes make the starter easier to use.
 
 - With `expectAuth: false` (public pages that load signed out), a signed-in page's first live Convex results come from an anonymous socket and overwrite the server-rendered cache, so React logs "Hydration failed" and rebuilds the page in the browser. Mark server pages rendered with a session (a `<meta>` in the root document) and create the `ConvexQueryClient` with `expectAuth` only when that mark is present; add a fallback that sets an empty auth source after about 10 s so a failed token fetch can't leave the socket paused (CultRemix `src/lib/sessionMeta.ts`, `src/router.tsx`). Have the signed-in browser test fail on any `Hydration failed` error.
 - In `convex-test`, a file's first HTTP route or scheduled-function call loads every Convex module and can pass vitest's 5 s default on a busy machine; set `testTimeout` once in the in-memory test config instead of per file.
+- `new-project` didn't bring the starter's `.github/workflows/` into CultRemix, yet its deployment, testing, and env docs kept describing that workflow as if it ran. When a generated app has no workflow, its docs should say so and name who deploys by hand.
+- When an app's server-rendered pages read Convex queries whose results change shape, the Worker and the Convex functions only work in matching pairs: CultRemix's old Worker crashed against the new functions and the reverse. Document a back-to-back order (back up with `convex export --include-file-storage`, build the Worker, then `convex deploy && wrangler deploy`) instead of separate steps with seeds in between, and check both mismatches in workerd before a big deploy.
 
 ## Still Worth Improving
 
