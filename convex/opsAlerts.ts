@@ -40,18 +40,36 @@ async function moveTo(ctx: MutationCtx, key: string, level: "ok" | "low" | "out"
   return creditWorsened(before, level);
 }
 
-// The Monad relayer ran out of MON (convex/chain.ts held a write for it) or has MON again. While it's
-// out, published designs wait for their Monad record; told once until a write goes through again.
+// The Monad relayer's MON after a chain tick (convex/chain.ts): running low (fewer than about 20
+// more writes at the gas price it just paid), out (a write was held for it), or fine. While it's
+// out, published designs wait for their Monad record. Running low is told once, and running out
+// again; sending with plenty again resets it.
+export function relayerFundsMessage(args: { level: "low" | "out"; network: string; address: string; balanceWei?: string; writesLeft?: number }) {
+  if (args.level === "out") {
+    return `The Monad relayer is out of MON, so new designs wait for their ${args.network} record. Send MON to ${args.address}; /admin/chain shows its balance.`;
+  }
+  const mon = args.balanceWei === undefined ? null : (Number(args.balanceWei) / 1e18).toFixed(3);
+  const left = args.writesLeft === undefined ? "" : ` about ${args.writesLeft} more records`;
+  return `The Monad relayer is running low on MON${mon === null ? "" : ` (${mon} MON left,${left || " a few records"})`}. Send MON to ${args.address} before new designs start waiting for their ${args.network} record; /admin/chain shows its balance.`;
+}
+
 export const recordRelayerFunds = internalMutation({
-  args: { out: v.boolean(), network: v.string(), address: v.string() },
+  args: {
+    level: v.union(v.literal("ok"), v.literal("low"), v.literal("out")),
+    network: v.string(),
+    address: v.string(),
+    balanceWei: v.optional(v.string()),
+    writesLeft: v.optional(v.number()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (!(await moveTo(ctx, RELAYER_KEY, args.out ? "out" : "ok"))) return null;
-    const message = `The Monad relayer is out of MON, so new designs wait for their ${args.network} record. Send MON to ${args.address}; /admin/chain shows its balance.`;
+    if (!(await moveTo(ctx, RELAYER_KEY, args.level)) || args.level === "ok") return null;
+    const message = relayerFundsMessage({ ...args, level: args.level });
+    const subject = args.level === "out" ? "CultRemix's Monad relayer needs MON" : "CultRemix's Monad relayer is running low on MON";
     const { owners, everyone } = await staff(ctx);
     for (const person of everyone) await notifyOpsAlert(ctx, { recipientId: person._id, message });
     for (const owner of owners) {
-      if (owner.email) await ctx.scheduler.runAfter(0, internal.opsAlerts.sendCreditEmail, { to: owner.email, message, out: true, subject: "CultRemix's Monad relayer needs MON" });
+      if (owner.email) await ctx.scheduler.runAfter(0, internal.opsAlerts.sendCreditEmail, { to: owner.email, message, out: args.level === "out", subject });
     }
     return null;
   },

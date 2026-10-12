@@ -383,6 +383,48 @@ describe("chain writes: fees and stalls", () => {
     await tick(t);
     expect((await getWrite(t, second)).status).toBe("confirmed");
   });
+
+  it("tells the owner and ops once when the relayer runs low on MON, and again when it runs out", async () => {
+    const { t, chain } = setup();
+    await setChainWrites(t, true);
+    await insertOwner(t);
+    const creator = await insertMember(t);
+    const alerts = async () =>
+      t.run(async (ctx) => (await ctx.db.query("notifications").collect()).filter((row) => row.kind === "ops_alert").map((row) => row.note ?? ""));
+    const level = async () => t.run(async (ctx) => (await ctx.db.query("opsAlerts").collect()).map((row) => [row.key, row.level]));
+
+    // A write costs 175,000 gas at 100 gwei here: 0.0175 MON. 0.3 MON less two writes covers 15 more.
+    chain.setBalance(RELAYER, 3n * 10n ** 17n);
+    await enqueueWork(t, await insertWork(t, creator.userId));
+    await enqueueWork(t, await insertWork(t, creator.userId));
+    expect(await tick(t)).toMatchObject({ sent: 2 });
+    expect(await level()).toEqual([["relayer-mon", "low"]]);
+    expect(await alerts()).toEqual([expect.stringContaining("running low on MON (0.265 MON left, about 15 more records)")]);
+
+    // Still low on the next send: told once.
+    await chain.mine(3);
+    await enqueueWork(t, await insertWork(t, creator.userId));
+    vi.setSystemTime(Date.now() + 60_000);
+    await tick(t);
+    expect(await alerts()).toHaveLength(1);
+
+    // Out is worse than low: told again.
+    chain.setBalance(RELAYER, 0n);
+    await enqueueWork(t, await insertWork(t, creator.userId));
+    vi.setSystemTime(Date.now() + 60_000);
+    await tick(t);
+    expect(await level()).toEqual([["relayer-mon", "out"]]);
+    expect((await alerts()).filter((note) => note.includes("out of MON"))).toHaveLength(1);
+
+    // Plenty again resets it, with nothing said.
+    chain.setBalance(RELAYER, 10n ** 20n);
+    vi.setSystemTime(Date.now() + 60_000);
+    await tick(t);
+    vi.setSystemTime(Date.now() + 60_000);
+    await tick(t);
+    expect(await level()).toEqual([["relayer-mon", "ok"]]);
+    expect(await alerts()).toHaveLength(2);
+  });
 });
 
 describe("chain writes: Backs", () => {

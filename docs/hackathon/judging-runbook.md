@@ -2,7 +2,7 @@
 
 For Jon (and Ops) while judges use cultremix.com. Everything here works on production once the latest Ops message is deployed.
 
-Judges use the site from October 14 to 27, and winners are announced November 3, so the image credit and the relayer's MON have to last two weeks. $50 of credit is about 380 batches, enough for about 19 judges who each use all 40 credits. 2 MON is about 85 Monad records once the registry is deployed. The bell (and email to the owner) says when the credit drops below $10 and when the relayer runs out of MON; Admin, Overview shows the credit, and /admin/chain the relayer's MON.
+Judges use the site from October 14 to 27, and winners are announced November 3, so the image credit and the relayer's MON have to last two weeks. $50 of credit is about 380 batches, enough for about 19 judges who each use all 40 credits. 2 MON is about 85 Monad records once the registry is deployed. The bell (and email to the owner) says when the credit drops below $10, when the relayer is running low on MON (about 20 records left), and when it runs out; Admin, Overview shows the credit, and /admin/chain the relayer's MON.
 
 ## Before judges arrive
 
@@ -13,7 +13,7 @@ Judges use the site from October 14 to 27, and winners are announced November 3,
 
 ## While judges are on the site
 
-- **The bell**, signed in as the owner. Alerts arrive there and by email to the owner and ops: the gateway credit under $10 or out, and later, once those parts are on, a relayer out of MON and orders that can't go on by themselves.
+- **The bell**, signed in as the owner. Alerts arrive there and by email to the owner and ops: the gateway credit under $10 or out, and later, once those parts are on, a relayer running low on MON (about 20 records left) or out of it, and orders that can't go on by themselves.
 - **Admin, Overview**: Gateway credit (a red "Low" line under $10), Browser errors (pages that broke in someone's browser, by page and count), and Ready to sell.
 
 ## When something goes wrong

@@ -734,8 +734,8 @@ type Step = {
   relayer: Relayer;
   lease: Lease;
   summary: Summary;
-  // Whether this tick already told opsAlerts the relayer is out of MON (true) or sending (false).
-  fundsReported?: boolean;
+  // What this tick already told opsAlerts about the relayer's MON.
+  fundsReported?: FundsLevel;
 };
 
 async function outcome(step: Step, write: WriteDoc, result: typeof outcomeValidator.type): Promise<void> {
@@ -889,15 +889,25 @@ async function signMember(step: Step, write: WriteDoc, payload: WritePayload): P
   return { signature, deadline: Number(deadline), signer: wallet.address };
 }
 
-// Tells the owner and ops when the relayer runs out of MON, once until a write goes through again
+type FundsLevel = "ok" | "low" | "out";
+
+// The relayer is running low when its MON covers fewer than this many more writes at the gas price
+// it just paid: about 0.4 MON at mainnet's prices on October 12 (a registration costs about 0.021),
+// a day or two of judging. Low tells the owner and ops once, and running out tells them again.
+const LOW_FUNDS_WRITES = 20n;
+
+// Tells the owner and ops when the relayer is running low on MON or runs out, once per drop
 // (convex/opsAlerts.ts). Once per tick is enough.
-async function reportFunds(step: Step, out: boolean) {
-  if (step.fundsReported === out) return;
-  step.fundsReported = out;
+async function reportFunds(step: Step, level: FundsLevel, left?: { balance: bigint; perWrite: bigint }) {
+  if (step.fundsReported === level) return;
+  step.fundsReported = level;
   await step.ctx.runMutation(internal.opsAlerts.recordRelayerFunds, {
-    out,
+    level,
     network: step.relayer.deployment.network.name,
     address: step.relayer.account.address,
+    ...(left && left.perWrite > 0n
+      ? { balanceWei: left.balance.toString(), writesLeft: Number(left.balance / left.perWrite) }
+      : {}),
   });
 }
 
@@ -911,6 +921,8 @@ async function sendPending(step: Step, heads: Heads): Promise<void> {
   const held = Boolean(state.stalled) || (state.clearTx !== undefined && heads.latestCount <= state.clearTx.nonce);
   let nextNonce = Math.max(state.nextNonce ?? 0, heads.latestCount);
   let balance: bigint | null = null;
+  // The dearest write sent this tick, to say how many more the balance covers.
+  let perWrite = 0n;
   const pending = [...work.pending];
   while (pending.length > 0) {
     const write = pending.shift()!;
@@ -919,19 +931,22 @@ async function sendPending(step: Step, heads: Heads): Promise<void> {
       if (sent === "no_funds") {
         for (const waiting of pending) await outcome(step, waiting, { type: "defer", error: "The relayer needs MON." });
         step.summary.detail = "The relayer needs MON.";
-        await reportFunds(step, true);
+        await reportFunds(step, "out");
         return;
       }
       if (sent) {
         nextNonce = sent.nonce + 1;
         balance = sent.balance;
-        await reportFunds(step, false);
+        if (sent.cost > perWrite) perWrite = sent.cost;
       }
     } catch (error) {
       // One write's failure (an RPC hiccup, a bad payload) doesn't hold up the rest.
       if (isLeaseLost(error)) throw error;
       await outcome(step, write, { type: "defer", error: errorText(error) });
     }
+  }
+  if (balance !== null && perWrite > 0n) {
+    await reportFunds(step, balance < perWrite * LOW_FUNDS_WRITES ? "low" : "ok", { balance, perWrite });
   }
 }
 
@@ -944,7 +959,7 @@ async function sendOne(
   heads: Heads,
   write: WriteDoc,
   at: { held: boolean; nonce: number; balance: bigint | null },
-): Promise<{ nonce: number; balance: bigint } | "no_funds" | null> {
+): Promise<{ nonce: number; balance: bigint; cost: bigint } | "no_funds" | null> {
   const { ctx, relayer } = step;
   if (write.chainId !== undefined && (write.chainId !== relayer.chainId || !sameAddress(write.registryAddress, relayer.registry))) {
     await outcome(step, write, { type: "settle", status: "failed", error: "The registry changed since this write was queued." });
@@ -1015,7 +1030,7 @@ async function sendOne(
   if (!recorded) return null;
   step.summary.sent += 1;
   await broadcast(ctx, relayer, step.lease, write._id, tx.rawTx);
-  return { nonce, balance: balance - cost };
+  return { nonce, balance: balance - cost, cost };
 }
 
 async function runTick(step: Step): Promise<void> {
