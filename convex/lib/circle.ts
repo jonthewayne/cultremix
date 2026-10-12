@@ -5,6 +5,19 @@
 import type { Hex } from "viem";
 
 export const CIRCLE_API_BASE = "https://api.circle.com";
+// The hosts Circle's API answers on. Live keys use api.circle.com; a test key uses it too unless
+// CIRCLE_API_BASE says the sandbox host (bun run circle:setup tries both and says which took it).
+export const CIRCLE_API_HOSTS = [CIRCLE_API_BASE, "https://api-sandbox.circle.com"] as const;
+
+/** The API host for a deployment: CIRCLE_API_BASE when set (one of Circle's hosts), else api.circle.com. */
+export function circleBaseUrl(env: Record<string, string | undefined>) {
+  const value = env.CIRCLE_API_BASE?.trim().replace(/\/$/u, "");
+  if (!value) return CIRCLE_API_BASE;
+  if (!(CIRCLE_API_HOSTS as ReadonlyArray<string>).includes(value)) {
+    throw new CircleError(`CIRCLE_API_BASE must be one of ${CIRCLE_API_HOSTS.join(" or ")}.`, null, null);
+  }
+  return value;
+}
 
 /** The slice of fetch the clients use, so tests can pass a plain function. */
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -128,6 +141,36 @@ export function circleClient(config: CircleConfig) {
         throw new CircleError("Circle returned no signature.", null, null);
       }
       return data.signature as Hex;
+    },
+
+    /** Whether this host takes the API key: Circle's entity public key, read with it. */
+    async checkKey(): Promise<void> {
+      await request<{ publicKey: string }>("GET", "/v1/w3s/config/entity/publicKey");
+    },
+
+    /**
+     * Registers the entity secret, once per Circle key environment. Circle keeps only its
+     * ciphertext and sends back a recovery file, the one way to reset the secret if it's lost.
+     */
+    async registerEntitySecret(): Promise<{ recoveryFile: string }> {
+      const data = await request<{ recoveryFile?: string }>("POST", "/v1/w3s/config/entity/entitySecret", {
+        entitySecretCiphertext: await ciphertext(),
+      });
+      if (!data.recoveryFile) throw new CircleError("Circle returned no recovery file.", null, null);
+      return { recoveryFile: data.recoveryFile };
+    },
+
+    /** Creates a wallet set, or returns the one already created with this idempotency key. */
+    async createWalletSet(args: { idempotencyKey: string; name: string }): Promise<{ walletSetId: string }> {
+      if (!isUuidV4(args.idempotencyKey)) throw new CircleError("The idempotency key must be a UUIDv4.", null, null);
+      const data = await request<{ walletSet?: { id?: string } }>("POST", "/v1/w3s/developer/walletSets", {
+        idempotencyKey: args.idempotencyKey,
+        entitySecretCiphertext: await ciphertext(),
+        name: args.name,
+      });
+      const id = data.walletSet?.id;
+      if (!id) throw new CircleError("Circle returned no wallet set.", null, null);
+      return { walletSetId: id };
     },
   };
 }

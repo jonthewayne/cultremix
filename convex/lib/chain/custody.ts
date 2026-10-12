@@ -2,7 +2,7 @@
 // exists only for dev without Circle keys, and refuses to run anywhere else.
 import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { circleClient } from "../circle";
+import { circleBaseUrl, circleClient } from "../circle";
 import { isCanonicalSignature, normalizeSignature, typedDataJson } from "./eip712";
 import type { FetchLike } from "../circle";
 import type { RegistryTypedData } from "./eip712";
@@ -50,6 +50,7 @@ function requireLocal(deployment: ChainDeployment, env: Env) {
 function requireCircle(deployment: ChainDeployment, env: Env, fetchImpl?: FetchLike) {
   if (deployment.custody.mode !== "circle") throw new CustodyError("Circle keys are not set for this deployment.");
   const client = circleClient({
+    baseUrl: circleBaseUrl(env),
     apiKey: env.CIRCLE_API_KEY!.trim(),
     entitySecret: env.CIRCLE_ENTITY_SECRET!.trim(),
     fetch: fetchImpl,

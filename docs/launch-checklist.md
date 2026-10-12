@@ -52,7 +52,8 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 
 ### Circle
 
-- [ ] A Circle developer account; a test key and entity secret in dev's env (`CIRCLE_API_KEY` and the rest in [Environment variables](environment-variables.md)). New members get a testnet wallet within five minutes.
+- [ ] Jon: a Circle developer account, and a test API key (Circle's console, Keys) in `~/.config/cultremix/circle.env` as `CIRCLE_API_KEY_TEST=...`. That's the only part that needs Jon.
+- [ ] Builder: `bun run circle:setup --env dev --apply`. It tries Circle's two API hosts with the key, registers a new entity secret (saved in `circle.env` before Circle sees it, with Circle's recovery file beside it), makes dev's wallet set, and sets dev's `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, and `CIRCLE_WALLET_SET_ID` (and `CIRCLE_API_BASE` if only the sandbox host took the key), piped in so they're never printed. Commit the wallet set ID it prints as `CHAIN_ENVIRONMENTS.dev.circleWalletSetId`. New members get a testnet wallet within five minutes.
 
 ## Production: go live
 
@@ -77,6 +78,7 @@ Admin, Overview starts with **Ready to sell**: each piece below for real orders 
 - [ ] Ops sets production's relayer key: `MONAD_RELAYER_PRIVATE_KEY` on production's Convex, from `MONAD_RELAYER_PRIVATE_KEY_PROD` in `~/.config/cultremix/chain.env`, never printed. /admin/chain on production then shows the relayer `0x1672…a74A` and its MON. Nothing is sent while chain writes are off.
 - [ ] `bun run chain:deploy:mainnet` (a dry run: balance and cost), then `bun run chain:deploy:mainnet --broadcast --confirm-mainnet`.
 - [ ] Record the address as `CHAIN_ENVIRONMENTS.prod.registryAddress`, push, and have Ops deploy.
+- [ ] Circle for production: with Jon's live key in `circle.env` as `CIRCLE_API_KEY_LIVE`, Ops runs `bun run circle:setup --env prod --apply` (it asks to type "production"). Commit the wallet set ID as `CHAIN_ENVIRONMENTS.prod.circleWalletSetId`, and back up `circle.env` and both recovery files in the password manager: Circle can't recover an entity secret, and it controls every member wallet. Each Monad record names its creator's wallet, so until this step every record waits; afterwards members get wallets within five minutes, and the records queued for them go out.
 - [ ] /admin/chain on production: turn chain writes on and register economic config v1. Then turn on Monad records in /admin.
 
 ### Orders, in four steps

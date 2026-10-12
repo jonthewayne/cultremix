@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CircleError, circleClient, encryptEntitySecret, isUuidV4, spkiFromPem } from "../../convex/lib/circle";
+import { CircleError, circleBaseUrl, circleClient, encryptEntitySecret, isUuidV4, spkiFromPem } from "../../convex/lib/circle";
+import type { FetchLike } from "../../convex/lib/circle";
 
 const ENTITY_SECRET = "ab".repeat(32);
 const API_KEY = "TEST_API_KEY:key-id:key-secret";
@@ -147,5 +148,61 @@ describe("circleClient", () => {
       }),
     });
     await expect(client.signTypedData({ walletId: "w", typedDataJson: "{}" })).rejects.toThrow(/could not be reached/);
+  });
+});
+
+describe("Circle setup calls", () => {
+  it("checks a key, registers the entity secret, and makes a wallet set, at the host it's given", async () => {
+    const keys = await rsaKeys();
+    const { calls, fetchImpl } = fakeCircle(keys.pkcs1Pem, {
+      "/v1/w3s/config/entity/entitySecret": () => Response.json({ data: { recoveryFile: "recovery-bytes" } }),
+      "/v1/w3s/developer/walletSets": () => Response.json({ data: { walletSet: { id: "set-9", name: "CultRemix dev" } } }, { status: 201 }),
+    });
+    const client = circleClient({ apiKey: API_KEY, entitySecret: ENTITY_SECRET, fetch: fetchImpl, baseUrl: "https://api-sandbox.circle.com" });
+    await client.checkKey();
+    expect(await client.registerEntitySecret()).toEqual({ recoveryFile: "recovery-bytes" });
+    const key = crypto.randomUUID();
+    expect(await client.createWalletSet({ idempotencyKey: key, name: "CultRemix dev" })).toEqual({ walletSetId: "set-9" });
+
+    const register = calls.find((c) => c.url.endsWith("/config/entity/entitySecret"))!;
+    expect(await decrypt(keys.privateKey, register.body!.entitySecretCiphertext as string)).toBe(ENTITY_SECRET);
+    const set = calls.find((c) => c.url.endsWith("/developer/walletSets"))!;
+    expect(set.body).toMatchObject({ idempotencyKey: key, name: "CultRemix dev" });
+    expect(await decrypt(keys.privateKey, set.body!.entitySecretCiphertext as string)).toBe(ENTITY_SECRET);
+    expect(register.body!.entitySecretCiphertext).not.toBe(set.body!.entitySecretCiphertext);
+    expect(calls.every((c) => c.url.startsWith("https://api-sandbox.circle.com/v1/w3s/"))).toBe(true);
+    expect(calls.every((c) => c.headers.Authorization === `Bearer ${API_KEY}`)).toBe(true);
+  });
+
+  it("reports a refused key and missing answers without the key or secret", async () => {
+    const keys = await rsaKeys();
+    const refused: FetchLike = async () => Response.json({ code: 401, message: "Malformed authorization." }, { status: 401 });
+    const error = await circleClient({ apiKey: API_KEY, entitySecret: ENTITY_SECRET, fetch: refused })
+      .checkKey()
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(CircleError);
+    expect((error as CircleError).status).toBe(401);
+    expect((error as Error).message).not.toContain("key-secret");
+    expect((error as Error).message).not.toContain(ENTITY_SECRET);
+
+    const { calls, fetchImpl } = fakeCircle(keys.spkiPem, {
+      "/v1/w3s/config/entity/entitySecret": () => Response.json({ data: {} }),
+      "/v1/w3s/developer/walletSets": () => Response.json({ data: { walletSet: {} } }),
+    });
+    const client = circleClient({ apiKey: API_KEY, entitySecret: ENTITY_SECRET, fetch: fetchImpl });
+    await expect(client.registerEntitySecret()).rejects.toThrow(/no recovery file/);
+    await expect(client.createWalletSet({ idempotencyKey: crypto.randomUUID(), name: "x" })).rejects.toThrow(/no wallet set/);
+    const before = calls.length;
+    await expect(client.createWalletSet({ idempotencyKey: "set-1", name: "x" })).rejects.toThrow(/UUIDv4/);
+    expect(calls).toHaveLength(before);
+  });
+});
+
+describe("circleBaseUrl", () => {
+  it("is api.circle.com unless CIRCLE_API_BASE names Circle's other host", () => {
+    expect(circleBaseUrl({})).toBe("https://api.circle.com");
+    expect(circleBaseUrl({ CIRCLE_API_BASE: " " })).toBe("https://api.circle.com");
+    expect(circleBaseUrl({ CIRCLE_API_BASE: "https://api-sandbox.circle.com/" })).toBe("https://api-sandbox.circle.com");
+    expect(() => circleBaseUrl({ CIRCLE_API_BASE: "https://api.circle.com.example.net" })).toThrow(/CIRCLE_API_BASE must be/);
   });
 });

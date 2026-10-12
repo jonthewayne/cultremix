@@ -67,7 +67,8 @@ Rows set in GitHub (secrets and variables) or read by a workflow come from the s
 | `MONAD_RPC_URL` | Convex env (optional) | no | no | manual | chain reads and writes; defaults to the network's public RPC; https only, except a localhost node in dev |
 | `CHAIN_REGISTRY_ADDRESS` | Convex env (dev only, optional) | no | no | manual | a local or fresh dev registry in place of the committed one |
 | `MONAD_RELAYER_PRIVATE_KEY` | Convex env | no | yes | manual | the relayer that sends every chain write; must belong to the environment's relayer in `shared/config/chains.ts`; never logged |
-| `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, `CIRCLE_WALLET_SET_ID` | Convex env | no | yes | manual | member wallets (Circle developer-controlled); all three or none |
+| `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, `CIRCLE_WALLET_SET_ID` | Convex env | no | yes | `bun run circle:setup --env dev --apply`, or `--env prod` (from the API key in `~/.config/cultremix/circle.env`) | member wallets (Circle developer-controlled); all three or none |
+| `CIRCLE_API_BASE` | Convex env (optional) | no | no | `circle:setup`, only when Circle took a test key at its sandbox host | Circle's API host: `https://api.circle.com` when unset, or `https://api-sandbox.circle.com`; any other value is refused |
 | `DEV_WALLET_SECRET` | Convex env (dev only) | no | yes | manual | dev member wallets made locally while the Circle keys are missing; refused outside dev |
 | `MONAD_RELAYER_PRIVATE_KEY_DEV` | `~/.config/cultremix/chain.env` | no | yes | manual | `bun run chain:deploy:testnet` deploys the dev registry with it; never printed |
 | `ANVIL_BIN` | shell (optional) | no | no | manual | `bun run test:chain:anvil` uses this anvil instead of `~/.foundry/bin/anvil` |
