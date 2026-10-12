@@ -15,6 +15,7 @@ import { useMemberAction } from "~/components/social/useSignIn";
 import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
 import { profileShareCard, shareMeta } from "~/lib/share";
 import { cn } from "~/lib/utils";
+import { useShowWhenFound } from "~/hooks/use-show-when-found";
 
 type Shelf = "works" | "remixes" | "backed" | "kept";
 const PAGE_SIZE = 12;
@@ -59,6 +60,7 @@ export const Route = createFileRoute("/u/$username")({
 
 function MemberNotFound() {
   const { username } = Route.useParams();
+  useShowWhenFound(useQuery(convexQuery(api.social.profile, { username })).data);
   return <NotFoundPage mark={`@${username}`} message="No one here by that name." mono={false} />;
 }
 

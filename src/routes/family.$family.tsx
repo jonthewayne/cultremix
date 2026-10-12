@@ -10,6 +10,7 @@ import { FamilyTree } from "~/components/cr/FamilyTree";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { chainSummary, familyOfCr } from "~/lib/familyTree";
 import { familyShareCard, pageMeta, shareMeta } from "~/lib/share";
+import { useShowWhenFound } from "~/hooks/use-show-when-found";
 
 // Works per load; "Show more" adds another page (the query caps the total).
 const PAGE = 60;
@@ -56,6 +57,10 @@ export const Route = createFileRoute("/family/$family")({
 
 function FamilyNotFound() {
   const { family } = Route.useParams();
+  const number = familyNumber(family);
+  // The loader's own query (the first page), so a family that appears shows from the cache.
+  const tree = useQuery({ ...convexQuery(api.lineage.familyTree, { family: number ?? 0, limit: PAGE }), enabled: number !== null });
+  useShowWhenFound(tree.data);
   return <NotFoundPage mark={`Family ${family}`} message="There’s no family with this number yet." mono={false} />;
 }
 

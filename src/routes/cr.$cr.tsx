@@ -33,6 +33,7 @@ import { PlacementEditor } from "~/components/publish/PlacementEditor";
 import { pageColors, selectedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
 import { BuyBox } from "~/components/commerce/BuyBox";
+import { useShowWhenFound } from "~/hooks/use-show-when-found";
 import { OnTheShirt } from "~/components/commerce/OnTheShirt";
 
 export const Route = createFileRoute("/cr/$cr")({
@@ -58,6 +59,7 @@ export const Route = createFileRoute("/cr/$cr")({
 
 function WorkNotFound() {
   const { cr } = Route.useParams();
+  useShowWhenFound(useQuery(convexQuery(api.feed.byCr, { cr })).data);
   return <NotFoundPage mark={`CR ${cr}`} message="This design isn’t published." />;
 }
 
