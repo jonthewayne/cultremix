@@ -150,7 +150,7 @@ function TreeNodeView({ node, compact, onExpand }: { node: TreeNode; compact: bo
 // hourglass while it's on its way. On the full page it links to the transaction.
 function ChainMark({ work, compact }: { work: TreeWork; compact: boolean }) {
   const recorded = work.chain === "recorded";
-  const label = recorded ? `CR ${work.cr} is recorded on Monad` : `CR ${work.cr} is being recorded on Monad`;
+  const label = recorded ? `CR ${work.cr} is recorded on Monad` : `CR ${work.cr} is waiting to be recorded on Monad`;
   const className = cn(
     "absolute right-1.5 top-1.5 grid place-items-center rounded-full",
     compact ? "size-5" : "size-6",

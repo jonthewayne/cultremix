@@ -1,7 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { Check } from "lucide-react";
+import { Check, Hourglass } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
@@ -120,7 +120,10 @@ function FamilyPage() {
                 </ChainLine>
               </p>
             )}
-            <Legend chain={data.works.some((work) => work.chain)} />
+            <Legend
+              recorded={data.works.some((work) => work.chain === "recorded")}
+              waiting={data.works.some((work) => work.chain === "recording")}
+            />
             <div className="mt-8">
               <FamilyTree data={data} currentCr={cr} />
             </div>
@@ -154,7 +157,8 @@ function ChainLine({ href, children }: { href?: string; children: React.ReactNod
   );
 }
 
-function Legend({ chain }: { chain: boolean }) {
+// Each mark the tree shows: before the registry is live, every design waits with an hourglass.
+function Legend({ recorded, waiting }: { recorded: boolean; waiting: boolean }) {
   return (
     <p className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-600">
       <span className="inline-flex items-center gap-2">
@@ -165,12 +169,20 @@ function Legend({ chain }: { chain: boolean }) {
         <svg aria-hidden width="28" height="4"><line x1="0" y1="2" x2="28" y2="2" stroke="#a3a3a3" strokeWidth="2" strokeDasharray="6 5" /></svg>
         a fork, which starts a new family
       </span>
-      {chain && (
+      {recorded && (
         <span className="inline-flex items-center gap-2">
           <span aria-hidden className="grid size-4 place-items-center rounded-full bg-black text-white">
             <Check strokeWidth={3} className="size-2.5" />
           </span>
           recorded on Monad
+        </span>
+      )}
+      {waiting && (
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden className="grid size-4 place-items-center rounded-full border-2 border-dashed border-neutral-400 bg-white text-neutral-500">
+            <Hourglass className="size-2" />
+          </span>
+          waiting to be recorded on Monad
         </span>
       )}
     </p>
