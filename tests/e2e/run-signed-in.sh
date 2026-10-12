@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Signed-in browser test against a local dev server and its dev deployment: a new member signs up
 # with an email code (read through the test helper, since no email is sent), picks a username,
-# opens the studio, a work page and its Remix this, their profile, notifications, and settings;
+# opens the studio (dropping in a HEIC photo, which it says it can't open), a work page and its Remix this, their profile, notifications, and settings;
 # then, as an owner, the admin tabs, running axe-core's accessibility rules on each. The member
 # and what it made are removed at the end. It
 # changes nothing else, and needs TEST_HELPER_SECRET in .env.local and
@@ -90,6 +90,11 @@ wait_text "What do you want to make?"
 wait_text "Generate"
 a11y
 agent-browser screenshot body .tmp/screenshots/signed-in-studio.png >/dev/null
+# A photo the browser can't open (an iPhone HEIC, which Chromium can't decode) says so in a toast
+# at the top of the screen. It fails before anything is uploaded, so it costs nothing.
+wait_ready "input[type=file]"
+agent-browser upload "input[type=file]" tests/e2e/fixtures/photo.heic >/dev/null
+wait_text "open HEIC photos"
 
 # A work page, signed in: a heart button and Remix this, which starts a remix session.
 go "$BASE_URL/"
