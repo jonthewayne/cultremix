@@ -168,6 +168,13 @@ go "$BASE_URL/admin/chain"
 wait_text "Relayer"
 a11y
 agent-browser screenshot body .tmp/screenshots/signed-in-admin-metrics.png >/dev/null
+# The Print Studio, which owners can open for any design (the work page's Prepare for print).
+if [[ -n "$work_path" ]]; then
+  go "$BASE_URL/print/${work_path#/cr/}"
+  wait_text "Prepare for print"
+  wait_text "Placement"
+  a11y
+fi
 
 # Every page above was a full load while signed in. React reports a server render that the browser
 # drew differently ("Hydration failed"), as when the live client's first anonymous results replaced
