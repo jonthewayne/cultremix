@@ -400,6 +400,13 @@ describe("remixing with the words", () => {
     expect((await workDoc(t, workId))?.remixFields?.map((field) => field.text)).toEqual(["HELLO THERE", "FRIEND", "SAY HI"]);
   });
 
+  it("keeps the parent's fields when a free-text remix's notes found no words at all", async () => {
+    const { t, bob, parent } = await setup();
+    const workId = await freeTextRemix(t, bob, parent, "make the mushroom glow");
+    await writeNotes(t, workId, NO_WORDS);
+    expect((await workDoc(t, workId))?.remixFields?.map((field) => field.text)).toEqual(["GROW SLOW", "EST. 1992", "TAKE IT\nEASY"]);
+  });
+
   it("keeps the parent's fields for a remix that changed something else and kept the words", async () => {
     const { t, bob, parent } = await setup();
     const workId = await freeTextRemix(t, bob, parent, "make the mushroom a cactus");

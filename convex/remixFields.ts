@@ -82,8 +82,9 @@ export async function inheritOnPublish(ctx: MutationCtx, workId: Id<"works">) {
 // words of its own (Anything else to change) may have changed its words there instead of in the
 // boxes ("Change the words to can you handle the Randall?"), so its inherited fields are checked
 // against the notes, and when fewer than half of their words are in the design, its fields come
-// from its own notes. A remix made with the boxes alone keeps them, whatever a reader makes of
-// its lettering.
+// from its own notes. Notes that found no words at all keep the boxes (a reader that missed the
+// lettering mustn't take them away). A remix made with the boxes alone keeps them, whatever a
+// reader makes of its lettering.
 export async function proposeOnNotes(ctx: MutationCtx, workId: Id<"works">, notes: string) {
   const work = await ctx.db.get("works", workId);
   if (!work) return;
@@ -95,7 +96,7 @@ export async function proposeOnNotes(ctx: MutationCtx, workId: Id<"works">, note
   }
   if (!work.parentWorkId) return;
   const batch = await sourceBatch(ctx, work);
-  if (!batch?.instruction.trim() || fieldsFoundInNotes(work.remixFields, proposed)) return;
+  if (!batch?.instruction.trim() || proposed.length === 0 || fieldsFoundInNotes(work.remixFields, proposed)) return;
   await ctx.db.patch("works", work._id, { remixFields: proposed });
 }
 
