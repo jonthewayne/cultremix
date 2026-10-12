@@ -152,15 +152,34 @@ function ShopPage() {
               />
             ) : (
               <>
-                <div className="flex items-baseline justify-between border-t-2 border-black pt-4">
-                  <span className="text-5xl font-black tracking-tight">
+                {/* One product sits beside its price; two or more are listed below it, one per line,
+                    so "from $36" stays on one line and no name breaks in the middle. */}
+                <div
+                  className={
+                    comesOn && comesOn.length > 1
+                      ? "border-t-2 border-black pt-4"
+                      : "flex items-baseline justify-between gap-3 border-t-2 border-black pt-4"
+                  }
+                >
+                  <span className="block whitespace-nowrap text-5xl font-black tracking-tight">
                     {from !== undefined ? `${comesOn!.length > 1 ? "from " : ""}${formatPrice(from)}` : "$36"}
                   </span>
-                  <span className="text-right text-sm font-semibold">
-                    {comesOn && comesOn.length > 0
-                      ? comesOn.map((product) => `${keepHyphens(product.name)}${product.side === "back" ? " (back print)" : ""}`).join(" · ")
-                      : "Heavyweight garment-dyed tee"}
-                  </span>
+                  {comesOn && comesOn.length > 1 ? (
+                    <ul className="mt-2 text-sm font-semibold">
+                      {comesOn.map((product, index) => (
+                        <li key={`${index}-${product.name}`}>
+                          {keepHyphens(product.name)}
+                          {product.side === "back" ? " (back print)" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="text-right text-sm font-semibold">
+                      {comesOn?.[0]
+                        ? `${keepHyphens(comesOn[0].name)}${comesOn[0].side === "back" ? " (back print)" : ""}`
+                        : "Heavyweight garment-dyed tee"}
+                    </span>
+                  )}
                 </div>
                 {color && <ColorSwatches colors={colors} value={color.key} onChange={pick} />}
                 {color && comesOn?.[0] && (
