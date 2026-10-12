@@ -28,6 +28,7 @@
     "test:convex": "vitest run tests/convex --config vitest.convex.config.ts",
     "test:e2e": "bash tests/e2e/run-e2e.sh",
     "test:e2e:signed-in": "bash tests/e2e/run-signed-in.sh",
+    "test:e2e:publish": "bash tests/e2e/run-publish.sh",
     "test:a11y": "bash tests/e2e/run-a11y.sh",
     "test:image": "bun tests/image-e2e/run.ts",
     "test:chain:anvil": "vitest run --config vitest.chain-e2e.config.ts",

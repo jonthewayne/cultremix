@@ -18,6 +18,7 @@ There's no staging project. Nothing is copied between the two; each is set up by
 ## Every production deploy
 
 - [ ] `bun run typecheck`, `bun run test`, `bun run build`, and `bun run test:e2e` pass on the commit.
+- [ ] When the deploy changes publishing, remixing, or the work page: `bun run test:e2e:publish` passes on dev (real image calls, about 35¢; it takes its designs down after).
 - [ ] The Builder's Ops message names the commit, the schema changes, any env to set, and the jobs to run. It replaces earlier messages, so only the latest one is followed.
 - [ ] Ops backs up production first (`bunx convex export --prod --include-file-storage`), builds the Worker, then runs `bunx convex deploy` and `wrangler deploy` back to back, because production's old pages and new functions don't work together ([Cloudflare deployment](deployment-cloudflare.md#production-deploys)).
 - [ ] The build log (`docs/hackathon/log.md`) has an entry for it.
