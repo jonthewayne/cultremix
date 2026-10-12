@@ -4,6 +4,7 @@ import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { configHashFor } from "../../convex/lib/chain/ids";
 import { CHAIN_WRITES_FLAG, enqueueRegisterWork } from "../../convex/lib/chain/queue";
 import { canonicalConfigJson } from "../../convex/lib/economics";
+import { formatCr } from "../../convex/lib/r2";
 import { RELAYER, insertMember, insertOwner, insertWork, setChainWrites, useChainEnv } from "./chainFixtures";
 import { FakeChain } from "./fakeChain";
 import { newTest } from "./setup";
@@ -119,6 +120,15 @@ describe("provenance on the work page", () => {
     // The same deployment on the public testnet RPC links to Monadscan.
     vi.stubEnv("MONAD_RPC_URL", "https://testnet-rpc.monad.xyz");
     expect((await t.query(api.provenance.forWork, { workId }))!.txUrl).toBe(`https://testnet.monadscan.com/tx/${confirmed!.txHash}`);
+
+    // /onchain's Latest records lists it, until it's taken down.
+    const work = await getWork(t, workId);
+    const cr = formatCr(work.crFamily, work.crExpression);
+    expect(await t.query(api.provenance.recent, {})).toEqual([
+      expect.objectContaining({ cr, txUrl: `https://testnet.monadscan.com/tx/${confirmed!.txHash}`, confirmedAt: Date.now() }),
+    ]);
+    await t.run((ctx) => ctx.db.patch("works", workId, { status: "withdrawn" }));
+    expect(await t.query(api.provenance.recent, {})).toEqual([]);
   });
 
   it("shows nothing for a work that isn't published", async () => {

@@ -115,6 +115,50 @@ function registryAddressHere() {
   return env === "dev" && override && ADDRESS.test(override) ? override : CHAIN_ENVIRONMENTS[env].registryAddress;
 }
 
+// How many designs /onchain lists under Latest records, and how many confirmed writes it reads to
+// find them (Backs, corrections, and designs no longer published are skipped).
+const RECENT_RECORDS = 8;
+const RECENT_SCAN = 60;
+
+// The designs most recently recorded on Monad, newest first, for /onchain: each one's CR number
+// and its transaction on the explorer. Only published designs: a kept or taken-down design's
+// record stays on the chain but isn't listed here. Public.
+export const recent = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      cr: v.string(),
+      title: v.optional(v.string()),
+      thumbUrl: v.optional(v.string()),
+      txUrl: v.union(v.null(), v.string()),
+      confirmedAt: v.union(v.null(), v.number()),
+    }),
+  ),
+  handler: async (ctx) => {
+    const writes = await ctx.db
+      .query("chainWrites")
+      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "confirmed"))
+      .order("desc")
+      .take(RECENT_SCAN);
+    const urls = imageUrlReader(ctx);
+    const out = [];
+    for (const write of writes) {
+      if (write.kind !== "registerWork" || !write.workId) continue;
+      const work = await ctx.db.get("works", write.workId);
+      if (!work || work.status !== "published") continue;
+      out.push({
+        cr: formatCr(work.crFamily, work.crExpression),
+        title: work.title,
+        thumbUrl: (await urls(work.artKey)).thumbUrl,
+        txUrl: explorerTxLink(write.chainId ?? deploymentChainId(), work.chainTxHash ?? write.txHash),
+        confirmedAt: work.provenanceConfirmedAt ?? null,
+      });
+      if (out.length === RECENT_RECORDS) break;
+    }
+    return out;
+  },
+});
+
 // This environment's registry, for /onchain: the committed address (a dev deployment may point
 // at its own registry with CHAIN_REGISTRY_ADDRESS), or null until it's deployed. Public.
 export const registry = query({

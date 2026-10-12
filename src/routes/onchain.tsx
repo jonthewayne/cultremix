@@ -22,6 +22,42 @@ export const Route = createFileRoute("/onchain")({
   component: OnchainPage,
 });
 
+// The designs most recently recorded, each linking to its page and its transaction. Shown once the
+// registry is deployed; it fills in on the client.
+function LatestRecords() {
+  const records = useQuery(convexQuery(api.provenance.recent, {})).data;
+  if (records === undefined) return null;
+  return (
+    <Section title="Latest records">
+      {records.length === 0 ? (
+        <p>Nothing recorded yet.</p>
+      ) : (
+        <ul className="divide-y divide-neutral-200">
+          {records.map((record) => (
+            <li key={record.cr} className="flex items-center gap-4 py-3">
+              {record.thumbUrl && <img src={record.thumbUrl} alt="" loading="lazy" className="size-12 shrink-0 object-contain" />}
+              <div className="min-w-0 flex-1">
+                <Link to="/cr/$cr" params={{ cr: record.cr }} className="font-bold underline underline-offset-4">
+                  CR {record.cr}
+                </Link>
+                {record.title && <span className="text-neutral-600"> · {record.title}</span>}
+                {record.confirmedAt && (
+                  <p className="text-sm text-neutral-600">Recorded {new Date(record.confirmedAt).toLocaleString()}</p>
+                )}
+              </div>
+              {record.txUrl && (
+                <a href={record.txUrl} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-semibold underline underline-offset-4">
+                  Transaction
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 function OnchainPage() {
   const registry = useQuery(convexQuery(api.provenance.registry, {})).data;
   return (
@@ -100,6 +136,8 @@ function OnchainPage() {
             </dl>
           )}
         </Section>
+
+        {registry?.address && <LatestRecords />}
 
         <Section title="Which design is this file?">
           <p className="mb-4">
