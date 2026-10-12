@@ -11,6 +11,7 @@ import type { RelativePlacement } from "~/lib/print/shirtPlacement";
 import { errorMessage } from "~/lib/imagePrep";
 import { garmentTones } from "~/lib/print/garmentMockup";
 import { toInches } from "~/lib/print/shirtPlacement";
+import { keepHyphens } from "~/lib/utils";
 
 // On a work's page, for its creator (and the owner): change what it comes on and where it sits,
 // after publishing. Saved on the work (convex/publish.ts setPrintSetup); when it's already on sale,
@@ -140,7 +141,7 @@ function EditorDialog({
           )}
           <span className="absolute bottom-3 left-4 text-sm font-bold">
             {lead.name}
-            {focused ? ` · ${focused.name}` : ""}
+            {focused ? ` · ${keepHyphens(focused.name)}` : ""}
             {placement.side === "back" ? " · back" : ""}
           </span>
         </div>
@@ -196,4 +197,3 @@ function EditorDialog({
     </m.div>
   );
 }
-

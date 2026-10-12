@@ -2,7 +2,7 @@ import { GARMENT_KINDS, formatPrice } from "../../../shared/config/print-product
 import type { GarmentKind } from "../../../shared/config/print-products";
 import type { PrintArea, RelativePlacement } from "~/lib/print/shirtPlacement";
 import { MIN_SIZE, SIZE_PRESETS, sizeKeyOf, toInches } from "~/lib/print/shirtPlacement";
-import { cn } from "~/lib/utils";
+import { cn, keepHyphens } from "~/lib/utils";
 
 // A product on offer, as convex/merch.ts offered returns it.
 export type OfferedProduct = {
@@ -115,7 +115,7 @@ export function PrintChoices({
                   </span>
                 </button>
                 <button type="button" onClick={() => onFocus(product.productId)} className="flex-1 py-3 pr-3 text-left">
-                  <span className="block text-base font-black">{product.name}</span>
+                  <span className="block text-base font-black">{keepHyphens(product.name)}</span>
                   <span className="block text-sm text-neutral-600">
                     {formatPrice(product.priceCents)}
                     {/* A work published before colors were chosen has none to count. */}
@@ -236,4 +236,3 @@ export function PrintChoices({
     </>
   );
 }
-

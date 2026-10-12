@@ -26,7 +26,7 @@ import { errorMessage, inkOn } from "~/lib/imagePrep";
 import { spellingNote } from "~/lib/spelling";
 import { garmentTones } from "~/lib/print/garmentMockup";
 import { DEFAULT_PLACEMENT, toInches } from "~/lib/print/shirtPlacement";
-import { cn } from "~/lib/utils";
+import { cn, keepHyphens } from "~/lib/utils";
 
 export type PublishTile = {
   generationId: Id<"generations">;
@@ -354,7 +354,7 @@ export function PublishDialog({
               className="max-h-[70svh]"
             />
             <span className="absolute bottom-3 left-4 text-sm font-bold text-black">
-              {shown.name} · {focusedProduct.name}
+              {shown.name} · {keepHyphens(focusedProduct.name)}
               {previewPlacement.side === "back" ? " · back" : ""}
             </span>
           </div>
