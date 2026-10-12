@@ -450,6 +450,12 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
 
             {draft && isReady(selected) && (
               <Panel title="Placement">
+                {studio.publishSide === "back" && (
+                  <p className="mb-4 text-sm">
+                    This design prints on the back of the {product.name}. Where it sits there is set on its page, under “Change what it
+                    comes on and where it sits”; here you prepare the art, and the version you pick is the one that prints.
+                  </p>
+                )}
                 <p className="text-sm font-bold">Shirt color · {shirt.name}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {swatches.map((color) => (

@@ -154,7 +154,10 @@ describe("versions", () => {
     expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.publishPlacement).toEqual({ side: "front", size: 0.4, drop: 0.3 });
     // The Print Studio places the front; a back print starts from its own default.
     await t.run(async (ctx) => ctx.db.patch("works", workId, { printPlacement: { side: "back", size: 0.4, drop: 0.3 } }));
-    expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.publishPlacement).toBeNull();
+    const back = await t.withIdentity(ALICE).query(api.print.studio, { cr: CR });
+    expect(back?.publishPlacement).toBeNull();
+    // The page says the back print's placement is set on the work page.
+    expect(back?.publishSide).toBe("back");
   });
 
   it("a placement saved here becomes the work's, so the work page says what prints", async () => {

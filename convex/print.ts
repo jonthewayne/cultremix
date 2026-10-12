@@ -160,6 +160,9 @@ export const studio = query({
       // Where the creator placed it on that product's front when publishing: the Print Studio starts
       // there until a placement is saved here. Null for a back print or a product they didn't choose.
       publishPlacement: v.union(v.null(), relativePlacementValidator),
+      // The side its first product is printed on, as published: a back print's file is made from the
+      // work page's placement, so this studio only picks and prepares its art.
+      publishSide: v.union(v.null(), v.literal("front"), v.literal("back")),
       versions: v.array(
         v.object({
           id: v.id("printVersions"),
@@ -207,6 +210,7 @@ export const studio = query({
       upscaleEnabled: await flagEnabled(ctx, "gen.upscale"),
       product: { ...target.geometry, name: target.name, colors: target.colors },
       publishPlacement: target.placement?.side === "front" ? target.placement : null,
+      publishSide: target.placement?.side ?? null,
       versions: await Promise.all(
         versions.map(async (version) => {
           // Version 1 is the published art, which already has its medium copy.
