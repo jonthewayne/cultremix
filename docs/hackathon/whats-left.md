@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 12, 2026, 9:20 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
+As of October 12, 2026, 9:45 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -30,7 +30,7 @@ As of October 12, 2026, 9:20 a.m. Pacific. The Monad submission is due **Tuesday
 9. **The hackathon pieces.**
    - Make the repo public. Checked October 11: none of the 404 commits holds a secret (the known keys, and the shapes of OpenAI, Cloudflare, Shopify, Circle, fal, Resend, Gateway, and private keys). Your Gmail address is gone from the current docs but stays in two September 29 commits; rewriting history would change every later commit hash the build log cites, so leave it unless that matters to you. The ChatGPT archive in `docs/reference/` has no memories or custom instructions (the share link strips them). There's no LICENSE file, so the code stays all rights reserved unless you add one.
    - Approve the store policies at /policies, then paste them into Shopify.
-   - Paste the submission form's fields into [submission.md](submission.md).
+   - Check the submission form against [submission.md](submission.md#event-requirements), which lists its fields as of October 12, with drafts of the prior-work and AI tools disclosures to confirm and paste.
    - Invite the first creators.
    - Once production is deployed, publish 8 to 10 designs there and a few remixes of them (variations and a fork), so judges land on a full feed, Trending, and family trees. [launch-set.md](launch-set.md) has requests that worked on dev, about $2 and half an hour in all.
    - Record the two videos ([scripts](video-scripts.md)).

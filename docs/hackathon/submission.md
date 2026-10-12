@@ -108,10 +108,30 @@ The demo (3 minutes or less) and pitch (2 minutes or less) scripts, with recordi
 
 ## Event requirements
 
-Jon: paste the event's submission fields here, and check each one.
+Checked October 12 against the event's pages. Confirm the deadline on the portal's own countdown before submitting.
 
-- [ ] Public GitHub repo, shared with metropolis@hackathon.monad.xyz
-- [ ] Live link with judge sign-in instructions. Production (cultremix.com) records on Monad mainnet; check that the event accepts a mainnet build, since this line once read "Live staging link on Monad testnet".
-- [ ] Demo video, 3 minutes or less (YouTube, Loom, or Vimeo)
-- [ ] Pitch video, 2 minutes or less
-- [ ] Logo, JPG/JPEG/PNG/WEBP, 3 MB or less
+- **Deadline:** Tuesday, October 13, 11:59 p.m. Eastern (8:59 p.m. Pacific), through [hackathon.monad.xyz](https://hackathon.monad.xyz) ([Susano Labs](https://news.susanolabs.com/monad/en/news/metropolis-opens-hackathon-project-submissions-2105704400748683495)).
+- **Judging:** October 14 to 27, with winners announced November 3 ([Rise In](https://www.risein.com/monad)). cultremix.com, its gateway credit, and its relayer's MON have to hold up through October 27 ([Judging days](judging-runbook.md)).
+- **Built in the window:** a working product built on Monad between September 1 and October 13. Earlier foundations are allowed if what's presented is new ([hackathon.monad.xyz](https://hackathon.monad.xyz), [Dev Grants Daily](https://devgrantsdaily.com/items/2026-09-16-monad-metropolis-2026/)). CultRemix's planning began September 27, and cultremix.com went live September 30.
+- **Network:** Monad testnet or mainnet both count ([Rise In](https://www.risein.com/monad/monad-metropolis-hackathon)).
+
+What the form asks for, as other teams' submissions list it ([one example](https://github.com/Planckify-Labs/monad-submission)), and where each piece is:
+
+- [ ] The project registered on the portal, with its track: Social, Attention & Culture.
+- [ ] Team info.
+- [ ] Name, description, the problem, the solution, and how it uses Monad: [Pitch](#pitch), [Why this track](#why-this-track), and [What the registry proves](#what-the-registry-proves).
+- [ ] Public GitHub repo, readable by metropolis@hackathon.monad.xyz.
+- [ ] Live link with judge sign-in instructions: https://cultremix.com and [Judges](../judges.md).
+- [ ] The registry's contract address, once `bun run chain:deploy:mainnet --broadcast --confirm-mainnet` has run (it needs about 0.47 MON in the relayer, and records the address in `shared/config/chains.ts` itself).
+- [ ] Demo video, 3 minutes or less (YouTube, Loom, or Vimeo).
+- [ ] Pitch video, 2 minutes or less.
+- [ ] Logo, JPG/JPEG/PNG/WEBP, 3 MB or less: [cultremix-logo.png](cultremix-logo.png).
+- [ ] The disclosures below, if the form asks (the portal expects an AI tools disclosure).
+
+## Disclosures
+
+Drafts for the form. Jon: confirm the bracketed line, then paste.
+
+**Prior work and third-party components.** CultRemix was built during the hackathon. Planning began September 27, 2026, and cultremix.com went live September 30. It started from our own app starter template (TanStack Start on Cloudflare Workers, with Convex and Better Auth), which supplied the sign-in pages, project setup, and deploy scripts. Everything specific to CultRemix was written during the hackathon: the studio, publishing and CR numbers, remixes and their lineage, the CultRemixRegistry contract on Monad and the relayer that writes to it, the shop, and the Print Studio. Third-party services: Convex (database and server functions), Better Auth (sign-in), Cloudflare Workers and R2 (hosting and image storage), Vercel AI Gateway (image and text models, called the CultRemix Gateway in the app), fal (print upscaling and background removal), Resend (sign-in email), Shopify and Printful (checkout and printing, built but not live yet), Circle (member wallets, once set up), and viem and Foundry for the contract.
+
+**AI tools.** AI coding agents in OpenAI's Codex app wrote most of the code, tests, and documentation, following Jon Shumate's direction. [Jon: confirm the models. This builder thread runs Anthropic's Claude.] Jon set the product, design, and business decisions and tested the site as it was built. ChatGPT was used for early brainstorming; that conversation is in the repo under `docs/reference`. In the product itself, GPT Image 2.5 makes the designs and model photos, with Nano Banana 2.1 and Recraft V4.1 available to admins. GPT-6 Luna reads uploaded images and published designs, Gemini 3.1 Pro checks lettering, and fal's Topaz and BiRefNet models upscale art and remove backgrounds for print. Every design and model photo on the site was made this way.

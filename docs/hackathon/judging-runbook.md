@@ -2,6 +2,8 @@
 
 For Jon (and Ops) while judges use cultremix.com. Everything here works on production once the latest Ops message is deployed.
 
+Judges use the site from October 14 to 27, and winners are announced November 3, so the image credit and the relayer's MON have to last two weeks. $50 of credit is about 380 batches, enough for about 19 judges who each use all 40 credits. 2 MON is about 85 Monad records once the registry is deployed. The bell (and email to the owner) says when the credit drops below $10 and when the relayer runs out of MON; Admin, Overview shows the credit, and /admin/chain the relayer's MON.
+
 ## Before judges arrive
 
 1. **Gateway credit.** Admin, Overview shows Gateway credit in dollars and "About N batches". Judges' designs, notes, and model photos are all paid from the CultRemix Gateway account: about 13¢ a batch, and a judge who uses all 40 credits spends about $2.60. Top it up to about $50.
