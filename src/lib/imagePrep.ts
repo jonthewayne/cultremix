@@ -63,11 +63,24 @@ export function edgeColor(source: CanvasImageSource, width: number, height: numb
   return toHex(best.r / best.count, best.g / best.count, best.b / best.count);
 }
 
+// What to say when the browser can't open an image. Its own message ("The source image could not
+// be decoded") means nothing to a member; an iPhone photo saved as HEIC is the usual cause.
+export function unreadableImageMessage(file: Pick<File, "name" | "type">) {
+  return /hei[cf]/iu.test(file.type) || /\.hei[cf]$/iu.test(file.name)
+    ? "This browser can't open HEIC photos. Save it as a JPEG or PNG first."
+    : "We couldn't open that image. Try a PNG, JPEG, or WebP.";
+}
+
 // Downsizes to at most 1024 px on the long side (the edit model's input
 // limit), keeps PNG for images that may carry transparency, and samples the
 // edge color from the original.
 export async function prepareInspiration(file: File) {
-  const bitmap = await createImageBitmap(file);
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error(unreadableImageMessage(file));
+  }
   const color = edgeColor(bitmap, bitmap.width, bitmap.height);
   const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));

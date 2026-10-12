@@ -78,6 +78,13 @@ export const Route = createFileRoute("/studio")({
 let slotCounter = 0;
 const newSlotId = () => `slot-${Date.now()}-${slotCounter++}`;
 
+// A problem with an image (one the browser can't open, too many, a failed upload) shows as a
+// toast where the member is looking: the form's error line sits under Generate, off a phone's
+// screen. The same message twice shows once, for long enough to read.
+function imageProblem(message: string) {
+  toast.error(message, { id: message, duration: 8000 });
+}
+
 // The studio previews designs on shirt colors (the active shirt's, convex/merch.ts palette): any
 // color it picks by itself snaps to the nearest one.
 const START_COLOR = nearestGarmentColor(DEFAULT_BG).hex;
@@ -211,7 +218,7 @@ function StudioPage() {
       const max = asStyle ? MAX_STYLES : MAX_IMAGES;
       const room = max - current;
       if (room <= 0) {
-        setError(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
+        imageProblem(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
         return;
       }
       const firstImage = !asStyle && current === 0;
@@ -220,7 +227,7 @@ function StudioPage() {
         try {
           prepared.push({ id: newSlotId(), ...(await prepareInspiration(file)) });
         } catch (err) {
-          setError(errorMessage(err));
+          imageProblem(errorMessage(err));
         }
       }
       if (prepared.length === 0) return;
@@ -234,7 +241,7 @@ function StudioPage() {
         // later images never change it, and neither does anything once the member has picked one.
         if (firstImage && !colorPicked.current) setColor(shirtHex(prepared[0].color));
       }
-      if (files.length > room) setError(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
+      if (files.length > room) imageProblem(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
       await Promise.all(
         prepared.map(async (p) => {
           try {
@@ -242,7 +249,7 @@ function StudioPage() {
             settle(p.id, result.imageId, asStyle);
           } catch (err) {
             dropSlot(p.id);
-            setError(errorMessage(err));
+            imageProblem(errorMessage(err));
           }
         }),
       );
@@ -256,7 +263,7 @@ function StudioPage() {
       const list = asStyle ? stylesRef.current : imagesRef.current;
       if (list.some((slot) => slot.previewUrl === url)) return;
       if (list.length >= (asStyle ? MAX_STYLES : MAX_IMAGES)) {
-        setError(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
+        imageProblem(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
         return;
       }
       const id = newSlotId();
@@ -272,7 +279,7 @@ function StudioPage() {
         settle(id, imageId, asStyle);
       } catch (err) {
         dropSlot(id);
-        setError(errorMessage(err));
+        imageProblem(errorMessage(err));
       }
     },
     [adopt],
@@ -467,7 +474,7 @@ function StudioPage() {
       try {
         prepared.push({ id: newSlotId(), ...(await prepareInspiration(file)) });
       } catch (err) {
-        setError(errorMessage(err));
+        imageProblem(errorMessage(err));
       }
     }
     if (prepared.length === 0) return;
@@ -489,7 +496,7 @@ function StudioPage() {
           );
         } catch (err) {
           edit((photos) => photos.filter((slot) => slot.id !== p.id));
-          setError(errorMessage(err));
+          imageProblem(errorMessage(err));
         }
       }),
     );
