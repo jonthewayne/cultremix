@@ -4,6 +4,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import { NotFoundPage } from "~/components/app/not-found";
+import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { ProfileSkeleton, ShelfSkeleton } from "~/components/cr/PageSkeletons";
 import { Avatar } from "~/components/social/Avatar";
@@ -168,6 +169,7 @@ function ProfilePage() {
           <ShelfGrid key={`${username}:${shelf}`} username={username} shelf={shelf} isSelf={isSelf} />
         )}
       </main>
+      <SiteFooter />
     </div>
   );
 }

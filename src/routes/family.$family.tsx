@@ -7,6 +7,7 @@ import { api } from "../../convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import { NotFoundPage } from "~/components/app/not-found";
 import { FamilyTree } from "~/components/cr/FamilyTree";
+import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { chainSummary, familyOfCr } from "~/lib/familyTree";
 import { familyShareCard, pageMeta, shareMeta } from "~/lib/share";
@@ -143,6 +144,7 @@ function FamilyPage() {
           </>
         )}
       </main>
+      <SiteFooter />
     </div>
   );
 }

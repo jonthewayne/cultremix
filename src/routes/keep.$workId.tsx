@@ -7,6 +7,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { BuyBox } from "~/components/commerce/BuyBox";
 import { Art } from "~/components/cr/Art";
+import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
@@ -176,6 +177,7 @@ function KeptPage() {
           )}
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }
