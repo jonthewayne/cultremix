@@ -259,7 +259,8 @@ export async function retireKeptListings(ctx: MutationCtx, workId: Id<"works">, 
 // What the Print Studio places for: the front of the first product the work sells on.
 export async function printTargetForWork(ctx: Ctx, work: Pick<Doc<"works">, "printPlacement" | "printProducts">) {
   const products = await offeredShopProducts(ctx);
-  const choice = chosenProducts(work, products)[0];
+  // None when every product the work comes on has left the offer.
+  const choice = chosenProducts(work, products)[0] as ProductChoice | undefined;
   const product = choice?.product ?? products[0];
   return {
     geometry: geometryOf(product.key, product.front),

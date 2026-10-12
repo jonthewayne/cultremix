@@ -208,7 +208,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
       save(draft).catch((err) => setError(errorMessage(err)));
     }, 700);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // save is a new function every render; only a changed draft should start the timer.
   }, [draft, locked]);
 
   const change = (next: Partial<Draft>) => {
