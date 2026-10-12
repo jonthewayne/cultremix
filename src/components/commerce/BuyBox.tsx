@@ -7,7 +7,7 @@ import type { GarmentKind } from "../../../shared/config/print-products";
 import type { PrintArea, RelativePlacement } from "~/lib/print/shirtPlacement";
 import { ColorSwatches } from "~/components/cr/ColorSwatches";
 import { useCaptureRef } from "~/lib/ref";
-import { cn } from "~/lib/utils";
+import { cn, keepHyphens } from "~/lib/utils";
 
 export type BuyProduct = {
   key: string;
@@ -77,7 +77,7 @@ export function BuyBox({
       <div className="flex items-baseline justify-between gap-3 border-t-2 border-foreground pt-4">
         <span className="text-5xl font-black tracking-tight">{formatPrice(price)}</span>
         <span className="text-right text-sm font-semibold">
-          {product.name}
+          {keepHyphens(product.name)}
           {product.side === "back" ? " · printed on the back" : ""}
         </span>
       </div>
@@ -100,7 +100,7 @@ export function BuyBox({
                   p.key === product.key && "bg-foreground text-background",
                 )}
               >
-                {p.name}
+                {keepHyphens(p.name)}
                 <span className="font-semibold opacity-70">{formatPrice(fromPrice(p))}</span>
               </button>
             ))}
@@ -194,4 +194,3 @@ export function BuyBox({
     </>
   );
 }
-

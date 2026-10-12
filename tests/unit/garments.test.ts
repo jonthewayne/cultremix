@@ -8,6 +8,7 @@ import {
   visibilityOn,
 } from "../../convex/lib/garments";
 import { normalizeWaitlistEmail } from "../../convex/lib/earlyAccess";
+import { readDesignPixels } from "../../src/lib/designPixels";
 
 describe("offered colors", () => {
   it("accepts only shirt colors, at least one, keeping the lead first", () => {
@@ -53,6 +54,43 @@ describe("the contrast check", () => {
     expect(visibilityOn(allBlack, "#6c6c47")).toBe("clear");
     const red = Array.from({ length: 50 }, (): [number, number, number] => [200, 40, 40]);
     expect(visibilityOn(red, "#b4d9c8")).toBe("clear");
+  });
+
+  it("looks at the edge, where the shirt meets the design", () => {
+    const half = [...Array.from({ length: 20 }, () => black), ...Array.from({ length: 30 }, () => yellow)];
+    const mostlyBlack = [...Array.from({ length: 35 }, () => black), ...Array.from({ length: 15 }, () => yellow)];
+    const yellowEdge = Array.from({ length: 12 }, () => yellow);
+    const blackEdge = Array.from({ length: 12 }, () => black);
+    // Black lines inside a yellow sticker stay visible on a black shirt; a black outline doesn't.
+    expect(visibilityOn(half, "#1f1f1f", yellowEdge)).toBe("clear");
+    expect(visibilityOn(half, "#1f1f1f", blackEdge)).toBe("faint");
+    // Mostly black inside a yellow rim reads faint; with a black edge too it disappears.
+    expect(visibilityOn(mostlyBlack, "#1f1f1f", yellowEdge)).toBe("faint");
+    expect(visibilityOn(mostlyBlack, "#1f1f1f", blackEdge)).toBe("disappears");
+  });
+});
+
+describe("reading a design's pixels", () => {
+  // A size × size RGBA image: paint(x, y) gives each pixel's [r, g, b, a].
+  const image = (size: number, paint: (x: number, y: number) => [number, number, number, number]) =>
+    Array.from({ length: size * size }, (_, i) => paint(i % size, Math.floor(i / size))).flat();
+  const RED: [number, number, number, number] = [220, 30, 30, 255];
+  const CLEAR: [number, number, number, number] = [0, 0, 0, 0];
+
+  it("takes the opaque pixels, and those beside transparency as the edge", () => {
+    // A 3×3 red square in the middle of a transparent 5×5: its 8 outer pixels are the edge.
+    const data = image(5, (x, y) => (x >= 1 && x <= 3 && y >= 1 && y <= 3 ? RED : CLEAR));
+    const { all, edge } = readDesignPixels(data, 5, 5, 5, "#ffffff");
+    expect(all).toHaveLength(9);
+    expect(edge).toHaveLength(8);
+  });
+
+  it("drops a painted background, and the design's edge is where it was", () => {
+    // Solid all over: a white background around a 2×2 red middle.
+    const data = image(4, (x, y) => (x >= 1 && x <= 2 && y >= 1 && y <= 2 ? RED : [255, 255, 255, 255]));
+    const { all, edge } = readDesignPixels(data, 4, 4, 4, "#ffffff");
+    expect(all).toEqual(Array.from({ length: 4 }, () => [220, 30, 30]));
+    expect(edge).toHaveLength(4);
   });
 });
 

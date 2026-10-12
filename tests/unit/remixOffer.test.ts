@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { midSentence } from "../../src/components/studio/RemixPartInputs";
-import { offerLine, wordsLine } from "../../src/lib/remixOffer";
+import { offerLine, remixWords } from "../../src/lib/remixOffer";
 
 // "A remix can change" on a work page (src/lib/remixOffer.ts).
 describe("what a remix can change", () => {
@@ -22,10 +22,9 @@ describe("what a remix can change", () => {
   });
 
   it("names the words once each, in order", () => {
-    expect(wordsLine(["GROW", "SLOW"])).toBe("GROW and SLOW");
-    expect(wordsLine(["OFFLINE", "IS THE NEW", "LUXURY"])).toBe("OFFLINE, IS THE NEW and LUXURY");
-    expect(wordsLine(["NIGHT", "SHIFT", "Z", "Z", "Z"])).toBe("NIGHT, SHIFT and Z");
-    expect(wordsLine(["MERRY &\nBRIGHT"])).toBe("MERRY & BRIGHT");
-    expect(wordsLine([])).toBe("");
+    expect(remixWords(["Keep it", "weird,", "Wanda"])).toEqual(["Keep it", "weird,", "Wanda"]);
+    expect(remixWords(["NIGHT", "SHIFT", "Z", "Z", "Z"])).toEqual(["NIGHT", "SHIFT", "Z"]);
+    expect(remixWords(["MERRY &\nBRIGHT", " "])).toEqual(["MERRY & BRIGHT"]);
+    expect(remixWords([])).toEqual([]);
   });
 });

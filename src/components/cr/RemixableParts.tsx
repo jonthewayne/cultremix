@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { errorMessage } from "~/lib/imagePrep";
-import { offerLine, wordsLine } from "~/lib/remixOffer";
+import { offerLine, remixWords } from "~/lib/remixOffer";
 import { cn } from "~/lib/utils";
 
 // Remixable words and parts (convex/remixParts.ts): what people who remix a design may change. The
@@ -420,7 +420,16 @@ export function RemixOffer({ workId }: { workId: Id<"works"> }) {
     <div className="-mt-2 text-sm">
       <p className="font-bold uppercase tracking-wider">A remix can change</p>
       <ul className="mt-1 space-y-0.5 text-neutral-700">
-        {words.length > 0 && <li>The words {wordsLine(words.map((word) => word.text))}</li>}
+        {words.length > 0 && (
+          <li className="flex flex-wrap items-center gap-1.5 pb-0.5">
+            <span>The words</span>
+            {remixWords(words.map((word) => word.text)).map((text) => (
+              <span key={text} className="rounded-md border border-neutral-300 px-1.5 py-0.5 font-semibold leading-tight text-black">
+                {text}
+              </span>
+            ))}
+          </li>
+        )}
         {parts.map((part) => (
           <li key={part.id}>{offerLine(part)}</li>
         ))}
@@ -435,4 +444,3 @@ export function PartChangesNote({ workId }: { workId: Id<"works"> }) {
   if (!changes) return null;
   return <p className="mt-2 text-lg">Changed: <span className="font-bold">{changes}</span></p>;
 }
-

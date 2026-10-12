@@ -61,7 +61,8 @@ function TakenDownSection() {
           {data.works.map((work) => (
             <li key={work.workId} className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-border p-3">
               {work.thumbUrl && <img src={work.thumbUrl} alt="" className="size-12 shrink-0 rounded-lg object-contain" />}
-              <div className="min-w-0 flex-1">
+              {/* At least 12rem, so on a phone Put it back up wraps below rather than squeezing the text. */}
+              <div className="min-w-[12rem] flex-1">
                 <p className="font-black">
                   CR {work.cr}
                   {work.title ? ` · ${work.title}` : ""}

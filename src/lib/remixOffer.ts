@@ -1,5 +1,5 @@
 // The lines of "A remix can change" on a work page (src/components/cr/RemixableParts.tsx RemixOffer):
-// what a remix may do with each remixable part, and the remixable words as one phrase.
+// what a remix may do with each remixable part, and the remixable words.
 
 export type OfferPart = {
   id: string;
@@ -20,9 +20,8 @@ export function offerLine(part: OfferPart) {
   return `${part.label}: ${most ? `up to ${most}, ` : ""}one photo each`;
 }
 
-// "GROW and SLOW"; a piece on two lines reads as one.
-export function wordsLine(texts: Array<string>) {
-  const unique = [...new Set(texts.map((text) => text.replace(/\s*\n\s*/gu, " ").trim()).filter(Boolean))];
-  if (unique.length <= 1) return unique[0] ?? "";
-  return `${unique.slice(0, -1).join(", ")} and ${unique[unique.length - 1]}`;
+// The remixable words once each, in order; a piece on two lines reads as one. The page shows each as
+// its own chip, since a design's words carry their own commas ("Keep it", "weird,", "Wanda").
+export function remixWords(texts: Array<string>) {
+  return [...new Set(texts.map((text) => text.replace(/\s*\n\s*/gu, " ").trim()).filter(Boolean))];
 }

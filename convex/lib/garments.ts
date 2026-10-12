@@ -133,6 +133,10 @@ export function defaultOfferedColors(backgroundHex: string, hidden: ReadonlySet<
 // blends in when it's within BLEND_DISTANCE of the shirt in Lab, or when it's nearly the same
 // brightness (under LOW_CONTRAST to 1) without a strong hue difference: dark ink on navy reads as
 // one shade on fabric. When most of the design blends in, it would disappear on that shirt.
+// `edge`, when given, are the visible pixels beside transparency, where the shirt meets the
+// design. Inside, a design sits against its own colors: a sticker's dark outlines don't vanish on a
+// black shirt while its white border holds. So the design only looks faint, or disappears, when
+// its edge blends in too; otherwise it reads, at worst faint when most of it matches the shirt.
 export type Visibility = "clear" | "faint" | "disappears";
 
 const BLEND_DISTANCE = 14;
@@ -140,6 +144,7 @@ const LOW_CONTRAST = 1.5;
 const HUE_DISTANCE = 30;
 const FAINT_SHARE = 0.3;
 const DISAPPEARS_SHARE = 0.6;
+const EDGE_SHARE = 0.5;
 
 export function blendShare(pixels: ReadonlyArray<[number, number, number]>, shirtHex: string): number {
   const shirt = rgbOf(shirtHex);
@@ -163,9 +168,14 @@ function contrastRatio(a: [number, number, number], b: [number, number, number])
   return (hi + 0.05) / (lo + 0.05);
 }
 
-export function visibilityOn(pixels: ReadonlyArray<[number, number, number]>, shirtHex: string): Visibility {
+export function visibilityOn(
+  pixels: ReadonlyArray<[number, number, number]>,
+  shirtHex: string,
+  edge?: ReadonlyArray<[number, number, number]>,
+): Visibility {
   const share = blendShare(pixels, shirtHex);
-  if (share >= DISAPPEARS_SHARE) return "disappears";
-  if (share >= FAINT_SHARE) return "faint";
+  const edgeBlends = !edge || edge.length === 0 || blendShare(edge, shirtHex) >= EDGE_SHARE;
+  if (share >= DISAPPEARS_SHARE) return edgeBlends ? "disappears" : "faint";
+  if (share >= FAINT_SHARE && edgeBlends) return "faint";
   return "clear";
 }

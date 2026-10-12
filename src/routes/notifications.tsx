@@ -234,7 +234,7 @@ function Message({ item }: { item: Notification }) {
     case "takedown":
       return item.takedown ? (
         <>
-          Your design <Cr work={{ cr: item.takedown.cr, title: item.takedown.title, thumbUrl: undefined }} /> was taken down: {item.takedown.reason} If you think that's a mistake, write to{" "}
+          Your design <Cr work={{ cr: item.takedown.cr, title: item.takedown.title, thumbUrl: undefined }} /> was taken down: {asSentence(item.takedown.reason)} If you think that's a mistake, write to{" "}
           <a href="mailto:heyyo@cultremix.com" className="font-semibold underline underline-offset-4">
             heyyo@cultremix.com
           </a>
@@ -297,6 +297,13 @@ function Cr({ work }: { work: WorkRef }) {
       <span className="whitespace-nowrap font-cr tabular-nums">CR {work.cr}</span>
     </>
   );
+}
+
+// An admin's takedown reason ends as a sentence, so "Copyrighted character" doesn't run into the
+// next one.
+function asSentence(text: string) {
+  const trimmed = text.trim();
+  return /[.!?…]["'”’)]?$/u.test(trimmed) ? trimmed : trimmed + ".";
 }
 
 function ago(timestamp: number, now: number) {

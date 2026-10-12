@@ -33,6 +33,7 @@ import { PrintEntry } from "~/components/print/PrintEntry";
 import { PlacementEditor } from "~/components/publish/PlacementEditor";
 import { pageColors, selectedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
+import { keepHyphens } from "~/lib/utils";
 import { BuyBox } from "~/components/commerce/BuyBox";
 import { useShowWhenFound } from "~/hooks/use-show-when-found";
 import { OnTheShirt } from "~/components/commerce/OnTheShirt";
@@ -157,7 +158,7 @@ function ShopPage() {
                   </span>
                   <span className="text-right text-sm font-semibold">
                     {comesOn && comesOn.length > 0
-                      ? comesOn.map((product) => `${product.name}${product.side === "back" ? " (back print)" : ""}`).join(" · ")
+                      ? comesOn.map((product) => `${keepHyphens(product.name)}${product.side === "back" ? " (back print)" : ""}`).join(" · ")
                       : "Heavyweight garment-dyed tee"}
                   </span>
                 </div>

@@ -79,7 +79,9 @@ export function PublishDialog({
   const pixels = useDesignPixels(tile.thumbUrl ?? tile.mediumUrl ?? tile.url, tile.backgroundColor);
   const visibility = useMemo(() => {
     const map = new Map<string, Visibility>();
-    if (pixels && pixels.length > 0) for (const color of palette) map.set(color.key, visibilityOn(pixels, color.hex));
+    if (pixels && pixels.all.length > 0) {
+      for (const color of palette) map.set(color.key, visibilityOn(pixels.all, color.hex, pixels.edge));
+    }
     return map;
   }, [pixels, palette]);
 
