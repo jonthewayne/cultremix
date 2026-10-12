@@ -14,7 +14,7 @@ import { CUTOUT_CENTS, topazCents, topazWorstCaseCents } from "./lib/pricing";
 import { formatCr, parseCr, publicUrl } from "./lib/r2";
 import { nudgeSalePrep } from "./lib/salePrep";
 import { printTargetForWork, withProductPlacement } from "./lib/shopProduct";
-import { relativePlacementValidator } from "./schema/merch";
+import { garmentKindValidator, relativePlacementValidator } from "./schema/merch";
 import { flagEnabled } from "./studio";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -156,6 +156,8 @@ export const studio = query({
         safeInsetIn: v.number(),
         dpi: v.number(),
         colors: v.array(v.object({ name: v.string(), hex: v.string() })),
+        // Which garment it is, for the drawing (tee, hoodie, ...).
+        kind: garmentKindValidator,
       }),
       // Where the creator placed it on that product's front when publishing: the Print Studio starts
       // there until a placement is saved here. Null for a back print or a product they didn't choose.
@@ -208,7 +210,7 @@ export const studio = query({
       credits: await creditBalance(ctx, user._id),
       upscaleCredits: owner ? 0 : UPSCALE_CREDITS,
       upscaleEnabled: await flagEnabled(ctx, "gen.upscale"),
-      product: { ...target.geometry, name: target.name, colors: target.colors },
+      product: { ...target.geometry, name: target.name, colors: target.colors, kind: target.kind },
       publishPlacement: target.placement?.side === "front" ? target.placement : null,
       publishSide: target.placement?.side ?? null,
       versions: await Promise.all(

@@ -148,8 +148,10 @@ describe("versions", () => {
 
   it("starts from where the creator placed it on the front when publishing", async () => {
     const { t, workId } = await setup();
-    // Published before placement existed: the default, Large near the top.
-    expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.publishPlacement).toEqual({ side: "front", size: 0.85, drop: 0.08 });
+    // Published before placement existed: the default, Large near the top, on the launch tee.
+    const opened = await t.withIdentity(ALICE).query(api.print.studio, { cr: CR });
+    expect(opened?.publishPlacement).toEqual({ side: "front", size: 0.85, drop: 0.08 });
+    expect(opened?.product.kind).toBe("tee");
     await t.run(async (ctx) => ctx.db.patch("works", workId, { printPlacement: { side: "front", size: 0.4, drop: 0.3 } }));
     expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.publishPlacement).toEqual({ side: "front", size: 0.4, drop: 0.3 });
     // The Print Studio places the front; a back print starts from its own default.

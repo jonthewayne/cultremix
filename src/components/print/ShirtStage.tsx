@@ -1,22 +1,17 @@
 import { useRef } from "react";
-import type { PrintGeometry } from "../../../shared/config/print-products";
+import type { GarmentKind, PrintGeometry } from "../../../shared/config/print-products";
 import type { Placement } from "~/lib/print/placement";
+import { MOCKUP_HEIGHT, MOCKUP_WIDTH, UNITS_PER_IN, areaBox, garmentDrawing, garmentTones } from "~/lib/print/garmentMockup";
 import { clampPlacement, placedHeight } from "~/lib/print/placement";
 import { cn } from "~/lib/utils";
 
-// A drawn tee with the front print area on it. The design sits in the area at its placed size and
-// can be dragged; the guides show the area, the safe line, the center, and the top.
+// The product's front, drawn (src/lib/print/garmentMockup.ts, the publish preview's drawings: a tee,
+// hoodie, and so on at about a size L, 32 units per inch), with its print area centered where a real
+// one sits. The design sits in the area at its placed size and can be dragged; the guides show the
+// area, the safe line, the center, and the top.
 
-// Shirt drawing units: 30 per inch. The body is about 21 in across, the print area 15 x 17 in,
-// starting about 3 in below the collar.
-const UNIT = 30;
-const AREA_LEFT = 275;
-const AREA_TOP = 150;
+const UNIT = UNITS_PER_IN;
 const SNAP_IN = 0.2;
-
-const TEE =
-  "M385 40 Q500 112 615 40 L765 72 L975 252 L882 362 L815 318 L815 962 Q500 990 185 962 L185 318 L118 362 L25 252 L235 72 Z";
-const NECK = "M385 40 Q500 128 615 40";
 
 // Whether light or dark lines read on a shirt color.
 function isDark(hex: string) {
@@ -27,6 +22,7 @@ function isDark(hex: string) {
 
 export function ShirtStage({
   product,
+  kind = "tee",
   shirtHex,
   imageUrl,
   aspect,
@@ -37,6 +33,7 @@ export function ShirtStage({
   className,
 }: {
   product: PrintGeometry & { name: string };
+  kind?: GarmentKind;
   shirtHex: string;
   imageUrl?: string;
   aspect: number;
@@ -50,6 +47,11 @@ export function ShirtStage({
   const drag = useRef<{ x: number; y: number; start: Placement; scale: number } | null>(null);
   const area = product.printArea;
   const inset = product.safeInsetIn;
+  const drawing = garmentDrawing(kind, "front");
+  const tones = garmentTones(shirtHex);
+  const box = areaBox(kind, "front", area);
+  const AREA_LEFT = box.x;
+  const AREA_TOP = box.y;
   const heightIn = placedHeight(placement.widthIn, aspect);
   const line = isDark(shirtHex) ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.55)";
   const centerX = AREA_LEFT + (area.widthIn / 2) * UNIT;
@@ -61,8 +63,8 @@ export function ShirtStage({
     if (locked || !onChange || !svg.current) return;
     event.preventDefault();
     (event.target as Element).setPointerCapture(event.pointerId);
-    const box = svg.current.getBoundingClientRect();
-    drag.current = { x: event.clientX, y: event.clientY, start: placement, scale: 1000 / box.width / UNIT };
+    const rect = svg.current.getBoundingClientRect();
+    drag.current = { x: event.clientX, y: event.clientY, start: placement, scale: MOCKUP_WIDTH / rect.width / UNIT };
   };
   const onPointerMove = (event: React.PointerEvent) => {
     const d = drag.current;
@@ -86,14 +88,20 @@ export function ShirtStage({
   return (
     <svg
       ref={svg}
-      viewBox="0 0 1000 1000"
+      viewBox={`0 0 ${MOCKUP_WIDTH} ${MOCKUP_HEIGHT}`}
       className={cn("h-auto w-full touch-none select-none", className)}
       role="img"
       aria-label={`The design on a ${product.name}, ${placement.widthIn} inches wide`}
     >
-      <path d={TEE} fill={shirtHex} stroke="rgba(0,0,0,0.25)" strokeWidth="3" strokeLinejoin="round" />
-      <path d={NECK} fill="none" stroke="rgba(0,0,0,0.22)" strokeWidth="10" strokeLinecap="round" />
-      <path d="M235 72 L185 318 M765 72 L815 318" fill="none" stroke="rgba(0,0,0,0.1)" strokeWidth="3" />
+      {drawing.fills.map((d) => (
+        <path key={d} d={d} fill={tones.fill} stroke={tones.outline} strokeWidth="6" strokeLinejoin="round" />
+      ))}
+      {drawing.shade.map((d) => (
+        <path key={d} d={d} fill={tones.inside} stroke={tones.outline} strokeWidth="5" strokeLinejoin="round" />
+      ))}
+      {drawing.lines.map((d) => (
+        <path key={d} d={d} fill="none" stroke={tones.detail} strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" />
+      ))}
 
       {guides && (
         <g fill="none" stroke={line} strokeWidth="2" pointerEvents="none">

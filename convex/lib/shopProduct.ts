@@ -265,6 +265,7 @@ export async function printTargetForWork(ctx: Ctx, work: Pick<Doc<"works">, "pri
   return {
     geometry: geometryOf(product.key, product.front),
     name: product.name,
+    kind: product.kind,
     colors: product.colors.map(({ name, hex }) => ({ name, hex })),
     // Where its creator placed it on this product when publishing, and the product's Printful id;
     // both null when it isn't one they chose.

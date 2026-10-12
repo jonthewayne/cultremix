@@ -328,6 +328,7 @@ function PrintStudio({ studio, error, setError }: { studio: Studio; error: strin
                 {draft && isReady(selected) ? (
                   <ShirtStage
                     product={product}
+                    kind={studio.product.kind}
                     shirtHex={shirt.hex}
                     imageUrl={selected.previewUrl ?? selected.url}
                     aspect={aspect}
