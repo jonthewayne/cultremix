@@ -3,7 +3,7 @@ import { printCheck } from "../src/lib/print/check";
 import { offeredPrintColors } from "../src/lib/print/colors";
 import { clampTolerance, parseHex } from "../src/lib/print/knockout";
 import { aspectOf, clampPlacement } from "../src/lib/print/placement";
-import { sameRelative, toRelative } from "../src/lib/print/shirtPlacement";
+import { areaPlacement, toInches, toRelative } from "../src/lib/print/shirtPlacement";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
@@ -524,9 +524,16 @@ export const savePlacement = mutation({
     }
     // The work page and the shop describe what prints: the product placed here takes this placement as
     // its own (centered, so a sideways nudge stays here), when it's printed on the front as published.
+    // Compared in inches, since the two forms round differently: a save that only changed the color
+    // or the art version leaves the work's placement alone.
     if (target.productId !== null && target.placement?.side === "front") {
-      const relative = toRelative({ side: "front", widthIn: placed.widthIn, yIn: placed.yIn }, aspectOf(version.width, version.height), target.geometry.printArea);
-      if (!sameRelative(relative, target.placement)) await ctx.db.patch("works", work._id, withProductPlacement(work, target.productId, relative));
+      const aspect = aspectOf(version.width, version.height);
+      const area = target.geometry.printArea;
+      const current = clampPlacement(areaPlacement(toInches(target.placement, aspect, area), area), aspect, target.geometry);
+      if (Math.abs(current.widthIn - placed.widthIn) > 0.02 || Math.abs(current.yIn - placed.yIn) > 0.02) {
+        const relative = toRelative({ side: "front", widthIn: placed.widthIn, yIn: placed.yIn }, aspect, area);
+        await ctx.db.patch("works", work._id, withProductPlacement(work, target.productId, relative));
+      }
     }
     return placed;
   },

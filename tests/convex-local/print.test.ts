@@ -170,6 +170,18 @@ describe("versions", () => {
     expect(toInches(placed!, 1, area).yIn).toBeCloseTo(2, 1);
   });
 
+  it("a save that only changes the color leaves the work's placement alone", async () => {
+    const { t, workId } = await setup();
+    const alice = t.withIdentity(ALICE);
+    const v1 = await openAndMeasure(t);
+    const studio = await alice.query(api.print.studio, { cr: CR });
+    // Where it opens: the default placement (Large near the top) in inches, a 1024 px square.
+    const start = toInches(studio!.publishPlacement!, 1, studio!.product.printArea);
+    const xIn = (studio!.product.printArea.widthIn - start.widthIn) / 2;
+    await alice.mutation(api.print.savePlacement, { cr: CR, versionId: v1, xIn, yIn: start.yIn, widthIn: start.widthIn, color: "Black" });
+    expect(await t.run(async (ctx) => (await ctx.db.get("works", workId))?.printPlacement ?? null)).toBeNull();
+  });
+
   it("a placement changed on the work page moves this one, keeping its version and color", async () => {
     const { t, workId } = await setup();
     const alice = t.withIdentity(ALICE);
