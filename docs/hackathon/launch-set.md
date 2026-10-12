@@ -4,13 +4,14 @@ Once production is deployed, publishing about ten designs and a few remixes of t
 
 ## Before you start
 
+- **Quickest:** `bun run launch:batches -- --prod` (Ops can run it, or you can from the repo; it asks you to type production) starts all nine originals below in @curiousentity's studio at once, each in its own session named for the design, a few seconds apart, about $1.20 of gateway credit in all. The next step is then only picking and publishing. `--list` shows what it would start, `--only "Grow Slow,Night Shift"` starts some, and `--as <username>` uses another account. On dev on October 12, Stay Sharp arrived as four designs in a session named Stay Sharp.
 - Sign in on cultremix.com as @curiousentity. The owner has unlimited credits, so nothing here spends credits, only gateway credit (Admin, Overview shows it).
 - For the remixes, sign in as a second member in another browser (another email of yours), so the remixes come from someone else, the way they would for a judge. It gets the starting credits every new member gets, and Admin, Members can add more.
 - Publish each design with a title. The originals go first, so they get the lowest numbers.
 
 ## Originals
 
-Type each request in the studio with no images, press Generate, and publish the best of the four.
+Type each request in the studio with no images and press Generate (or let `launch:batches` start them all), then publish the best of the four.
 
 | Title | Request |
 | --- | --- |
@@ -43,4 +44,3 @@ Then, from the second account, heart a few designs and follow @curiousentity, so
 ## Optional: a family as elves
 
 On Merry & Bright's page, as its creator, press **Edit** under Remixable parts and check that it found Santa, Mrs. Claus, and the elves. Set Mrs. Claus to "leave them out" without a photo and the elves to up to 6 photos, then Save. Press **Remix this**, add your family's photos to Santa and the elves, Generate, and publish one with **Keep it just for you**. It stays private at its own page and still credits the original, which shows kept designs without putting your family in the feed.
-

@@ -9,7 +9,7 @@ Judges use the site from October 14 to 27, and winners are announced November 3,
 1. **Gateway credit.** Admin, Overview shows Gateway credit in dollars and "About N batches". Judges' designs, notes, and model photos are all paid from the CultRemix Gateway account: about 13¢ a batch, and a judge who uses all 40 credits spends about $2.60. Top it up to about $50.
 2. **Settings** (Admin, Overview): a $50 daily image budget and 3 model-photo shoots per member per day. The budget counts UTC days, so it starts over at 5 p.m. Pacific.
 3. **Judge accounts.** Admin, Judges: an email and a username make an account with a password, creator access, 40 credits, and that username, so the judge lands straight in the studio. Copy each password when it appears; it shows only there, once. For a list, Ops can run `bun run judges:provision -- --prod --file judges.txt` (one "email username" per line); its passwords go to `.judges.local.json`, readable only by you. Running either again changes nothing for existing judges unless you ask for a new password. Send each judge their email and password privately, with [the judges' page](../judges.md): on the sign-in page they tap **Have a password? Sign in with it**.
-4. **The launch set.** Publish the designs and remixes in [launch-set.md](launch-set.md), so the feed, Trending, and family trees have something in them when judges arrive.
+4. **The launch set.** Publish the designs and remixes in [launch-set.md](launch-set.md), so the feed, Trending, and family trees have something in them when judges arrive. `bun run launch:batches -- --prod` starts all nine originals in your studio at once, each in a session named for it, so what's left is picking and publishing.
 
 ## While judges are on the site
 

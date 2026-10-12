@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { DEFAULT_APP_SETTINGS } from "./identity";
 import { FIRST_ASSIGNED_CREATOR_NUMBER } from "./lib/creators";
 import { FEATURE_FLAGS } from "./lib/flags";
@@ -53,5 +53,27 @@ export const environment = internalMutation({
       }
     }
     return { created, kept };
+  },
+});
+
+// For launch scripts that act as a member (scripts/launch-batches.ts): the auth subject of the member
+// with that username, or of the owner. Internal, so only someone holding the deployment's admin key
+// can read it, the same people who can run convex run --identity.
+export const memberIdentity = internalQuery({
+  args: { username: v.optional(v.string()) },
+  returns: v.union(v.null(), v.object({ authId: v.string(), username: v.union(v.null(), v.string()) })),
+  handler: async (ctx, args) => {
+    const name = args.username?.trim().replace(/^@/u, "").toLowerCase();
+    const user = name
+      ? await ctx.db
+          .query("users")
+          .withIndex("by_usernameLower", (q) => q.eq("usernameLower", name))
+          .unique()
+      : await ctx.db
+          .query("users")
+          .withIndex("by_platformRole", (q) => q.eq("platformRole", "super_admin_owner"))
+          .first();
+    if (!user?.authId) return null;
+    return { authId: user.authId, username: user.username ?? null };
   },
 });

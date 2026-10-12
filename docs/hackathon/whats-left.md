@@ -32,7 +32,7 @@ As of October 12, 2026, 9:45 a.m. Pacific. The Monad submission is due **Tuesday
    - Approve the store policies at /policies, then paste them into Shopify.
    - Check the submission form against [submission.md](submission.md#event-requirements), which lists its fields as of October 12, with drafts of the prior-work and AI tools disclosures to confirm and paste.
    - Invite the first creators.
-   - Once production is deployed, publish 8 to 10 designs there and a few remixes of them (variations and a fork), so judges land on a full feed, Trending, and family trees. [launch-set.md](launch-set.md) has requests that worked on dev, about $2 and half an hour in all.
+   - Once production is deployed, publish 8 to 10 designs there and a few remixes of them (variations and a fork), so judges land on a full feed, Trending, and family trees. [launch-set.md](launch-set.md) has requests that worked on dev, and `bun run launch:batches -- --prod` starts all nine originals in your studio at once, about $2 and half an hour in all.
    - Record the two videos ([scripts](video-scripts.md)).
 10. **Optional: an Etherscan API key** (free at etherscan.io), saved as `ETHERSCAN_API_KEY` in `~/.config/cultremix/chain.env`. The registry deploy verifies the contract's source on Sourcify on its own, so MonadVision shows it; with this key it's verified on Monadscan too, which is where the site's transaction links go.
 

@@ -96,12 +96,13 @@ bun run test:image   # the image pipeline against the real models: ~9 min, ~$2.8
 ```bash
 bun run seed:environment                        # set up a fresh environment (safe to rerun)
 bun run deploy:migrate -- --prod                # after a deploy: seed, move images, fill in older data
+bun run launch:batches -- --prod                # start the launch set's designs in the owner's studio
 bun run judges:provision -- --file judges.txt   # make judge accounts with passwords
 bun run circle:setup --env dev --apply          # Circle's entity secret, wallet set, and env, from an API key
 bun run chain:verify:mainnet --registry 0x…    # verify the registry's source on Sourcify (and Monadscan with ETHERSCAN_API_KEY)
 ```
 
-The first three target your dev deployment by default and production with `--prod` (they ask first); `circle:setup` takes `--env dev` or `--env prod` and asks before production. None ever copies data between environments. There are two environments: dev, the private rehearsal on Monad testnet, and production, cultremix.com on Monad mainnet. See [Judges](docs/judges.md), the [Launch checklist](docs/launch-checklist.md), and [Judging days](docs/hackathon/judging-runbook.md).
+The first four target your dev deployment by default and production with `--prod` (they ask first); `circle:setup` takes `--env dev` or `--env prod` and asks before production. None ever copies data between environments. There are two environments: dev, the private rehearsal on Monad testnet, and production, cultremix.com on Monad mainnet. See [Judges](docs/judges.md), the [Launch checklist](docs/launch-checklist.md), and [Judging days](docs/hackathon/judging-runbook.md).
 
 ## Admin
 

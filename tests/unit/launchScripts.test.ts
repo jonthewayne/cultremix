@@ -31,4 +31,12 @@ describe("convex run output", () => {
     expect(parseRunOutput("[CONVEX A(x)] log\nsomething\n{\n  \"created\": []\n}\n")).toEqual({ created: [] });
     expect(() => parseRunOutput("no result")).toThrow(/Couldn't read/);
   });
+
+  it("reads nothing as null, and a plain value after log lines", () => {
+    expect(parseRunOutput("")).toBeNull();
+    expect(parseRunOutput("\n")).toBeNull();
+    expect(parseRunOutput("null\n")).toBeNull();
+    expect(parseRunOutput("\"Reading CR 106-001 again.\"\n")).toBe("Reading CR 106-001 again.");
+    expect(parseRunOutput("[CONVEX M(x)] [LOG] 'saved'\n42\n")).toBe(42);
+  });
 });
