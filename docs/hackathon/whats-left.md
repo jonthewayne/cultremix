@@ -28,7 +28,7 @@ As of October 11, 2026, 6:00 p.m. Pacific. The Monad submission is due **Tuesday
 7. **MON.** Testnet faucet MON for dev's relayer `0x7D39bCfd08b206fEaacb4F1E2817aDB22e06f921` (dev already has its relayer key, so the testnet registry can go up as soon as the MON lands), and about 1 MON for production's relayer (deploying the registry needs about 0.47 MON on hand; each publish costs a few hundredths). OKX sells MON and withdraws it on the Monad network straight to the relayer's address (Coinbase lists MON too; check that its withdraw screen offers the Monad network). Pick the network named Monad, never Ethereum or Base, and send a small test amount first.
 8. **A backup of production's relayer key** in Jon's password manager, copied over Screen Sharing.
 9. **The hackathon pieces.**
-   - Make the repo public.
+   - Make the repo public. Checked October 11: none of the 404 commits holds a secret (the known keys, and the shapes of OpenAI, Cloudflare, Shopify, Circle, fal, Resend, Gateway, and private keys). Your Gmail address is gone from the current docs but stays in two September 29 commits; rewriting history would change every later commit hash the build log cites, so leave it unless that matters to you. The ChatGPT archive in `docs/reference/` has no memories or custom instructions (the share link strips them). There's no LICENSE file, so the code stays all rights reserved unless you add one.
    - Approve the store policies at /policies, then paste them into Shopify.
    - Paste the submission form's fields into [submission.md](submission.md).
    - Invite the first creators.
