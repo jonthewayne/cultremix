@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 11, 2026, 8:20 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
+As of October 11, 2026, 9:40 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT**. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -17,7 +17,7 @@ As of October 11, 2026, 8:20 p.m. Pacific. The Monad submission is due **Tuesday
 ## Waiting on Jon
 
 1. **Decisions.** Pick the launch products and their prices, and confirm $5.95 flat US shipping and the 15% creator pool for real orders.
-2. **Production go**, so Ops can deploy production. Production is still on 8bc367d (September 30); the [Ops message](../launch-checklist.md#deploy-ops) brings it up to dev. It backs up production first, then deploys Convex and the Worker back to back.
+2. **Production go**, so Ops can deploy production. Production is still on 8bc367d (September 30); the [Ops message](../launch-checklist.md#deploy-ops) brings it up to dev. It backs up production first, then deploys Convex and the Worker back to back. The whole sequence ran on a copy of production's data on October 11 ([Rehearsing a big deploy](../deployment-cloudflare.md#rehearsing-a-big-deploy)), and every step passed.
 3. **Sign-ups only Jon can do**, because they ask for a card, identity, bank or tax details, or acceptance of terms:
    - Shopify: the Basic plan and Shopify Payments.
    - Printful: billing.
