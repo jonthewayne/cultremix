@@ -1,9 +1,14 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { deploymentEnv } from "./lib/shopFlags";
 import { scopeRoleValidator } from "./schema";
 
+// The e2e tests' helpers (scripts/e2e-helper.ts). They make accounts and set roles, so they need
+// TEST_HELPER_SECRET, which production never has (docs/setup.md), and they refuse to run on
+// production even if it were set there by mistake.
 function requireTestSecret(testSecret: string) {
+  if (deploymentEnv() === "prod") throw new Error("Test helpers don't run on production.");
   const expected = process.env.TEST_HELPER_SECRET;
   if (!expected || testSecret !== expected) {
     throw new Error("Invalid TEST_HELPER_SECRET");

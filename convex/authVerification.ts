@@ -10,6 +10,7 @@ import {
   isRateLimitOperation,
 } from "./lib/authRateLimit";
 import { sanitizeRedirect } from "./lib/redirect";
+import { deploymentEnv } from "./lib/shopFlags";
 import {
   assertEmailAttemptIdentity,
   publicEmailAttemptStatus,
@@ -135,7 +136,8 @@ export const storeTestOtp = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, { email, otpCode }) => {
-    if (process.env.ENABLE_TEST_OTP_STORAGE !== "true") return null;
+    // Never on production, even if the flag were set there by mistake (docs/setup.md).
+    if (process.env.ENABLE_TEST_OTP_STORAGE !== "true" || deploymentEnv() === "prod") return null;
 
     const attempt = await ctx.db
       .query("authVerificationAttempts")

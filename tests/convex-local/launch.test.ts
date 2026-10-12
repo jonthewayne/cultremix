@@ -27,6 +27,22 @@ const SETTINGS = {
   shootsPerMemberPerDay: 4,
 };
 
+describe("the e2e test helpers", () => {
+  it("need TEST_HELPER_SECRET, and refuse on production even with it", async () => {
+    const t = newTest();
+    vi.stubEnv("TEST_HELPER_SECRET", "s3cret");
+    await expect(t.mutation(api.testHelpers.seedTestUser, { testSecret: "wrong", authId: "x", email: "x@example.com" })).rejects.toThrow(/Invalid TEST_HELPER_SECRET/u);
+    const userId = await t.mutation(api.testHelpers.seedTestUser, { testSecret: "s3cret", authId: "x", email: "x@example.com" });
+    expect(userId).toBeTruthy();
+    vi.stubEnv("DEPLOYMENT_ENV", "prod");
+    await expect(
+      t.mutation(api.testHelpers.setTestUserRole, { testSecret: "s3cret", email: "e2e+abc@example.com", platformRole: "super_admin_owner" }),
+    ).rejects.toThrow(/don't run on production/u);
+    await expect(t.query(api.testHelpers.getTestEmailOtp, { testSecret: "s3cret", email: "x@example.com" })).rejects.toThrow(/don't run on production/u);
+    vi.unstubAllEnvs();
+  });
+});
+
 describe("admin access", () => {
   it("shows any admin what's left before real orders and Monad records", async () => {
     const t = newTest();

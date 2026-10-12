@@ -93,7 +93,7 @@ The dev Convex env commands set:
 
 Production env commands use the production URL for `SITE_URL` and include the production host plus `www` as trusted origins.
 
-Production Convex env commands intentionally exclude `TEST_HELPER_SECRET` and `ENABLE_TEST_OTP_STORAGE`. Those are local/dev testing helpers and should never be set in production.
+Production Convex env commands intentionally exclude `TEST_HELPER_SECRET` and `ENABLE_TEST_OTP_STORAGE`. Those are local/dev testing helpers and should never be set in production. As a second guard, the test helpers (`convex/testHelpers.ts`) refuse to run and test OTPs are never stored when `DEPLOYMENT_ENV=prod`, even if one were set there by mistake.
 
 ## Setup State
 
