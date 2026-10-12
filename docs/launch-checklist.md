@@ -49,7 +49,7 @@ Jon signs in once in a Screen Sharing session on mighteous; the Builder does the
 - [x] Dev's Convex has its relayer key: `MONAD_RELAYER_PRIVATE_KEY`, set October 11 from `MONAD_RELAYER_PRIVATE_KEY_DEV` without printing it. /admin/chain shows the relayer's address and balance (it said "MONAD_RELAYER_PRIVATE_KEY is not set" before).
 - [ ] Testnet MON for dev's relayer from the faucet.
 - [ ] `bun run chain:deploy:testnet` (a dry run), then `bun run chain:deploy:testnet --broadcast`. Record the address in `shared/config/chains.ts` (`CHAIN_ENVIRONMENTS.dev.registryAddress`) and push.
-- [ ] /admin/chain: turn chain writes on and register economic config v1. Turn on Monad records in /admin, publish two designs, and check each one's record on testnet.monadscan.com and /onchain. Note the real cost per publish.
+- [ ] /admin/chain: turn chain writes on and register economic config v1. Turn on Monad records in /admin, publish two designs, and check each one's record on testnet.monadscan.com and /onchain. Note the real cost per publish. Then press **Queue registrations for earlier works** on /admin/chain until it's gone, so designs published before chain writes get their records too.
 
 ### Circle
 
@@ -82,7 +82,7 @@ While judges use the site, [Judging days](hackathon/judging-runbook.md) says wha
 - [ ] `bun run chain:deploy:mainnet` (a dry run: balance and cost), then `bun run chain:deploy:mainnet --broadcast --confirm-mainnet`.
 - [ ] Record the address as `CHAIN_ENVIRONMENTS.prod.registryAddress`, push, and have Ops deploy.
 - [ ] Circle for production: with Jon's live key in `circle.env` as `CIRCLE_API_KEY_LIVE`, Ops runs `bun run circle:setup --env prod --apply` (it asks to type "production"). Commit the wallet set ID as `CHAIN_ENVIRONMENTS.prod.circleWalletSetId`, and back up `circle.env` and both recovery files in the password manager: Circle can't recover an entity secret, and it controls every member wallet. Each Monad record names its creator's wallet, so until this step every record waits; afterwards members get wallets within five minutes, and the records queued for them go out.
-- [ ] /admin/chain on production: turn chain writes on and register economic config v1. Then turn on Monad records in /admin.
+- [ ] /admin/chain on production: turn chain writes on and register economic config v1. Then turn on Monad records in /admin, and press **Queue registrations for earlier works** on /admin/chain (it queues up to a batch at a time; press it until it's gone), so the designs published before the registry went live, the launch set included, get their records. Each work page then links its transaction once it confirms.
 
 ### Orders, in four steps
 
