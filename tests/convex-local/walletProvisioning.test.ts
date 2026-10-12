@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { privateKeyToAccount } from "viem/accounts";
 import { internal } from "../../convex/_generated/api";
-import { devWalletPrivateKey } from "../../convex/lib/chain/custody";
+import { devWalletPrivateKey, managedWalletPrivateKey } from "../../convex/lib/chain/custody";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { WALLET_LEASE_MS, walletBackoffMs } from "../../convex/wallets";
 import { newTest } from "./setup";
@@ -10,7 +10,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 const DEV_SECRET = "dev-only-secret";
 
 function useEnv(env: Record<string, string>) {
-  for (const name of ["DEPLOYMENT_ENV", "DEV_WALLET_SECRET", "CIRCLE_API_KEY", "CIRCLE_ENTITY_SECRET", "CIRCLE_WALLET_SET_ID"]) {
+  for (const name of ["DEPLOYMENT_ENV", "DEV_WALLET_SECRET", "MANAGED_WALLET_SECRET", "CIRCLE_API_KEY", "CIRCLE_ENTITY_SECRET", "CIRCLE_WALLET_SET_ID"]) {
     vi.stubEnv(name, env[name] ?? "");
   }
 }
@@ -76,6 +76,16 @@ describe("wallet provisioning", () => {
 
     await t.action(internal.wallets.provisionWallet, { userId });
     expect((await getUser(t, userId)).walletAddress).toBe(expected);
+  });
+
+  it("gives a production member a managed wallet while Circle isn't set up", async () => {
+    const secret = "m".repeat(32);
+    useEnv({ DEPLOYMENT_ENV: "prod", MANAGED_WALLET_SECRET: secret });
+    const t = newTest();
+    const userId = await insertUser(t, { walletStatus: "pending" });
+    await t.action(internal.wallets.provisionWallet, { userId });
+    const expected = privateKeyToAccount(await managedWalletPrivateKey(secret, userId)).address;
+    expect(await getUser(t, userId)).toMatchObject({ walletStatus: "ready", walletCustody: "managed", walletAddress: expected });
   });
 
   it("is idempotent with Circle: the stored key returns the same wallet", async () => {

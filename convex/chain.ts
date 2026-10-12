@@ -626,7 +626,11 @@ export const memberWallet = internalQuery({
   args: { userId: v.id("users") },
   returns: v.union(
     v.null(),
-    v.object({ custody: v.union(v.literal("circle"), v.literal("local")), address: v.string(), circleWalletId: v.optional(v.string()) }),
+    v.object({
+      custody: v.union(v.literal("circle"), v.literal("managed"), v.literal("local")),
+      address: v.string(),
+      circleWalletId: v.optional(v.string()),
+    }),
   ),
   handler: async (ctx, args) => {
     const user = await ctx.db.get("users", args.userId);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { privateKeyToAccount } from "viem/accounts";
 import { assertDeploymentConsistency } from "../../shared/config/chains";
-import { createMemberWallet, devWalletPrivateKey, signForMember } from "../../convex/lib/chain/custody";
+import { createMemberWallet, devWalletPrivateKey, managedWalletPrivateKey, signForMember } from "../../convex/lib/chain/custody";
 import { backTypedData, registryDomain } from "../../convex/lib/chain/eip712";
 import type { ChainDeployment } from "../../shared/config/chains";
 import type { Hex } from "viem";
@@ -53,6 +53,42 @@ describe("dev local signer", () => {
     await expect(
       createMemberWallet(deployment, {}, { userId: "u", idempotencyKey: crypto.randomUUID() }),
     ).rejects.toThrow(/No Circle keys/);
+  });
+});
+
+describe("managed wallets", () => {
+  const MANAGED = "m".repeat(32);
+
+  it("derives a production member's wallet from the secret and signs with it", async () => {
+    const env = { DEPLOYMENT_ENV: "prod", MANAGED_WALLET_SECRET: MANAGED };
+    const deployment = assertDeploymentConsistency(env);
+    const wallet = await createMemberWallet(deployment, env, { userId: "user-a", idempotencyKey: crypto.randomUUID() });
+    expect(wallet.custody).toBe("managed");
+    expect(wallet.address).toBe(privateKeyToAccount(await managedWalletPrivateKey(MANAGED, "user-a")).address);
+    // Never the dev wallet the same secret would give.
+    expect(wallet.address).not.toBe(privateKeyToAccount(await devWalletPrivateKey(MANAGED, "user-a")).address);
+    const message = { ...typed.message, backer: wallet.address };
+    expect(await signForMember(deployment, env, { userId: "user-a", wallet }, { ...typed, message })).toMatch(/^0x[0-9a-f]{130}$/u);
+  });
+
+  it("keeps signing for a managed wallet after Circle keys are set", async () => {
+    const managedEnv = { DEPLOYMENT_ENV: "staging", MANAGED_WALLET_SECRET: MANAGED };
+    const wallet = await createMemberWallet(assertDeploymentConsistency(managedEnv), managedEnv, { userId: "user-a", idempotencyKey: "k" });
+    const env = { ...managedEnv, CIRCLE_API_KEY: "TEST_API_KEY:a:b", CIRCLE_ENTITY_SECRET: "ab".repeat(32), CIRCLE_WALLET_SET_ID: "s" };
+    const deployment = assertDeploymentConsistency(env);
+    expect(deployment.custody.mode).toBe("circle");
+    const message = { ...typed.message, backer: wallet.address };
+    expect(await signForMember(deployment, env, { userId: "user-a", wallet }, { ...typed, message })).toMatch(/^0x[0-9a-f]{130}$/u);
+  });
+
+  it("refuses to sign once the secret is changed or gone", async () => {
+    const env = { DEPLOYMENT_ENV: "prod", MANAGED_WALLET_SECRET: MANAGED };
+    const deployment = assertDeploymentConsistency(env);
+    const wallet = await createMemberWallet(deployment, env, { userId: "user-a", idempotencyKey: "k" });
+    const message = { ...typed.message, backer: wallet.address };
+    const changed = { ...env, MANAGED_WALLET_SECRET: "n".repeat(32) };
+    await expect(signForMember(assertDeploymentConsistency(changed), changed, { userId: "user-a", wallet }, { ...typed, message })).rejects.toThrow(/changed/);
+    await expect(signForMember(deployment, { DEPLOYMENT_ENV: "prod" }, { userId: "user-a", wallet }, { ...typed, message })).rejects.toThrow(/not set/);
   });
 });
 

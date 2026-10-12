@@ -97,6 +97,17 @@ describe("assertDeploymentConsistency (KTD-14)", () => {
     expect(assertDeploymentConsistency({ DEPLOYMENT_ENV: "staging" }).custody.mode).toBe("unavailable");
   });
 
+  it("takes managed wallets in any environment until Circle keys are set", () => {
+    const secret = "m".repeat(32);
+    for (const env of ["dev", "staging", "prod"] as const) {
+      expect(assertDeploymentConsistency({ DEPLOYMENT_ENV: env, MANAGED_WALLET_SECRET: secret }).custody).toEqual({ mode: "managed" });
+    }
+    // Circle takes over new wallets once its keys are set; managed wins over dev's local signer.
+    expect(assertDeploymentConsistency({ DEPLOYMENT_ENV: "staging", MANAGED_WALLET_SECRET: secret, ...TEST_CIRCLE }).custody.mode).toBe("circle");
+    expect(assertDeploymentConsistency({ DEPLOYMENT_ENV: "dev", MANAGED_WALLET_SECRET: secret, DEV_WALLET_SECRET: "s" }).custody.mode).toBe("managed");
+    expect(() => assertDeploymentConsistency({ DEPLOYMENT_ENV: "prod", MANAGED_WALLET_SECRET: "short" })).toThrow(/at least 32/);
+  });
+
   it("refuses another environment's relayer key", () => {
     const dev = assertDeploymentConsistency({ DEPLOYMENT_ENV: "dev" });
     const prod = assertDeploymentConsistency({ DEPLOYMENT_ENV: "prod" });

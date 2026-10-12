@@ -68,7 +68,7 @@ export default defineSchema({
     walletAddress: v.optional(v.string()),
     circleWalletId: v.optional(v.string()),
     walletIdempotencyKey: v.optional(v.string()),
-    walletCustody: v.optional(v.union(v.literal("circle"), v.literal("local"))),
+    walletCustody: v.optional(v.union(v.literal("circle"), v.literal("managed"), v.literal("local"))),
     walletAttempts: v.optional(v.number()),
     walletNextAttemptAt: v.optional(v.number()),
     walletError: v.optional(v.string()),

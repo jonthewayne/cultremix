@@ -42,8 +42,12 @@ describe("ready to sell", () => {
     expect(detail(fresh, "confirming")).toMatch(/PRINTFUL_AUTO_CONFIRM=true/u);
     expect(detail(fresh, "registry")).toBe("Not deployed. Once the relayer has MON: bun run chain:deploy:mainnet");
     expect(detail(fresh, "wallets")).toBe(
-      "Put Circle's live API key in ~/.config/cultremix/circle.env as CIRCLE_API_KEY_LIVE, then run bun run circle:setup --env prod --apply. Until then, each Monad record waits for its creator's wallet.",
+      "Put Circle's live API key in ~/.config/cultremix/circle.env as CIRCLE_API_KEY_LIVE, then run bun run circle:setup --env prod --apply (or, as a stopgap, set MANAGED_WALLET_SECRET for CultRemix's own wallets). Until then, each Monad record waits for its creator's wallet.",
     );
+    // Managed wallets count as wallets, with a reminder about their secret.
+    const managed = { ...fresh, chain: { ...fresh.chain, custody: "managed" as const } };
+    expect(missing(managed)).not.toContain("wallets");
+    expect(detail(managed, "wallets")).toMatch(/MANAGED_WALLET_SECRET/u);
     // A Printful connection without a signing key isn't done.
     expect(detail({ ...ready, printful: { keys: true, connected: true, signingKey: false } }, "printful")).toMatch(/no signing key/u);
     expect(detail({ ...ready, confirming: { env: true, flag: false } }, "confirming")).toMatch(/Send paid orders to print is off/u);

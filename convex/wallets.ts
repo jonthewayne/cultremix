@@ -59,7 +59,7 @@ export const claimProvisioning = internalMutation({
 export const recordWallet = internalMutation({
   args: {
     userId: v.id("users"),
-    custody: v.union(v.literal("circle"), v.literal("local")),
+    custody: v.union(v.literal("circle"), v.literal("managed"), v.literal("local")),
     address: v.string(),
     circleWalletId: v.optional(v.string()),
   },

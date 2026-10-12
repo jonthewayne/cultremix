@@ -20,7 +20,7 @@ export type ReadinessInput = {
     problem: string | null;
     registry: string | null;
     relayerKey: boolean;
-    custody: "circle" | "local" | "unavailable";
+    custody: "circle" | "managed" | "local" | "unavailable";
     writes: boolean;
   };
 };
@@ -122,11 +122,13 @@ export function readinessItems(input: ReadinessInput): Array<ReadinessItem> {
     chain.custody !== "unavailable",
     chain.custody === "circle"
       ? "Circle wallets."
-      : chain.custody === "local"
-        ? "Dev's own wallets (no Circle keys); production uses Circle."
-        : input.env === "prod" || input.env === "dev"
-          ? `Put Circle's ${input.env === "prod" ? "live" : "test"} API key in ~/.config/cultremix/circle.env as ${input.env === "prod" ? "CIRCLE_API_KEY_LIVE" : "CIRCLE_API_KEY_TEST"}, then run bun run circle:setup --env ${input.env} --apply. Until then, each Monad record waits for its creator's wallet.`
-          : "Set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, and CIRCLE_WALLET_SET_ID in this deployment's Convex env.",
+      : chain.custody === "managed"
+        ? "CultRemix's managed wallets (MANAGED_WALLET_SECRET) until Circle is set up. Keep that secret set and backed up: it signs for every managed wallet."
+        : chain.custody === "local"
+          ? "Dev's own wallets (no Circle keys); production uses Circle."
+          : input.env === "prod" || input.env === "dev"
+            ? `Put Circle's ${input.env === "prod" ? "live" : "test"} API key in ~/.config/cultremix/circle.env as ${input.env === "prod" ? "CIRCLE_API_KEY_LIVE" : "CIRCLE_API_KEY_TEST"}, then run bun run circle:setup --env ${input.env} --apply (or, as a stopgap, set MANAGED_WALLET_SECRET for CultRemix's own wallets). Until then, each Monad record waits for its creator's wallet.`
+            : "Set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, and CIRCLE_WALLET_SET_ID in this deployment's Convex env.",
   );
   monad(
     "writes",

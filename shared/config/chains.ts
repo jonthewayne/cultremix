@@ -101,11 +101,17 @@ export class DeploymentConfigError extends Error {
   }
 }
 
-// How member wallets are held. "local" is the dev-only signer used when Circle keys are absent.
+// How new member wallets are held. "local" is the dev-only signer used when Circle keys are absent.
+// "managed" is CultRemix's own fallback until Circle is set up: each member's key is derived from
+// MANAGED_WALLET_SECRET, in any environment (convex/lib/chain/custody.ts).
 export type Custody =
   | { mode: "circle"; walletSetId: string }
+  | { mode: "managed" }
   | { mode: "local" }
   | { mode: "unavailable"; reason: string };
+
+// MANAGED_WALLET_SECRET is the root of every managed wallet's key, so it has to be long.
+export const MANAGED_SECRET_MIN_LENGTH = 32;
 
 export type ChainDeployment = {
   env: DeploymentEnv;
@@ -139,7 +145,9 @@ function sameAddress(a: string, b: string) {
  *   CHAIN_REGISTRY_ADDRESS  optional; dev only (a local or fresh dev registry). Elsewhere it may
  *                           only repeat the committed address.
  *   CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_SET_ID   all three, or none
- *   DEV_WALLET_SECRET       dev only, when the Circle keys are absent
+ *   MANAGED_WALLET_SECRET   any environment, when the Circle keys are absent (and kept once set:
+ *                           members' managed wallets keep signing after Circle takes over new ones)
+ *   DEV_WALLET_SECRET       dev only, when neither of the above is set
  */
 export function assertDeploymentConsistency(env: Env): ChainDeployment {
   const name = env.DEPLOYMENT_ENV;
@@ -205,6 +213,11 @@ export function assertDeploymentConsistency(env: Env): ChainDeployment {
     custody = { mode: "circle", walletSetId };
   } else if (circleCount > 0) {
     throw new DeploymentConfigError("Set all of CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, and CIRCLE_WALLET_SET_ID, or none.");
+  } else if (env.MANAGED_WALLET_SECRET?.trim()) {
+    if (env.MANAGED_WALLET_SECRET.trim().length < MANAGED_SECRET_MIN_LENGTH) {
+      throw new DeploymentConfigError(`MANAGED_WALLET_SECRET must be at least ${MANAGED_SECRET_MIN_LENGTH} characters (openssl rand -hex 32).`);
+    }
+    custody = { mode: "managed" };
   } else if (env.DEV_WALLET_SECRET?.trim()) {
     if (name !== "dev") {
       throw new DeploymentConfigError("DEV_WALLET_SECRET is allowed only in dev; staging and prod use Circle wallets.");
