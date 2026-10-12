@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { checkRateLimit } from "./lib/authRateLimit";
 import { generateSecureNumericCode } from "./lib/otp";
 import { normalizePhone } from "./lib/phone";
@@ -87,7 +87,9 @@ export const getPhoneAuthAttemptStatus = query({
   },
 });
 
-export const lookupAttemptByOtp = query({
+// Internal: given a code, it returns a pending attempt's phone number, so a public version would let
+// anyone guess codes for numbers. Nothing in the app calls it while phone sign-in is off.
+export const lookupAttemptByOtp = internalQuery({
   args: { otpCode: v.string() },
   returns: v.union(
     v.null(),

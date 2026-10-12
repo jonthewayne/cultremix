@@ -24,7 +24,6 @@ export const createEmailAuthAttempt = mutation({
     redirect: v.string(),
     source: v.optional(v.string()),
     inviteId: v.optional(v.id("invites")),
-    mergeTargetUserId: v.optional(v.id("users")),
   },
   returns: v.id("authVerificationAttempts"),
   handler: async (ctx, args) => {
@@ -44,7 +43,6 @@ export const createEmailAuthAttempt = mutation({
       status: "pending",
       expiresAtMs: Date.now() + ATTEMPT_TTL_MS,
       inviteId: args.inviteId,
-      mergeTargetUserId: args.mergeTargetUserId,
     });
   },
 });

@@ -46,6 +46,12 @@ agent workflow changes make the starter easier to use.
 - A big deploy can be rehearsed on real data without touching production: export it (`convex export --prod --include-file-storage`), import it into an anonymous local backend (`CONVEX_AGENT_MODE=anonymous convex dev < /dev/null`) at the old commit, then switch to the new commit and run every migration, with a local S3 server in place of R2. CultRemix's rehearsal found misread words that only production's older designs showed. The starter could ship this as a script.
 - Better Auth's Convex component stores its JWT signing key encrypted with `AUTH_SECRET`, so a deployment restored or copied under a different secret fails every token request with "Failed to decrypt private key" until the `jwks` table is emptied. Rotating `AUTH_SECRET` has the same effect; the starter's rotation docs should say so.
 
+### 2026-10-12
+
+- `phoneVerification.lookupAttemptByOtp` was a public query: given a code, it returned a pending phone attempt's number and redirect, though only server code needs it. Make it an `internalQuery` so nobody can guess codes for numbers once phone sign-in is on.
+- `authVerification.createEmailAuthAttempt` still accepted a `mergeTargetUserId` from the browser and stored it, though nothing read it after the merge flow left the starter. Drop the argument so later code can't trust a member ID the browser chose.
+- typescript-eslint's `no-unnecessary-type-assertion` flags `as Hex` on template strings and `as never` on viem's generic calls, and its automatic fix breaks typecheck there (a template string widens to `string`). Run typecheck after `eslint --fix`, and keep those assertions.
+
 ## Still Worth Improving
 
 - Consider a `--show-secrets=false` setup mode for teams that prefer external commands to be written to a secure local file instead of printed in the terminal.
