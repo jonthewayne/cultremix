@@ -48,6 +48,19 @@ assert_no_broken_images() {
   agent-browser eval "(() => { const broken = [...document.images].filter((i) => i.complete && i.naturalWidth === 0).map((i) => i.src); if (broken.length) throw new Error('Broken images: ' + broken.join(', ')); return true })()"
 }
 
+# Every public page ends with the store policies, /onchain, and the contact address.
+assert_footer() {
+  agent-browser eval "(() => { const footer = document.querySelector('footer')?.innerText ?? ''; const missing = ['Shipping', 'Returns', 'Privacy', 'Terms', 'On Monad', 'heyyo@cultremix.com'].filter((t) => !footer.includes(t)); if (missing.length) throw new Error('The footer is missing: ' + missing.join(', ')); return true })()"
+}
+
+# On a deployed site every image comes from R2. One still served from Convex storage
+# (<deployment>.convex.site/img/) means the deploy's data steps haven't moved it yet.
+assert_images_from_r2() {
+  if [[ "$BASE_URL" == https://* ]]; then
+    agent-browser eval "(() => { const old = [...document.images].map((i) => i.currentSrc || i.src).filter((src) => /\.convex\.(site|cloud)\//.test(src)); if (old.length) throw new Error('Images still load from Convex storage (run bun run deploy:migrate): ' + old.slice(0, 3).join(', ')); return true })()"
+  fi
+}
+
 # Security headers (src/start.ts) on a deployed site; a local dev server loads them when it starts.
 if [[ "$BASE_URL" == https://* ]]; then
   page_headers="$(curl -fsS -D - -o /dev/null "$BASE_URL/")"
@@ -64,6 +77,12 @@ assert_text "get paid."
 assert_text "Latest"
 assert_text "Trending"
 assert_no_broken_images
+assert_images_from_r2
+assert_footer
+# Production's header says Early access; Testnet there means DEPLOYMENT_ENV isn't prod.
+if [[ "$BASE_URL" == *cultremix.com* ]]; then
+  agent-browser eval "(() => { const header = (document.querySelector('header')?.innerText ?? '').toLowerCase(); if (!header.includes('early access') || header.includes('testnet')) throw new Error('The header should say Early access, never Testnet (is DEPLOYMENT_ENV prod?): ' + header); return true })()"
+fi
 agent-browser screenshot body .tmp/screenshots/home.png
 
 work_path=$(agent-browser eval "document.querySelector('main a[href^=\"/cr/\"]')?.getAttribute('href') ?? ''" | tr -d '"')
@@ -77,6 +96,8 @@ else
   assert_text "$cr"
   assert_text "SHA-256"
   assert_no_broken_images
+  assert_images_from_r2
+  assert_footer
   agent-browser screenshot body .tmp/screenshots/work.png
   # Its fingerprint (under the Fingerprint heading; the economics rules file has a SHA-256 too),
   # for /onchain's check below.
@@ -115,6 +136,7 @@ fi
 agent-browser open "$BASE_URL/onchain"
 agent-browser wait 1500
 assert_text "On Monad"
+[[ "$BASE_URL" == *cultremix.com* ]] && assert_text "Monad mainnet"
 agent-browser screenshot body .tmp/screenshots/onchain.png
 
 # Which design is this file? A work's fingerprint pasted in names that work.
@@ -144,6 +166,20 @@ for policy in shipping returns privacy terms; do
 done
 assert_text "Terms"
 agent-browser screenshot body .tmp/screenshots/policies-terms.png
+
+# Addresses that lead nowhere answer 404 with a way back.
+for missing in /cr/999-999 /u/nobody-here /family/999; do
+  status=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL$missing")
+  [[ "$status" == 404 ]] || { echo "$BASE_URL$missing answered $status, not 404"; exit 1; }
+done
+agent-browser open "$BASE_URL/cr/999-999"
+agent-browser wait 1000
+assert_text "Back to the feed"
+agent-browser screenshot body .tmp/screenshots/not-found.png
+
+# Nobody can make a password account; judges' accounts are provisioned (convex/lib/passwordAuth.ts).
+status=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$BASE_URL/api/auth/sign-up/email")
+[[ "$status" == 404 ]] || { echo "Password sign-up answered $status on $BASE_URL; it should be 404"; exit 1; }
 
 echo "E2E smoke complete for $BASE_URL"
 
