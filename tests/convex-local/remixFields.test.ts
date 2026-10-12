@@ -372,6 +372,45 @@ describe("remixing with the words", () => {
       changes: [{ label: "Tagline", from: "TAKE IT\nEASY", to: "STAY\nWEIRD" }],
     });
   });
+
+  // A published remix made from words in Anything else to change, without the boxes.
+  async function freeTextRemix(t: T, bob: Awaited<ReturnType<typeof setup>>["bob"], parent: { cr: string; artKey: string }, instruction: string) {
+    const remix = await remixSession(bob.as, parent.cr, parent.artKey);
+    const result = await bob.as.mutation(api.studio.generate, { ...remix, instruction, backgroundColor: "#ffffff" });
+    if ("refused" in result) throw new Error(result.refused);
+    const generationId = await t.run(async (ctx) => {
+      const tile = await ctx.db
+        .query("generations")
+        .withIndex("by_batch", (q) => q.eq("batchId", result.batchId))
+        .first();
+      await ctx.db.patch("generations", tile!._id, { status: "succeeded", fullKey: "cvx:freetextdesign" });
+      return tile!._id;
+    });
+    const { workId } = await bob.as.mutation(api.publish.quick, { requestId: `free-${instruction.length}`, generationId });
+    await t.mutation(internal.publish.markPublished, { workId, artKey: "cvx:freetextart", contentHash: "def" });
+    return workId;
+  }
+
+  it("gives a remix whose words were changed in Anything else to change the words its notes found", async () => {
+    const { t, bob, parent } = await setup();
+    const workId = await freeTextRemix(t, bob, parent, "change the words to hello there friend");
+    // Published, it starts from the parent's fields, as any remix does.
+    expect((await workDoc(t, workId))?.remixFields?.map((field) => field.text)).toEqual(["GROW SLOW", "EST. 1992", "TAKE IT\nEASY"]);
+    await writeNotes(t, workId, NOTES.replace("“GROW SLOW”", "“HELLO THERE”").replace("“EST. 1992”", "“FRIEND”").replace("“TAKE IT\nEASY”", "“SAY HI”"));
+    expect((await workDoc(t, workId))?.remixFields?.map((field) => field.text)).toEqual(["HELLO THERE", "FRIEND", "SAY HI"]);
+  });
+
+  it("keeps the parent's fields for a remix that changed something else and kept the words", async () => {
+    const { t, bob, parent } = await setup();
+    const workId = await freeTextRemix(t, bob, parent, "make the mushroom a cactus");
+    // Its notes split the tagline differently and misread the date; most of its words are still there.
+    await writeNotes(t, workId, NOTES.replace("“EST. 1992”", "“EST. 1997”").replace("“TAKE IT\nEASY”", "“TAKE IT EASY”"));
+    expect((await workDoc(t, workId))?.remixFields).toEqual([
+      { id: "t1", kind: "text", label: "Headline", text: "GROW SLOW", maxLength: 80, on: true },
+      { id: "t2", kind: "text", label: "Date", text: "EST. 1992", maxLength: 80, on: true },
+      { id: "t3", kind: "text", label: "Tagline", text: "TAKE IT\nEASY", maxLength: 80, on: true },
+    ]);
+  });
 });
 
 describe("backfill", () => {

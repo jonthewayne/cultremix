@@ -289,11 +289,14 @@ export const workNotesJob = internalQuery({
       hasNotes: v.boolean(),
       // The creator's own notes for the same file, when they already wrote them in the studio.
       copy: v.optional(v.object({ model: v.string(), summary: v.optional(v.string()), kind: notesKind, notes: v.string() })),
+      // What the design was made from, to help read its lettering (lib/notesWriter.ts requestHint).
+      request: v.optional(v.string()),
     }),
   ),
   handler: async (ctx, args) => {
     const work = await ctx.db.get("works", args.workId);
     if (!work?.artKey || work.status !== "published") return null;
+    const request = await workRequest(ctx, work);
     const artKey = work.artKey;
     const own = await ctx.db
       .query("userImages")
@@ -302,9 +305,21 @@ export const workNotesJob = internalQuery({
     const copy = own?.analysis === "ready" && own.notes
       ? { model: own.analysisModel ?? "unknown", summary: own.summary, kind: own.kind, notes: own.notes }
       : undefined;
-    return { artKey, hasNotes: Boolean(work.notes), copy };
+    return { artKey, hasNotes: Boolean(work.notes), copy, request };
   },
 });
+
+// The request that made a work's art: the batch's words, and a words remix's changes.
+async function workRequest(ctx: QueryCtx, work: Doc<"works">) {
+  const generation = await ctx.db.get("generations", work.generationId);
+  const batch = generation ? await ctx.db.get("batches", generation.batchId) : null;
+  if (!batch) return undefined;
+  const changes = (batch.wordChanges ?? [])
+    .filter((change) => change.to.trim())
+    .map((change) => `"${change.from}" to "${change.to}"`);
+  const parts = [batch.instruction.trim(), changes.length ? `Change the words: ${changes.join(", ")}` : ""].filter(Boolean);
+  return parts.length ? parts.join(". ") : undefined;
+}
 
 export const saveWorkNotes = internalMutation({
   args: { workId: v.id("works"), model: v.string(), summary: v.optional(v.string()), kind: notesKind, notes: v.string() },

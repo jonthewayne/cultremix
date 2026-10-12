@@ -39,8 +39,21 @@ export function onGray(bytes: Uint8Array) {
   }
 }
 
-// One image's notes, tried twice.
-export async function writeNotes(original: Uint8Array, model: string = VISION_MODEL) {
+// What a design's maker asked for, when it's known (a published design's request), as a reading
+// aid. Heavy script lettering gets misread without it: production's "Sugar Baby Boo" came back
+// "Sweet Baby Boo", and "Can you Handle the Randall?" came back "Enjoy Handle the Panda!".
+export function requestHint(request: string | undefined) {
+  const text = request?.replace(/\s+/gu, " ").trim().slice(0, 600);
+  if (!text) return "";
+  return (
+    "\n\nThe person who made this design asked for: «" +
+    text +
+    "». Lettering, especially heavy script, can be hard to read. Where the request names the words, use it to tell which words the lettering spells, and write them as the design shows them, with its own capitals, line breaks, and punctuation. Read each row in order and keep every word in it, short ones squeezed between bigger letters too. List only words the design shows; leave out any the request asks for that it doesn't."
+  );
+}
+
+// One image's notes, tried twice. request: what the design was made from (see requestHint).
+export async function writeNotes(original: Uint8Array, model: string = VISION_MODEL, request?: string) {
   let lastError = "Style capture failed.";
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -56,7 +69,7 @@ export async function writeNotes(original: Uint8Array, model: string = VISION_MO
             role: "user",
             content: [
               { type: "file", data: bytes, mediaType: mimeOf(bytes) },
-              { type: "text", text: ask },
+              { type: "text", text: ask + requestHint(request) },
             ],
           },
         ],

@@ -8,6 +8,7 @@ import {
   MAX_LABEL_LENGTH,
   checkWordChanges,
   fieldLimit,
+  fieldsFoundInNotes,
   inheritRemixFields,
   proposeRemixFields,
   wordChangeInstruction,
@@ -68,11 +69,24 @@ export async function inheritOnPublish(ctx: MutationCtx, workId: Id<"works">) {
 }
 
 // When the notes are written (images.saveWorkNotes): fields proposed from their words, unless the
-// work already has fields (a remix carrying its parent's).
+// work already has fields (a remix carrying its parent's). A remix that also said what to change in
+// words of its own (Anything else to change) may have changed its words there instead of in the
+// boxes ("Change the words to can you handle the Randall?"), so its inherited fields are checked
+// against the notes, and when fewer than half of their words are in the design, its fields come
+// from its own notes. A remix made with the boxes alone keeps them, whatever a reader makes of
+// its lettering.
 export async function proposeOnNotes(ctx: MutationCtx, workId: Id<"works">, notes: string) {
   const work = await ctx.db.get("works", workId);
-  if (!work || work.remixFields) return;
-  await ctx.db.patch("works", work._id, { remixFields: proposeRemixFields(notes) });
+  if (!work) return;
+  const proposed = proposeRemixFields(notes);
+  if (!work.remixFields) {
+    await ctx.db.patch("works", work._id, { remixFields: proposed });
+    return;
+  }
+  if (!work.parentWorkId) return;
+  const batch = await sourceBatch(ctx, work);
+  if (!batch?.instruction.trim() || fieldsFoundInNotes(work.remixFields, proposed)) return;
+  await ctx.db.patch("works", work._id, { remixFields: proposed });
 }
 
 const PROBLEMS: Record<WordChangeProblem, string> = {

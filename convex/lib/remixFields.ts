@@ -224,6 +224,19 @@ export function proposeRemixFields(notes: string | undefined): Array<RemixField>
     });
 }
 
+// Whether a remix's inherited fields are still its words: at least half of the fields' words (by
+// letters, in any spacing or line breaks) are among the words its notes found. Fields with no
+// letters count as found when the notes found no words either.
+export function fieldsFoundInNotes(
+  fields: ReadonlyArray<Pick<RemixField, "text">>,
+  found: ReadonlyArray<Pick<RemixField, "text">>,
+) {
+  const seen = found.map((field) => letterKey(field.text)).join("");
+  const keys = fields.map((field) => letterKey(field.text)).filter((key) => key.length > 0);
+  if (keys.length === 0) return seen.length === 0;
+  return keys.filter((key) => seen.includes(key)).length * 2 >= keys.length;
+}
+
 // A remix's own fields: the parent's, same ids, labels, and switches, with the new text. A piece
 // the remix removed isn't one of its fields.
 export function inheritRemixFields(parent: Array<RemixField>, changes: Array<{ fieldId: string; to: string }>) {

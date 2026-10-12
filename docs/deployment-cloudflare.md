@@ -35,7 +35,19 @@ If something breaks after step 3, fix it forward with another deploy. Rolling ba
 1. With the new functions still deployed, run `bunx convex import --prod --replace-all -y <the backup zip>`. From 8bc367d (production since September 30) to the October deploy, the schema only gained tables, optional fields, and indexes, so the old data fits the new schema. For a later deploy, check the same with `git diff <old commit> -- convex/schema.ts convex/schema/`.
 2. From a checkout of the old commit, run `bunx convex deploy -y && bun run deploy:prod`.
 
-The import hasn't been rehearsed against a copy of production, so go through it with the Builder before running it.
+Importing production's export into a fresh deployment worked in the October 11 rehearsal below (393 records and 118 files, the auth and email components included). Restoring over production itself hasn't been tried, so go through it with the Builder first. A restore keeps production's `AUTH_SECRET` (env vars aren't in the export), so sign-in keeps working.
+
+## Rehearsing a big deploy
+
+Before the October deploy, the whole Ops sequence ran on a copy of production without touching it. Every step passed; the Ops message carries the numbers.
+
+1. Export production, read-only: `bunx convex export --prod --include-file-storage --path <zip>`. It holds members' emails, so keep it private and delete it afterwards.
+2. In a worktree at production's commit, start a local backend with `CONVEX_AGENT_MODE=anonymous bunx convex dev < /dev/null` (without the redirect it waits at a first-run question). Give it production's env names with safe values: no Resend key, `AUTH_EMAIL_PROVIDER=console` (sign-in codes go to its log), and a fresh `AUTH_SECRET`. Then `bunx convex import --replace-all -y <zip>`.
+3. For R2, run a local S3 server (`s3rver` on 127.0.0.1; the SDK switches to path-style addresses for an IP endpoint) and point the copy's `R2_*` values at it. Never use dev's bucket: work keys like `works/101/001/` exist in both, and step 7's cleanup deletes everything outside `members/` and `works/` in whatever bucket it's given.
+4. Check out the new commit, run `bun install`, and let the watcher push it: that's the deploy. Build the Worker with `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` exported for the local backend, and serve it with `wrangler dev --var VITE_CONVEX_URL:... --var VITE_CONVEX_SITE_URL:... --var SITE_URL:...`, because the built config's own vars point at dev.
+5. Run the message's seeds and backfills and its cleanup, the e2e smoke from the worktree (`BASE_URL=http://127.0.0.1:<port> bash tests/e2e/run-e2e.sh`), and sign in to look at the studio and Admin.
+
+Signing in on the copy needs one more step. Production's auth signing key (the `betterAuth` component's `jwks` table) is encrypted with production's `AUTH_SECRET`, so under a fresh secret every token request fails with "Failed to decrypt private key" until that table is emptied: `bunx convex import --component betterAuth --table jwks --replace -y --format jsonArray <a file holding []>`. Production would fail the same way if its `AUTH_SECRET` ever changed.
 
 ## Security Headers
 
