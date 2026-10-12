@@ -187,6 +187,7 @@ function ShopPage() {
                     kind={comesOn[0].kind}
                     placement={comesOn[0].placement}
                     printArea={comesOn[0].printArea}
+                    markArea={comesOn[0].markArea}
                     hex={color.hex}
                     artUrl={item.artMediumUrl ?? item.artUrl}
                   />

@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import * as m from "motion/react-m";
 import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
-import { GarmentPreview, useImageAspect } from "./GarmentPreview";
+import { ChestMarkPreview, GarmentPreview, useImageAspect } from "./GarmentPreview";
 import { PrintChoices, areaOn, placementOn } from "./PrintChoices";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { RelativePlacement } from "~/lib/print/shirtPlacement";
@@ -48,7 +48,12 @@ function EditorDialog({
   workId: Id<"works">;
   artUrl?: string;
   colors: Array<{ key: string; name: string; hex: string }>;
-  setup: { printPlacement: RelativePlacement; printProducts: Array<{ productId: number; placement?: RelativePlacement }>; onSale: boolean };
+  setup: {
+    printPlacement: RelativePlacement;
+    printProducts: Array<{ productId: number; placement?: RelativePlacement }>;
+    onSale: boolean;
+    chestMarks: boolean;
+  };
   onClose: () => void;
 }) {
   const offered = useQuery(convexQuery(api.merch.offered, {})).data;
@@ -139,6 +144,12 @@ function EditorDialog({
               className="max-h-[70svh]"
             />
           )}
+          {focused && placement.side === "back" && placement.mark !== undefined && (
+            <div className="absolute right-3 top-3 flex w-[28%] flex-col items-center rounded-xl bg-white/80 p-1 shadow-sm">
+              <ChestMarkPreview kind={focused.kind} hex={lead.hex} imageUrl={artUrl} aspect={aspect} markIn={placement.mark} area={focused.front} />
+              <span className="text-xs font-bold">Front</span>
+            </div>
+          )}
           <span className="absolute bottom-3 left-4 text-sm font-bold">
             {lead.name}
             {focused ? ` · ${keepHyphens(focused.name)}` : ""}
@@ -168,6 +179,7 @@ function EditorDialog({
               colorKeys={colors.filter((color) => color.key !== "custom").map((color) => color.key)}
               aspect={aspect}
               disabled={saving}
+              chestMarks={setup.chestMarks}
               preview={
                 <GarmentPreview
                   kind={focused.kind}

@@ -314,6 +314,51 @@ describe("approving a work for sale", () => {
     const tee = (await rows(t, workId)).find((row) => row.productKey === "printful-586");
     expect(tee?.printFile).toBeUndefined();
   });
+
+  it("gives a back print's chest mark its own file on the front, and lists it once both are made", async () => {
+    const { t, admin, workId } = await shop();
+    const markOn = (mark: number) =>
+      t.run((ctx) =>
+        ctx.db.patch("works", workId, { printProducts: [{ productId: 586 }, { productId: 146, placement: { side: "back", size: 0.9, drop: 0.05, mark } }] }),
+      );
+    await markOn(3);
+    await admin.mutation(api.sales.approve, { workId });
+    const hoodieId = (await rows(t, workId)).find((row) => row.productKey === "printful-146")!._id;
+    const hoodie = async () => (await rows(t, workId)).find((row) => row._id === hoodieId)!;
+    // The mark goes on the hoodie's front print area (its kind's 14 x 14 in), at the back print's price.
+    expect((await hoodie()).listing).toMatchObject({
+      placement: { side: "back", size: 0.9, drop: 0.05, mark: 3 },
+      printArea: { widthIn: 12, heightIn: 16 },
+      markArea: { widthIn: 14, heightIn: 14 },
+      priceCents: 6000,
+    });
+    const [first] = await versions(t, workId);
+    await t.mutation(internal.print.recordVersion, { versionId: first._id, key: "fake:art.png", width: 3000, height: 3000, metrics: METRICS });
+    await t.mutation(internal.sales.advance, { workId });
+    const job = await t.query(internal.sales.renderJob, { workId, versionId: first._id, listingIds: (await rows(t, workId)).map((row) => row._id) });
+    expect(job?.listings.map((listing) => listing.markArea)).toEqual([undefined, { widthIn: 14, heightIn: 14 }]);
+
+    // Its print file alone isn't enough to list it.
+    await t.mutation(internal.sales.recordListingFile, { listingId: hoodieId, file: FILE(first._id, "works/101/001/print-" + "e".repeat(26) + "/print.png") });
+    expect((await hoodie()).status).toBe("preparing");
+    await t.mutation(internal.sales.recordListingFile, {
+      listingId: hoodieId,
+      file: FILE(first._id, "works/101/001/print-" + "f".repeat(26) + "/print.png"),
+      markFile: FILE(first._id, "works/101/001/print-" + "g".repeat(26) + "/print.png"),
+    });
+    expect(await hoodie()).toMatchObject({ status: "pending", markFile: { key: "works/101/001/print-" + "g".repeat(26) + "/print.png" } });
+    const listed = (await admin.query(api.sales.list, {})).page[0].listings.find((listing) => listing.productKey === "printful-146");
+    expect(listed?.markFile).toMatchObject({ widthIn: 7.15, dpi: 573 });
+
+    // Approved again unchanged, both files stay; a bigger mark makes both again.
+    expect((await admin.mutation(api.sales.approve, { workId })).products.map((p) => p.status)).toEqual(["preparing", "pending"]);
+    await markOn(4);
+    await admin.mutation(api.sales.approve, { workId });
+    const remade = await hoodie();
+    expect(remade.status).toBe("preparing");
+    expect(remade.printFile).toBeUndefined();
+    expect(remade.markFile).toBeUndefined();
+  });
 });
 
 describe("changing what it comes on and where it sits after publishing", () => {
@@ -328,6 +373,7 @@ describe("changing what it comes on and where it sits after publishing", () => {
       printPlacement: { side: "front", size: 0.65, drop: 0.1 },
       printProducts: [{ productId: 586 }, { productId: 146, placement: { side: "back", size: 0.9, drop: 0.05 } }],
       onSale: false,
+      chestMarks: false,
     });
     expect(await t.withIdentity(someone).query(api.publish.printSetup, { workId })).toBeNull();
     await expect(
@@ -348,6 +394,42 @@ describe("changing what it comes on and where it sits after publishing", () => {
     await expect(
       t.withIdentity(CREATOR).mutation(api.publish.setPrintSetup, { workId, printPlacement: { side: "front", size: 0.4, drop: 0 }, printProducts: [{ productId: 999 }] }),
     ).rejects.toThrow(/at least one product/u);
+  });
+
+  it("adds a chest mark only while the Chest marks switch is on, and keeps one already chosen", async () => {
+    const { t, workId, creator } = await shop();
+    const CREATOR = { subject: "test|creator", issuer: "test" };
+    await t.run((ctx) => ctx.db.patch("users", creator, { authId: CREATOR.subject, username: "maker", usernameLower: "maker" }));
+    const me = t.withIdentity(CREATOR);
+    const save = (mark: number) =>
+      me.mutation(api.publish.setPrintSetup, {
+        workId,
+        printPlacement: { side: "front", size: 0.65, drop: 0.1 },
+        printProducts: [{ productId: 586 }, { productId: 146, placement: { side: "back", size: 0.9, drop: 0.05, mark } }],
+      });
+    const hoodieMark = async () => (await t.run((ctx) => ctx.db.get("works", workId)))!.printProducts!.find((pick) => pick.productId === 146)!.placement!.mark;
+
+    // Off (as it starts): no mark is added.
+    await save(3);
+    expect(await hoodieMark()).toBeUndefined();
+    await setFlag(t, "print.chestMarks", true);
+    expect((await me.query(api.publish.printSetup, { workId }))?.chestMarks).toBe(true);
+    await save(3);
+    expect(await hoodieMark()).toBe(3);
+    // Off again: the mark it has stays when saved as it is, but can't change.
+    await setFlag(t, "print.chestMarks", false);
+    await save(3);
+    expect(await hoodieMark()).toBe(3);
+    await save(4);
+    expect(await hoodieMark()).toBeUndefined();
+    // A front print never keeps one.
+    await setFlag(t, "print.chestMarks", true);
+    await me.mutation(api.publish.setPrintSetup, {
+      workId,
+      printPlacement: { side: "front", size: 0.65, drop: 0.1, mark: 3 },
+      printProducts: [{ productId: 586 }],
+    });
+    expect((await t.run((ctx) => ctx.db.get("works", workId)))!.printPlacement).toEqual({ side: "front", size: 0.65, drop: 0.1 });
   });
 });
 
@@ -811,4 +893,3 @@ describe("Shopify product sync", () => {
     expect(await t.mutation(internal.shopify.retryDueProducts, {})).toBe(1);
   });
 });
-

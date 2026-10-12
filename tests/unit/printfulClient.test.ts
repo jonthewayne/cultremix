@@ -67,6 +67,25 @@ describe("buildOrderRequest", () => {
       ],
     });
   });
+
+  it("sends a back print's chest mark as a second file, on the front", () => {
+    const request = buildOrderRequest({
+      shopifyOrderId: "5551234",
+      recipient,
+      lines: [
+        { lineItemId: "11", catalogVariantId: 4012, quantity: 1, printUrl: "https://f.test/back.png", placement: "back", markUrl: "https://f.test/mark.png" },
+        // A front print never carries one.
+        { lineItemId: "12", catalogVariantId: 4013, quantity: 1, printUrl: "https://f.test/front.png", placement: "front", markUrl: "https://f.test/x.png" },
+      ],
+    });
+    expect(request.order_items.map((item) => item.placements)).toEqual([
+      [
+        { placement: "back", technique: "dtg", layers: [{ type: "file", url: "https://f.test/back.png" }] },
+        { placement: "front", technique: "dtg", layers: [{ type: "file", url: "https://f.test/mark.png" }] },
+      ],
+      [{ placement: "front", technique: "dtg", layers: [{ type: "file", url: "https://f.test/front.png" }] }],
+    ]);
+  });
 });
 
 describe("createPrintful", () => {

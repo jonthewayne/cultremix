@@ -10,7 +10,7 @@ import {
   garmentColor,
   visibilityOn,
 } from "../../../convex/lib/garments";
-import { GarmentPreview, useImageAspect } from "./GarmentPreview";
+import { ChestMarkPreview, GarmentPreview, useImageAspect } from "./GarmentPreview";
 import { PrintChoices, areaOn, placementOn } from "./PrintChoices";
 import type { Palette, Visibility } from "../../../convex/lib/garments";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -353,6 +353,19 @@ export function PublishDialog({
               area={areaOn(focusedProduct, previewPlacement.side)}
               className="max-h-[70svh]"
             />
+            {previewPlacement.side === "back" && previewPlacement.mark !== undefined && (
+              <div className="absolute right-3 top-3 flex w-[28%] flex-col items-center rounded-xl bg-white/80 p-1 shadow-sm">
+                <ChestMarkPreview
+                  kind={focusedProduct.kind}
+                  hex={shown.hex}
+                  imageUrl={tile.mediumUrl ?? tile.url}
+                  aspect={aspect}
+                  markIn={previewPlacement.mark}
+                  area={focusedProduct.front}
+                />
+                <span className="text-xs font-bold text-black">Front</span>
+              </div>
+            )}
             <span className="absolute bottom-3 left-4 text-sm font-bold text-black">
               {shown.name} · {keepHyphens(focusedProduct.name)}
               {previewPlacement.side === "back" ? " · back" : ""}
@@ -580,6 +593,7 @@ export function PublishDialog({
               colorKeys={selected}
               aspect={aspect}
               disabled={saving}
+              chestMarks={preview?.chestMarks ?? false}
               preview={
                 <GarmentPreview
                   kind={focusedProduct.kind}

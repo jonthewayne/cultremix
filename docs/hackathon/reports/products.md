@@ -67,5 +67,17 @@ The model photo follows the first product the work comes on: the garment ("pullo
 ## Open
 
 - Confirm each product's print areas and placement names with Printful's print-file endpoint, and confirm with one draft order that a whole-area file without a position prints as placed. Both need a Printful token.
-- A small second design on the front of a back print (a chest mark) is left for later.
 
+## Chest marks (October 12)
+
+A back print can carry a chest mark: the same design, small, on the front over the wearer's left chest, the way back-printed hoodies often have one. It's behind the **Chest marks** switch in Admin, which starts off.
+
+- **Choosing it:** with Back picked in Publish or in "Change what it comes on and where it sits", the creator ticks "Add a small one on the front" and picks Small (3 in) or Medium (4 in). A small drawing of the front shows it in the corner of the preview, and the work page draws it beside the back ("with a 3-inch one on the front chest").
+- **Stored:** as `mark` on the placement, its width in inches (2 to 5), only on a back print (`clampRelative`). A chest mark is a fixed size rather than a share of the print area, so it's the same on every product. Moving the print to the front, or onto a product with no back, drops it.
+- **Where it sits:** `markPlacement` in `src/lib/print/shirtPlacement.ts`: centered a quarter of the front print area's width right of center as you face the shirt, 2 in below the area's top, never across the center or past the 0.5 in edge, and at most 4.5 in tall. On a tee's 12 x 16 in front, a square 3-inch mark spans 7.5 to 10.5 in across.
+- **Print files:** approving a work makes the mark's own file with the back's (`renderListings`): the art on the product's whole front print area at 300 DPI, with every print check except the 2% ink minimum, which a chest mark is too small to meet. A listing goes to Shopify only once both files exist (`filesReady`), and a new mark size or front print area makes both again.
+- **Orders:** each order line sends the back file on `back` and the mark on `front`. The fingerprint check before an order (INV-10) covers both, and a changed file makes both again. An order whose mark file isn't made yet waits, saying so.
+- **Price:** unchanged. A back print already adds Printful's back-print extra, which covers printing both sides under either reading of Printful's pricing (one placement included, whichever it is, or the front included and the back always extra).
+- **The switch:** while it's off, Publish and the editor show no mark choice, and the server adds no new mark; a design that has one keeps it when saved as it is.
+
+Not yet: a different design as the mark (Jon was asked October 12), and checking the mark's spot against a real Printful sample.

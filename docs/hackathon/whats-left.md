@@ -70,7 +70,7 @@ As of October 12, 2026, 10:55 a.m. Pacific. The Monad submission is due **Tuesda
 
 **The V1 plan, checked October 11.** Its requirements (R1–R44) against the build: everything is built except the per-member ChatGPT connection (R30–R32), which the September 29 sprint plan deferred and no later plan picked up, so every design is made through the CultRemix Gateway, and the Print Studio's "AI touch-up by instruction" (R8), which the studio's **Start from this** covers before publishing (a touch-up after publishing would print something other than the published, fingerprinted design). R8's background removal was missing too (an earlier version of this note said otherwise) and was built October 11, along with the invariants INV-10 (Printful gets the approved file) and INV-23 (disputes). R44's "staging link on testnet" became production on mainnet with the October 7 decision; dev stays the testnet rehearsal.
 
-**After judging:** more products, a Printify price comparison, a small second design on the front of a back print, and a registry admin key separate from the relayer's.
+**After judging:** more products, a Printify price comparison, and a registry admin key separate from the relayer's. A small second design on the front of a back print, a chest mark, was built October 12 behind the **Chest marks** switch, which starts off ([products.md](reports/products.md#chest-marks-october-12)).
 
 ## The last two days
 

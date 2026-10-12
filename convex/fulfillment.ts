@@ -20,6 +20,7 @@ import { checkPrintFiles } from "./lib/printFingerprint";
 import { advancePrep } from "./sales";
 import { autoConfirmAllowedByEnv, autoConfirmFlagAllows } from "./lib/shopFlags";
 import { catalogColorByCode } from "./lib/shopColors";
+import { hasMark } from "./lib/shopProduct";
 import { crNumber } from "./lib/shopify/productSync";
 import { syncOrderEarnings } from "./earnings";
 import { PAYLOAD_TTL_MS } from "./orders";
@@ -144,8 +145,18 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
     if (catalogVariantId === null) {
       return { ok: false, state: "needs_attention", reason: `${cr} ${variant.color} ${variant.size} has no Printful variant yet.` };
     }
-    lines.push({ lineItemId: item.shopifyLineItemId, catalogVariantId, quantity, printUrl: url, placement });
+    // A back print's chest mark goes on the front from its own file, checked like the main one.
     files.push({ url, sha256: printSha256, label: cr });
+    let markUrl: string | undefined;
+    if (listing?.listing && hasMark(listing.listing)) {
+      const markFile = listing.markFile;
+      markUrl = publicUrl(markFile?.key);
+      if (!markFile || !markUrl || !/^https?:\/\//u.test(markUrl)) {
+        return { ok: false, state: "needs_attention", reason: `${cr}'s chest mark file isn't ready yet. The order goes to Printful once it is.` };
+      }
+      files.push({ url: markUrl, sha256: markFile.sha256, label: `${cr}'s chest mark` });
+    }
+    lines.push({ lineItemId: item.shopifyLineItemId, catalogVariantId, quantity, printUrl: url, placement, ...(markUrl ? { markUrl } : {}) });
   }
   if (lines.length === 0) return { ok: false, state: "canceled" };
   const r = order.recipient;
@@ -562,9 +573,12 @@ export const printFileChanged = internalMutation({
       const variant = item.variantId ? await ctx.db.get("workVariants", item.variantId) : null;
       const listing = variant?.listingId ? await ctx.db.get("shopProducts", variant.listingId) : null;
       const url = publicUrl(listing?.printFile?.key);
-      if (!listing || !url || !args.urls.includes(url)) continue;
+      const markUrl = publicUrl(listing?.markFile?.key);
+      if (!listing || !((url && args.urls.includes(url)) || (markUrl && args.urls.includes(markUrl)))) continue;
+      // Both files are made again together.
       await ctx.db.patch("shopProducts", listing._id, {
         printFile: undefined,
+        markFile: undefined,
         renderStartedAt: undefined,
         prepError: undefined,
         ...(listing.status === "paused" ? {} : { status: "preparing" as const }),

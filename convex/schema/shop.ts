@@ -63,6 +63,8 @@ export const listingValidator = v.object({
   placement: relativePlacementValidator,
   // The print area on the placement's side, in inches.
   printArea: printAreaValidator,
+  // The front print area, when the placement has a chest mark: its own print file goes there.
+  markArea: v.optional(printAreaValidator),
   // S-XL and 2XL, a back print's extra included.
   priceCents: v.number(),
   largePriceCents: v.number(),
@@ -119,6 +121,8 @@ export const shopTables = {
     // Why the print file couldn't be made, while preparing.
     prepError: v.optional(v.string()),
     printFile: v.optional(listingFileValidator),
+    // The chest mark's print file on the front, when the listing has one; made with printFile.
+    markFile: v.optional(listingFileValidator),
     // Set while its print file is being made.
     renderStartedAt: v.optional(v.number()),
     shopifyProductId: v.optional(v.string()),

@@ -10,7 +10,7 @@ import { printfulConfigFromEnv } from "./lib/printful/client";
 import { topazWorstCaseCents } from "./lib/pricing";
 import { publicUrl } from "./lib/r2";
 import { commerceOpen, simulatesTestOrders } from "./lib/shopFlags";
-import { chosenProducts, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
+import { chosenProducts, filesReady, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
 import { crNumber, keptHandle, productHandle } from "./lib/shopify/productSync";
 import { MAX_VERSIONS, UPSCALE_MAX_SIDE } from "./print";
@@ -56,6 +56,11 @@ function sameArea(a: { widthIn: number; heightIn: number }, b: { widthIn: number
   return Math.abs(a.widthIn - b.widthIn) < 0.001 && Math.abs(a.heightIn - b.heightIn) < 0.001;
 }
 
+// The chest mark's print area on two listings: both none, or the same size.
+function sameMarkArea(a: { widthIn: number; heightIn: number } | undefined, b: { widthIn: number; heightIn: number } | undefined) {
+  return a === undefined || b === undefined ? a === b : sameArea(a, b);
+}
+
 async function prepFailed(ctx: MutationCtx, rows: Array<Row>, message: string) {
   const now = Date.now();
   for (const row of rows) {
@@ -63,7 +68,7 @@ async function prepFailed(ctx: MutationCtx, rows: Array<Row>, message: string) {
   }
 }
 
-// A row whose print file exists goes on to Shopify.
+// A row whose print files exist (and its chest mark's, when it has one) goes on to Shopify.
 async function toShop(ctx: MutationCtx, row: Row) {
   const now = Date.now();
   await ctx.db.patch("shopProducts", row._id, {
@@ -87,7 +92,7 @@ export async function advancePrep(ctx: MutationCtx, workId: Id<"works">) {
   if (!work || !sellable(work)) return await prepFailed(ctx, rows, "Only published and kept designs can go on sale.");
   const waiting: Array<Row> = [];
   for (const row of rows) {
-    if (row.printFile) await toShop(ctx, row);
+    if (filesReady(row)) await toShop(ctx, row);
     else if (!row.prepError) waiting.push(row);
   }
   if (waiting.length === 0) return;
@@ -201,7 +206,7 @@ export const advance = internalMutation({
 
 const metricsValidator = v.object({ hasAlpha: v.boolean(), solid: v.number(), visible: v.number(), haze: v.number() });
 
-// For printTools.renderListings: the art and each listing still waiting for its print file.
+// For printTools.renderListings: the art and each listing still waiting for its print files.
 export const renderJob = internalQuery({
   args: { workId: v.id("works"), versionId: v.id("printVersions"), listingIds: v.array(v.id("shopProducts")) },
   returns: v.union(
@@ -218,6 +223,8 @@ export const renderJob = internalQuery({
           productKey: v.string(),
           placement: relativePlacementValidator,
           printArea: printAreaValidator,
+          // The front print area, when the listing prints a chest mark there too.
+          markArea: v.optional(printAreaValidator),
           // Where the creator placed it in the Print Studio, in inches, when that was on this
           // product's front; it wins over the publish placement for this product.
           studio: v.optional(v.object({ xIn: v.number(), yIn: v.number(), widthIn: v.number() })),
@@ -238,7 +245,7 @@ export const renderJob = internalQuery({
     const listings = [];
     for (const listingId of args.listingIds) {
       const row = await ctx.db.get("shopProducts", listingId);
-      if (!row || row.workId !== work._id || row.status !== "preparing" || row.printFile || !row.listing) continue;
+      if (!row || row.workId !== work._id || row.status !== "preparing" || filesReady(row) || !row.listing) continue;
       const placedHere =
         studio &&
         target &&
@@ -250,6 +257,7 @@ export const renderJob = internalQuery({
         productKey: row.listing.productKey,
         placement: row.listing.placement,
         printArea: row.listing.printArea,
+        ...(row.listing.markArea && row.listing.placement.mark !== undefined ? { markArea: row.listing.markArea } : {}),
         ...(placedHere ? { studio: { xIn: studio.xIn, yIn: studio.yIn, widthIn: studio.widthIn } } : {}),
       });
     }
@@ -264,12 +272,18 @@ export const renderJob = internalQuery({
 });
 
 export const recordListingFile = internalMutation({
-  args: { listingId: v.id("shopProducts"), file: listingFileValidator },
+  // markFile: the chest mark's file, made in the same run when the listing has one.
+  args: { listingId: v.id("shopProducts"), file: listingFileValidator, markFile: v.optional(listingFileValidator) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await ctx.db.get("shopProducts", args.listingId);
-    if (!row || row.status !== "preparing" || row.printFile) return null;
-    await ctx.db.patch("shopProducts", row._id, { printFile: args.file, renderStartedAt: undefined, updatedAt: Date.now() });
+    if (!row || row.status !== "preparing" || filesReady(row)) return null;
+    await ctx.db.patch("shopProducts", row._id, {
+      printFile: args.file,
+      ...(args.markFile ? { markFile: args.markFile } : {}),
+      renderStartedAt: undefined,
+      updatedAt: Date.now(),
+    });
     await advancePrep(ctx, row.workId);
     return null;
   },
@@ -340,13 +354,15 @@ export const approve = mutation({
         continue;
       }
       const existing = rows.find((row) => row.productKey === product.key);
-      // A print file made for the same placement and print area is kept.
+      // Print files made for the same placement and print areas are kept.
       const sameFile = Boolean(
-        existing?.printFile &&
+        existing &&
+          filesReady(existing) &&
           existing.listing &&
           sameRelative(existing.listing.placement, listing.placement) &&
           sameArea(existing.listing.printArea, listing.printArea) &&
-          !(studio && studioKey === product.key && studio.updatedAt > existing.printFile.madeAt),
+          sameMarkArea(existing.listing.markArea, listing.markArea) &&
+          !(studio && studioKey === product.key && existing.printFile && studio.updatedAt > existing.printFile.madeAt),
       );
       // A live product stays on sale while it syncs again.
       const status: Row["status"] = !sameFile ? "preparing" : existing?.status === "live" ? "live" : "pending";
@@ -367,7 +383,7 @@ export const approve = mutation({
           prepError: undefined,
           renderStartedAt: undefined,
           lastError: undefined,
-          ...(sameFile ? {} : { printFile: undefined, nextAttemptAt: undefined }),
+          ...(sameFile ? {} : { printFile: undefined, markFile: undefined, nextAttemptAt: undefined }),
         });
       } else {
         id = await ctx.db.insert("shopProducts", {
@@ -440,7 +456,7 @@ export const resume = mutation({
     const now = Date.now();
     let prepare = false;
     for (const row of rows) {
-      if (row.printFile) {
+      if (filesReady(row)) {
         await ctx.db.patch("shopProducts", row._id, { status: "pending", attempts: 0, nextAttemptAt: now, updatedAt: now });
         await ctx.scheduler.runAfter(0, internal.shopify.syncListing, { listingId: row._id });
       } else {
@@ -479,6 +495,10 @@ const listingRowValidator = v.object({
   printFile: v.union(
     v.null(),
     v.object({ previewUrl: v.optional(v.string()), url: v.optional(v.string()), widthIn: v.number(), dpi: v.number(), grade: v.string() }),
+  ),
+  // The chest mark's file on the front, when the listing has one and it's made.
+  markFile: v.optional(
+    v.object({ previewUrl: v.optional(v.string()), url: v.optional(v.string()), widthIn: v.number(), dpi: v.number() }),
   ),
 });
 
@@ -609,6 +629,16 @@ async function saleRow(
               grade: row.printFile.grade,
             }
           : null,
+        ...(row.markFile
+          ? {
+              markFile: {
+                previewUrl: publicUrl(row.markFile.previewKey) ?? publicUrl(row.markFile.key),
+                url: publicUrl(row.markFile.key),
+                widthIn: row.markFile.placement.widthIn,
+                dpi: Math.floor(row.markFile.dpi),
+              },
+            }
+          : {}),
       };
     }),
   };
@@ -661,4 +691,3 @@ export const overview = query({
     };
   },
 });
-

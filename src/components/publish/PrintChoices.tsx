@@ -1,7 +1,18 @@
 import { GARMENT_KINDS, formatPrice } from "../../../shared/config/print-products";
 import type { GarmentKind } from "../../../shared/config/print-products";
 import type { PrintArea, RelativePlacement } from "~/lib/print/shirtPlacement";
-import { MIN_SIZE, SIZE_PRESETS, sizeKeyOf, toInches } from "~/lib/print/shirtPlacement";
+import {
+  DEFAULT_MARK_IN,
+  MARK_PRESETS,
+  MIN_SIZE,
+  SIZE_PRESETS,
+  markKeyOf,
+  markPlacement,
+  onFront,
+  sizeKeyOf,
+  toInches,
+  withoutMark,
+} from "~/lib/print/shirtPlacement";
 import { cn, keepHyphens } from "~/lib/utils";
 
 // A product on offer, as convex/merch.ts offered returns it.
@@ -21,10 +32,10 @@ export type OfferedProduct = {
 };
 
 // A product's placement: its own when its creator set one, else the shared one; a back placement
-// on a product without a back prints on the front.
+// on a product without a back prints on the front, without a chest mark.
 export function placementOn(product: OfferedProduct, shared: RelativePlacement, own: Record<number, RelativePlacement>): RelativePlacement {
   const placement = product.productId in own ? own[product.productId] : shared;
-  return placement.side === "back" && !product.back ? { ...placement, side: "front" } : placement;
+  return placement.side === "back" && !product.back ? onFront(placement) : placement;
 }
 
 export function areaOn(product: OfferedProduct, side: RelativePlacement["side"]): PrintArea {
@@ -48,6 +59,7 @@ export function PrintChoices({
   aspect,
   disabled,
   preview,
+  chestMarks = false,
 }: {
   products: Array<OfferedProduct>;
   chosen: Array<number>;
@@ -65,6 +77,8 @@ export function PrintChoices({
   disabled?: boolean;
   // A small preview shown beside the controls on phones, where the big one has scrolled away.
   preview?: React.ReactNode;
+  // The Chest marks switch: a back print may add the same design small on the front chest.
+  chestMarks?: boolean;
 }) {
   const current = placementOn(focused, shared, own);
   const area = areaOn(focused, current.side);
@@ -72,6 +86,8 @@ export function PrintChoices({
   const preset = sizeKeyOf(current.size);
   const separate = focused.productId in own;
   const set = (next: Partial<RelativePlacement>) => onChange({ ...current, ...next });
+  const markPreset = markKeyOf(current.mark);
+  const markWidth = current.mark !== undefined ? markPlacement(current.mark, aspect, focused.front).widthIn : null;
   // "the hoodie", or the product's name when two products on offer are the same kind.
   const sameKind = products.filter((product) => product.kind === focused.kind).length > 1;
   const called = sameKind ? focused.name : GARMENT_KINDS[focused.kind].label.toLowerCase();
@@ -149,7 +165,7 @@ export function PrintChoices({
                 type="button"
                 disabled={!available}
                 aria-pressed={current.side === side}
-                onClick={() => set({ side })}
+                onClick={() => (side === "front" ? onChange(onFront(current)) : set({ side }))}
                 className={cn(
                   "h-11 rounded-xl border-2 border-black px-4 font-bold disabled:opacity-30",
                   current.side === side && "bg-black text-white",
@@ -232,6 +248,39 @@ export function PrintChoices({
               ? "Set once, it fits every product: the same share of each print area, in the same spot."
               : "Centered, the size shown on the shirt."}
         </p>
+        {chestMarks && current.side === "back" && (
+          <div className="mt-5 rounded-2xl border-2 border-neutral-200 p-3">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={current.mark !== undefined}
+                onChange={(event) => onChange(event.target.checked ? { ...current, mark: DEFAULT_MARK_IN } : withoutMark(current))}
+                className="h-5 w-5 accent-black"
+              />
+              Add a small one on the front
+            </label>
+            {current.mark !== undefined && (
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Size on the front">
+                {MARK_PRESETS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    aria-pressed={markPreset === option.key}
+                    onClick={() => set({ mark: option.widthIn })}
+                    className={cn("h-11 rounded-xl border-2 border-black px-4 font-bold", markPreset === option.key && "bg-black text-white")}
+                  >
+                    {option.label} · {option.widthIn} in
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-sm text-neutral-600">
+              {markWidth !== null
+                ? `The same design, ${markWidth.toFixed(1)} in wide, on the left chest. It doesn't change the price.`
+                : "The same design, small, on the left chest, the way back prints often have one. It doesn't change the price."}
+            </p>
+          </div>
+        )}
       </fieldset>
     </>
   );

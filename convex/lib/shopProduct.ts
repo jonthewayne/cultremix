@@ -7,7 +7,7 @@ import {
   PRINT_SIZES,
   garmentKindOf,
 } from "../../shared/config/print-products";
-import { DEFAULT_PLACEMENT, clampRelative, sameRelative } from "../../src/lib/print/shirtPlacement";
+import { DEFAULT_PLACEMENT, clampRelative, onFront, sameRelative } from "../../src/lib/print/shirtPlacement";
 import { GARMENT_COLORS, colorKey } from "./garments";
 import { colorCode } from "./shopColors";
 import { productHandle } from "./shopify/productSync";
@@ -168,7 +168,8 @@ export type ProductChoice = { product: ShopProduct; placement: RelativePlacement
 
 // The products a work sells on that are still on offer, each with its placement (its own when its
 // creator adjusted it, else the work's). Works published before products could be chosen sell on
-// the default product. A back placement on a product without a back prints on the front.
+// the default product. A back placement on a product without a back prints on the front, without
+// a chest mark.
 export function chosenProducts(
   work: Pick<Doc<"works">, "printPlacement" | "printProducts">,
   products: ReadonlyArray<ShopProduct>,
@@ -185,7 +186,7 @@ export function chosenProducts(
     const product = products.find((p) => p.printfulProductId === pick.productId);
     if (!product || out.some((choice) => choice.product.key === product.key)) continue;
     const placement = clampRelative(pick.placement ?? shared);
-    out.push({ product, placement: placement.side === "back" && !product.back ? { ...placement, side: "front" } : placement });
+    out.push({ product, placement: placement.side === "back" && !product.back ? onFront(placement) : placement });
   }
   return out;
 }
@@ -217,10 +218,23 @@ export function listingFor(work: Pick<Doc<"works">, "offeredColors">, product: S
     ...(product.detail ? { detail: product.detail } : {}),
     placement,
     printArea: areaFor(product, placement.side),
+    // A chest mark prints on the front, in its own file.
+    ...(placement.side === "back" && placement.mark !== undefined ? { markArea: product.front } : {}),
     priceCents: product.priceCents + extra,
     largePriceCents: product.largePriceCents + extra,
     colors: listingColors(work.offeredColors, product),
   };
+}
+
+// Whether a listing prints a chest mark on the front as well, in its own file.
+export function hasMark(listing: Pick<Listing, "placement" | "markArea">): boolean {
+  return listing.placement.side === "back" && listing.placement.mark !== undefined && listing.markArea !== undefined;
+}
+
+// Whether a listing's print files are all made: its print file, and its chest mark's when it has one.
+export function filesReady(row: Pick<Doc<"shopProducts">, "printFile" | "markFile" | "listing">) {
+  if (!row.printFile) return false;
+  return !row.listing || !hasMark(row.listing) || Boolean(row.markFile);
 }
 
 export function priceForSize(prices: { priceCents: number; largePriceCents: number }, size: string) {
@@ -293,4 +307,3 @@ export function withProductPlacement(
     ),
   };
 }
-

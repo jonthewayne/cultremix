@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PLACEMENT,
   EDGE_IN,
+  MARK_MAX_HEIGHT_IN,
   MIN_SIZE,
   areaPlacement,
   clampRelative,
   fullWidthIn,
+  markKeyOf,
+  markPlacement,
+  onFront,
+  sameRelative,
   sizeKeyOf,
   sizeWords,
   toInches,
   toRelative,
+  withoutMark,
 } from "../../src/lib/print/shirtPlacement";
 
 const TEE = { widthIn: 12, heightIn: 16 };
@@ -88,3 +94,46 @@ describe("sizeWords", () => {
   });
 });
 
+describe("a chest mark with a back print", () => {
+  const back = { side: "back" as const, size: 0.9, drop: 0.05 };
+
+  it("is kept only on a back print, between 2 and 5 inches wide", () => {
+    expect(clampRelative({ ...back, mark: 3 })).toEqual({ ...back, mark: 3 });
+    expect(clampRelative({ side: "front", size: 0.9, drop: 0.05, mark: 3 })).toEqual({ side: "front", size: 0.9, drop: 0.05 });
+    expect(clampRelative({ ...back, mark: 9 }).mark).toBe(5);
+    expect(clampRelative({ ...back, mark: 0.5 }).mark).toBe(2);
+    expect(clampRelative({ ...back, mark: Number.NaN })).toEqual(back);
+    expect(clampRelative(back)).toEqual(back);
+  });
+
+  it("counts as part of the placement, and leaves with a move to the front", () => {
+    expect(sameRelative({ ...back, mark: 3 }, { ...back, mark: 3 })).toBe(true);
+    expect(sameRelative({ ...back, mark: 3 }, back)).toBe(false);
+    expect(sameRelative({ ...back, mark: 3 }, { ...back, mark: 4 })).toBe(false);
+    expect(onFront({ ...back, mark: 3 })).toEqual({ side: "front", size: 0.9, drop: 0.05 });
+    expect(withoutMark({ ...back, mark: 3 })).toEqual(back);
+    expect(markKeyOf(3)).toBe("small");
+    expect(markKeyOf(4)).toBe("medium");
+    expect(markKeyOf(3.6)).toBeNull();
+  });
+
+  it("sits over the wearer's left chest: right of center as you face it, near the top", () => {
+    expect(markPlacement(3, 1, TEE)).toEqual({ xIn: 7.5, yIn: 2, widthIn: 3 });
+    expect(markPlacement(3, 1, HOODIE)).toEqual({ xIn: 9, yIn: 2, widthIn: 3 });
+  });
+
+  it("stays on its half of the print area and holds a tall design to a chest mark's height", () => {
+    for (const area of [TEE, HOODIE, { widthIn: 9, heightIn: 11 }]) {
+      for (const aspect of [0.3, 1, 2.5]) {
+        for (const mark of [2, 3, 4, 5]) {
+          const placed = markPlacement(mark, aspect, area);
+          expect(placed.xIn).toBeGreaterThanOrEqual(area.widthIn / 2);
+          expect(placed.xIn + placed.widthIn).toBeLessThanOrEqual(area.widthIn - EDGE_IN + 0.001);
+          expect(placed.yIn + placed.widthIn * aspect).toBeLessThanOrEqual(area.heightIn - EDGE_IN + 0.001);
+          expect(placed.widthIn * aspect).toBeLessThanOrEqual(MARK_MAX_HEIGHT_IN + 0.01);
+        }
+      }
+    }
+    expect(markPlacement(4, 2, TEE).widthIn).toBe(2.25);
+  });
+});

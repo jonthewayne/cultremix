@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { DEFAULT_PLACEMENT, clampRelative, sameRelative } from "../src/lib/print/shirtPlacement";
+import { DEFAULT_PLACEMENT, clampRelative, sameRelative, withoutMark } from "../src/lib/print/shirtPlacement";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser, isOwner } from "./identity";
@@ -323,8 +323,9 @@ export const quick = mutation({
     if (!colors.ok) throw new ConvexError({ code: "INVALID_COLORS", message: colors.message });
     // The lead color is the work's background: the feed, the model photo and remixes all use it.
     const backgroundColor = garmentColor(colors.keys[0], palette)!.hex;
-    const printPlacement = clampRelative(args.printPlacement ?? DEFAULT_PLACEMENT);
-    const printProducts = pickPrintProducts(args.printProducts, printPlacement, await offeredShopProducts(ctx));
+    const marksOn = await isFlagOn(ctx, CHEST_MARKS_FLAG);
+    const printPlacement = markAllowed(clampRelative(args.printPlacement ?? DEFAULT_PLACEMENT), [], marksOn);
+    const printProducts = pickPrintProducts(withMarksAllowed(args.printProducts, [], marksOn), printPlacement, await offeredShopProducts(ctx));
     if (printProducts.length === 0) {
       throw new ConvexError({ code: "INVALID_PRODUCTS", message: "Pick at least one product it comes on." });
     }
@@ -448,6 +449,35 @@ export const availability = query({
   handler: async (ctx) => ({ publishing: await isFlagOn(ctx, "publishing") }),
 });
 
+// The Chest marks switch: with a back print, its creator may add the same design small on the front
+// chest (src/lib/print/shirtPlacement.ts). While it's off, a design keeps a mark it already has and
+// gains no new one.
+const CHEST_MARKS_FLAG = "print.chestMarks";
+
+function markAllowed(next: RelativePlacement, had: ReadonlyArray<RelativePlacement>, on: boolean): RelativePlacement {
+  if (on || next.mark === undefined) return next;
+  const mark = next.mark;
+  return had.some((placement) => placement.side === "back" && placement.mark !== undefined && Math.abs(placement.mark - mark) < 0.01)
+    ? next
+    : withoutMark(next);
+}
+
+function withMarksAllowed(
+  picks: ReadonlyArray<{ productId: number; placement?: RelativePlacement }> | undefined,
+  had: ReadonlyArray<RelativePlacement>,
+  on: boolean,
+) {
+  return picks?.map((pick) => (pick.placement ? { ...pick, placement: markAllowed(clampRelative(pick.placement), had, on) } : pick));
+}
+
+// A work's placements as saved: its shared one and each product's own.
+function savedPlacements(work: Doc<"works">): Array<RelativePlacement> {
+  return [
+    ...(work.printPlacement ? [work.printPlacement] : []),
+    ...(work.printProducts ?? []).flatMap((pick) => (pick.placement ? [pick.placement] : [])),
+  ];
+}
+
 // The products a work comes on, each with its own placement when it has one.
 const printProductsValidator = v.array(v.object({ productId: v.number(), placement: v.optional(relativePlacementValidator) }));
 
@@ -460,6 +490,8 @@ export const preview = query({
     v.null(),
     v.object({
       publishing: v.boolean(),
+      // Whether Publish offers a chest mark with a back print.
+      chestMarks: v.boolean(),
       newFamilyCr: v.string(),
       remix: v.optional(
         v.object({
@@ -506,6 +538,7 @@ export const preview = query({
     }
     return {
       publishing: await isFlagOn(ctx, "publishing"),
+      chestMarks: await isFlagOn(ctx, CHEST_MARKS_FLAG),
       newFamilyCr,
       remix,
       defaultColors: defaultOfferedColors(batch.backgroundColor, new Set(), (await activePalette(ctx)).colors),
@@ -551,7 +584,13 @@ export const printSetup = query({
   args: { workId: v.id("works") },
   returns: v.union(
     v.null(),
-    v.object({ printPlacement: relativePlacementValidator, printProducts: printProductsValidator, onSale: v.boolean() }),
+    v.object({
+      printPlacement: relativePlacementValidator,
+      printProducts: printProductsValidator,
+      onSale: v.boolean(),
+      // Whether the editor offers a chest mark with a back print.
+      chestMarks: v.boolean(),
+    }),
   ),
   handler: async (ctx, args) => {
     const user = await getViewerUser(ctx);
@@ -565,6 +604,7 @@ export const printSetup = query({
     return {
       ...workSetup(work, await offeredShopProducts(ctx)),
       onSale: listings.some((row) => row.listing !== undefined),
+      chestMarks: await isFlagOn(ctx, CHEST_MARKS_FLAG),
     };
   },
 });
@@ -578,8 +618,10 @@ export const setPrintSetup = mutation({
     if (!work || (work.creatorId !== user._id && !isOwner(user)) || (work.status !== "published" && work.status !== "private")) {
       throw new ConvexError({ code: "NOT_FOUND", message: "That design isn't yours to change." });
     }
-    const printPlacement = clampRelative(args.printPlacement);
-    const printProducts = pickPrintProducts(args.printProducts, printPlacement, await offeredShopProducts(ctx));
+    const marksOn = await isFlagOn(ctx, CHEST_MARKS_FLAG);
+    const had = savedPlacements(work);
+    const printPlacement = markAllowed(clampRelative(args.printPlacement), had, marksOn);
+    const printProducts = pickPrintProducts(withMarksAllowed(args.printProducts, had, marksOn), printPlacement, await offeredShopProducts(ctx));
     if (printProducts.length === 0) {
       throw new ConvexError({ code: "INVALID_PRODUCTS", message: "Pick at least one product it comes on." });
     }

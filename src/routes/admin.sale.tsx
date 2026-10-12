@@ -325,6 +325,16 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
                   Print file · {listing.printFile.widthIn} in · {listing.printFile.dpi} DPI
                 </a>
               )}
+              {listing.markFile && (
+                <a
+                  href={listing.markFile.url ?? listing.markFile.previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold underline underline-offset-4"
+                >
+                  Chest mark · {listing.markFile.widthIn} in · {listing.markFile.dpi} DPI
+                </a>
+              )}
               {listing.prepError && <span className="w-full font-semibold text-destructive">{listing.prepError}</span>}
               {listing.lastError && <span className="w-full text-destructive">{listing.lastError}</span>}
             </div>
@@ -342,4 +352,3 @@ function WorkRow({ row, canSimulate }: { row: Row; canSimulate: boolean }) {
     </AdminSection>
   );
 }
-

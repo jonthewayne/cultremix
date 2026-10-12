@@ -114,6 +114,8 @@ export const comesOn = query({
       priceCents: v.number(),
       placement: relativePlacementValidator,
       printArea: printAreaValidator,
+      // The front print area, when a back print has a chest mark there.
+      markArea: v.optional(printAreaValidator),
     }),
   ),
   handler: async (ctx, args) => {
@@ -131,6 +133,7 @@ export const comesOn = query({
       priceCents: product.priceCents + (placement.side === "back" ? product.backExtraCents : 0),
       placement,
       printArea: areaFor(product, placement.side),
+      ...(placement.side === "back" && placement.mark !== undefined ? { markArea: product.front } : {}),
     }));
   },
 });

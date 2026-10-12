@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chosenProducts, launchShopProduct, listingColors, listingFor, merchShopProduct } from "../../convex/lib/shopProduct";
+import { chosenProducts, filesReady, hasMark, launchShopProduct, listingColors, listingFor, merchShopProduct } from "../../convex/lib/shopProduct";
 import { garmentKindOf } from "../../shared/config/print-products";
 import { DEFAULT_PLACEMENT } from "../../src/lib/print/shirtPlacement";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -110,6 +110,25 @@ describe("what a work sells on", () => {
     expect(listing.largePriceCents).toBe(tee.largePriceCents + tee.backExtraCents);
     expect(listing.printArea).toEqual(tee.back);
     expect(listing.colors.map((c) => c.key)).toEqual(["black"]);
+    expect(listing.markArea).toBeUndefined();
+    expect(hasMark(listing)).toBe(false);
+  });
+
+  it("gives a back print's chest mark the front print area, at the back print's price", () => {
+    const listing = listingFor({ offeredColors: ["black"] }, tee, { side: "back", size: 0.65, drop: 0.1, mark: 3 });
+    expect(listing.markArea).toEqual(tee.front);
+    expect(listing.priceCents).toBe(tee.priceCents + tee.backExtraCents);
+    expect(hasMark(listing)).toBe(true);
+    const file = { key: "k" } as NonNullable<Doc<"shopProducts">["printFile"]>;
+    expect(filesReady({ listing, printFile: file, markFile: undefined })).toBe(false);
+    expect(filesReady({ listing, printFile: file, markFile: file })).toBe(true);
+    expect(filesReady({ listing: listingFor({ offeredColors: ["black"] }, tee, { side: "front", size: 0.65, drop: 0.1 }), printFile: file, markFile: undefined })).toBe(true);
+  });
+
+  it("drops a chest mark when a back print moves to the front of a product without a back", () => {
+    const chosen = chosenProducts({ printPlacement: { side: "back", size: 0.9, drop: 0, mark: 3 }, printProducts: [{ productId: 146 }] }, [tee, hood]);
+    expect(chosen[0].placement).toEqual({ side: "front", size: 0.9, drop: 0 });
+    expect(listingFor({ offeredColors: ["black"] }, hood, chosen[0].placement).markArea).toBeUndefined();
   });
 
   it("sells in the creator's colors the product carries, never others", () => {
@@ -119,4 +138,3 @@ describe("what a work sells on", () => {
     expect(listingColors(undefined, hood).map((c) => c.key)).toEqual(["white", "black"]);
   });
 });
-

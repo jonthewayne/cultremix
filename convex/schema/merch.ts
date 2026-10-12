@@ -28,8 +28,14 @@ export const garmentKindValidator = v.union(
 export const printSideValidator = v.union(v.literal("front"), v.literal("back"));
 // Where a design sits on a garment (src/lib/print/shirtPlacement.ts): the side, its size as a share
 // of the largest it fits, and how far down it sits as a share of the room left. Relative, so one
-// choice fits every product.
-export const relativePlacementValidator = v.object({ side: printSideValidator, size: v.number(), drop: v.number() });
+// choice fits every product. A back print may add a chest mark: the same design on the front, mark
+// inches wide (the Chest marks switch, print.chestMarks).
+export const relativePlacementValidator = v.object({
+  side: printSideValidator,
+  size: v.number(),
+  drop: v.number(),
+  mark: v.optional(v.number()),
+});
 
 export const merchTables = {
   merchProducts: defineTable({
@@ -66,4 +72,3 @@ export const merchTables = {
     .index("by_provider_product", ["provider", "productId"])
     .index("by_active", ["active"]),
 };
-

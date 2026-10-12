@@ -5,7 +5,7 @@ import { hazeShare } from "../src/lib/print/alpha";
 import { HAZE_REFUSE, printCheck } from "../src/lib/print/check";
 import { parseHex } from "../src/lib/print/knockout";
 import { aspectOf, canvasPx, clampPlacement, pixelRect, placedHeight } from "../src/lib/print/placement";
-import { areaPlacement, toInches } from "../src/lib/print/shirtPlacement";
+import { areaPlacement, markPlacement, toInches } from "../src/lib/print/shirtPlacement";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { geometryOf } from "./lib/shopProduct";
@@ -213,14 +213,77 @@ type ListingJob = {
     productKey: string;
     placement: RelativePlacement;
     printArea: PrintArea;
+    markArea?: PrintArea;
     studio?: { xIn: number; yIn: number; widthIn: number };
   }>;
 };
 
+type ListingFile = {
+  key: string;
+  previewKey: string;
+  sha256: string;
+  widthPx: number;
+  heightPx: number;
+  versionId: Id<"printVersions">;
+  placement: { xIn: number; yIn: number; widthIn: number; heightIn: number };
+  dpi: number;
+  grade: "great" | "good";
+  warnings: Array<string>;
+  madeAt: number;
+};
+
+// One print file: the art at placement on geometry's whole print area, checked, rendered, checked
+// again on the rendered pixels, and stored behind a fresh random code. A chest mark is small by
+// design, so the ink-coverage minimum doesn't apply to it; every other check does.
+async function renderOne(
+  ctx: ActionCtx,
+  job: ListingJob,
+  source: Uint8Array,
+  placement: { xIn: number; yIn: number; widthIn: number },
+  geometry: PrintGeometry,
+  options: { mark?: boolean } = {},
+): Promise<ListingFile> {
+  const { version } = job;
+  const aspect = aspectOf(version.width, version.height);
+  const metrics = { width: version.width, height: version.height, ...version.metrics };
+  const check = printCheck(metrics, placement, geometry);
+  const refusal = check.items.find((item) => item.status === "refuse" && !(options.mark && item.key === "coverage"));
+  if (refusal || check.grade === "refused") throw new Error(`${options.mark ? "The chest mark: " : ""}${refusal?.label ?? "Not printable yet."}`);
+  const rect = pixelRect(placement, aspect, geometry);
+  const canvas = canvasPx(geometry);
+  const rendered = await renderPrintFile(source, rect, canvas, geometry.dpi);
+  if (!rendered.designMetrics.hasAlpha) throw new Error("The rendered file lost its transparency.");
+  if (hazeShare(rendered.designMetrics) > HAZE_REFUSE) throw new Error("The rendered file has too much faint haze.");
+  const planned = printFileKey(job.family, job.expression, randomCode(), job.keptBy);
+  const [key, previewKey] = await Promise.all([
+    storeObject(ctx, planned, rendered.bytes, "image/png"),
+    previewWebp(rendered.bytes).then((webp) => storeObject(ctx, printPreviewKey(planned), webp, "image/webp")),
+  ]);
+  return {
+    key,
+    previewKey,
+    sha256: rendered.sha256,
+    widthPx: canvas.width,
+    heightPx: canvas.height,
+    versionId: version.id,
+    placement: {
+      xIn: placement.xIn,
+      yIn: placement.yIn,
+      widthIn: placement.widthIn,
+      heightIn: Math.round(placedHeight(placement.widthIn, aspect) * 100) / 100,
+    },
+    dpi: Math.round(check.dpi * 10) / 10,
+    grade: check.grade === "great" ? "great" : "good",
+    warnings: check.items.filter((item) => item.status === "warn").map((item) => item.label),
+    madeAt: Date.now(),
+  };
+}
+
 // The print files for a work going on sale (convex/sales.ts): for each product, the art placed where
 // its creator chose on that product's whole print area at 300 DPI. A file covering the whole area is
 // what Printful expects for the placement, so it prints where the preview showed it, and when
-// Printful scales a print down for smaller sizes it scales as one piece and stays centered.
+// Printful scales a print down for smaller sizes it scales as one piece and stays centered. A back
+// print with a chest mark gets a second file, the mark on the front print area, recorded with it.
 export const renderListings = internalAction({
   args: { workId: v.id("works"), versionId: v.id("printVersions"), listingIds: v.array(v.id("shopProducts")) },
   returns: v.null(),
@@ -238,41 +301,23 @@ export const renderListings = internalAction({
         const placement = listing.studio
           ? clampPlacement(listing.studio, aspect, geometry)
           : areaPlacement(toInches(listing.placement, aspect, listing.printArea), listing.printArea);
-        const metrics = { width: version.width, height: version.height, ...version.metrics };
-        const check = printCheck(metrics, placement, geometry);
-        const refusal = check.items.find((item) => item.status === "refuse");
-        if (refusal || check.grade === "refused") throw new Error(refusal?.label ?? "Not printable yet.");
         source ??= await fetchPublicImage(version.key, ctx);
-        const rect = pixelRect(placement, aspect, geometry);
-        const canvas = canvasPx(geometry);
-        const rendered = await renderPrintFile(source, rect, canvas, geometry.dpi);
-        if (!rendered.designMetrics.hasAlpha) throw new Error("The rendered file lost its transparency.");
-        if (hazeShare(rendered.designMetrics) > HAZE_REFUSE) throw new Error("The rendered file has too much faint haze.");
-        const planned = printFileKey(job.family, job.expression, randomCode(), job.keptBy);
-        const [key, previewKey] = await Promise.all([
-          storeObject(ctx, planned, rendered.bytes, "image/png"),
-          previewWebp(rendered.bytes).then((webp) => storeObject(ctx, printPreviewKey(planned), webp, "image/webp")),
-        ]);
+        const file = await renderOne(ctx, job, source, placement, geometry);
+        const mark =
+          listing.placement.side === "back" && listing.placement.mark !== undefined && listing.markArea
+            ? await renderOne(
+                ctx,
+                job,
+                source,
+                markPlacement(listing.placement.mark, aspect, listing.markArea),
+                geometryOf(`${listing.productKey}-front`, listing.markArea),
+                { mark: true },
+              )
+            : undefined;
         await ctx.runMutation(internal.sales.recordListingFile, {
           listingId: listing.listingId,
-          file: {
-            key,
-            previewKey,
-            sha256: rendered.sha256,
-            widthPx: canvas.width,
-            heightPx: canvas.height,
-            versionId: version.id,
-            placement: {
-              xIn: placement.xIn,
-              yIn: placement.yIn,
-              widthIn: placement.widthIn,
-              heightIn: Math.round(placedHeight(placement.widthIn, aspect) * 100) / 100,
-            },
-            dpi: Math.round(check.dpi * 10) / 10,
-            grade: check.grade === "great" ? "great" : "good",
-            warnings: check.items.filter((item) => item.status === "warn").map((item) => item.label),
-            madeAt: Date.now(),
-          },
+          file,
+          ...(mark ? { markFile: mark } : {}),
         });
       } catch (error) {
         await ctx.runMutation(internal.sales.failListingFile, { listingId: listing.listingId, error: readable(error) });

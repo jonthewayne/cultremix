@@ -16,6 +16,8 @@ export type BuyProduct = {
   side: "front" | "back";
   placement: RelativePlacement;
   printArea: PrintArea;
+  // The front print area, when a back print has a chest mark there.
+  markArea?: PrintArea;
   // key: the garment color key the page selects by; code: the SKU code the cart sends.
   colors: Array<{ key: string; code: string; name: string; hex: string }>;
   sizes: Array<string>;
@@ -111,7 +113,14 @@ export function BuyBox({
       {picked && <ColorSwatches colors={product.colors} value={picked.key} onChange={onColorChange} />}
 
       {picked && (
-        <OnTheShirt kind={product.kind} placement={product.placement} printArea={product.printArea} hex={picked.hex} artUrl={artUrl} />
+        <OnTheShirt
+          kind={product.kind}
+          placement={product.placement}
+          printArea={product.printArea}
+          markArea={product.markArea}
+          hex={picked.hex}
+          artUrl={artUrl}
+        />
       )}
 
       <div>

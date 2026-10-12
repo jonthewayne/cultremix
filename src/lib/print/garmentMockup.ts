@@ -120,6 +120,18 @@ export function designBox(kind: GarmentKind, placement: InchPlacement, aspect: n
   };
 }
 
+// A design placed anywhere on the drawn front, from the print area's top-left corner in inches (a
+// back print's chest mark).
+export function frontBox(kind: GarmentKind, placed: { xIn: number; yIn: number; widthIn: number }, aspect: number, area: PrintArea): Box {
+  const box = areaBox(kind, "front", area);
+  return {
+    x: box.x + placed.xIn * UNITS_PER_IN,
+    y: box.y + placed.yIn * UNITS_PER_IN,
+    width: placed.widthIn * UNITS_PER_IN,
+    height: placed.widthIn * aspect * UNITS_PER_IN,
+  };
+}
+
 function rgb(hex: string): [number, number, number] {
   const clean = /^#?([0-9a-f]{6})$/iu.exec(hex.trim())?.[1] ?? "ffffff";
   return [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16)) as [number, number, number];
@@ -158,4 +170,3 @@ export function garmentSvg(kind: GarmentKind, side: PrintSide, hex: string, scal
     "</svg>"
   );
 }
-

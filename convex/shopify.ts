@@ -459,6 +459,8 @@ const offerProductValidator = v.object({
   // Where the design sits, for the buy box's drawn garment.
   placement: relativePlacementValidator,
   printArea: printAreaValidator,
+  // The front print area, when a back print has a chest mark there.
+  markArea: v.optional(printAreaValidator),
   // key is the garment color key (works.offeredColors), so the page's swatches and the buy box
   // share one selection; code is the SKU code the cart sends.
   colors: v.array(v.object({ key: v.string(), code: v.string(), name: v.string(), hex: v.string() })),
@@ -540,6 +542,7 @@ async function offerOf(ctx: QueryCtx, work: Doc<"works">) {
       side: listing.placement.side,
       placement: listing.placement,
       printArea: listing.printArea,
+      ...(listing.markArea && listing.placement.mark !== undefined ? { markArea: listing.markArea } : {}),
       colors: colors.map(({ key, code, name, hex }) => ({ key, code, name, hex })),
       sizes: PRINT_SIZES.filter((size) => sold.some((variant) => variant.size === size)),
       variants: sold.map((variant) => ({
@@ -553,4 +556,3 @@ async function offerOf(ctx: QueryCtx, work: Doc<"works">) {
   if (products.length === 0) return null;
   return { workId: work._id, cr, products };
 }
-

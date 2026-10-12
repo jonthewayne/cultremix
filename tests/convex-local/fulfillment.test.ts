@@ -302,6 +302,41 @@ describe("creating the Printful order", () => {
     ]);
   });
 
+  it("sends a back print's chest mark as a second file on the front, checked like the first", async () => {
+    const t = newTest();
+    const { work } = await onSale(t);
+    const backKey = "works/101/002/print-" + "q".repeat(26) + "/print.png";
+    const markKey = "works/101/002/print-" + "m".repeat(26) + "/print.png";
+    const setMark = (markFile: boolean) =>
+      t.run(async (ctx) => {
+        const row = await ctx.db.query("shopProducts").withIndex("by_work", (q) => q.eq("workId", work)).unique();
+        await ctx.db.patch("shopProducts", row!._id, {
+          listing: { ...row!.listing!, placement: { side: "back", size: 0.9, drop: 0, mark: 3 }, markArea: { widthIn: 12, heightIn: 16 } },
+          printFile: { ...row!.printFile!, key: backKey },
+          markFile: markFile ? { ...row!.printFile!, key: markKey } : undefined,
+        });
+      });
+    // Without its mark's file, the order waits for it.
+    await setMark(false);
+    await paid(t);
+    expect(creates()).toBe(0);
+    expect((await theOrder(t)).attentionReason).toBe("CR 101-002's chest mark file isn't ready yet. The order goes to Printful once it is.");
+
+    await setMark(true);
+    await t.action(internal.fulfillment.reconcile, {});
+    await settle(t);
+    expect(creates()).toBe(1);
+    const sent = printful.calls.find((c) => c.method === "POST" && c.path === "/v2/orders")!.body as {
+      order_items: Array<{ placements: Array<unknown> }>;
+    };
+    expect(sent.order_items[0].placements).toEqual([
+      { placement: "back", technique: "dtg", layers: [{ type: "file", url: `https://files.cultremix.test/${backKey}` }] },
+      { placement: "front", technique: "dtg", layers: [{ type: "file", url: `https://files.cultremix.test/${markKey}` }] },
+    ]);
+    // Both files were read and checked against their fingerprints first.
+    expect(files.reads).toEqual(expect.arrayContaining([`https://files.cultremix.test/${backKey}`, `https://files.cultremix.test/${markKey}`]));
+  });
+
   it("never sends a print file that isn't the approved one: it's made again, and the order waits for it", async () => {
     const t = newTest();
     const { b, work } = await onSale(t);

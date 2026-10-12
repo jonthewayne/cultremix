@@ -66,6 +66,13 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
       "Creators can upscale art to print size (2 credits; the owner is exempt) and remove backgrounds in the Print Studio, and approving a work for sale upscales its art. Off refuses new upscales and background removals.",
     defaultOn: false,
   },
+  {
+    key: "print.chestMarks",
+    label: "Chest marks",
+    description:
+      "With a design printed on the back, its creator can add a small copy on the front chest when publishing or changing where it sits. It doesn't change the price: the back print's extra already covers what Printful charges to print both sides. Off hides the choice; designs that already have a mark keep it.",
+    defaultOn: false,
+  },
 ];
 
 export const FLAG_KEYS = FEATURE_FLAGS.map((flag) => flag.key);
