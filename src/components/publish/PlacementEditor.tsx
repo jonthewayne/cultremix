@@ -162,7 +162,9 @@ function EditorDialog({
               own={own}
               onChange={change}
               onSeparate={separate}
-              colorKeys={colors.map((color) => color.key)}
+              // A work published before colors were chosen has only its background ("custom",
+              // convex/feed.ts shopColors) and sells in the launch colors: no colors to count.
+              colorKeys={colors.filter((color) => color.key !== "custom").map((color) => color.key)}
               aspect={aspect}
               disabled={saving}
               preview={

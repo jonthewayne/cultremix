@@ -118,8 +118,9 @@ export function PrintChoices({
                   <span className="block text-base font-black">{product.name}</span>
                   <span className="block text-sm text-neutral-600">
                     {formatPrice(product.priceCents)}
-                    {" · "}
-                    {carried === 0 ? (
+                    {/* A work published before colors were chosen has none to count. */}
+                    {colorKeys.length > 0 && " · "}
+                    {colorKeys.length === 0 ? null : carried === 0 ? (
                       <span className="font-semibold text-red-700">none of your colors</span>
                     ) : carried === colorKeys.length ? (
                       "all your colors"
