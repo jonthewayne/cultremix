@@ -42,7 +42,7 @@ export function callFailure(error: unknown): { spend: Spend; ambiguous: boolean 
 
 // The HTTP status on an AI SDK APICallError (or the gateway's own errors), found by shape so this
 // file needs no SDK import.
-function statusOf(error: unknown): number | undefined {
+export function statusOf(error: unknown): number | undefined {
   if (!error || typeof error !== "object") return undefined;
   const record = error as Record<string, unknown>;
   for (const key of ["statusCode", "status"]) {

@@ -6,7 +6,7 @@ The history behind the studio's style handling, with every style test in date or
 
 ## Models
 
-All image calls go through the Vercel AI Gateway with AI SDK 7 `generateImage`, `maxRetries: 0`.
+All image calls go through the Vercel AI Gateway with AI SDK 7 `generateImage`, `maxRetries: 0`, since a timeout or a 5xx may already have been billed. The one exception is a rate limit: a 429 means nothing was made or billed, so a design call tries once more after the provider's Retry-After (2 to 20 seconds, 8 when it sends none). A 429 about quota or credit isn't treated as a rate limit (`convex/lib/rateLimitRetry.ts`).
 
 | Job | Model |
 |---|---|
