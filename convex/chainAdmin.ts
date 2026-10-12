@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { assertDeploymentConsistency, explorerNetwork, explorerTxUrl } from "../shared/config/chains";
+import { assertDeploymentConsistency, explorerNetwork, explorerTxUrl, networkLabel } from "../shared/config/chains";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { configHashFor } from "./lib/chain/ids";
@@ -31,7 +31,7 @@ function deploymentSummary() {
     const deployment = assertDeploymentConsistency(process.env);
     return {
       env: deployment.env,
-      networkName: deployment.network.name,
+      networkName: networkLabel(deployment.network),
       registryAddress: deployment.registryAddress,
       problem: null,
       custody: deployment.custody.mode,

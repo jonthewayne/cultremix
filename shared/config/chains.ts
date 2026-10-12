@@ -38,6 +38,12 @@ export const MONAD_MAINNET: ChainNetwork = {
   circleBlockchain: "MONAD",
 };
 
+// How a page names the network in a label: "Monad" alone could be either, so mainnet says so.
+// Sentences ("Registered on Monad") keep the plain name.
+export function networkLabel(network: { name: string; testnet: boolean }): string {
+  return network.testnet ? network.name : `${network.name} mainnet`;
+}
+
 export type ChainEnvironment = {
   network: ChainNetwork;
   // The registry for this environment, or null until it is deployed.

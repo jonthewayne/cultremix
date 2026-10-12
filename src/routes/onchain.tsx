@@ -2,6 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
+import { networkLabel } from "../../shared/config/chains";
 import { FingerprintCheck } from "~/components/cr/FingerprintCheck";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
@@ -115,7 +116,7 @@ function OnchainPage() {
             <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr]">
               <dt className="font-bold">Network</dt>
               <dd>
-                {registry.networkName}
+                {networkLabel({ name: registry.networkName, testnet: registry.testnet })}
                 {registry.testnet && <span className="text-neutral-500"> · a test network, so these records are practice runs</span>}
               </dd>
               <dt className="font-bold">Registry</dt>
