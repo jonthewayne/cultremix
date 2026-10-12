@@ -41,6 +41,9 @@ describe("ready to sell", () => {
     expect(detail(fresh, "upscale")).toBe("Approving a design for sale upscales its art first: set FAL_KEY and turn on Print-size art in Switches.");
     expect(detail(fresh, "confirming")).toMatch(/PRINTFUL_AUTO_CONFIRM=true/u);
     expect(detail(fresh, "registry")).toBe("Not deployed. Once the relayer has MON: bun run chain:deploy:mainnet");
+    expect(detail(fresh, "wallets")).toBe(
+      "Put Circle's live API key in ~/.config/cultremix/circle.env as CIRCLE_API_KEY_LIVE, then run bun run circle:setup --env prod --apply. Until then, each Monad record waits for its creator's wallet.",
+    );
     // A Printful connection without a signing key isn't done.
     expect(detail({ ...ready, printful: { keys: true, connected: true, signingKey: false } }, "printful")).toMatch(/no signing key/u);
     expect(detail({ ...ready, confirming: { env: true, flag: false } }, "confirming")).toMatch(/Send paid orders to print is off/u);

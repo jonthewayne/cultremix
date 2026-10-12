@@ -124,7 +124,9 @@ export function readinessItems(input: ReadinessInput): Array<ReadinessItem> {
       ? "Circle wallets."
       : chain.custody === "local"
         ? "Dev's own wallets (no Circle keys); production uses Circle."
-        : "Set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, and CIRCLE_WALLET_SET_ID in this deployment's Convex env.",
+        : input.env === "prod" || input.env === "dev"
+          ? `Put Circle's ${input.env === "prod" ? "live" : "test"} API key in ~/.config/cultremix/circle.env as ${input.env === "prod" ? "CIRCLE_API_KEY_LIVE" : "CIRCLE_API_KEY_TEST"}, then run bun run circle:setup --env ${input.env} --apply. Until then, each Monad record waits for its creator's wallet.`
+          : "Set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, and CIRCLE_WALLET_SET_ID in this deployment's Convex env.",
   );
   monad(
     "writes",
