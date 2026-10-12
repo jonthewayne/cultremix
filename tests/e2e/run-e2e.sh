@@ -171,6 +171,13 @@ done
 assert_text "Terms"
 agent-browser screenshot body .tmp/screenshots/policies-terms.png
 
+# The tour for a first visit, linked from home and every footer.
+agent-browser open "$BASE_URL/how-it-works"
+agent-browser wait 1000
+assert_text "Recorded on Monad"
+assert_footer
+agent-browser screenshot body .tmp/screenshots/how-it-works.png
+
 # Addresses that lead nowhere answer 404 with a way back.
 for missing in /cr/999-999 /u/nobody-here /family/999; do
   status=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL$missing")

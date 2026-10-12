@@ -57,9 +57,14 @@ function FeedPage() {
           <p className="mt-10 max-w-2xl text-xl font-medium leading-snug md:mt-14 md:text-2xl">
             <span className="block sm:inline">Remix anything you see.</span> Wear it, share it, sell it.
           </p>
-          <Link to="/studio" className="mt-8 inline-block rounded-2xl bg-black px-8 py-4 text-lg font-black text-white transition-transform hover:-translate-y-0.5">
-            Open the studio
-          </Link>
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+            <Link to="/studio" className="inline-block rounded-2xl bg-black px-8 py-4 text-lg font-black text-white transition-transform hover:-translate-y-0.5">
+              Open the studio
+            </Link>
+            <Link to="/how-it-works" className="text-lg font-bold underline underline-offset-4">
+              How it works
+            </Link>
+          </div>
         </section>
         <ActiveCreators />
         <section className="mt-20">

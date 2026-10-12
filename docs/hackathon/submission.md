@@ -121,7 +121,7 @@ What the form asks for, as other teams' submissions list it ([one example](https
 - [ ] Team info.
 - [ ] Name, description, the problem, the solution, and how it uses Monad: [Pitch](#pitch), [Why this track](#why-this-track), and [What the registry proves](#what-the-registry-proves).
 - [ ] Public GitHub repo, readable by metropolis@hackathon.monad.xyz.
-- [ ] Live link with judge sign-in instructions: https://cultremix.com and [Judges](../judges.md).
+- [ ] Live link with judge sign-in instructions: https://cultremix.com, its [How it works](https://cultremix.com/how-it-works) page, and [Judges](../judges.md).
 - [ ] The registry's contract address, once `bun run chain:deploy:mainnet --broadcast --confirm-mainnet` has run (it needs about 0.47 MON in the relayer, and records the address in `shared/config/chains.ts` itself).
 - [ ] Demo video, 3 minutes or less (YouTube, Loom, or Vimeo).
 - [ ] Pitch video, 2 minutes or less.

@@ -21,6 +21,8 @@ If the password is wrong, the page says “That email and password don’t match
 
 ## What a judge can try
 
+[cultremix.com/how-it-works](https://cultremix.com/how-it-works) explains CultRemix in five steps (make, publish, remix, share in the sale, recorded on Monad), and works signed out, so it's a good first link to send a judge with their password. Home and every footer link it.
+
 The full list, with how to check each claim, is under **Judging evidence** in the [submission](hackathon/submission.md#judging-evidence).
 
 1. **Make designs.** In the studio, add your images, give it a style in the **Style mixer** (upload a style image; two or more styles mix by their sliders), say what you want ("draw image 1 as a concert poster that says FAR OUT"), and press Generate: four designs for 2 credits, in about 30 seconds from words alone or about a minute with images. Heart the good ones and open any of them full screen.

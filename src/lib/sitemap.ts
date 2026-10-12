@@ -20,6 +20,7 @@ function url(path: string, lastAt?: number) {
 export function sitemapXml(entries: SitemapEntries | null) {
   const lines = [
     url("/"),
+    url("/how-it-works"),
     url("/onchain"),
     ...POLICIES.map((policy) => url(`/policies/${policy.slug}`)),
     ...(entries?.works ?? []).map((work) => url(`/cr/${encodeURIComponent(work.cr)}`, work.publishedAt)),
@@ -50,4 +51,3 @@ export const ROBOTS_TXT = [
   `Sitemap: ${SITE_URL}/sitemap.xml`,
   "",
 ].join("\n");
-

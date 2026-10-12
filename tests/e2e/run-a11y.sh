@@ -31,7 +31,7 @@ check() {
   agent-browser eval "axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, resultTypes: ['violations'] }).then((r) => r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => v.impact + ' ' + v.id + ' (' + v.nodes.length + ') e.g. ' + v.nodes[0].target.join(' ').slice(0, 100)).join(' | '))" | tr -d '"'
 }
 
-pages=("$BASE_URL/" "$BASE_URL/onchain" "$BASE_URL/login" "$BASE_URL/policies/terms")
+pages=("$BASE_URL/" "$BASE_URL/how-it-works" "$BASE_URL/onchain" "$BASE_URL/login" "$BASE_URL/policies/terms")
 agent-browser open "$BASE_URL/" >/dev/null
 agent-browser wait --load networkidle >/dev/null 2>&1 || true
 work_path=$(agent-browser eval "document.querySelector('main a[href^=\"/cr/\"]')?.getAttribute('href') ?? ''" | tr -d '"')
