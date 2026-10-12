@@ -21,6 +21,7 @@ import { Label } from "~/components/ui/label";
 import { authClient } from "~/lib/auth-client";
 import { getPreauthClient, preauthQuery } from "~/lib/convex-preauth";
 import { sanitizeRedirect } from "~/lib/sanitize-redirect";
+import { pageMeta } from "~/lib/share";
 
 type LoginSearch = {
   redirect?: string;
@@ -28,7 +29,7 @@ type LoginSearch = {
 };
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Sign in · CultRemix" }] }),
+  head: () => ({ meta: pageMeta("Sign in", "/login", "Sign in to CultRemix with a code sent to your email.") }),
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
     inviteId: typeof search.inviteId === "string" ? search.inviteId : undefined,
