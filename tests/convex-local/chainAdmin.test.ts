@@ -183,6 +183,29 @@ describe("/admin/chain", () => {
     expect(await owner.action(api.chain.relayerStatus, {})).toMatchObject({ balance: null, problem: "MONAD_RELAYER_PRIVATE_KEY is not set." });
   });
 
+  it("counts member wallets by status, who holds the ready ones, and the latest failure", async () => {
+    const { t } = setup();
+    const owner = await insertOwner(t); // from before wallets: no status
+    await insertMember(t); // a ready dev wallet
+    await insertMember(t, { walletReady: false }); // pending
+    await t.run((ctx) =>
+      ctx.db.insert("users", { email: "managed@example.com", walletStatus: "ready", walletCustody: "managed", walletAddress: RELAYER }),
+    );
+    await t.run((ctx) => ctx.db.insert("users", { email: "early@example.com", walletStatus: "failed", walletError: "Circle said no.", walletNextAttemptAt: 1 }));
+    await t.run((ctx) => ctx.db.insert("users", { email: "late@example.com", walletStatus: "failed", walletError: "Circle timed out.", walletNextAttemptAt: 2 }));
+    const { wallets, deployment } = await owner.query(api.chainAdmin.overview, {});
+    expect(deployment.custody).toBe("local");
+    expect(wallets).toEqual({
+      none: { count: 1, capped: false },
+      pending: { count: 1, capped: false },
+      provisioning: { count: 0, capped: false },
+      ready: { count: 2, capped: false },
+      failed: { count: 2, capped: false },
+      readyBy: { circle: 0, managed: 1, local: 1 },
+      lastError: "Circle timed out.",
+    });
+  });
+
   it("registers economic config v1 as the SHA-256 of its canonical JSON", async () => {
     const { t, chain } = setup();
     await setChainWrites(t, true);

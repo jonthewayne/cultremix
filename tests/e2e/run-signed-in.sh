@@ -166,6 +166,7 @@ wait_text "Email them"
 a11y
 go "$BASE_URL/admin/chain"
 wait_text "Relayer"
+wait_text "Member wallets"
 a11y
 agent-browser screenshot body .tmp/screenshots/signed-in-admin-metrics.png >/dev/null
 # The Print Studio, which owners can open for any design (the work page's Prepare for print).

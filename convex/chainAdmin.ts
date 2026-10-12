@@ -8,7 +8,7 @@ import { ECONOMIC_CONFIG_V1, canonicalConfigJson } from "./lib/economics";
 import { requirePlatformCapability, requireSuperAdmin } from "./lib/permissions";
 import { formatCr } from "./lib/r2";
 import { chainWriteKindValidator, chainWriteStatusValidator } from "./schema/chain";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 
 // /admin/chain: the relayer's queue and controls. Super admins can look; changing anything takes
@@ -29,11 +29,26 @@ function economicConfigV1() {
 function deploymentSummary() {
   try {
     const deployment = assertDeploymentConsistency(process.env);
-    return { env: deployment.env, networkName: deployment.network.name, registryAddress: deployment.registryAddress, problem: null };
+    return {
+      env: deployment.env,
+      networkName: deployment.network.name,
+      registryAddress: deployment.registryAddress,
+      problem: null,
+      custody: deployment.custody.mode,
+    };
   } catch (error) {
-    return { env: process.env.DEPLOYMENT_ENV ?? null, networkName: null, registryAddress: null, problem: error instanceof Error ? error.message : String(error) };
+    return {
+      env: process.env.DEPLOYMENT_ENV ?? null,
+      networkName: null,
+      registryAddress: null,
+      problem: error instanceof Error ? error.message : String(error),
+      custody: null,
+    };
   }
 }
+
+const countValidator = v.object({ count: v.number(), capped: v.boolean() });
+const WALLET_STATUSES = ["pending", "provisioning", "ready", "failed"] as const;
 
 const writeRowValidator = v.object({
   _id: v.id("chainWrites"),
@@ -61,6 +76,18 @@ export const overview = query({
       networkName: v.union(v.null(), v.string()),
       registryAddress: v.union(v.null(), v.string()),
       problem: v.union(v.null(), v.string()),
+      // How this deployment makes new member wallets (shared/config/chains.ts Custody).
+      custody: v.union(v.null(), v.literal("circle"), v.literal("managed"), v.literal("local"), v.literal("unavailable")),
+    }),
+    // Members' wallets: those from before wallets existed (none), by status, and who holds the ready ones.
+    wallets: v.object({
+      none: countValidator,
+      pending: countValidator,
+      provisioning: countValidator,
+      ready: countValidator,
+      failed: countValidator,
+      readyBy: v.object({ circle: v.number(), managed: v.number(), local: v.number() }),
+      lastError: v.union(v.null(), v.string()),
     }),
     relayers: v.array(
       v.object({
@@ -154,9 +181,38 @@ export const overview = query({
       recent,
       config: { version: config.version, hash: config.hash, status: configWrite?.status ?? null },
       unqueuedWorks: { count: published.length, capped: published.length === COUNT_CAP },
+      wallets: await walletSummary(ctx),
     };
   },
 });
+
+// Members by wallet status (each count capped), who holds the ready wallets, and the latest reason a
+// wallet couldn't be made. The five-minute check (wallets.reconcileWallets) gives members from before
+// wallets one, and retries failures, once this deployment can make wallets.
+async function walletSummary(ctx: QueryCtx) {
+  const count = (rows: Array<unknown>) => ({ count: rows.length, capped: rows.length === COUNT_CAP });
+  const byStatus = async (status: (typeof WALLET_STATUSES)[number] | undefined) =>
+    await ctx.db
+      .query("users")
+      .withIndex("by_walletStatus_and_nextAttempt", (q) => q.eq("walletStatus", status))
+      .take(COUNT_CAP);
+  const [none, pending, provisioning, ready, failed] = await Promise.all([undefined, ...WALLET_STATUSES].map(byStatus));
+  const readyBy = { circle: 0, managed: 0, local: 0 };
+  for (const user of ready) if (user.walletCustody) readyBy[user.walletCustody] += 1;
+  const latest = failed.reduce<(typeof failed)[number] | null>(
+    (best, user) => (user.walletError && (!best || (user.walletNextAttemptAt ?? 0) > (best.walletNextAttemptAt ?? 0)) ? user : best),
+    null,
+  );
+  return {
+    none: count(none),
+    pending: count(pending),
+    provisioning: count(provisioning),
+    ready: count(ready),
+    failed: count(failed),
+    readyBy,
+    lastError: latest?.walletError ?? null,
+  };
+}
 
 async function kickTick(ctx: MutationCtx) {
   await ctx.scheduler.runAfter(0, internal.chain.tick, {});

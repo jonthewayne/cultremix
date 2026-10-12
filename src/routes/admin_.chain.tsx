@@ -187,6 +187,32 @@ function ChainAdminPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Member wallets</CardTitle>
+            <CardDescription>Each Monad record is signed by its creator's wallet. The five-minute wallet check makes them.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {overview && (
+              <>
+                <Row label="New wallets">{custodyLine(overview.deployment.custody)}</Row>
+                <Row label="Ready">
+                  {countText(overview.wallets.ready)}
+                  {readyByText(overview.wallets.readyBy)}
+                </Row>
+                <Row label="Waiting">
+                  {countText(overview.wallets.pending)}, and {countText(overview.wallets.none)} from before wallets
+                </Row>
+                <Row label="Being made">{countText(overview.wallets.provisioning)}</Row>
+                <Row label="Failed">
+                  {countText(overview.wallets.failed)}
+                  {overview.wallets.lastError ? ` · latest: ${overview.wallets.lastError}` : ""}
+                </Row>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Stuck nonce</CardTitle>
             <CardDescription>
               When a transaction won't go through after three fee increases, later writes are held until it's cleared.
@@ -313,6 +339,31 @@ function ChainAdminPage() {
       </div>
     </AdminFrame>
   );
+}
+
+type Custody = typeof api.chainAdmin.overview._returnType.deployment.custody;
+
+function custodyLine(custody: Custody) {
+  if (custody === "circle") return "Circle (developer-controlled wallets)";
+  if (custody === "managed") return "CultRemix's managed wallets, from MANAGED_WALLET_SECRET";
+  if (custody === "local") return "Dev's own wallets, from DEV_WALLET_SECRET";
+  if (custody === "unavailable") {
+    return "None yet: set the Circle keys (bun run circle:setup) or, as a stopgap, MANAGED_WALLET_SECRET. Records wait until then.";
+  }
+  return "Unknown: this deployment's chain settings have a problem (above).";
+}
+
+function countText({ count, capped }: { count: number; capped: boolean }) {
+  return `${count}${capped ? "+" : ""}`;
+}
+
+function readyByText(by: { circle: number; managed: number; local: number }) {
+  const parts = [
+    by.circle ? `Circle ${by.circle}` : null,
+    by.managed ? `managed ${by.managed}` : null,
+    by.local ? `dev ${by.local}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
