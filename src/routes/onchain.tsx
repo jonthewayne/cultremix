@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { FingerprintCheck } from "~/components/cr/FingerprintCheck";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { pageMeta } from "~/lib/share";
 
 // /onchain: what CultRemix records on Monad, what it leaves off, and how to check a work.
 export const Route = createFileRoute("/onchain")({
@@ -14,10 +15,7 @@ export const Route = createFileRoute("/onchain")({
     }
   },
   head: () => ({
-    meta: [
-      { title: "On Monad · CultRemix" },
-      { name: "description", content: "What CultRemix records on Monad, and how to check a design yourself." },
-    ],
+    meta: pageMeta("On Monad", "/onchain", "What CultRemix records on Monad, and how to check a design yourself."),
   }),
   component: OnchainPage,
 });

@@ -2,6 +2,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { CONTACT_EMAIL, POLICIES, POLICIES_DRAFT, POLICIES_UPDATED, policyBySlug } from "~/lib/policies";
+import { pageMeta } from "~/lib/share";
 
 // /policies/shipping, /returns, /privacy, /terms (src/lib/policies.ts).
 export const Route = createFileRoute("/policies/$slug")({
@@ -11,9 +12,7 @@ export const Route = createFileRoute("/policies/$slug")({
     return policy;
   },
   head: ({ loaderData }) => ({
-    meta: loaderData
-      ? [{ title: `${loaderData.title} · CultRemix` }, { name: "description", content: loaderData.summary }]
-      : [{ title: "CultRemix" }],
+    meta: loaderData ? pageMeta(loaderData.title, `/policies/${loaderData.slug}`, loaderData.summary) : [{ title: "CultRemix" }],
   }),
   component: PolicyPage,
 });
