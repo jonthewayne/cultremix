@@ -10,6 +10,7 @@ import type { PickedColor } from "~/lib/pickedColor";
 import { NotFoundPage } from "~/components/app/not-found";
 import { Art } from "~/components/cr/Art";
 import { ChainStatus } from "~/components/cr/ChainStatus";
+import { VerifyOnMonad } from "~/components/cr/VerifyOnMonad";
 import { ColorSwatches } from "~/components/cr/ColorSwatches";
 import { CrMark } from "~/components/cr/CrMark";
 import { DirectRemixes } from "~/components/cr/DirectRemixes";
@@ -209,6 +210,7 @@ function ShopPage() {
                   </p>
                 )}
                 <ChainStatus workId={item.workId} />
+                <VerifyOnMonad cr={item.cr} artUrl={item.artUrl} contentHash={contentHash} />
               </div>
             )}
             <Backers workId={item.workId} cr={item.cr} />

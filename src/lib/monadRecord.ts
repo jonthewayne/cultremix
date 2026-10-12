@@ -61,6 +61,17 @@ async function ethCall(rpcUrl: string, to: string, data: string, fetchImpl: type
   return body.result;
 }
 
+// Lowercase hex of a digest, as fingerprints are shown.
+export function hexOf(buffer: ArrayBuffer) {
+  return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+// "101-002" as the registry's family and expression.
+export function crParts(cr: string) {
+  const [family, expression] = cr.split("-").map(Number);
+  return { family, expression };
+}
+
 // The record for CR <family>-<expression>, or null when the registry has none.
 export async function readMonadRecord(
   args: { rpcUrl: string; registry: string; family: number; expression: number },

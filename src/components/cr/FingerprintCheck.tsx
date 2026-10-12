@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
-import { readMonadRecord } from "~/lib/monadRecord";
+import { crParts, hexOf, readMonadRecord } from "~/lib/monadRecord";
 import type { MonadRecord } from "~/lib/monadRecord";
 import { cn } from "~/lib/utils";
 
@@ -26,7 +26,7 @@ export function FingerprintCheck() {
       const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
       setFileName(file.name);
       setPasted("");
-      setHash(hex(digest));
+      setHash(hexOf(digest));
     } finally {
       setBusy(false);
     }
@@ -119,11 +119,10 @@ function ChainCheck({ cr, hash }: { cr: string; hash: string }) {
   const registry = useQuery(convexQuery(api.provenance.registry, {})).data;
   const [state, setState] = useState<ChainState>({ step: "idle" });
   if (!registry?.address) return null;
-  const [family, expression] = cr.split("-").map(Number);
   const run = async () => {
     setState({ step: "reading" });
     try {
-      const record = await readMonadRecord({ rpcUrl: registry.publicRpcUrl, registry: registry.address!, family, expression });
+      const record = await readMonadRecord({ rpcUrl: registry.publicRpcUrl, registry: registry.address!, ...crParts(cr) });
       setState({ step: "done", record });
     } catch (error) {
       setState({ step: "error", message: error instanceof Error ? error.message : String(error) });
@@ -161,8 +160,4 @@ function ChainCheck({ cr, hash }: { cr: string; hash: string }) {
 }
 
 const KIND = { original: "An original", variation: "A variation", fork: "A fork" } as const;
-
-function hex(buffer: ArrayBuffer) {
-  return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
