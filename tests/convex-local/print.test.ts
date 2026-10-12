@@ -211,6 +211,25 @@ describe("versions", () => {
     });
   });
 
+  it("a work page save that leaves the size and height alone keeps a sideways nudge made here", async () => {
+    const { t, workId } = await setup();
+    const alice = t.withIdentity(ALICE);
+    const v1 = await openAndMeasure(t);
+    const area = (await alice.query(api.print.studio, { cr: CR }))!.product.printArea;
+    // An inch right of center.
+    await alice.mutation(api.print.savePlacement, { cr: CR, versionId: v1, xIn: (area.widthIn - 6) / 2 + 1, yIn: 2, widthIn: 6, color: "Black" });
+    const before = (await alice.query(api.print.studio, { cr: CR }))!.placement!;
+    const work = await t.run(async (ctx) => ctx.db.get("works", workId));
+    // The work page's sheet saved as it was (say, after looking at the products).
+    const productId = PRINT_PRODUCT.printful.productId;
+    await alice.mutation(api.publish.setPrintSetup, { workId, printPlacement: work!.printPlacement!, printProducts: [{ productId }] });
+    expect((await alice.query(api.print.studio, { cr: CR }))?.placement).toMatchObject({
+      xIn: before.xIn,
+      yIn: before.yIn,
+      widthIn: before.widthIn,
+    });
+  });
+
   it("offers the work's published colors first, as the print product's names", async () => {
     const { t, workId } = await setup();
     expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.offeredColors).toEqual([]);

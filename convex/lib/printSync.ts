@@ -12,6 +12,13 @@ import type { MutationCtx } from "../_generated/server";
 // makes each product's print file from this placement, so it follows even after the Print Studio's
 // own file is made (that file, works.printKey, never changes). Left alone while the Print Studio
 // renders, and when the product is printed on its back.
+//
+// The work page's placement has no sideways position (it's always centered), so only a new size or
+// height moves this one: a save there that left both alone (products ticked, nothing moved) keeps a
+// sideways nudge made here. Compared in inches within 0.02, as print.savePlacement does, since the
+// two forms round differently.
+const SAME_INCHES = 0.02;
+
 export async function followPublishPlacement(ctx: MutationCtx, workId: Id<"works">, userId: Id<"users">) {
   const work = await ctx.db.get("works", workId);
   if (!work) return;
@@ -27,6 +34,6 @@ export async function followPublishPlacement(ctx: MutationCtx, workId: Id<"works
   const aspect = aspectOf(version.width, version.height);
   const area = target.geometry.printArea;
   const placed = clampPlacement(areaPlacement(toInches(target.placement, aspect, area), area), aspect, target.geometry);
-  if (placed.xIn === placement.xIn && placed.yIn === placement.yIn && placed.widthIn === placement.widthIn) return;
+  if (Math.abs(placed.widthIn - placement.widthIn) <= SAME_INCHES && Math.abs(placed.yIn - placement.yIn) <= SAME_INCHES) return;
   await ctx.db.patch("printPlacements", placement._id, { ...placed, updatedBy: userId, updatedAt: Date.now(), render: undefined });
 }
