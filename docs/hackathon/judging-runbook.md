@@ -31,6 +31,6 @@ For Jon (and Ops) while judges use cultremix.com. Everything here works on produ
 ## What judges see that's expected
 
 - **Early access** in the header (production never says Testnet).
-- **Buying opens soon** and **Tell me when it's ready** on shop pages, until Checkout is on.
-- **Queued for Monad: it's recorded once the registry goes live** under a new design's fingerprint, until the mainnet registry is up, Monad records is on, and members have Circle wallets.
+- **Buying opens soon** on shop pages until Checkout is on, with **Tell me when it's ready** for a signed-in judge (an email box for visitors who aren't signed in).
+- **Queued for Monad: it's recorded once the registry goes live** under a new design's fingerprint, until the mainnet registry is up, Monad records is on, and members have wallets (Circle's, or the managed stopgap's if you said yes to it).
 - **Draft, under review** on the store policies, until you approve them.

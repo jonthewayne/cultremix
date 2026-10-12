@@ -15,9 +15,10 @@
 //   bun run chain:deploy:mainnet --broadcast --confirm-mainnet
 //                                                       spends real MON, so it needs both flags
 //
-// Afterwards, record the address as CHAIN_ENVIRONMENTS.<env>.registryAddress in
-// shared/config/chains.ts. Run it while that relayer is idle: it uses the relayer's nonces.
-import { readFileSync } from "node:fs";
+// Afterwards it records the address as CHAIN_ENVIRONMENTS.<env>.registryAddress in
+// shared/config/chains.ts, to commit and deploy. Run it while that relayer is idle: it uses the
+// relayer's nonces.
+import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createPublicClient, formatEther, http, isAddress } from "viem";
@@ -41,6 +42,7 @@ import {
 } from "./deployRegistry";
 import { registryAbi } from "./registryArtifact";
 import { chainEnvValue } from "./chainEnv";
+import { recordRegistryAddress } from "./recordAddress";
 import { verifyEverywhere } from "./verifyRegistry";
 import type { RegistryTarget } from "./deployRegistry";
 import type { Address, Hex } from "viem";
@@ -244,9 +246,19 @@ async function main() {
       `  Rehearsal done. A dev Convex deployment can use it with CHAIN_REGISTRY_ADDRESS=${registry} and MONAD_RPC_URL=${target.rpcUrl}.`,
     );
   } else {
-    console.log(
-      `  1. Set CHAIN_ENVIRONMENTS.${args.env}.registryAddress to "${registry}" in shared/config/chains.ts and commit.`,
-    );
+    // A failure here leaves the deploy as it is; the line below says what to record by hand.
+    const chainsFile = new URL("../../shared/config/chains.ts", import.meta.url);
+    try {
+      const recorded = recordRegistryAddress(readFileSync(chainsFile, "utf8"), args.env, registry);
+      if (recorded.changed) writeFileSync(chainsFile, recorded.source);
+      console.log(
+        `  1. ${recorded.changed ? "Recorded" : "Already recorded"} as CHAIN_ENVIRONMENTS.${args.env}.registryAddress in shared/config/chains.ts: commit and push it.`,
+      );
+    } catch (error) {
+      console.log(
+        `  1. Couldn't record it (${error instanceof Error ? error.message : String(error)}). Set CHAIN_ENVIRONMENTS.${args.env}.registryAddress to "${registry}" in shared/config/chains.ts and commit.`,
+      );
+    }
     console.log(`     ${explorerAddressUrl(network, registry)}`);
     console.log(
       `  2. Deploy Convex ${args.env}, turn on chain writes in /admin/chain, and press Register economic config v1:`,
