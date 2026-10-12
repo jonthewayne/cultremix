@@ -30,6 +30,6 @@ describe("recording a deployed registry", () => {
   });
 
   it("refuses an address that isn't one", () => {
-    expect(() => recordRegistryAddress(CHAINS, "prod", "0x123" as never)).toThrow();
+    expect(() => recordRegistryAddress(CHAINS, "prod", "0x123")).toThrow();
   });
 });

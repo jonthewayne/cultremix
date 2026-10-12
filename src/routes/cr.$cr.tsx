@@ -166,10 +166,10 @@ function ShopPage() {
                   </span>
                   {comesOn && comesOn.length > 1 ? (
                     <ul className="mt-2 text-sm font-semibold">
-                      {comesOn.map((product, index) => (
-                        <li key={`${index}-${product.name}`}>
-                          {keepHyphens(product.name)}
-                          {product.side === "back" ? " (back print)" : ""}
+                      {comesOn.map((choice, index) => (
+                        <li key={`${index}-${choice.name}`}>
+                          {keepHyphens(choice.name)}
+                          {choice.side === "back" ? " (back print)" : ""}
                         </li>
                       ))}
                     </ul>

@@ -13,7 +13,7 @@ export function recordRegistryAddress(source: string, env: "dev" | "staging" | "
   const close = source.indexOf("\n  },", open);
   if (close < 0) throw new Error("The " + env + " block in CHAIN_ENVIRONMENTS doesn't end where expected.");
   const block = source.slice(open, close);
-  const line = /\n    registryAddress: (null|"(0x[0-9a-fA-F]{40})"),/u.exec(block);
+  const line = /\n {4}registryAddress: (null|"(0x[0-9a-fA-F]{40})"),/u.exec(block);
   if (!line) throw new Error("No registryAddress line in the " + env + " block.");
   if (line[2]) {
     if (getAddress(line[2]) === checksummed) return { source, changed: false };

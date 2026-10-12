@@ -7,15 +7,17 @@ function deployment(answers: Record<string, Array<unknown>>) {
   const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
   const waits: Array<number> = [];
   const io: StepIO = {
-    call: async (fn, args) => {
+    call: (fn, args) => {
       calls.push({ fn, args });
-      const next = answers[fn]?.shift();
-      if (next === undefined) throw new Error("No answer left for " + fn);
-      if (next instanceof Error) throw next;
-      return next;
+      const queue = answers[fn] as Array<unknown> | undefined;
+      const next = queue?.shift();
+      if (next === undefined) return Promise.reject(new Error("No answer left for " + fn));
+      if (next instanceof Error) return Promise.reject(next);
+      return Promise.resolve(next);
     },
-    sleep: async (ms) => {
+    sleep: (ms) => {
       waits.push(ms);
+      return Promise.resolve();
     },
   };
   return { io, calls, waits };

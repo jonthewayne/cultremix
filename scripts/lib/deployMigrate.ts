@@ -30,11 +30,17 @@ const MAX_ROUNDS = 10_000;
 
 // Calls fn until nextOf says it's finished, passing each result to add. A place to continue from
 // that comes back twice means the function isn't moving forward, so that stops the step.
-async function follow<R>(io: StepIO, fn: string, first: Args, nextOf: (result: R) => Args | null, add: (result: R) => void) {
+async function follow<TResult>(
+  io: StepIO,
+  fn: string,
+  first: Args,
+  nextOf: (result: TResult) => Args | null,
+  add: (result: TResult) => void,
+) {
   const seen = new Set<string>();
   let args = first;
   for (let round = 1; round <= MAX_ROUNDS; round++) {
-    const result = (await io.call(fn, args)) as R;
+    const result = (await io.call(fn, args)) as TResult;
     add(result);
     const next = nextOf(result);
     if (!next) return;
