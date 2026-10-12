@@ -33,6 +33,9 @@ crons.interval("sweep paid calls", { minutes: 10 }, internal.budget.sweep, {});
 // The image credit: tell the owner and ops when it runs low (convex/gatewayCredit.ts watch).
 crons.hourly("watch gateway credit", { minuteUTC: 20 }, internal.gatewayCredit.watch, {});
 
+// Browser errors last seen over 14 days ago (convex/clientErrors.ts).
+crons.daily("client error cleanup", { hourUTC: 9, minuteUTC: 45 }, internal.clientErrors.cleanup, {});
+
 // Trending: days that leave the 7-day window come off works' scores (convex/trending.ts).
 crons.hourly("expire trending attention", { minuteUTC: 3 }, internal.trending.expire, {});
 

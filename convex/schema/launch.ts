@@ -17,6 +17,26 @@ export const launchTables = {
     note: v.optional(v.string()),
   }).index("by_user_active", ["userId", "active"]),
 
+  // Errors browsers hit (convex/clientErrors.ts): one row per error and page, with how many times
+  // and when, and the hour that counts toward a burst. Nothing personal: the message, its stack, the
+  // page's path without its query, the browser, and whether the person was signed in.
+  clientErrors: defineTable({
+    key: v.string(),
+    message: v.string(),
+    stack: v.optional(v.string()),
+    path: v.string(),
+    userAgent: v.optional(v.string()),
+    source: v.union(v.literal("window"), v.literal("promise"), v.literal("page")),
+    count: v.number(),
+    firstAt: v.number(),
+    lastAt: v.number(),
+    windowStart: v.number(),
+    windowCount: v.number(),
+    signedIn: v.boolean(),
+  })
+    .index("by_key", ["key"])
+    .index("by_lastAt", ["lastAt"]),
+
   // Operational alerts and the level each was last told at (convex/opsAlerts.ts), so a drop is
   // told once: "gateway-credit" with ok, low, or out.
   opsAlerts: defineTable({

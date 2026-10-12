@@ -2,6 +2,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { SiteHeader } from "~/components/cr/SiteHeader";
+import { reportClientError } from "~/lib/clientErrors";
 import { cn } from "~/lib/utils";
 
 // The page for an address that leads nowhere: an unknown CR number, family, member, or path.
@@ -45,8 +46,10 @@ export function NotFoundPage({
 }
 
 // When a page fails to load. No header here: the header's own queries may be what failed.
-export function ErrorPage({ reset }: ErrorComponentProps) {
+export function ErrorPage({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
+  // The error behind it goes to Admin, Overview (src/lib/clientErrors.ts).
+  useEffect(() => reportClientError(error, "page"), [error]);
   return (
     <div className="min-h-svh bg-white px-4 py-16 text-black md:px-10">
       <Link to="/" className="text-base font-black uppercase tracking-[0.2em] md:text-lg">

@@ -11,7 +11,9 @@ import { LazyMotion } from "motion/react";
 import { Toaster } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
+import { useEffect } from "react";
 import { convexAuthClient } from "~/lib/auth-client";
+import { installClientErrorReporting } from "~/lib/clientErrors";
 import { getTokenAndRenewSession } from "~/lib/auth-server";
 import { redirectForOnboarding, useOnboardingGuard } from "~/lib/onboardingGuard";
 import { SESSION_META } from "~/lib/sessionMeta";
@@ -97,6 +99,8 @@ const loadMotionFeatures = () => import("~/lib/motionFeatures").then((mod) => mo
 
 function RootComponent() {
   const context = useRouteContext({ from: Route.id });
+  // Errors in this browser go to Admin, Overview (src/lib/clientErrors.ts).
+  useEffect(() => installClientErrorReporting(context.convexQueryClient.convexClient), [context.convexQueryClient]);
   return (
     <RootDocument signedIn={Boolean(context.token)}>
       <ConvexBetterAuthProvider

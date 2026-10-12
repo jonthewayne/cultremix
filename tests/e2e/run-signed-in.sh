@@ -129,6 +129,7 @@ go "$BASE_URL/admin"
 wait_text "Switches"
 wait_text "Gateway credit"
 wait_text "Ready to sell"
+wait_text "Browser errors"
 a11y
 go "$BASE_URL/admin/products"
 wait_text "Add a product"

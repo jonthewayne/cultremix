@@ -56,6 +56,12 @@ export const RATE_LIMITS = {
     windowMs: 60 * 60 * 1000,
     blockMs: 60 * 60 * 1000,
   },
+  // Browser error reports (convex/clientErrors.ts), from everyone together: anyone can send them.
+  "client:error": {
+    maxAttempts: 100,
+    windowMs: 10 * 60 * 1000,
+    blockMs: 10 * 60 * 1000,
+  },
   // "Add a part" (remixPartsActions.describe): each one asks a model to read the description.
   "studio:describe_part": {
     maxAttempts: 30,

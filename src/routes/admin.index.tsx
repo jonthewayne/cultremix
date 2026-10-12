@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { AdminSection, Toggle, adminButton, adminInput, adminQuietButton } from "~/components/admin/AdminSection";
 import { BudgetCard } from "~/components/admin/BudgetCard";
+import { BrowserErrors } from "~/components/admin/BrowserErrors";
 import { GatewayCredit } from "~/components/admin/GatewayCredit";
 import { Readiness } from "~/components/admin/Readiness";
 import { errorMessage } from "~/lib/imagePrep";
@@ -20,6 +21,7 @@ function AdminOverview() {
       <Readiness />
       <BudgetCard />
       <GatewayCredit />
+      <BrowserErrors />
       <FlagsSection flags={overview.flags} canManage={overview.canManage} />
       <SettingsSection settings={overview.settings} canManage={overview.canManage} />
       <TakenDownSection />
