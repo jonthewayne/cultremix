@@ -10,6 +10,7 @@ import { api, internal } from "../../convex/_generated/api";
 import { privateKeyToAccount } from "viem/accounts";
 import { registryAbi } from "../../convex/lib/chain/abi";
 import { managedWalletPrivateKey } from "../../convex/lib/chain/custody";
+import { readMonadRecord } from "../../src/lib/monadRecord";
 import {
   ZERO_BYTES32,
   configHashFor,
@@ -179,6 +180,11 @@ describe("chain writes on a local Monad node", () => {
     });
     expect(receipt.status).toBe("success");
     expect(receipt.from.toLowerCase()).toBe(RELAYER.toLowerCase());
+
+    // /onchain's in-browser check reads the same record with plain JSON-RPC calls.
+    const remixWork = await workOf(t, remix);
+    const record = await readMonadRecord({ rpcUrl, registry, family: remixWork.crFamily, expression: remixWork.crExpression });
+    expect(record).toMatchObject({ workId: workIdFor(remix), creator: remixer.address.toLowerCase(), kind: 2, contentHash: remixWork.contentHash });
   });
 
   it("records Backs with each backer's place in line", async () => {

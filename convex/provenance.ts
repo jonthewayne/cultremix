@@ -169,6 +169,9 @@ export const registry = query({
     address: v.union(v.null(), v.string()),
     addressUrl: v.union(v.null(), v.string()),
     explorerUrl: v.union(v.null(), v.string()),
+    // The network's public RPC, for checking a record from the browser. Never MONAD_RPC_URL, which
+    // may carry a provider's key.
+    publicRpcUrl: v.string(),
   }),
   handler: () => {
     const settings = CHAIN_ENVIRONMENTS[deploymentEnv()];
@@ -180,6 +183,7 @@ export const registry = query({
       address,
       addressUrl: explorer && address ? explorerAddressUrl(explorer, address) : null,
       explorerUrl: explorer?.explorerUrl ?? null,
+      publicRpcUrl: settings.network.rpcUrl,
     };
   },
 });

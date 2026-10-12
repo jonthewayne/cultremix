@@ -346,6 +346,7 @@ describe("provenance.registry", () => {
       address: null,
       addressUrl: null,
       explorerUrl: "https://testnet.monadscan.com",
+      publicRpcUrl: "https://testnet-rpc.monad.xyz",
     });
   });
 
@@ -366,7 +367,11 @@ describe("provenance.registry", () => {
       address: null,
       addressUrl: null,
       explorerUrl: "https://monadscan.com",
+      publicRpcUrl: "https://rpc.monad.xyz",
     });
+    // A private RPC (which may carry a provider's key) is never what the browser is told to use.
+    vi.stubEnv("MONAD_RPC_URL", "https://monad-mainnet.example.com/secret-key");
+    expect((await t.query(api.provenance.registry, {})).publicRpcUrl).toBe("https://rpc.monad.xyz");
     vi.stubEnv("DEPLOYMENT_ENV", "dev");
     vi.stubEnv("MONAD_RPC_URL", "http://127.0.0.1:8545");
     expect(await t.query(api.provenance.registry, {})).toMatchObject({ address, addressUrl: null, explorerUrl: null });

@@ -57,7 +57,7 @@ Stack: TanStack Start on Cloudflare Workers, Convex with Better Auth, GPT Image 
 
 ## Check a file today
 
-Every work page shows its fingerprint, the SHA-256 of its original file, with a link to that file. On `/onchain`, **Which design is this file?** hashes a dropped file in the browser (only the hash leaves the device) and names the design it is; a resaved copy doesn't match. This works before the registry is deployed, and once it is, the same fingerprint is the `contentHash` recorded on Monad.
+Every work page shows its fingerprint, the SHA-256 of its original file, with a link to that file. On `/onchain`, **Which design is this file?** hashes a dropped file in the browser (only the hash leaves the device) and names the design it is; a resaved copy doesn't match. This works before the registry is deployed, and once it is, the same fingerprint is the `contentHash` recorded on Monad: under a match, **Check it on Monad yourself** has the browser read the design's record from Monad's public RPC (`workIdAt`, then `getWork`) and compare the fingerprints, so the check doesn't depend on trusting CultRemix's servers. The anvil test reads a real registration this way.
 
 ## What the registry proves
 

@@ -164,7 +164,8 @@ function OnchainPage() {
           </ol>
           <p className="mt-4 text-neutral-600">
             Each design’s page also shows whether it’s recorded yet, with a link to its transaction. Its family tree marks
-            every design that is.
+            every design that is. Or drop its file above and press Check it on Monad yourself: your browser asks Monad for the
+            record and compares the fingerprints.
           </p>
         </Section>
 

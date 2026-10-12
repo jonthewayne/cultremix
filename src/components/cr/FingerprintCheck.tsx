@@ -4,6 +4,8 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Art } from "~/components/cr/Art";
+import { readMonadRecord } from "~/lib/monadRecord";
+import type { MonadRecord } from "~/lib/monadRecord";
 import { cn } from "~/lib/utils";
 
 // Drop a design's original file (or paste a fingerprint) to find the CultRemix design it is. The
@@ -98,7 +100,61 @@ export function FingerprintCheck() {
               </span>
             </Link>
           )}
+          {found.data && <ChainCheck key={found.data.cr} cr={found.data.cr} hash={hash} />}
         </div>
+      )}
+    </div>
+  );
+}
+
+type ChainState =
+  | { step: "idle" }
+  | { step: "reading" }
+  | { step: "done"; record: MonadRecord | null }
+  | { step: "error"; message: string };
+
+// Once the registry is deployed: reads the design's record from Monad's public RPC, in the browser,
+// and compares its fingerprint with the file's. Nothing goes through CultRemix's servers.
+function ChainCheck({ cr, hash }: { cr: string; hash: string }) {
+  const registry = useQuery(convexQuery(api.provenance.registry, {})).data;
+  const [state, setState] = useState<ChainState>({ step: "idle" });
+  if (!registry?.address) return null;
+  const [family, expression] = cr.split("-").map(Number);
+  const run = async () => {
+    setState({ step: "reading" });
+    try {
+      const record = await readMonadRecord({ rpcUrl: registry.publicRpcUrl, registry: registry.address!, family, expression });
+      setState({ step: "done", record });
+    } catch (error) {
+      setState({ step: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  return (
+    <div className="mt-4 border-t border-neutral-300 pt-4 text-sm">
+      {state.step === "idle" || state.step === "reading" ? (
+        <button
+          type="button"
+          onClick={() => void run()}
+          disabled={state.step === "reading"}
+          className="min-h-10 rounded-xl border-2 border-black bg-white px-3 font-bold disabled:opacity-50"
+        >
+          {state.step === "reading" ? "Asking Monad…" : "Check it on Monad yourself"}
+        </button>
+      ) : state.step === "error" ? (
+        <p>Couldn't reach Monad: {state.message} Try again in a moment.</p>
+      ) : state.record === null ? (
+        <p>Monad has no record of CR {cr} yet. A new design is recorded within a minute or two of publishing.</p>
+      ) : state.record.contentHash === hash ? (
+        <p className="font-semibold">
+          Monad's record of CR {cr} has this exact fingerprint
+          {state.record.registeredAt ? `, recorded ${new Date(state.record.registeredAt * 1000).toLocaleString()}` : ""}. Your browser
+          read it from {registry.networkName} directly.
+        </p>
+      ) : (
+        <p className="font-semibold text-red-700">
+          Monad's record of CR {cr} has a different fingerprint ({state.record.contentHash.slice(0, 12)}…). Write to
+          heyyo@cultremix.com.
+        </p>
       )}
     </div>
   );
