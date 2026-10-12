@@ -95,7 +95,10 @@ function KeptPage() {
         <div className="flex flex-col gap-6">
           <div>
             <p className="text-sm font-bold uppercase tracking-wider">Kept just for you</p>
-            <h1 className="mt-2 text-5xl font-black leading-[0.9] tracking-tight md:text-6xl">{kept.title ?? "Untitled"}</h1>
+            {/* Only its creator sees this page, and a kept design has no CR number to go by. */}
+            <h1 className="mt-2 text-5xl font-black leading-[0.9] tracking-tight md:text-6xl">
+              {kept.title ?? (kept.parent ? "Your remix" : "Your design")}
+            </h1>
             {kept.description && <p className="mt-3 text-lg">{kept.description}</p>}
             <p className="mt-3 text-sm text-neutral-600">Only you can see this page. It has no CR number and isn't in the feed.</p>
           </div>
