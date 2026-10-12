@@ -171,6 +171,112 @@ export function snapWordsToRequest(notes: string, asked: ReadonlyArray<string>):
     .join("\n");
 }
 
+// ---- Short words a reading left out ----
+
+// Production's CR 106-001 was asked to say "I live my life a quarter-mile at a time" and read as
+// I LIVE / LIFE A / QUARTER- / MILE A / TIME, its MY and AT squeezed between bigger letters. When
+// every word the fields read lines up, in order, with words the design was asked to say, and only
+// one or two asked words of three letters or fewer are missing between them, the missing words go
+// back right after the word they follow, in the reading's capitals. Anything else stays as read.
+const SHORT_WORD = 3;
+const MAX_DROPPED = 2;
+const MIN_MATCHED = 3;
+
+// A word's pieces for lining up, split after a hyphen ("quarter-mile" is "quarter-" and "mile"),
+// so a reading that breaks it over two lines still lines up.
+function hyphenPieces(word: string) {
+  return word.split(/(?<=-)(?=[\p{L}\p{N}])/u);
+}
+
+// Where the asked words line up with a run of the words read: the run's first word, and each
+// missing asked word with the read word it follows (-1: before the run's first word). Null when
+// they don't line up that way, or when nothing is missing.
+function alignDropped(asked: ReadonlyArray<string>, read: ReadonlyArray<string>) {
+  const m = asked.length;
+  let best: { start: number; cost: number; missing: Array<{ at: number; after: number }> } | null = null;
+  for (let start = 0; start < read.length; start++) {
+    const n = read.length - start;
+    // cost[i][j]: the fewest asked words skipped to line asked[0..i) up with read[start..start+j).
+    const cost = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(Number.POSITIVE_INFINITY));
+    const skipped = Array.from({ length: m + 1 }, () => new Array<boolean>(n + 1).fill(false));
+    cost[0][0] = 0;
+    for (let i = 0; i < m; i++) {
+      for (let j = 0; j <= n; j++) {
+        const here = cost[i][j];
+        if (!Number.isFinite(here)) continue;
+        if (j < n && asked[i] === read[start + j] && here < cost[i + 1][j + 1]) {
+          cost[i + 1][j + 1] = here;
+          skipped[i + 1][j + 1] = false;
+        }
+        if (asked[i].length <= SHORT_WORD && here + 1 <= MAX_DROPPED && here + 1 < cost[i + 1][j]) {
+          cost[i + 1][j] = here + 1;
+          skipped[i + 1][j] = true;
+        }
+      }
+    }
+    for (let dropped = 0; dropped <= MAX_DROPPED; dropped++) {
+      const j = m - dropped;
+      if (j < MIN_MATCHED || j > n || cost[m][j] !== dropped) continue;
+      // The asked words are all there in this run: nothing to put back.
+      if (dropped === 0) return null;
+      if (best && best.cost <= dropped) break;
+      const missing: Array<{ at: number; after: number }> = [];
+      for (let i = m, k = j; i > 0; i--) {
+        if (skipped[i][k]) missing.push({ at: i - 1, after: k > 0 ? start + k - 1 : -1 });
+        else k--;
+      }
+      best = { start, cost: dropped, missing: missing.reverse() };
+      break;
+    }
+  }
+  return best;
+}
+
+export function restoreDroppedWords<F extends RemixField>(fields: Array<F>, asked: ReadonlyArray<string>): Array<F> {
+  const lines = fields.map((field) => field.text.split("\n").map((line) => line.split(/\s+/u).filter(Boolean)));
+  const read: Array<{ field: number; line: number; word: number; key: string }> = [];
+  lines.forEach((fieldLines, field) =>
+    fieldLines.forEach((words, line) =>
+      words.forEach((text, word) => {
+        for (const piece of hyphenPieces(text)) {
+          const key = letterKey(piece);
+          if (key) read.push({ field, line, word, key });
+        }
+      }),
+    ),
+  );
+  for (const phrase of asked) {
+    const wanted = phrase
+      .split(/\s+/u)
+      .flatMap(hyphenPieces)
+      .map((word) => ({ word, key: letterKey(word) }))
+      .filter((word) => word.key.length > 0);
+    if (wanted.length < MIN_MATCHED + 1) continue;
+    const found = alignDropped(
+      wanted.map((word) => word.key),
+      read.map((word) => word.key),
+    );
+    if (!found) continue;
+    const touched = new Set<number>();
+    // Last first, so earlier places don't move; two words after the same word land in order.
+    for (const gap of [...found.missing].reverse()) {
+      const anchor = gap.after >= 0 ? read[gap.after] : read[found.start];
+      const words = lines[anchor.field][anchor.line];
+      const lineText = words.join(" ");
+      const capitals = /\p{L}/u.test(lineText) && lineText === lineText.toUpperCase();
+      const word = capitals ? wanted[gap.at].word.toUpperCase() : wanted[gap.at].word;
+      words.splice(gap.after >= 0 ? anchor.word + 1 : anchor.word, 0, word);
+      touched.add(anchor.field);
+    }
+    return fields.map((field, i) => {
+      if (!touched.has(i)) return field;
+      const text = lines[i].map((words) => words.join(" ")).join("\n");
+      return { ...field, text, maxLength: Math.max(field.maxLength, maxLengthFor(text)) };
+    });
+  }
+  return fields;
+}
+
 // Every quoted piece in the notes' "Words" section, in order, with the words describing it.
 export function wordPieces(notes: string | undefined): Array<{ text: string; description: string }> {
   if (!notes?.trim()) return [];

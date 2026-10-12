@@ -5,6 +5,7 @@ import {
   inheritRemixFields,
   maxLengthFor,
   proposeRemixFields,
+  restoreDroppedWords,
   snapWordsToRequest,
   wordChangeInstruction,
   wordPieces,
@@ -274,6 +275,39 @@ describe("inheritRemixFields and changeSummary", () => {
       "GROW SLOW to GROW WILD; TAKE IT EASY to STAY WEIRD",
     );
     expect(changeSummary([{ from: "EST. 1992", to: "" }])).toBe("removed EST. 1992");
+  });
+});
+
+describe("restoreDroppedWords", () => {
+  const field = (id: string, text: string): RemixField => ({ id, kind: "text", label: "Headline", text, maxLength: maxLengthFor(text), on: true });
+  // Production's CR 106-001: its squeezed MY and AT were left out in two of three readings.
+  const QUARTER = "I live my life a quarter-mile at a time";
+
+  it("puts back short words a reading left out of the asked words, where they go", () => {
+    const rows = ["I LIVE", "LIFE A", "QUARTER-", "MILE A", "TIME"].map((text, i) => field(`t${i + 1}`, text));
+    expect(restoreDroppedWords(rows, [QUARTER]).map((f) => f.text)).toEqual(["I LIVE MY", "LIFE A", "QUARTER-", "MILE AT A", "TIME"]);
+    const one = [field("t1", "I LIVE\nLIFE A\nQUARTER-\nMILE AT A\nTIME")];
+    expect(restoreDroppedWords(one, [QUARTER])[0].text).toBe("I LIVE MY\nLIFE A\nQUARTER-\nMILE AT A\nTIME");
+    const first = [field("t1", "LIVE MY\nLIFE A\nQUARTER-\nMILE AT A\nTIME")];
+    expect(restoreDroppedWords(first, [QUARTER])[0].text).toBe("I LIVE MY\nLIFE A\nQUARTER-\nMILE AT A\nTIME");
+    // In the reading's own capitals.
+    expect(restoreDroppedWords([field("t1", "I live life a quarter-mile at a time")], [QUARTER])[0].text).toBe(QUARTER);
+  });
+
+  it("leaves complete readings, other words, and other fields as read", () => {
+    const whole = [field("t1", "I LIVE MY LIFE A QUARTER-MILE AT A TIME")];
+    expect(restoreDroppedWords(whole, [QUARTER])).toEqual(whole);
+    // A long word missing, three short ones, a word the request doesn't have.
+    for (const text of ["I LIVE MY A QUARTER-MILE AT A TIME", "I LIVE LIFE QUARTER-MILE A TIME", "I LIVE MY WHOLE LIFE A QUARTER-MILE A TIME"]) {
+      const fields = [field("t1", text)];
+      expect(restoreDroppedWords(fields, [QUARTER])).toEqual(fields);
+    }
+    const plain = [field("t1", "I LIVE LIFE A QUARTER-MILE AT A TIME")];
+    expect(restoreDroppedWords(plain, [])).toEqual(plain);
+    const mixed = [field("t1", "EST.  1992"), field("t2", "I LIVE LIFE A QUARTER-MILE AT A TIME")];
+    const out = restoreDroppedWords(mixed, [QUARTER]);
+    expect(out[0]).toBe(mixed[0]);
+    expect(out[1].text).toBe("I LIVE MY LIFE A QUARTER-MILE AT A TIME");
   });
 });
 

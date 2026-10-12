@@ -11,6 +11,7 @@ import {
   fieldsFoundInNotes,
   inheritRemixFields,
   proposeRemixFields,
+  restoreDroppedWords,
   wordChangeInstruction,
 } from "./lib/remixFields";
 import type { RemixField, WordChange, WordChangeProblem } from "./lib/remixFields";
@@ -38,6 +39,14 @@ function publicFields(fields: Array<RemixField> | undefined) {
 async function sourceBatch(ctx: Ctx, work: Doc<"works">) {
   const generation = await ctx.db.get("generations", work.generationId);
   return generation ? await ctx.db.get("batches", generation.batchId) : null;
+}
+
+// The words a work's design was asked to say: those in capitals or quotes in its batch's request,
+// and a words remix's new words.
+export async function askedWordsFor(ctx: Ctx, work: Doc<"works">) {
+  const batch = await sourceBatch(ctx, work);
+  if (!batch) return [];
+  return [...requestedWords(batch.instruction), ...(batch.wordChanges ?? []).map((change) => change.to).filter(Boolean)];
 }
 
 // The words a published remix changed, when it changed them through the fields.
@@ -78,7 +87,8 @@ export async function inheritOnPublish(ctx: MutationCtx, workId: Id<"works">) {
 export async function proposeOnNotes(ctx: MutationCtx, workId: Id<"works">, notes: string) {
   const work = await ctx.db.get("works", workId);
   if (!work) return;
-  const proposed = proposeRemixFields(notes);
+  // Short words the reader left out of the asked words go back (lib/remixFields.ts restoreDroppedWords).
+  const proposed = restoreDroppedWords(proposeRemixFields(notes), await askedWordsFor(ctx, work));
   if (!work.remixFields) {
     await ctx.db.patch("works", work._id, { remixFields: proposed });
     return;
@@ -214,7 +224,9 @@ export const backfill = internalMutation({
     let saved = 0;
     for (const work of page.page) {
       if (work.remixFields) continue;
-      const fields = (await inheritedFields(ctx, work)) ?? (work.notes ? proposeRemixFields(work.notes) : null);
+      const fields =
+        (await inheritedFields(ctx, work)) ??
+        (work.notes ? restoreDroppedWords(proposeRemixFields(work.notes), await askedWordsFor(ctx, work)) : null);
       if (!fields) continue;
       await ctx.db.patch("works", work._id, { remixFields: fields });
       saved++;

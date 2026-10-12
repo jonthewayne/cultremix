@@ -7,9 +7,8 @@ import { checkRateLimit } from "./lib/authRateLimit";
 import { imageUrlReader } from "./lib/imageUrls";
 import { EMPTY_PAGE, cappedPage } from "./lib/paging";
 import { isDevDeployment } from "./lib/r2";
-import { requestedWords } from "./lib/prompts";
 import { snapWordsToRequest } from "./lib/remixFields";
-import { inheritOnPublish, proposeOnNotes } from "./remixFields";
+import { askedWordsFor, inheritOnPublish, proposeOnNotes } from "./remixFields";
 import { requireMember } from "./studio";
 import { isImageKey } from "./lib/sizes";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -328,7 +327,7 @@ export const saveWorkNotes = internalMutation({
     const work = await ctx.db.get("works", args.workId);
     if (!work || work.notes) return null;
     // A reading a letter or two off the words the design was made to say takes their spelling.
-    const notes = snapWordsToRequest(args.notes, await askedWords(ctx, work));
+    const notes = snapWordsToRequest(args.notes, await askedWordsFor(ctx, work));
     await ctx.db.patch("works", work._id, {
       notes,
       notesSummary: args.summary,
@@ -342,15 +341,6 @@ export const saveWorkNotes = internalMutation({
     return null;
   },
 });
-
-// The words a work's design was asked to say: those in capitals or quotes in its batch's request,
-// and a remix's new words.
-async function askedWords(ctx: MutationCtx, work: Doc<"works">) {
-  const generation = await ctx.db.get("generations", work.generationId);
-  const batch = generation ? await ctx.db.get("batches", generation.batchId) : null;
-  if (!batch) return [];
-  return [...requestedWords(batch.instruction), ...(batch.wordChanges ?? []).map((change) => change.to).filter(Boolean)];
-}
 
 // Ops repair for a misread design: forgets a work's notes and its proposed remixable words, then
 // reads it again. The creator's edits to those words go with them, so it's for fixing a bad reading.
