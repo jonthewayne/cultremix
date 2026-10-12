@@ -16,7 +16,11 @@ It's always centered left to right. Each product turns it into inches for its ow
 
 The work stores `printPlacement` (shared) and `printProducts` (the Printful product ids it comes on, each with its own placement when the creator chose "Place it separately"). Works published before this sell on the default product with the default placement.
 
-The Print Studio (`/print/<cr>`) places the front of the work's first product in inches, and a placement saved there wins over the publish placement for that product's front. Until one is saved, it starts from the publish placement (`print.studio` returns it as `publishPlacement` when it's on the front), so it shows the size the work page states; before October 12 it started from its own default, up to 12 inches at the top, and the first adjustment saved that instead of the creator's choice.
+The Print Studio (`/print/<cr>`) places the front of the work's first product in inches, and the two placements always describe the same print, so the newest choice is what prints and what the work page says (October 12; before, the Print Studio's placement won at print time while the work page kept describing the publish placement):
+
+- Until a placement is saved in the Print Studio, it starts from the publish placement (`print.studio` returns it as `publishPlacement` when it's on the front). It used to start from its own default, up to 12 inches at the top, and the first adjustment saved that instead of the creator's choice.
+- Saving there writes the work's placement for that product (`withProductPlacement` in `convex/lib/shopProduct.ts`): the shared placement when it's the work's only product, else that product's own ("placed separately"). Relative placements are centered, so a sideways nudge stays in the Print Studio.
+- Changing the placement on the work page moves the Print Studio's to match, keeping its art version and color (`followPublishPlacement` in `convex/lib/printSync.ts`). Not once the Print Studio's own print file is made, while it renders, or when the product is printed on its back.
 
 ## Products
 

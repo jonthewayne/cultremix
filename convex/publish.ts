@@ -16,6 +16,7 @@ import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
 import { activePalette } from "./merch";
 import { chosenProducts, offeredShopProducts, retireKeptListings } from "./lib/shopProduct";
+import { followPublishPlacement } from "./lib/printSync";
 import { crNumber } from "./lib/shopify/productSync";
 import { garmentKindValidator, relativePlacementValidator } from "./schema/merch";
 import {
@@ -583,6 +584,7 @@ export const setPrintSetup = mutation({
       throw new ConvexError({ code: "INVALID_PRODUCTS", message: "Pick at least one product it comes on." });
     }
     await ctx.db.patch("works", work._id, { printPlacement, printProducts });
+    await followPublishPlacement(ctx, work._id, user._id);
     return null;
   },
 });

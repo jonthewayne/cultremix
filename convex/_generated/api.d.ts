@@ -95,6 +95,7 @@ import type * as lib_printFingerprint from "../lib/printFingerprint.js";
 import type * as lib_printImage from "../lib/printImage.js";
 import type * as lib_printKeys from "../lib/printKeys.js";
 import type * as lib_printPng from "../lib/printPng.js";
+import type * as lib_printSync from "../lib/printSync.js";
 import type * as lib_printful_client from "../lib/printful/client.js";
 import type * as lib_printful_setup from "../lib/printful/setup.js";
 import type * as lib_printful_webhookRoute from "../lib/printful/webhookRoute.js";
@@ -284,6 +285,7 @@ declare const fullApi: ApiFromModules<{
   "lib/printImage": typeof lib_printImage;
   "lib/printKeys": typeof lib_printKeys;
   "lib/printPng": typeof lib_printPng;
+  "lib/printSync": typeof lib_printSync;
   "lib/printful/client": typeof lib_printful_client;
   "lib/printful/setup": typeof lib_printful_setup;
   "lib/printful/webhookRoute": typeof lib_printful_webhookRoute;

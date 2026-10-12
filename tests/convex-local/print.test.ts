@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
+import { PRINT_PRODUCT } from "../../shared/config/print-products";
+import { toInches } from "../../src/lib/print/shirtPlacement";
 import { newTest } from "./setup";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -153,6 +155,35 @@ describe("versions", () => {
     // The Print Studio places the front; a back print starts from its own default.
     await t.run(async (ctx) => ctx.db.patch("works", workId, { printPlacement: { side: "back", size: 0.4, drop: 0.3 } }));
     expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.publishPlacement).toBeNull();
+  });
+
+  it("a placement saved here becomes the work's, so the work page says what prints", async () => {
+    const { t, workId } = await setup();
+    const alice = t.withIdentity(ALICE);
+    const v1 = await openAndMeasure(t);
+    const area = (await alice.query(api.print.studio, { cr: CR }))!.product.printArea;
+    await alice.mutation(api.print.savePlacement, { cr: CR, versionId: v1, xIn: 3, yIn: 2, widthIn: 6, color: "Black" });
+    const placed = await t.run(async (ctx) => (await ctx.db.get("works", workId))?.printPlacement);
+    expect(placed?.side).toBe("front");
+    // Back in inches on the same print area (a 1024 px square), it's what was saved.
+    expect(toInches(placed!, 1, area).widthIn).toBeCloseTo(6, 1);
+    expect(toInches(placed!, 1, area).yIn).toBeCloseTo(2, 1);
+  });
+
+  it("a placement changed on the work page moves this one, keeping its version and color", async () => {
+    const { t, workId } = await setup();
+    const alice = t.withIdentity(ALICE);
+    const v1 = await openAndMeasure(t);
+    await alice.mutation(api.print.savePlacement, { cr: CR, versionId: v1, xIn: 3, yIn: 2, widthIn: 6, color: "Black" });
+    const productId = PRINT_PRODUCT.printful.productId;
+    const small = { side: "front" as const, size: 0.4, drop: 0 };
+    await alice.mutation(api.publish.setPrintSetup, { workId, printPlacement: small, printProducts: [{ productId }] });
+    const studio = await alice.query(api.print.studio, { cr: CR });
+    const expected = toInches(small, 1, studio!.product.printArea);
+    expect(studio?.placement).toMatchObject({ versionId: v1, widthIn: expected.widthIn, yIn: expected.yIn, color: "Black" });
+    // A back print leaves it alone: the Print Studio places the front.
+    await alice.mutation(api.publish.setPrintSetup, { workId, printPlacement: { side: "back", size: 0.9, drop: 0 }, printProducts: [{ productId }] });
+    expect((await alice.query(api.print.studio, { cr: CR }))?.placement).toMatchObject({ widthIn: expected.widthIn, yIn: expected.yIn });
   });
 
   it("offers the work's published colors first, as the print product's names", async () => {

@@ -7,7 +7,7 @@ import {
   PRINT_SIZES,
   garmentKindOf,
 } from "../../shared/config/print-products";
-import { DEFAULT_PLACEMENT, clampRelative } from "../../src/lib/print/shirtPlacement";
+import { DEFAULT_PLACEMENT, clampRelative, sameRelative } from "../../src/lib/print/shirtPlacement";
 import { GARMENT_COLORS, colorKey } from "./garments";
 import { colorCode } from "./shopColors";
 import { productHandle } from "./shopify/productSync";
@@ -265,8 +265,30 @@ export async function printTargetForWork(ctx: Ctx, work: Pick<Doc<"works">, "pri
     geometry: geometryOf(product.key, product.front),
     name: product.name,
     colors: product.colors.map(({ name, hex }) => ({ name, hex })),
-    // Where its creator placed it on this product when publishing; null when it isn't one they chose.
+    // Where its creator placed it on this product when publishing, and the product's Printful id;
+    // both null when it isn't one they chose.
     placement: choice ? choice.placement : null,
+    productId: choice ? choice.product.printfulProductId : null,
+  };
+}
+
+// The work's placement with one product's changed (by the Print Studio, on the product it places):
+// the shared placement when that's the work's only product, else that product's own.
+export function withProductPlacement(
+  work: Pick<Doc<"works">, "printPlacement" | "printProducts">,
+  productId: number,
+  placement: RelativePlacement,
+): Pick<Doc<"works">, "printPlacement" | "printProducts"> {
+  const picks = work.printProducts ?? [];
+  if (picks.length <= 1) {
+    return { printPlacement: placement, printProducts: picks.length === 1 ? [{ productId: picks[0].productId }] : work.printProducts };
+  }
+  const shared = clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT);
+  return {
+    printPlacement: work.printPlacement,
+    printProducts: picks.map((pick) =>
+      pick.productId === productId ? { productId, ...(sameRelative(placement, shared) ? {} : { placement }) } : pick,
+    ),
   };
 }
 

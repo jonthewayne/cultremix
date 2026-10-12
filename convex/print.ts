@@ -3,6 +3,7 @@ import { printCheck } from "../src/lib/print/check";
 import { offeredPrintColors } from "../src/lib/print/colors";
 import { clampTolerance, parseHex } from "../src/lib/print/knockout";
 import { aspectOf, clampPlacement } from "../src/lib/print/placement";
+import { sameRelative, toRelative } from "../src/lib/print/shirtPlacement";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { creditBalance, getViewerUser, isOwner } from "./identity";
@@ -12,7 +13,7 @@ import { EXPIRED_MESSAGE } from "./lib/paidAttempts";
 import { CUTOUT_CENTS, topazCents, topazWorstCaseCents } from "./lib/pricing";
 import { formatCr, parseCr, publicUrl } from "./lib/r2";
 import { nudgeSalePrep } from "./lib/salePrep";
-import { printTargetForWork } from "./lib/shopProduct";
+import { printTargetForWork, withProductPlacement } from "./lib/shopProduct";
 import { relativePlacementValidator } from "./schema/merch";
 import { flagEnabled } from "./studio";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -520,6 +521,12 @@ export const savePlacement = mutation({
       await ctx.db.patch("printPlacements", existing._id, { ...row, render: undefined });
     } else {
       await ctx.db.insert("printPlacements", { workId: work._id, ...row });
+    }
+    // The work page and the shop describe what prints: the product placed here takes this placement as
+    // its own (centered, so a sideways nudge stays here), when it's printed on the front as published.
+    if (target.productId !== null && target.placement?.side === "front") {
+      const relative = toRelative({ side: "front", widthIn: placed.widthIn, yIn: placed.yIn }, aspectOf(version.width, version.height), target.geometry.printArea);
+      if (!sameRelative(relative, target.placement)) await ctx.db.patch("works", work._id, withProductPlacement(work, target.productId, relative));
     }
     return placed;
   },
