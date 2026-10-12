@@ -101,6 +101,17 @@ function OnchainPage() {
           </ul>
         </Section>
 
+        <Section title="What a record proves">
+          <p>
+            That this exact design existed at that time, which design it came from, and that no one has quietly changed
+            either since: the record is public, and the chain keeps every change as a new entry.
+          </p>
+          <p className="mt-3">
+            What it doesn’t prove: CultRemix holds each member’s wallet for them, so a record shows CultRemix submitted it for
+            that account, not that the person signed it themselves. Backs are limited per account, not per person.
+          </p>
+        </Section>
+
         <Section title="Where it lives">
           {registry && (
             <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr]">
