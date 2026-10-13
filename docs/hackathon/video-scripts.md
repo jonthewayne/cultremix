@@ -39,3 +39,8 @@ Recording notes:
 | 1:15–1:35 | A shirt being ordered; the printed shirt | "Every design is a real product: printed to order through Printful and sold through Shopify, so creators earn from day one." |
 | 1:35–1:45 | The logo and cultremix.com | "Remix culture, get paid. CultRemix." |
 
+## Clips to cut in
+
+`bun run clips -- --base https://cultremix.com` records six short tours of the live site as MP4s, ready for any editor: the home feed, a remix's page (its CR number, what a remix can change, who shares in a sale, and its fingerprint), that remix's family tree, its creator's profile, /onchain, and /how-it-works. Each is 6 to 13 seconds, scrolled smoothly at 30 frames a second, with every frame a sharp screenshot (1170 x 2532 at phone size; `--size laptop` gives 2560 x 1600). It's signed out and free: it never makes or publishes anything, and it picks the pages itself. `--only home,work` records some; `--list` names them.
+
+Clips go to `~/cultremix-clips/<date>-<host>/` on mighteous, which the daily-driver Mac reads through the home folder's file share. Record them on cultremix.com after the production deploy and the launch set: dev's pages say Testnet. Each clip takes one to two minutes to record. It needs an ffmpeg with H.264 (`FFMPEG`, `~/.cache/cultremix-tools/ffmpeg`, or one on the PATH); with only Playwright's, the clips come out as WebM.

@@ -51,6 +51,7 @@
     "deploy:prod": "CLOUDFLARE_ENV=production bun run build && WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy",
     "deploy:migrate": "bun run scripts/deploy-migrate.ts",
     "launch:batches": "bun run scripts/launch-batches.ts",
+    "clips": "bun run scripts/record-clips.ts",
     "postinstall": "bun run cf-typegen || true"
   },
   "dependencies": {
