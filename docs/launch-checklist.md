@@ -11,7 +11,7 @@ CultRemix has two environments in one Convex project:
 | Shopify | a free development store | the live store (Basic plan, Shopify Payments, Headless channel) |
 | Printful | a store whose orders stop at drafts | the live store; drafts are confirmed after the 1-hour hold |
 | Circle | test keys | live keys |
-| Who deploys | the Builder, by pushing to `dev` | the Builder acting as Ops, from the same checkout, when Jon says go |
+| Who deploys | the Builder, by pushing to `dev` | the Builder, from the same checkout, when Jon says go |
 
 There's no staging project. Nothing is copied between the two; each is set up by its own commands. Secret values come from `~/.config/cultremix/*.env` or the owner's key store and never go into docs, chat, or commits.
 
