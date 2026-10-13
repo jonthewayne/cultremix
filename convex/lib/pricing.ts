@@ -6,7 +6,7 @@
 //
 // Pure TypeScript with no Convex imports, so tests and the browser can read it.
 
-export const PRICING_VERSION = 1;
+export const PRICING_VERSION = 2;
 
 // The gateway's list prices for GPT Image 2.5, dollars per million tokens.
 export const OUTPUT_DOLLARS_PER_M = 30;
@@ -79,9 +79,10 @@ export function singleWorstCaseCents(imageCount: number, quality: Quality = "med
   return cents(outputTokens("single", quality), imageCount, STUDIO_PROMPT_TOKENS);
 }
 
-// One 1024x1024 model photo: an edit with the design as its one input. 4 cents at medium.
-export function photoWorstCaseCents(quality: Quality = "medium") {
-  return cents(outputTokens("single", quality), 1, PHOTO_PROMPT_TOKENS);
+// One 1024x1024 model photo: an edit with the design and the drawn garment as its two inputs (version
+// 2; one input was 4 cents). 6 cents at medium.
+export function photoWorstCaseCents(quality: Quality = "medium", images = 2) {
+  return cents(outputTokens("single", quality), images, PHOTO_PROMPT_TOKENS);
 }
 
 // What fal charges for a Topaz output of the given size: 8 cents up to 24 MP, 16 up to 48, and so on.

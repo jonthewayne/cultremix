@@ -3,11 +3,15 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { measureAlpha, roundSolid } from "../../src/lib/print/alpha";
+import { designBox, garmentSvg } from "../../src/lib/print/garmentMockup";
 import { applyKnockout } from "../../src/lib/print/knockout";
+import { toInches } from "../../src/lib/print/shirtPlacement";
 import { visibleBox } from "../../src/lib/print/trim";
 import { isPng, tagForPrint } from "./printPng";
+import type { GarmentKind } from "../../shared/config/print-products";
 import type { AlphaMetrics } from "../../src/lib/print/alpha";
 import type { KnockoutParams } from "../../src/lib/print/knockout";
+import type { PrintArea, RelativePlacement } from "../../src/lib/print/shirtPlacement";
 import type { Box } from "../../src/lib/print/trim";
 
 // Print Studio's image work on the server, with sharp: measuring, trimming, knocking out, and the
@@ -92,6 +96,32 @@ export async function largeWebp(bytes: Uint8Array) {
   const out = await load(bytes)
     .resize({ width: LARGE_SIDE, height: LARGE_SIDE, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 85, alphaQuality: 95 })
+    .toBuffer();
+  return new Uint8Array(out);
+}
+
+// The model photo's guide: the drawn garment in its color with the design at its real size and spot,
+// the same drawing Publish shows (src/lib/print/garmentMockup.ts) without the print area's outline.
+// 1000 x 1160 px, about a size L laid flat at 32 px to the inch.
+export async function garmentReference(args: {
+  kind: GarmentKind;
+  hex: string;
+  art: Uint8Array;
+  placement: RelativePlacement;
+  area: PrintArea;
+}) {
+  const meta = await load(args.art).metadata();
+  const aspect = meta.width && meta.height ? meta.height / meta.width : 1;
+  const inches = toInches(args.placement, aspect, args.area);
+  const box = designBox(args.kind, inches, aspect, args.area);
+  const garment = await sharp(Buffer.from(garmentSvg(args.kind, inches.side, args.hex))).png().toBuffer();
+  const design = await load(args.art)
+    .resize({ width: Math.max(1, Math.round(box.width)), height: Math.max(1, Math.round(box.height)), fit: "inside" })
+    .png()
+    .toBuffer();
+  const out = await sharp(garment)
+    .composite([{ input: design, left: Math.max(0, Math.round(box.x)), top: Math.max(0, Math.round(box.y)) }])
+    .png()
     .toBuffer();
   return new Uint8Array(out);
 }

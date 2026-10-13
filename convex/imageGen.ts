@@ -24,6 +24,7 @@ import { stripPngMetadata } from "./lib/pngMeta";
 import { keyFor, keyedPrompt, photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
 import { callFailure } from "./lib/paidAttempts";
 import { gatewayCostCents } from "./lib/pricing";
+import { garmentReference } from "./lib/printImage";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
 import { decodeToRgba, encodePng } from "./lib/resize";
 import { randomCode } from "./lib/codes";
@@ -250,7 +251,9 @@ function spendAfter(error: unknown, sent: Spend | null): { spend: Spend; unknown
   return { spend: sent ?? { kind: "release", reason: "not sent" }, unknown: false };
 }
 
-// The model photo: one opaque 1024x1024 edit with the design as input.
+// The model photo: one opaque 1024x1024 edit with the design and, when the garment's print area is
+// known, a drawing of the garment in its color with the design at its real size and spot
+// (garmentReference), so the photo shows the color, size, and placement that print.
 async function photoImage(
   art: Uint8Array,
   backgroundColor: string,
@@ -258,18 +261,28 @@ async function photoImage(
   provider: Provider | null = imageProvider(),
   garment?: PhotoGarment,
 ) {
+  const reference = garment?.area
+    ? await garmentReference({ kind: garment.kind, hex: backgroundColor, art, placement: garment.placement, area: garment.area }).catch(
+        (error: unknown) => {
+          console.error("garment reference failed", readableError(error));
+          return null;
+        },
+      )
+    : null;
+  const images = reference ? [art, reference] : [art];
+  const text = photoPrompt(backgroundColor, look, garment, Boolean(reference));
   if (provider === "chatgpt") {
     return clean(await chatgptImage({
-      text: photoPrompt(backgroundColor, look, garment),
-      images: [art],
+      text,
+      images,
       background: "opaque",
       size: "1024x1024",
     }));
   }
   return clean(
     await gatewayImage({
-      text: photoPrompt(backgroundColor, look, garment),
-      images: [art],
+      text,
+      images,
       size: PHOTO_SIZE,
       background: "opaque",
       quality: process.env.PHOTO_QUALITY ?? DEFAULT_QUALITY.photo,

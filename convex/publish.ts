@@ -645,13 +645,14 @@ async function photoGarment(ctx: QueryCtx | MutationCtx, work: Doc<"works">) {
     : GARMENT_KINDS[kind][placement.side];
   const generation = await ctx.db.get("generations", work.generationId);
   const aspect = generation?.width && generation.height ? generation.height / generation.width : undefined;
-  return { kind, placement, ...(aspect ? { widthIn: toInches(placement, aspect, area).widthIn } : {}) };
+  return { kind, placement, area, ...(aspect ? { widthIn: toInches(placement, aspect, area).widthIn } : {}) };
 }
 
 const photoGarmentValidator = v.object({
   kind: garmentKindValidator,
   placement: relativePlacementValidator,
   widthIn: v.optional(v.number()),
+  area: v.optional(v.object({ widthIn: v.number(), heightIn: v.number() })),
 });
 
 export const assetJob = internalQuery({

@@ -17,7 +17,9 @@ describe("worst-case prices", () => {
     expect(gridWorstCaseCents(0, "medium")).toBe(8);
     expect(singleWorstCaseCents(0)).toBe(6);
     expect(singleWorstCaseCents(1)).toBe(7);
-    expect(photoWorstCaseCents()).toBe(4);
+    // The design and the drawn garment.
+    expect(photoWorstCaseCents()).toBe(6);
+    expect(photoWorstCaseCents("medium", 1)).toBe(4);
     expect(gridWorstCaseCents(1)).toBeGreaterThan(11.1);
     expect(singleWorstCaseCents(1)).toBeGreaterThan(2.31);
   });

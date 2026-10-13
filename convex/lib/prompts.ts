@@ -807,8 +807,14 @@ export function pickLook(
 }
 
 // What the model wears: the first product a work sells on, and where its creator placed the design.
-// widthIn: how wide the design prints there, when its size is known (convex/publish.ts photoGarment).
-export type PhotoGarment = { kind: GarmentKind; placement: RelativePlacement; widthIn?: number };
+// widthIn: how wide the design prints there, when its size is known; area: the print area it's placed
+// in, for the drawn reference (convex/publish.ts photoGarment).
+export type PhotoGarment = {
+  kind: GarmentKind;
+  placement: RelativePlacement;
+  widthIn?: number;
+  area?: { widthIn: number; heightIn: number };
+};
 
 const GARMENT_WORDS: Record<GarmentKind, string> = {
   tee: "crew-neck t-shirt",
@@ -822,6 +828,9 @@ export function photoPrompt(
   backgroundColor: string,
   look: ShootLook = { casting: CASTING[0], pose: POSES[0], world: SETTINGS[0] },
   garment: PhotoGarment = { kind: "tee", placement: DEFAULT_PLACEMENT },
+  // A second image comes with the design: the garment drawn flat in its color with the design at its
+  // real size and spot (convex/lib/printImage.ts garmentReference).
+  reference = false,
 ) {
   const color = colorName(backgroundColor);
   const back = garment.placement.side === "back";
@@ -832,6 +841,9 @@ export function photoPrompt(
     "The pose feels natural for the place. " +
     `She wears a plain ${color} ${GARMENT_WORDS[garment.kind] ?? GARMENT_WORDS.tee} (color ${backgroundColor}) with this exact graphic printed as ${sizeWords(garment.placement, garment.widthIn)}, ` +
     "reproduced faithfully with no changes and at that size; no jacket, hair, or anything else covers the graphic. " +
+    (reference
+      ? "The second image is a flat drawing of that garment: match its color exactly, and print the graphic at the same size and in the same spot, measured against the collar and the garment's edges. It's only a guide; the photo never takes its flat, drawn look. "
+      : "") +
     "House style: raw on-camera flash, 35mm film grain, candid and confident, natural skin, minimal retouching. " +
     `Framed from mid-thigh up, the ${back ? "back of the garment" : "garment"} and print clearly visible.`
   );
