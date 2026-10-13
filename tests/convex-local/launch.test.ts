@@ -3,6 +3,7 @@ import { api, internal } from "../../convex/_generated/api";
 import { PAGE_SIZE } from "../../convex/metrics";
 import { FEATURE_FLAGS } from "../../convex/lib/flags";
 import { flagEnabled } from "../../convex/studio";
+import { CHAIN_ENVIRONMENTS } from "../../shared/config/chains";
 import { newTest } from "./setup";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -59,7 +60,8 @@ describe("admin access", () => {
     expect(item("products")).toMatchObject({ ok: false });
     expect(item("onSale")).toMatchObject({ ok: false, detail: "None yet. Approve designs in For sale." });
     expect(item("confirming")).toMatchObject({ ok: false });
-    expect(item("registry")).toMatchObject({ ok: false, detail: expect.stringMatching(/chain:deploy:mainnet/u) });
+    // Production's registry is deployed and committed in shared/config/chains.ts.
+    expect(item("registry")).toMatchObject({ ok: true, detail: `Deployed at ${CHAIN_ENVIRONMENTS.prod.registryAddress}.` });
     vi.unstubAllEnvs();
   });
 

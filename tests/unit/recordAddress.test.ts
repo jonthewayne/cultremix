@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { recordRegistryAddress } from "../../scripts/chain/recordAddress";
 
 // The registry deploy records its address in shared/config/chains.ts (scripts/chain/recordAddress.ts).
-const CHAINS = readFileSync(new URL("../../shared/config/chains.ts", import.meta.url), "utf8");
+// The real file records the deployed registries, so these tests start from a copy with none recorded.
+const CHAINS = readFileSync(new URL("../../shared/config/chains.ts", import.meta.url), "utf8").replace(
+  /registryAddress: "0x[0-9a-fA-F]{40}"/gu,
+  "registryAddress: null",
+);
 const ADDRESS = "0x5fbdb2315678afecb367f032d93f642f64180aa3";
 const CHECKSUMMED = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 

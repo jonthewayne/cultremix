@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../convex/_generated/api";
 import { TREE_CHILD_SCAN, TREE_MAX, TREE_PAGE } from "../../convex/lineage";
 import { chainSummary } from "../../src/lib/familyTree";
+import { CHAIN_ENVIRONMENTS } from "../../shared/config/chains";
 import { newTest } from "./setup";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 
@@ -361,11 +362,13 @@ describe("provenance.registry", () => {
       addressUrl: `https://testnet.monadscan.com/address/${address}`,
     });
     vi.stubEnv("DEPLOYMENT_ENV", "prod");
+    // Production always shows its committed registry, whatever CHAIN_REGISTRY_ADDRESS says.
+    const prodRegistry = CHAIN_ENVIRONMENTS.prod.registryAddress;
     expect(await t.query(api.provenance.registry, {})).toEqual({
       networkName: "Monad",
       testnet: false,
-      address: null,
-      addressUrl: null,
+      address: prodRegistry,
+      addressUrl: prodRegistry ? `https://monadscan.com/address/${prodRegistry}` : null,
       explorerUrl: "https://monadscan.com",
       publicRpcUrl: "https://rpc.monad.xyz",
     });

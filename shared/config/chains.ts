@@ -73,7 +73,7 @@ export const CHAIN_ENVIRONMENTS: Record<DeploymentEnv, ChainEnvironment> = {
   },
   prod: {
     network: MONAD_MAINNET,
-    registryAddress: null,
+    registryAddress: "0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0",
     // Created 2026-10-07; its key is MONAD_RELAYER_PRIVATE_KEY_PROD in ~/.config/cultremix/chain.env.
     // It also deploys the registry, so it becomes the admin (lineage corrections, economics rules).
     relayerAddress: "0x1672581d1B190d045197439039446bD48bd9a74A",
