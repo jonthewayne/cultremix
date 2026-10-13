@@ -22,11 +22,12 @@ As of October 12, 2026, 6:05 p.m. Pacific. The Monad submission is due **Tuesday
 - **Packing slips:** Printful's per-order packing slip carries the order's designs (CR number, title, creator, and what each remixes) and a QR code to the design's page.
 - **Printful stays the printer** for launch. Printify's starting prices are $0.63 to $2.95 lower per item ($2.97 to $7.64 with its $39-a-month Premium), but it would mean a new integration and less consistent printing; revisit after judging with real order costs.
 - **The launch set** started in Jon's studio at 6 p.m.: nine sessions, 36 designs, all made. Jon publishes the best of each.
+- **The studio hides two sections for launch:** "Need an idea?" and the style mixer (one line each in `src/lib/studioSections.ts` brings them back). Images still lend their look through the request ("image 1 in the style of image 2"), and a design's **Use as style** adds it as the next image and writes that for the member. Production runs bcf5c0d (Worker version 88bb653e) since 9:10 p.m.
 
 ## Waiting on Jon
 
 1. **Decisions.** Pick the launch products and their prices, and confirm $5.95 flat US shipping and the 15% creator pool for real orders.
-2. ~~**Production go.**~~ Done October 12: production runs b737a49 (see Decided October 12).
+2. ~~**Production go.**~~ Done October 12: production went live at b737a49 and runs bcf5c0d since 9:10 p.m. (see Decided October 12).
 3. **Sign-ups only Jon can do**, because they ask for a card, identity, bank or tax details, or acceptance of terms:
    - Shopify: the Basic plan and Shopify Payments.
    - Printful: billing.
