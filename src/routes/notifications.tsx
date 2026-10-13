@@ -131,6 +131,12 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
               Test
             </span>
           )}
+          {/* Alerts for the owner and ops staff only (convex/opsAlerts.ts, orderAlerts.ts). */}
+          {(item.kind === "ops_alert" || item.kind === "order_attention") && (
+            <span className="rounded-full border border-neutral-300 px-2 text-[11px] font-black uppercase leading-5 text-neutral-500">
+              Admins only
+            </span>
+          )}
           {now !== null && ago(item.createdAt, now)}
         </span>
       </span>
