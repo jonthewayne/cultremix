@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CASTING, POSES, SETTINGS, photoPrompt, pickLook } from "../../convex/lib/prompts";
+import { CASTING, POSES, SETTINGS, colorPhotoPrompt, photoPrompt, pickLook } from "../../convex/lib/prompts";
 
 describe("model photo looks", () => {
   it("picks the same look for the same seed", () => {
@@ -28,5 +28,14 @@ describe("model photo looks", () => {
     expect(prompt).toContain(POSES[2]);
     expect(prompt).toContain(SETTINGS[3]);
     expect(prompt.length).toBeLessThanOrEqual(1000);
+  });
+
+  it("asks the photo in another color to change only the garment's color", () => {
+    const prompt = colorPhotoPrompt("#2c3447", "tee", true);
+    expect(prompt).toContain("change only the color of the crew-neck t-shirt");
+    expect(prompt).toContain("#2c3447");
+    expect(prompt).toContain("the second image");
+    expect(prompt).toContain("the same artwork, colors, size, and placement");
+    expect(colorPhotoPrompt("#2c3447")).not.toContain("second image");
   });
 });

@@ -97,6 +97,9 @@ function ShopPage() {
     : undefined;
   const colors = pageColors(data.colors, product);
   const color = selectedColor(colors, picked, item.cr);
+  // The model photo in the picked color, when there's one (convex/colorPhotos.ts).
+  const shot = data.colorPhotos.find((photo) => photo.colorKey === color?.key && photo.url);
+  const photoItem = shot ? { ...item, photoUrl: shot.url, photoMediumUrl: shot.mediumUrl, photoThumbUrl: shot.thumbUrl } : item;
   const pick = (key: string) => setPicked({ cr: item.cr, key });
   return (
     <div className="min-h-svh bg-white text-black">
@@ -116,7 +119,7 @@ function ShopPage() {
               className="h-full w-auto max-w-full object-contain"
             />
           </div>
-          <PhotoSquare item={item} large priority />
+          <PhotoSquare item={photoItem} large priority />
         </div>
         <PhotoRetry cr={item.cr} />
 

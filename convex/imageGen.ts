@@ -22,16 +22,18 @@ import {
 } from "./lib/models";
 import { stripPngMetadata } from "./lib/pngMeta";
 import { keyFor, keyedPrompt, photoPrompt, pickLook, studioPrompt } from "./lib/prompts";
+import { colorPhotoPrompt } from "./lib/prompts";
 import { callFailure } from "./lib/paidAttempts";
 import { gatewayCostCents } from "./lib/pricing";
 import { garmentReference } from "./lib/printImage";
 import { isDevDeployment, publicUrl, storageMode } from "./lib/r2";
 import { decodeToRgba, encodePng } from "./lib/resize";
 import { randomCode } from "./lib/codes";
-import { designKey, gridKey as gridFileKey, photoNumberOf, testImageKey, uploadKey, workArtKey, workPhotoKey } from "./lib/sizes";
+import { designKey, gridKey as gridFileKey, photoNumberOf, testImageKey, uploadKey, workArtKey, workColorPhotoKey, workPhotoKey } from "./lib/sizes";
 import { copyImage, fetchPublicImage, makeSizes, sha256Hex, storeNew, storeObject } from "./lib/storage";
 import type { Spend } from "./lib/paidAttempts";
 import type { PhotoGarment, ShootLook } from "./lib/prompts";
+import type { GarmentKind } from "../shared/config/print-products";
 import type { Rgba } from "./lib/gridCut";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -196,6 +198,69 @@ async function designImage(text: string, images: Array<Uint8Array>, provider: Pr
     }),
   );
 }
+
+// The model photo in another color: an edit of the photo with the garment drawn in that color as the
+// guide (convex/colorPhotos.ts). Gateway only, since only its calls are budgeted.
+async function colorPhotoImage(photo: Uint8Array, reference: Uint8Array | null, hex: string, kind: GarmentKind) {
+  return clean(
+    await gatewayImage({
+      text: colorPhotoPrompt(hex, kind, Boolean(reference)),
+      images: reference ? [photo, reference] : [photo],
+      size: PHOTO_SIZE,
+      background: "opaque",
+      quality: process.env.PHOTO_QUALITY ?? DEFAULT_QUALITY.photo,
+    }),
+  );
+}
+
+type ColorPhotoJob = {
+  hex: string;
+  colorKey: string;
+  photoKey: string;
+  artKey: string;
+  garment: PhotoGarment;
+  crFamily: number;
+  crExpression: number;
+};
+
+// A model photo in another of the work's colors (convex/colorPhotos.ts), stored in photo n's folder.
+export const colorPhoto = internalAction({
+  args: { colorPhotoId: v.id("colorPhotos") },
+  returns: v.null(),
+  // Explicit types: colorPhotos.start schedules this action, so inference would be circular.
+  handler: async (ctx, args): Promise<null> => {
+    const job: ColorPhotoJob | null = await ctx.runQuery(internal.colorPhotos.job, args);
+    if (!job) {
+      await ctx.runMutation(internal.colorPhotos.fail, {
+        colorPhotoId: args.colorPhotoId,
+        reason: "The work changed before this photo.",
+        spend: { kind: "release", reason: "not sent" },
+      });
+      return null;
+    }
+    let sent: Spend | null = null;
+    try {
+      const [photo, art] = await Promise.all([fetchPublicImage(job.photoKey, ctx), fetchPublicImage(job.artKey, ctx)]);
+      const area = job.garment.area;
+      const reference = area
+        ? await garmentReference({ kind: job.garment.kind, hex: job.hex, art, placement: job.garment.placement, area }).catch(() => null)
+        : null;
+      const paid = await paidCall(() => colorPhotoImage(photo, reference, job.hex, job.garment.kind));
+      sent = paid.spend;
+      const n = photoNumberOf(job.photoKey) ?? 1;
+      const key = (await storeNew(ctx, paid.out.bytes, "image/png", () => workColorPhotoKey(job.crFamily, job.crExpression, n, job.colorKey))).key;
+      await ctx.runMutation(internal.colorPhotos.record, { colorPhotoId: args.colorPhotoId, publicKey: key, spend: sent });
+    } catch (error) {
+      console.error("color photo failed", args.colorPhotoId, readableError(error));
+      await ctx.runMutation(internal.colorPhotos.fail, {
+        colorPhotoId: args.colorPhotoId,
+        reason: readableError(error),
+        spend: spendAfter(error, sent).spend,
+      });
+    }
+    return null;
+  },
+});
 
 // The model's PNG without its metadata: the C2PA content credential, text, and timestamps. The
 // pixels are untouched. Everything that hashes, cuts, or stores a model image starts from these

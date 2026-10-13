@@ -634,7 +634,7 @@ export const setPrintSetup = mutation({
 
 // What the model photo shows: the first product a work sells on, with the design where its creator
 // put it, and how wide it prints there when the design's size is known.
-async function photoGarment(ctx: QueryCtx | MutationCtx, work: Doc<"works">) {
+export async function photoGarment(ctx: QueryCtx | MutationCtx, work: Doc<"works">) {
   const [first] = chosenProducts(work, await offeredShopProducts(ctx));
   const kind = first?.product.kind ?? ("tee" as const);
   const placement = first?.placement ?? clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT);
@@ -648,7 +648,7 @@ async function photoGarment(ctx: QueryCtx | MutationCtx, work: Doc<"works">) {
   return { kind, placement, area, ...(aspect ? { widthIn: toInches(placement, aspect, area).widthIn } : {}) };
 }
 
-const photoGarmentValidator = v.object({
+export const photoGarmentValidator = v.object({
   kind: garmentKindValidator,
   placement: relativePlacementValidator,
   widthIn: v.optional(v.number()),
@@ -925,6 +925,8 @@ export const recordPhoto = internalMutation({
       .unique();
     if (photo) {
       await ctx.db.patch("shootPhotos", photo._id, { state: "succeeded", publicKey: args.publicKey });
+      // The same photo in the work's other colors, when Photos in every color is on (convex/colorPhotos.ts).
+      await ctx.scheduler.runAfter(0, internal.colorPhotos.start, { workId: photo.workId });
     }
     await ctx.db.patch("shoots", args.shootId, { status: "done", updatedAt: Date.now() });
     return null;

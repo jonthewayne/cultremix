@@ -19,6 +19,7 @@ import type * as budget from "../budget.js";
 import type * as chain from "../chain.js";
 import type * as chainAdmin from "../chainAdmin.js";
 import type * as clientErrors from "../clientErrors.js";
+import type * as colorPhotos from "../colorPhotos.js";
 import type * as crons from "../crons.js";
 import type * as deployment from "../deployment.js";
 import type * as disputes from "../disputes.js";
@@ -210,6 +211,7 @@ declare const fullApi: ApiFromModules<{
   chain: typeof chain;
   chainAdmin: typeof chainAdmin;
   clientErrors: typeof clientErrors;
+  colorPhotos: typeof colorPhotos;
   crons: typeof crons;
   deployment: typeof deployment;
   disputes: typeof disputes;

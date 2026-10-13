@@ -848,3 +848,18 @@ export function photoPrompt(
     `Framed from mid-thigh up, the ${back ? "back of the garment" : "garment"} and print clearly visible.`
   );
 }
+
+// The model photo in another shirt color (convex/colorPhotos.ts): the photo itself (the first image)
+// with only the garment's color changed, and, when given, the garment drawn flat in the new color
+// (the second image) as the color guide.
+export function colorPhotoPrompt(hex: string, kind: GarmentKind = "tee", reference = false) {
+  const garment = GARMENT_WORDS[kind] ?? GARMENT_WORDS.tee;
+  return (
+    `Edit this photograph: change only the color of the ${garment} to ${colorName(hex)} (color ${hex})` +
+    (reference ? ", the color of the garment drawn in the second image" : "") +
+    ". Keep everything else exactly as it is: the same person, face, hair, expression, pose, hands, setting, light, and framing, " +
+    "and the printed graphic with the same artwork, colors, size, and placement. " +
+    "The new color looks like real dyed fabric, with the same folds, shadows, and highlights." +
+    (reference ? " The drawing is only a color guide; the photo never takes its flat, drawn look." : "")
+  );
+}

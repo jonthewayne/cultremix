@@ -88,7 +88,9 @@ describe("admin access", () => {
     expect(overview.canManage).toBe(false);
     expect(overview.flags.find((flag) => flag.key === "publishing")).toMatchObject({ enabled: false, isSet: true });
     expect(overview.flags.find((flag) => flag.key === "commerce.checkout")).toMatchObject({ enabled: false, isSet: false });
-    expect(overview.flags).toHaveLength(9);
+    expect(overview.flags).toHaveLength(10);
+    // Photos in every color start off; each costs image credit.
+    expect(overview.flags.find((flag) => flag.key === "photos.colors")).toMatchObject({ enabled: false });
     // Sale emails start off; an admin turns them on.
     expect(overview.flags.find((flag) => flag.key === "email.sales")).toMatchObject({ enabled: false });
     expect(overview.settings).toMatchObject({ signupGrantCredits: 30, dailyBudgetCents: 8000, shootsPerMemberPerDay: 4 });

@@ -73,6 +73,13 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
       "With a design printed on the back, its creator can add a small copy on the front chest when publishing or changing where it sits. It doesn't change the price: the back print's extra already covers what Printful charges to print both sides. Off hides the choice; designs that already have a mark keep it.",
     defaultOn: false,
   },
+  {
+    key: "photos.colors",
+    label: "Photos in every color",
+    description:
+      "After a work's model photo, up to three more in its other shirt colors: the same photo with only the garment's color changed, about 4 cents each from the image credit. The work page's photo follows the color picked.",
+    defaultOn: false,
+  },
 ];
 
 export const FLAG_KEYS = FEATURE_FLAGS.map((flag) => flag.key);

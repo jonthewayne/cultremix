@@ -407,4 +407,17 @@ export const cultremixTables = {
   })
     .index("by_shoot_index", ["shootId", "index"])
     .index("by_work", ["workId"]),
+
+  // The model photo in a work's other shirt colors: an edit of the photo that changes only the
+  // garment's color (convex/colorPhotos.ts). basedOn is the photo it was made from, so a reshoot's
+  // new photo gets its own.
+  colorPhotos: defineTable({
+    workId: v.id("works"),
+    colorKey: v.string(),
+    hex: v.string(),
+    basedOn: v.string(),
+    state: v.union(v.literal("pending"), v.literal("succeeded"), v.literal("failed")),
+    publicKey: v.optional(v.string()),
+    reason: v.optional(v.string()),
+  }).index("by_work", ["workId"]),
 };

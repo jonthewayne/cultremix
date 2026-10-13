@@ -9,6 +9,7 @@
 //   members/<member>/sessions/<date>-<session>/batch-01/design-1-<code>/original.png
 //   works/<family>/<expression>/original.png                               a published work's art
 //   works/<family>/<expression>/photos/<n>/original.png                    its model photos (n never reused)
+//   works/<family>/<expression>/photos/<n>/colors/<color>/original.png     photo n in its other shirt colors
 //   works/<family>/<expression>/print-<code>/print.png                     its print file
 //
 // Every original has medium.webp and thumb.webp beside it in its folder (grids and print files
@@ -34,6 +35,7 @@ const DESIGN = new RegExp(String.raw`^${SESSION_FOLDER}/design-(\d+)-(${CODE})/o
 const GRID = new RegExp(String.raw`^${SESSION_FOLDER}/grid-(${CODE})\.png$`, "u");
 const WORK_ART = /^works\/(\d+)\/(\d{3,})\/original\.png$/u;
 const WORK_PHOTO = /^works\/(\d+)\/(\d{3,})\/photos\/(\d+)\/original\.png$/u;
+const WORK_COLOR_PHOTO = /^works\/(\d+)\/(\d{3,})\/photos\/(\d+)\/colors\/[a-z0-9-]{1,40}\/original\.png$/u;
 const PRINT = new RegExp(String.raw`^works/(\d+)/(\d{3,})/print-(${CODE})/print\.png$`, "u");
 const TEST = new RegExp(String.raw`^tests/(${DATE})-(${CODE})/original\.png$`, "u");
 
@@ -95,6 +97,12 @@ export function workPhotoKey(family: number, expression: number, n: number) {
   return `${workFolder(family, expression)}/photos/${n}/original.png`;
 }
 
+// Photo n in another of the work's shirt colors (convex/colorPhotos.ts), inside photo n's folder.
+export function workColorPhotoKey(family: number, expression: number, n: number, colorKey: string) {
+  if (!/^[a-z0-9-]{1,40}$/u.test(colorKey)) throw new Error("Not a color key.");
+  return `${workFolder(family, expression)}/photos/${n}/colors/${colorKey}/original.png`;
+}
+
 export function printKey(family: number, expression: number, code: string) {
   return `${workFolder(family, expression)}/print-${checkCode(code)}/print.png`;
 }
@@ -123,7 +131,7 @@ export function currentKind(key: string): KeyKind | undefined {
   if (DESIGN.test(key)) return "design";
   if (GRID.test(key)) return "grid";
   if (WORK_ART.test(key)) return "work";
-  if (WORK_PHOTO.test(key)) return "photo";
+  if (WORK_PHOTO.test(key) || WORK_COLOR_PHOTO.test(key)) return "photo";
   if (PRINT.test(key)) return "print";
   if (TEST.test(key)) return "test";
   return undefined;

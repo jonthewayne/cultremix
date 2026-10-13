@@ -86,6 +86,11 @@ async function finishAbandoned(ctx: MutationCtx, reservation: Doc<"reservations"
       .unique();
     // A reshoot keeps the photo that's up; only a first photo still pending is marked failed.
     if (photo?.state === "pending") await failShootPhoto(ctx, reservation.shootId, message);
+  } else if (reservation.attemptId.startsWith("colorPhoto:")) {
+    // A photo in another color (convex/colorPhotos.ts) whose action died.
+    const id = ctx.db.normalizeId("colorPhotos", reservation.attemptId.slice("colorPhoto:".length));
+    const row = id ? await ctx.db.get("colorPhotos", id) : null;
+    if (row?.state === "pending") await ctx.db.patch("colorPhotos", row._id, { state: "failed", reason: message });
   } else if (reservation.attemptKind === "upscale") {
     // An upscale's (or a background removal's) attempt is its print version; failing it gives the
     // credits back.

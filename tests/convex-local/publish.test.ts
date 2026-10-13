@@ -197,7 +197,7 @@ describe("the shop page signed out", () => {
 
     const page = await t.query(api.feed.byCr, { cr });
     expect(page).not.toBeNull();
-    for (const key of Object.keys(page!)) expect(["colors", "contentHash", "description", "item"]).toContain(key);
+    for (const key of Object.keys(page!)) expect(["colorPhotos", "colors", "contentHash", "description", "item"]).toContain(key);
     expect(page!.description).toBe("Salt and sun.");
     expect(page!.colors).toEqual([
       { key: "moss", name: "Moss", hex: "#6c6c47" },
@@ -268,4 +268,3 @@ describe("keep it just for you", () => {
     expect((await t.query(internal.publish.assetJob, { workId: kept.workId }))?.keep).toBeUndefined();
   });
 });
-

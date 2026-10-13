@@ -301,19 +301,58 @@ export const byCr = query({
       contentHash: v.optional(v.string()),
       description: v.optional(v.string()),
       colors: v.array(shopColor),
+      // The model photo in the work's other colors, made from the photo it shows (convex/colorPhotos.ts).
+      colorPhotos: v.array(
+        v.object({
+          colorKey: v.string(),
+          url: v.optional(v.string()),
+          mediumUrl: v.optional(v.string()),
+          thumbUrl: v.optional(v.string()),
+        }),
+      ),
     }),
   ),
   handler: async (ctx, args) => {
     const work = await publishedWorkByCr(ctx, args.cr);
     if (!work) return null;
+    const urls = imageUrlReader(ctx);
     return {
-      item: await toFeedItem(ctx, work),
+      item: await toFeedItem(ctx, work, urls),
       contentHash: work.contentHash,
       description: work.description,
       colors: shopColors(work, await colorLookup(ctx)),
+      colorPhotos: await colorPhotosOf(ctx, work._id, urls),
     };
   },
 });
+
+// The work's photos in its other colors that were made from its current model photo.
+async function colorPhotosOf(ctx: QueryCtx, workId: Id<"works">, urls: Urls) {
+  const shoot = await ctx.db
+    .query("shoots")
+    .withIndex("by_work", (q) => q.eq("workId", workId))
+    .first();
+  const photo = shoot
+    ? await ctx.db
+        .query("shootPhotos")
+        .withIndex("by_shoot_index", (q) => q.eq("shootId", shoot._id).eq("index", 1))
+        .unique()
+    : null;
+  if (photo?.state !== "succeeded" || !photo.publicKey) return [];
+  const basedOn = photo.publicKey;
+  const rows = await ctx.db
+    .query("colorPhotos")
+    .withIndex("by_work", (q) => q.eq("workId", workId))
+    .collect();
+  return await Promise.all(
+    rows
+      .filter((row) => row.state === "succeeded" && row.basedOn === basedOn && row.publicKey)
+      .map(async (row) => {
+        const shot = await urls(row.publicKey);
+        return { colorKey: row.colorKey, url: shot.url, mediumUrl: shot.mediumUrl, thumbUrl: shot.thumbUrl };
+      }),
+  );
+}
 
 // A work's direct remixes, oldest first (so they read in number order), a page at a time.
 export const remixes = query({
