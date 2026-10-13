@@ -4,7 +4,7 @@ CultRemix, built from starter `4b5d609`. Today's plan: `docs/plans/2026-09-29-sp
 
 ## Git
 
-Only the CultRemix Builder thread commits app code, to `dev`, and pushes working states. The Ops thread owns `wrangler.jsonc`'s `env.production` block and `.env.production` (non-secret values) and commits them from its own clone. Both pull with `--rebase` before pushing. Only the Ops thread deploys production. Secrets live only in `~/.config/cultremix/*.env` and deployment env; never commit or print them.
+There is one copy of the code: this folder (`~/Projects/CultRemix`). Don't make deploy clones or lasting worktrees (Jon, October 12); a rehearsal that needs another commit checked out uses a temporary worktree and removes it when done. The CultRemix Builder thread commits app code to `dev` and pushes working states, and production deploys run from this folder, by the thread acting as Ops (the Builder since October 12), in the order in `docs/deployment-cloudflare.md`. Production's settings (`wrangler.jsonc`'s `env.production` block and `.env.production`, non-secret values) are committed here like everything else. Pull with `--rebase` before pushing. Secrets live only in `~/.config/cultremix/*.env` and deployment env; never commit or print them.
 
 ## Plans And Docs
 

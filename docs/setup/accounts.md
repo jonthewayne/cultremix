@@ -16,7 +16,7 @@ The app stores images in R2 whenever `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_
 ## Convex
 
 - Project `cultremix` (team `curiousentity`). Dev deployment `vibrant-rook-798`.
-- Production deployment `savory-tiger-504`: https://savory-tiger-504.convex.cloud and https://savory-tiger-504.convex.site. Deployed with `bunx convex deploy -y` from `~/Projects/CultRemix-deploy`.
+- Production deployment `savory-tiger-504`: https://savory-tiger-504.convex.cloud and https://savory-tiger-504.convex.site. Deployed with `bunx convex deploy -y` from `~/Projects/CultRemix`, the only checkout ([Production deploys](../deployment-cloudflare.md#production-deploys)).
 - Production env: `SITE_URL` and `AUTH_TRUSTED_ORIGINS` = https://cultremix-prod.jonthewayne.workers.dev, `APP_NAME=CultRemix`, `AUTH_EMAIL_FROM`, `AUTH_EMAIL_PROVIDER=console`, `AUTH_EMAIL_OTP_ENABLED=true`, `AUTH_MAGIC_LINK_ENABLED=false`, `AUTH_PHONE_ENABLED=false`, `AUTH_SMS_PROVIDER=console`, `PHONE_TEMP_EMAIL_DOMAIN`, `DEPLOYMENT_ENV=prod`, `FIRST_SUPER_ADMIN_EMAIL` (Jon's Gmail), `R2_ENDPOINT`, `R2_BUCKET=cultremix-prod-public`, `R2_PUBLIC_URL`, `AUTH_SECRET`, `AI_GATEWAY_API_KEY`, `IMAGE_STORE=convex`. No `ENABLE_TEST_OTP_STORAGE`, `TEST_HELPER_SECRET`, or ChatGPT token.
 - Images on production go through the Vercel AI Gateway (Jon's decision at 3:05). The dev deployment also has `CHATGPT_ACCESS_TOKEN` and `CHATGPT_ACCOUNT_ID` (set by the Builder at 3:01), and the app prefers them, so dev images spend Jon's ChatGPT plan until they are removed.
 
@@ -30,7 +30,7 @@ Inbound: Cloudflare Email Routing is enabled on `cultremix.com` (MX `route1-3.mx
 
 - Account: Jon's Cloudflare account (`e118a9fae1084226a1733eb812e337b5`); `workers.dev` subdomain `jonthewayne`. Wrangler on mighteous is signed in with OAuth.
 - R2 buckets `cultremix-dev-public` (https://pub-9fa5537465754fb5a384ad1a5109a04f.r2.dev) and `cultremix-prod-public` (https://pub-4c63aeb732c445d5b2850fa3e9485f53.r2.dev), both with CORS for GET and PUT from the tailnet dev URLs, `http://localhost:3000`, and the production URL (`~/cultremix-ops/r2-cors.json`). Unused until an R2 token exists.
-- Production Worker `cultremix-prod` at https://cultremix-prod.jonthewayne.workers.dev (`wrangler.jsonc` `env.production`, `.env.production`); deploy with `bun run deploy:prod` from the deploy clone.
+- Production Worker `cultremix-prod` at https://cultremix-prod.jonthewayne.workers.dev (`wrangler.jsonc` `env.production`, `.env.production`); deployed from `~/Projects/CultRemix` together with Convex, in the order under [Production deploys](../deployment-cloudflare.md#production-deploys).
 
 ## Domain
 
