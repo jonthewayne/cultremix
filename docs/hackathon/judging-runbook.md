@@ -2,7 +2,7 @@
 
 For Jon (and Ops) while judges use cultremix.com. Everything here works on production once the latest Ops message is deployed.
 
-Judges use the site from October 14 to 27, and winners are announced November 3, so the image credit and the relayer's MON have to last two weeks. $50 of credit is about 380 batches, enough for about 19 judges who each use all 40 credits. 2 MON is about 85 Monad records once the registry is deployed. The bell (and email to the owner) says when the credit drops below $10, when the relayer is running low on MON (about 20 records left), and when it runs out; Admin, Overview shows the credit, and /admin/chain the relayer's MON.
+Judges use the site from October 14 to 27, and winners are announced November 3, so the image credit and the relayer's MON have to last two weeks. $50 of credit is about 380 batches, enough for about 19 judges who each use all 40 credits. The relayer had 15.29 MON on October 13 after the registry deploy and the first 12 records, enough for about 700 more (a design's record is about 0.021 MON, a Back about 0.011). The bell (and email to the owner) says when the credit drops below $10, when the relayer is running low on MON (about 20 records left), and when it runs out; Admin, Overview shows the credit, and /admin/chain the relayer's MON.
 
 ## Before judges arrive
 
@@ -34,5 +34,5 @@ Judges use the site from October 14 to 27, and winners are announced November 3,
 
 - **Early access** in the header (production never says Testnet).
 - **Buying opens soon** on shop pages until Checkout is on, with **Tell me when it's ready** for a signed-in judge (an email box for visitors who aren't signed in).
-- **Queued for Monad: it's recorded once the registry goes live** under a new design's fingerprint, until the mainnet registry is up, Monad records is on, and members have wallets (Circle's, or the managed stopgap's if you said yes to it).
+- **Waiting to be registered on Monad** under a new design's fingerprint for a few seconds after publishing, then **Registered on Monad · View transaction**. If one stays waiting, /admin/chain shows why: usually a brand-new member's wallet (they get one within five minutes) or a relayer out of MON.
 - **Draft, under review** on the store policies, until you approve them.

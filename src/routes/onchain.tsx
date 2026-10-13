@@ -2,7 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
-import { networkLabel } from "../../shared/config/chains";
+import { networkLabel, sourceExplorerAddressUrl } from "../../shared/config/chains";
 import { FingerprintCheck } from "~/components/cr/FingerprintCheck";
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
@@ -164,8 +164,25 @@ function OnchainPage() {
               published image file, so anyone with the file can check it.
             </li>
             <li>
-              Open the registry on an explorer that shows its source code (it’s verified on Sourcify, so MonadVision shows it)
-              and find its Read Contract tab.
+              {registry?.address && registry.explorerUrl ? (
+                <>
+                  Open{" "}
+                  <a
+                    href={sourceExplorerAddressUrl(registry, registry.address)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-bold underline underline-offset-4"
+                  >
+                    the registry on MonadVision
+                  </a>
+                  , which shows its source code (it’s verified on Sourcify), and find its Read Contract tab.
+                </>
+              ) : (
+                <>
+                  Open the registry on an explorer that shows its source code (it’s verified on Sourcify, so MonadVision shows
+                  it) and find its Read Contract tab.
+                </>
+              )}
             </li>
             <li>
               Call <Code>workIdAt</Code> with the two parts of the CR number. For CR 101-002, that’s 101 and 2.

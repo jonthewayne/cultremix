@@ -24,7 +24,7 @@ Recording notes:
 - The style mixer is hidden for now (October 12), so the poster goes in as image 2 and the request names it. The rehearsal above used the mixer; the request version reads image 2's look the same way.
 - A design's remixable words appear a few seconds after it's published. Wait for them before recording the remix.
 - Use images you have the rights to: a portrait and a poster with strong, simple shapes.
-- The Monad record needs the mainnet registry and the **Monad records** switch on. If it isn't ready, show the fingerprint and the rules file's hash instead, and say "These go on Monad."
+- The mainnet registry, Monad records, and Backs are on (October 13), so a design published while recording shows **Registered on Monad** within seconds; any of the 12 earlier designs works for the Verify it yourself shot.
 - The buy box needs Checkout on and the design approved in Admin, For sale. If checkout isn't open yet, show the drawn shirts from Publish and say "Buying opens soon."
 - The closing notification needs a real order of the remix. Every person who shares in a sale gets one ("Someone bought CR …. You earn $2.70."), so buy the remix once and record the original creator's bell. Rehearse it on dev with **Simulate a sale** in Admin, For sale; dev marks those Test.
 

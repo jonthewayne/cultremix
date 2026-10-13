@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 12, 2026, 6:05 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
+As of October 13, 2026, 1:45 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -24,6 +24,15 @@ As of October 12, 2026, 6:05 p.m. Pacific. The Monad submission is due **Tuesday
 - **The launch set** started in Jon's studio at 6 p.m.: nine sessions, 36 designs, all made. Jon publishes the best of each.
 - **The studio hides two sections for launch:** "Need an idea?" and the style mixer (one line each in `src/lib/studioSections.ts` brings them back). Images still lend their look through the request ("image 1 in the style of image 2"), and a design's **Use as style** adds it as the next image and writes that for the member. Production runs bcf5c0d (Worker version 88bb653e) since 9:10 p.m.
 
+## Done overnight, October 12 to 13
+
+- **Publishing shows where the design prints.** The publish sheet draws the product's print area with its edges and starts the design at about 85% of the print width (10.2 in on a tee, 12.1 in on a hoodie), centered with a little room above. The size slider reads in inches and in percent of the print width, and the size buttons are gone.
+- **Sharper art on every page.** Publishing upscales the design (Topaz, about 8¢), and the feed and the work page show the 2,400 px copy. The published file and its fingerprint stay the same. The Print-size art switch is on, and all 12 published designs have their copy.
+- **Model photos see the shirt.** The photo call gets a drawing of the garment in the lead color with the design at its real size and spot, and the prompt gives the print width in inches.
+- **Photos in every color**, behind its own switch, which is off on production: after the first photo, up to 3 more show the same photo in the design's other colors, each changing only the garment's color (about 4¢ each). The work page's photo follows the color picked. Once the gateway is topped up, turn it on in Admin, Switches and run `bunx convex run --prod colorPhotos:backfill` (about $1) for the designs already published.
+- **Use as style** works while the style mixer is hidden: it adds the design as the next image and writes "in the style of image N".
+- **Monad mainnet is live.** At 1:04 a.m. the registry deployed at `0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0` from production's relayer, with economic config v1 registered in the same run and the source verified on Sourcify. Production got the address (c490dc2), Monad records went on, and the config and all 12 published designs confirmed within 25 seconds. The deploy and those records cost about 0.47 MON; 15.29 MON is left, about 700 more records. **Backs** went on too. On production, **Verify it yourself** passes: the file's fingerprint and Monad's record both match. /onchain links the registry on MonadVision, where its verified source shows.
+
 ## Waiting on Jon
 
 1. **Decisions.** Pick the launch products and their prices, and confirm $5.95 flat US shipping and the 15% creator pool for real orders.
@@ -33,9 +42,9 @@ As of October 12, 2026, 6:05 p.m. Pacific. The Monad submission is due **Tuesday
    - Printful: billing.
    - Circle: deferred (managed wallets cover member wallets). When it's wanted: a developer account and two API keys from its console (Keys), saved in `~/.config/cultremix/circle.env` as `CIRCLE_API_KEY_TEST` and `CIRCLE_API_KEY_LIVE`, then `bun run circle:setup`. Mainnet keys need Circle's compliance review first.
 4. **A Screen Sharing session on mighteous.** Jon signs in once, in a Chrome window with its own profile, and the Builder does the rest there: the development store and its app (scopes in the [launch checklist](../launch-checklist.md#the-shop)), the Headless channel's token, the shipping rate, and Printful's store and token. Then three presses in Admin finish the setup: **Connect Printful**, **Connect Shopify**, and **Check with Printful**.
-5. **Print-size art on, when Jon wants it.** `FAL_KEY` is set on production (October 12), and the Print-size art switch is still off, so nothing upscales yet. Turning it on lets judges upscale and remove backgrounds in **Prepare for print** (about 8¢ of fal credit an upscale, 2 credits for members), and approving designs for sale needs it.
-6. **Gateway credit.** $7.88 on October 12 at 6 p.m., after the deploy's data steps (about $2.20 of notes) and the launch set (about $1). Admin, Overview shows it, and it's under the $10 alert line. Judges' designs, notes, and model photos are paid from it, about 13¢ a batch, so add about $50 before judging.
-7. **MON.** Testnet faucet MON for dev's relayer `0x7D39bCfd08b206fEaacb4F1E2817aDB22e06f921` (dev already has its relayer key, so the testnet registry can go up as soon as the MON lands), and about 2 MON for production's relayer. The faucets need an account, a captcha, or an Ethereum mainnet balance (Alchemy's gives 1 MON a day; deploying needs 0.47 on hand), so the Builder can't get testnet MON alone. If that's a hassle, skip testnet: it's a rehearsal, and the anvil test (`bun run test:chain:anvil`) already runs the real contract and the real writer end to end, so production can go straight to mainnet. Measured October 12 at mainnet's 102 gwei: deploying burns about 0.2 MON (the script wants 0.47 on hand first), each design's record about 0.021 MON (registerWork, about 179,000 gas, and Monad charges for the gas limit), and a Back about 0.011. So 1 MON covers about 37 records after the deploy, while production's earlier designs, the launch set, judges' designs, and their remixes could pass 50; 2 MON covers about 85. MON was about 3¢ on October 12 (MetaMask's price page), so an exchange's minimum purchase will buy far more than that: $5 buys about 165 MON, thousands of records. A relayer running low (about 20 records left) tells the owner and ops, and again if it runs out; records wait until it's topped up. OKX sells MON and withdraws it on the Monad network straight to the relayer's address (Coinbase lists MON too; check that its withdraw screen offers the Monad network). Pick the network named Monad, never Ethereum or Base, and send a small test amount first.
+5. ~~**Print-size art on.**~~ Done October 12 at night: the switch is on, publishing upscales each design (Topaz, about 8¢), and all 12 published designs have their print-size copy.
+6. **Gateway credit.** $6.60 at 1:30 a.m. on October 13, after the launch set and the night's photo and upscale tests. Admin, Overview shows it, and it's under the $10 alert line. Judges' designs, notes, and model photos are paid from it, about 13¢ a batch, so add about $50 before judging.
+7. ~~**MON.**~~ Done October 13: production's relayer received 15.77 MON, and the mainnet registry went live (see Done overnight). Dev's testnet relayer still has none, so dev has no registry; `bun run test:chain:anvil` runs the real contract and writer end to end instead.
 8. **Backups in Jon's password manager:** production's relayer key (`MONAD_RELAYER_PRIVATE_KEY_PROD`) and the managed-wallet secret (`MANAGED_WALLET_SECRET_PROD`), both in `~/.config/cultremix/chain.env` on mighteous.
 9. **The hackathon pieces.**
    - Make the repo public. Checked October 11: none of the 404 commits holds a secret (the known keys, and the shapes of OpenAI, Cloudflare, Shopify, Circle, fal, Resend, Gateway, and private keys). Your Gmail address is gone from the current docs but stays in two September 29 commits; rewriting history would change every later commit hash the build log cites, so leave it unless that matters to you. The ChatGPT archive in `docs/reference/` has no memories or custom instructions (the share link strips them). There's no LICENSE file, so the code stays all rights reserved unless you add one.
@@ -63,9 +72,9 @@ As of October 12, 2026, 6:05 p.m. Pacific. The Monad submission is due **Tuesday
 
 **Monad:**
 
-11. The testnet registry goes up on dev, then a few designs are published there and the real costs measured.
-12. Circle wallets get tested on dev with test keys, then production switches to live keys.
-13. The mainnet registry and the economics rules go up on production: `bun run chain:deploy:mainnet --broadcast --confirm-mainnet` once production's relayer has its MON (the dry run works now).
+11. ~~The testnet registry on dev.~~ Skipped: production went straight to mainnet, and the real costs were measured there (about 0.021 MON a design's record).
+12. Circle wallets: deferred. Production uses managed wallets until creator payouts are decided; the code takes Circle whenever its keys are added.
+13. ~~The mainnet registry and the economics rules on production.~~ Done October 13 at 1:04 a.m. Pacific: `0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0`.
 
 **Launch:**
 
@@ -86,5 +95,5 @@ As of October 12, 2026, 6:05 p.m. Pacific. The Monad submission is due **Tuesday
 
 | Day | Jon | Builder and Ops |
 | --- | --- | --- |
-| Mon Oct 12 | Production go; about 2 MON to production's relayer; about $50 of gateway credit; register the project and make the repo public | Ops deploys production (about 45 minutes with the backup and data steps). Once the MON lands, the registry deploy (one command from the repo, about 0.2 MON) records its address; the Builder commits it and Ops deploys again |
+| Mon Oct 12 | Production go; about 2 MON to production's relayer; about $50 of gateway credit; register the project and make the repo public | Ops deploys production (about 45 minutes with the backup and data steps). Done. The MON landed after midnight, and the registry went live at 1:04 a.m. on the 13th |
 | Tue Oct 13 | Publish the launch set; record the two videos; confirm the disclosures; submit by 20:59 PDT | The launch set and its remixes on production, smoke tests, fixes forward |

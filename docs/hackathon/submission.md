@@ -11,7 +11,7 @@ Jon fills in the ones marked (link).
 - Demo video (3 minutes or less): (link). Script: [video-scripts.md](video-scripts.md#demo-about-250)
 - Pitch video (2 minutes or less): (link). Script: [video-scripts.md](video-scripts.md#pitch-about-145)
 - Logo: [cultremix-logo.png](cultremix-logo.png) (1024 × 1024 PNG, 28 KB), or [cultremix-logo-wide.png](cultremix-logo-wide.png) (1600 × 900, with the name)
-- Monad registry contract: (explorer link, once `bun run chain:deploy:mainnet` has run)
+- Monad registry contract: [0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0](https://monadscan.com/address/0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0) on Monad mainnet, live since October 13; its verified source is on [MonadVision](https://monadvision.com/address/0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0)
 - Judge sign-in: each judge gets an email and password privately (see [Judges](../judges.md)). On the sign-in page, tap **Have a password? Sign in with it**.
 
 ## Pitch
@@ -41,8 +41,8 @@ From the [build log](log.md) and the [builder reports](reports/):
 - **Lineage:** a variation is the next number in its family (CR 101-002); a fork starts a new family and says where it came from. A remix that changed only the design's remixable words is always a variation; one that changed more can be either, and the publish dialog suggests a fork. Every work page shows the trail back to the original, the remixes of it, and the family as a tree; `/family/<n>` shows the whole tree, with forks branching off. Admins can correct a wrong lineage; the work page shows the correction, and the original record stays as published.
 - **Economics panel:** every work page shows who shares in a sale (15% of each sale goes to the people behind the design) and links the rules file, `/economics/v1.json`, with its SHA-256.
 - **Social:** profiles at `/u/<username>` with a bio, follower and following lists, and Works, Remixes, and Backed shelves; a home feed with Latest, Trending (hearts, Backs, and remixes from other members over the last week), and Following, plus a row of creators who just published; hearts and follows on every feed row, work page, and profile; a bell for new follows, hearts, remixes, Backs, and sales; rich link previews for work pages, profiles, and families.
-- **Backs:** a member can Back up to 3 works a week, one per work and never their own, and each Back is recorded on Monad with its place in line; work pages list the earliest backers and Following shows the Backs of people you follow. Built and tested; hidden until the registry is live.
-- **Monad registry (built; it deploys once its relayer has MON):** the `CultRemixRegistry` contract (55 contract tests) records each work's ID, CR number, parent, kind, fingerprint, and creator wallet, plus lineage corrections, Backs in order, and the economics rules' hash. Publishing queues the registration, signed by the creator's wallet and sent by a relayer that pays the gas, so nobody needs MON or a wallet app. `/admin/chain` shows the queue; the public `/onchain` page explains what's recorded and how to check it. The whole path runs end to end against a local Monad node in the test suite.
+- **Backs:** a member can Back up to 3 works a week, one per work and never their own, and each Back is recorded on Monad with its place in line; work pages list the earliest backers and Following shows the Backs of people you follow. Live on production since October 13.
+- **Monad registry (live on mainnet since October 13):** the `CultRemixRegistry` contract (55 contract tests) records each work's ID, CR number, parent, kind, fingerprint, and creator wallet, plus lineage corrections, Backs in order, and the economics rules' hash. Publishing queues the registration, signed by the creator's wallet and sent by a relayer that pays the gas, so nobody needs MON or a wallet app. `/admin/chain` shows the queue; the public `/onchain` page explains what's recorded and how to check it. The whole path runs end to end against a local Monad node in the test suite.
 - **Products and placement:** when publishing, the creator picks the products a design comes on (a tee, a hoodie, whatever is on offer) and places it once on a drawn shirt at real size, with the print area outlined: front or back, any size up to its edges, higher or lower. The same choice fits every product, or any one can be placed separately. The model photo follows it, down to a back print shot from behind.
 - **Print files:** an admin approves each work for sale. CultRemix upscales the art, makes a 300 DPI print file for each product with the design where its creator put it, and lists each one in Shopify. The Print Studio (`/print/<CR number>`) lets the creator trim, knock out a flat background color or remove any other background, and compare the art with what goes to the printer.
 - **Kept designs:** publishing can keep a design just for its creator (a family shirt, an inside joke): no CR number, no feed, credit still going to the design it remixes. Its creator can order it from its private page once an admin approves it for them, and can share it with the world later.
@@ -71,7 +71,7 @@ Signed out works for all of these unless noted.
 
 | Claim | How to check it |
 | --- | --- |
-| Every published design has a fixed fingerprint | On any work page (`/cr/<number>`), note the SHA-256 under **Fingerprint**. Open the full-size design and run `shasum -a 256` on the downloaded file. They match. Once the registry is deployed, **Verify it yourself** under the fingerprint does both checks in the browser: it downloads and hashes the original file, and reads the design's record from Monad's public RPC. |
+| Every published design has a fixed fingerprint | On any work page (`/cr/<number>`), note the SHA-256 under **Fingerprint**. Open the full-size design and run `shasum -a 256` on the downloaded file. They match. **Verify it yourself** under the fingerprint does both checks in the browser: it downloads and hashes the original file, and reads the design's record from Monad's public RPC. |
 | The sale split follows public rules | On a work page, the Economics panel names the people who share in a sale and links `/economics/v1.json` with its SHA-256. Run `curl -s <site>/economics/v1.json \| shasum -a 256`; it matches the panel. The file says how 15% of a sale is shared, so you can recompute the split yourself. |
 | Remixes carry their lineage | On a remix's work page, **Lineage** walks back to the original, across forks. **Remixes of this** and the family tree show what came after; **See the whole tree** opens `/family/<n>`. A variation's number continues its family; a fork starts a new one and says “Forked from CR …”. |
 | A remix's boxes offer only the words its creator opened | Signed in as a judge: on a work page, **Remix this**. Its words appear as boxes; change one and press Generate. The batch says “Changed the words: … to …”, and the four designs keep the art, lettering, and colors. The server checks each box against the parent's stored words, so the browser can't open words the creator locked. Asking for more in the request box is allowed; when publishing, a remix that looks different from its original is offered as a fork. |
@@ -79,24 +79,24 @@ Signed out works for all of these unless noted.
 | Credit follows a fork | A fork's Economics panel includes the creator of the design it came from; a variation's includes the family's founder. |
 | Corrections are public and append-only | A corrected work shows **Lineage amended** with the date, what changed, and the reason; the original record stays as published. |
 | It's social | Profiles at `/u/<username>`, follower and following lists, hearts on every work, and the **Trending** tab. Signed in: follow another judge, then open **Following** on the home page; the bell shows their follows, hearts, and remixes of your work. |
-| Provenance is explained and checkable | `/onchain` lists what's recorded on Monad and walks through checking a design from its fingerprint (`workIdAt`, then `getWork` on the explorer). Once the registry is deployed, /onchain lists the latest recorded designs with their transactions, each work page links its registration transaction, and the family tree marks recorded designs. |
+| Provenance is explained and checkable | `/onchain` lists what's recorded on Monad and walks through checking a design from its fingerprint (`workIdAt`, then `getWork` on the explorer). /onchain also lists the latest recorded designs with their transactions, each work page links its registration transaction, and the family tree marks recorded designs. |
 | The studio makes four print-ready designs at once | Signed in as a judge: add images, say what you want ("image 1 in the style of image 2"), press Generate. Four transparent designs arrive; 2 credits are used. |
 | Designs become print files | Signed in as a judge, publish a design and open **Prepare for print** on its page. Trim, knock out a flat color or remove any other background, place, and make the print file; the Print Studio shows its DPI and SHA-256. |
 | Prompts stay private | Watch the browser's network tab while generating: the prompt we build from your instruction and the notes we read from your style images never reach the browser. Checked October 11 by recording every message the studio received over its live connection while opening a session made with a photo and style images: the member's own request came through, and no notes or prompt text did. |
 
-### When the registry is deployed
+### On Monad mainnet
 
-The registry contract and the chain writer are built and tested: 55 contract tests, and an end-to-end run of the real contract against a local Monad node. Deploying the mainnet registry is one command (`bun run chain:deploy:mainnet`) once production's relayer has about 0.47 MON. Then, with the **Monad records** switch on:
+The registry went live on Monad mainnet on October 13 at [`0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0`](https://monadscan.com/address/0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0), deployed by one command (`bun run chain:deploy:mainnet --broadcast --confirm-mainnet`) that also registered the economics rules and verified the source on Sourcify. The contract has 55 contract tests, and the test suite runs the real contract and chain writer end to end against a local Monad node. With the **Monad records** and **Backs** switches on, as they are on production:
 
-- Each published work's fingerprint and lineage are recorded on Monad mainnet, signed by the creator's CultRemix-held wallet. The work page links the registration transaction, and the family tree marks every recorded design.
+- Each published work's fingerprint and lineage are recorded on Monad mainnet, signed by the creator's CultRemix-held wallet, within seconds of publishing. The work page links the registration transaction, and the family tree marks every recorded design. The 12 designs published before the registry went live were recorded the same night.
 - The economics rules file's SHA-256 is registered on Monad, and the Economics panel says “These shares are recorded on Monad.”
 - Lineage corrections are recorded on Monad as amendments; the original record stays.
-- With the **Backs** switch on too, members Back works, and each Back's place in line comes from the chain.
+- Members Back works, and each Back's place in line comes from the chain.
+- The relayer pays every fee, so nobody needs MON or a wallet app: about 0.021 MON a design and 0.011 a Back, well under a cent each.
 - Contract address: see **Monad registry contract** in [Links](#links), and `/onchain` on the site.
 
 ## What's next
 
-- The Monad registry on mainnet in production.
 - Checkout and print on demand for every approved design, once the Shopify and Printful accounts are set up.
 - A small second design on the front of a back print, such as the CR mark on the chest.
 - The first creator payouts in mid-November, 30 days after the first orders ship (the payout tools are built).
@@ -122,7 +122,7 @@ What the form asks for, as other teams' submissions list it ([one example](https
 - [ ] Name, description, the problem, the solution, and how it uses Monad: [Pitch](#pitch), [Why this track](#why-this-track), and [What the registry proves](#what-the-registry-proves).
 - [ ] Public GitHub repo, readable by metropolis@hackathon.monad.xyz.
 - [ ] Live link with judge sign-in instructions: https://cultremix.com, its [How it works](https://cultremix.com/how-it-works) page, and [Judges](../judges.md).
-- [ ] The registry's contract address, once `bun run chain:deploy:mainnet --broadcast --confirm-mainnet` has run (it needs about 0.47 MON in the relayer, and records the address in `shared/config/chains.ts` itself).
+- [x] The registry's contract address: `0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0` ([Monadscan](https://monadscan.com/address/0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0)).
 - [ ] Demo video, 3 minutes or less (YouTube, Loom, or Vimeo).
 - [ ] Pitch video, 2 minutes or less.
 - [ ] Logo, JPG/JPEG/PNG/WEBP, 3 MB or less: [cultremix-logo.png](cultremix-logo.png).

@@ -90,6 +90,12 @@ export function explorerAddressUrl(network: ChainNetwork, address: string) {
   return `${network.explorerUrl}/address/${address}`;
 }
 
+// MonadVision shows the source of contracts verified on Sourcify, which the registry deploy does
+// itself. Monadscan shows it only after an Etherscan-key verification (scripts/chain/verifyRegistry.ts).
+export function sourceExplorerAddressUrl(network: { testnet: boolean }, address: string) {
+  return `${network.testnet ? "https://testnet.monadvision.com" : "https://monadvision.com"}/address/${address}`;
+}
+
 /**
  * The network whose public explorer shows a chain's transactions, or null when there is none to
  * link to: an unknown chain, or a dev deployment pointed at a localhost node.
