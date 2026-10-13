@@ -4,7 +4,7 @@ Rendered from [cases.ts](cases.ts) by `bun run test:image --catalog`; don't edit
 
 Pinned to `gpt-image-2.5`: `openai/gpt-image-2.5-sunburst` with images, `openai/gpt-image-2.5-flare` without, grids 1920x1920 at high quality; `openai/gpt-6-luna` for notes, the request reader, the remix comparison, and the checker's questions; `google/gemini-3.1-pro-preview` reads each design's words, for the checker and the spelling check.
 
-109 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 10 image notes (gpt-6 luna), 25 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna), 7 remixable parts (gpt-6 luna), 16 spelling check (gemini 3.1 pro).
+113 cases: 4 words, 8 styles, 5 people, 11 remixes, 2 grid and layout, 3 model photo, 10 image notes (gpt-6 luna), 29 request reader (gpt-6 luna), 18 remix comparison (gpt-6 luna), 7 remixable parts (gpt-6 luna), 16 spelling check (gemini 3.1 pro).
 
 ## Words
 
@@ -568,6 +568,10 @@ What a request wants from each numbered image, and whether it asks for the style
 | `reader-keep-curls` | `person` | `cartoon-boys` | "full body, and keep her curls" | content | 2026-10-04 |
 | `reader-pink-hair` | `person` | `cartoon-boys` | "make her hair pink" | content | 2026-10-04 |
 | `reader-mohawk` | `person` | `cartoon-boys` | "give her a mohawk" | content | 2026-10-04 |
+| `reader-use-as-style-added` | `lion` |  | "A wolf howling at the moon. In the style of image 1." | style | 2026-10-12 |
+| `reader-use-as-style-started` | `lion` |  | "In the style of image 1: a fox reading a book" | style | 2026-10-12 |
+| `reader-use-as-style-draw` | `person`, `lion` |  | "Draw image 1 in the style of image 2." | content/style | 2026-10-12 |
+| `reader-use-as-style-words` | `grow-slow`, `lion` |  | "Change the words to GROW LOUD. In the style of image 2." | content/style | 2026-10-12 |
 
 ## Remix comparison (GPT-6 Luna)
 

@@ -7,7 +7,7 @@
   "vision": "openai/gpt-6-luna",
   "words": "google/gemini-3.1-pro-preview"
  },
- "recordedAt": "2026-10-12T04:31:40.192Z",
+ "recordedAt": "2026-10-13T04:12:03.051Z",
  "cases": {
   "words-from-text": {
    "passed": true,
@@ -814,6 +814,30 @@
    "passed": false,
    "checks": {
     "name": "no"
+   }
+  },
+  "reader-use-as-style-added": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: style, style"
+   }
+  },
+  "reader-use-as-style-started": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: style, style"
+   }
+  },
+  "reader-use-as-style-draw": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
+   }
+  },
+  "reader-use-as-style-words": {
+   "passed": true,
+   "checks": {
+    "read": "2/2: content/style, content/style"
    }
   }
  }

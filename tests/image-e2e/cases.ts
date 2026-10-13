@@ -928,9 +928,11 @@ export const CASES: Array<Case> = [
 ];
 
 // What a request wants from each numbered image (convex/lib/roleReader.ts), 23 requests written to
-// be tricky (2026-10-02, extended 2026-10-04).
+// be tricky (2026-10-02, extended 2026-10-04), and the requests the studio's Use as style writes
+// while the style mixer is hidden (src/lib/styleRequest.ts, 2026-10-12).
 function readerCases(): Array<ReaderCase> {
   const ADDED_OCT_5 = new Set(["reader-colors-second", "reader-keep-own-colors"]);
+  const ADDED_OCT_12 = new Set(["reader-use-as-style-added", "reader-use-as-style-started", "reader-use-as-style-draw", "reader-use-as-style-words"]);
   const rows: Array<[string, string, Array<string>, Array<string>, string, Array<Array<Role>>, Array<boolean>?, number?]> = [
     ["reader-mixer-plain", "A plain request with a mixer style", ["person"], ["cartoon-boys"], "Draw image 1 as a full-body character, head to toe.", [["content"]]],
     ["reader-mixer-hair-words", "Spiky hair described in words", ["person"], ["cartoon-boys"], "Draw image 1 as a full-body character, head to toe, with her hair sticking straight up in spikes like the style.", [["content"]], [true, false]],
@@ -961,6 +963,13 @@ function readerCases(): Array<ReaderCase> {
     ["reader-keep-curls", "\"Keep her curls\"", ["person"], ["cartoon-boys"], "full body, and keep her curls", [["content"]], [false]],
     ["reader-pink-hair", "\"Make her hair pink\"", ["person"], ["cartoon-boys"], "make her hair pink", [["content"]], [false]],
     ["reader-mohawk", "\"Give her a mohawk\"", ["person"], ["cartoon-boys"], "give her a mohawk", [["content"]], [false]],
+    // What Use as style writes: after a request that describes a new subject, as the start of an empty
+    // request (the member finishes it), for an empty request with one other image, and after a request
+    // that changes image 1's words.
+    ["reader-use-as-style-added", "Use as style after a new subject", ["lion"], [], "A wolf howling at the moon. In the style of image 1.", [["style"]]],
+    ["reader-use-as-style-started", "Use as style, request finished by the member", ["lion"], [], "In the style of image 1: a fox reading a book", [["style"]]],
+    ["reader-use-as-style-draw", "Use as style with one other image", ["person", "lion"], [], "Draw image 1 in the style of image 2.", [["content", "style"]]],
+    ["reader-use-as-style-words", "Use as style after changing the words", ["grow-slow", "lion"], [], "Change the words to GROW LOUD. In the style of image 2.", [["content", "style"]]],
   ];
   return rows.map(([id, title, images, mixer, request, roles, styleHair, min]) => ({
     kind: "reader",
@@ -968,11 +977,13 @@ function readerCases(): Array<ReaderCase> {
     group: "reader",
     title,
     supports: "The request reader decides what the request wants from each image (what's in it, only its look, or both) and whether it asks for the style's hair.",
-    since: ADDED_OCT_5.has(id)
-      ? "2026-10-05"
-      : id.includes("hair") || id.includes("curls") || id.includes("mohawk") || id.includes("mixer") || id.includes("this-style")
-        ? "2026-10-04"
-        : "2026-10-02",
+    since: ADDED_OCT_12.has(id)
+      ? "2026-10-12"
+      : ADDED_OCT_5.has(id)
+        ? "2026-10-05"
+        : id.includes("hair") || id.includes("curls") || id.includes("mohawk") || id.includes("mixer") || id.includes("this-style")
+          ? "2026-10-04"
+          : "2026-10-02",
     images,
     mixer,
     request,
