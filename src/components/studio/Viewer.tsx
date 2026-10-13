@@ -96,7 +96,8 @@ export function Viewer({
   onFixSpelling: (tile: Tile) => void;
   // "Make it remixable" for the design.
   onRemixable: (tile: Tile) => void;
-  onStyle: (tile: Tile) => void;
+  // Absent while the style mixer is hidden.
+  onStyle?: (tile: Tile) => void;
   // Missing while publishing is switched off.
   onPublish?: (tile: Tile) => void;
   // Designs picked for Compare; C or "+ Compare" picks this one.
@@ -270,7 +271,7 @@ export function Viewer({
           onFixSpelling: () => onFixSpelling(tile),
           onRemixable: () => onRemixable(tile),
           onInspire: () => onBranch(tile),
-          onStyle: () => onStyle(tile),
+          onStyle: onStyle ? () => onStyle(tile) : undefined,
         }).filter((item) => item.label !== "Publish"),
       ]
     : [];

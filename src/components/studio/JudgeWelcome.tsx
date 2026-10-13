@@ -22,7 +22,7 @@ export function JudgeWelcome() {
         Welcome, judge
       </h2>
       <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm">
-        <li>Make something here: add an image or tap an idea, then Generate. Four designs arrive together.</li>
+        <li>Make something here: add an image or say what you want, then Generate. Four designs arrive together.</li>
         <li>Publish your favorite. It gets a CR number, a shop page, and a photo of someone wearing it.</li>
         <li>
           Remix someone else's design from the{" "}

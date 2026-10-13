@@ -46,6 +46,7 @@ import { useCompareRoute } from "~/components/studio/useCompareRoute";
 import { useViewerRoute } from "~/components/studio/useViewerRoute";
 import { DEFAULT_BG, errorMessage, inkOn, prepareInspiration } from "~/lib/imagePrep";
 import { PROMPT_IDEAS, pickIdeas } from "~/lib/promptIdeas";
+import { SHOW_PROMPT_IDEAS, SHOW_STYLE_MIXER } from "~/lib/studioSections";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { prefetchImage } from "~/lib/saveImage";
 import { fixSpellingRequest, spellingNote } from "~/lib/spelling";
@@ -322,12 +323,15 @@ function StudioPage() {
         }),
       );
       setStyles(
-        loneStyleAtFull(
-          last.styles.flatMap((style) => {
-            const previewUrl = style.thumbUrl ?? style.url;
-            return previewUrl ? [{ id: newSlotId(), imageId: style.imageId, previewUrl, uploading: false, weight: style.weight }] : [];
-          }),
-        ),
+        // A hidden mixer brings back no styles, which would otherwise apply unseen.
+        SHOW_STYLE_MIXER
+          ? loneStyleAtFull(
+              last.styles.flatMap((style) => {
+                const previewUrl = style.thumbUrl ?? style.url;
+                return previewUrl ? [{ id: newSlotId(), imageId: style.imageId, previewUrl, uploading: false, weight: style.weight }] : [];
+              }),
+            )
+          : [],
       );
       if (last.legacyKey && last.legacyUrl) void addExisting(last.legacyKey, last.legacyUrl, false);
     } else if (session.remix) {
@@ -541,7 +545,7 @@ function StudioPage() {
         instruction,
         backgroundColor: color,
         images: images.map((slot) => slot.imageId!),
-        styles: styles.map((slot) => ({ imageId: slot.imageId!, weight: slot.weight })),
+        styles: SHOW_STYLE_MIXER ? styles.map((slot) => ({ imageId: slot.imageId!, weight: slot.weight })) : [],
         ...(askedWords.length > 0 ? { words: askedWords } : {}),
         ...(askedParts.length > 0 ? { parts: askedParts } : {}),
         ...(onTryArt && tryId ? { tryDesign: tryId } : {}),
@@ -766,7 +770,7 @@ function StudioPage() {
               </div>
             )}
 
-            {count === 0 && ideas && (
+            {SHOW_PROMPT_IDEAS && count === 0 && ideas && (
               <div>
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-sm font-bold uppercase tracking-wider">Need an idea?</span>
@@ -794,18 +798,20 @@ function StudioPage() {
               </div>
             )}
 
-            <StyleMixer
-              open={mixerOpen}
-              onOpen={setMixerOpen}
-              styles={styles}
-              images={images}
-              states={states}
-              onWeight={(id, weight) => setStyles((list) => list.map((slot) => (slot.id === id ? { ...slot, weight } : slot)))}
-              onRemove={(id) => setStyles((list) => loneStyleAtFull(list.filter((slot) => slot.id !== id)))}
-              onAddImage={addImageLook}
-              onBrowse={() => setLibraryOpen(true)}
-              onFiles={(files) => void addFiles(files, true)}
-            />
+            {SHOW_STYLE_MIXER && (
+              <StyleMixer
+                open={mixerOpen}
+                onOpen={setMixerOpen}
+                styles={styles}
+                images={images}
+                states={states}
+                onWeight={(id, weight) => setStyles((list) => list.map((slot) => (slot.id === id ? { ...slot, weight } : slot)))}
+                onRemove={(id) => setStyles((list) => loneStyleAtFull(list.filter((slot) => slot.id !== id)))}
+                onAddImage={addImageLook}
+                onBrowse={() => setLibraryOpen(true)}
+                onFiles={(files) => void addFiles(files, true)}
+              />
+            )}
 
             <div className="flex flex-wrap items-center gap-4">
               <button
@@ -955,7 +961,7 @@ function StudioPage() {
                         onFixSpelling={() => fixSpelling(tile)}
                         onRemixable={() => setSettingUp({ generationId: tile.generationId, tile })}
                         onInspire={() => useAsImage(tile)}
-                        onStyle={() => useAsStyle(tile)}
+                        onStyle={SHOW_STYLE_MIXER ? () => useAsStyle(tile) : undefined}
                         onFavorite={(on) => designActions.setFavorite(tile.generationId, on)}
                         onReject={(rejected) => reject(tile, rejected)}
                       />
@@ -1037,10 +1043,14 @@ function StudioPage() {
               leaveViewer();
               setSettingUp({ generationId: tile.generationId, tile });
             }}
-            onStyle={(tile) => {
-              leaveViewer();
-              useAsStyle(tile);
-            }}
+            onStyle={
+              SHOW_STYLE_MIXER
+                ? (tile) => {
+                    leaveViewer();
+                    useAsStyle(tile);
+                  }
+                : undefined
+            }
             onPublish={
               canPublish
                 ? (tile) => {
@@ -1263,7 +1273,8 @@ function TileCard({
   onFixSpelling: () => void;
   onRemixable: () => void;
   onInspire: () => void;
-  onStyle: () => void;
+  // Absent while the style mixer is hidden.
+  onStyle?: () => void;
   onFavorite: (favorite: boolean) => void;
   onReject: (rejected: boolean) => void;
 }) {

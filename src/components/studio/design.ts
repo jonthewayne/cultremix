@@ -49,7 +49,8 @@ export function designItems(
     onRemixable?: () => void;
     // Adds the design to the images already there.
     onInspire: () => void;
-    onStyle: () => void;
+    // Adds it to the style mixer; absent while the mixer is hidden (src/lib/studioSections.ts).
+    onStyle?: () => void;
     onReject?: () => void;
   },
 ): Array<MenuItem> {
@@ -62,7 +63,7 @@ export function designItems(
     if (actions.onStartFrom) items.push({ label: "Start from this", onSelect: actions.onStartFrom });
     if (tile.spelling?.length && actions.onFixSpelling) items.push({ label: "Fix the spelling", onSelect: actions.onFixSpelling });
     items.push({ label: "Add as an image", onSelect: actions.onInspire });
-    items.push({ label: "Use as style", onSelect: actions.onStyle });
+    if (actions.onStyle) items.push({ label: "Use as style", onSelect: actions.onStyle });
   }
   const out = Boolean(tile.publishedCr || tile.keptId);
   if (!out && actions.onPublish) items.push({ label: "Publish", onSelect: actions.onPublish });
