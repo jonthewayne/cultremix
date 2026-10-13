@@ -50,7 +50,7 @@ assert_no_broken_images() {
 
 # Every public page ends with the store policies, /onchain, and the contact address.
 assert_footer() {
-  agent-browser eval "(() => { const footer = document.querySelector('footer')?.innerText ?? ''; const missing = ['Shipping', 'Returns', 'Privacy', 'Terms', 'On Monad', 'heyyo@cultremix.com'].filter((t) => !footer.includes(t)); if (missing.length) throw new Error('The footer is missing: ' + missing.join(', ')); return true })()"
+  agent-browser eval "(() => { const footer = document.querySelector('footer')?.innerText ?? ''; const missing = ['Shipping', 'Returns', 'Privacy', 'Terms', 'On Monad', 'hey@cultremix.com'].filter((t) => !footer.includes(t)); if (missing.length) throw new Error('The footer is missing: ' + missing.join(', ')); return true })()"
 }
 
 # On a deployed site every image comes from R2. One still served from Convex storage
@@ -166,7 +166,7 @@ fi
 for policy in shipping returns privacy terms; do
   agent-browser open "$BASE_URL/policies/$policy"
   agent-browser wait 1000
-  assert_text "heyyo@cultremix.com"
+  assert_text "hey@cultremix.com"
 done
 assert_text "Terms"
 agent-browser screenshot body .tmp/screenshots/policies-terms.png

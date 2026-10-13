@@ -152,7 +152,7 @@ function ChainCheck({ cr, hash }: { cr: string; hash: string }) {
       ) : (
         <p className="font-semibold text-red-700">
           Monad's record of CR {cr} has a different fingerprint ({state.record.contentHash.slice(0, 12)}…). Write to
-          heyyo@cultremix.com.
+          hey@cultremix.com.
         </p>
       )}
     </div>
@@ -160,4 +160,3 @@ function ChainCheck({ cr, hash }: { cr: string; hash: string }) {
 }
 
 const KIND = { original: "An original", variation: "A variation", fork: "A fork" } as const;
-

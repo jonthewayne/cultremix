@@ -241,8 +241,8 @@ function Message({ item }: { item: Notification }) {
       return item.takedown ? (
         <>
           Your design <Cr work={{ cr: item.takedown.cr, title: item.takedown.title, thumbUrl: undefined }} /> was taken down: {asSentence(item.takedown.reason)} If you think that's a mistake, write to{" "}
-          <a href="mailto:heyyo@cultremix.com" className="font-semibold underline underline-offset-4">
-            heyyo@cultremix.com
+          <a href="mailto:hey@cultremix.com" className="font-semibold underline underline-offset-4">
+            hey@cultremix.com
           </a>
           .
         </>

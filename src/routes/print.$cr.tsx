@@ -11,13 +11,13 @@ import type { Layer, Region } from "~/components/print/CompareSlider";
 import type { Placement } from "~/lib/print/placement";
 import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
-import { CompareView, CropZoom, useLoaded } from "~/components/print/CompareSlider";
+import { CropZoom, PlacedView, useLoaded } from "~/components/print/CompareSlider";
 import { CHECKER, KnockoutTool } from "~/components/print/KnockoutTool";
 import { PrintCheckList } from "~/components/print/PrintEntry";
 import { ShirtStage } from "~/components/print/ShirtStage";
 import { errorMessage } from "~/lib/imagePrep";
 import { printCheck, readyLine } from "~/lib/print/check";
-import { DPI_GREAT_FROM, maxWidthAtDpi } from "~/lib/print/dpi";
+import { DPI_GREAT_FROM, dpiGrade, maxWidthAtDpi, sourceDpi } from "~/lib/print/dpi";
 import { parseHex } from "~/lib/print/knockout";
 import {
   MIN_WIDTH_IN,
@@ -609,8 +609,16 @@ function upscaleBlocked(version: Version | undefined, studio: Studio, upscaling:
   return null;
 }
 
-// The comparison: before the file is made, a preview of the chosen version at print size; after,
-// the real print file.
+// How a print of this many dots per inch looks: the words the printer tab uses.
+function printsLike(dpi: number) {
+  const grade = dpiGrade(dpi);
+  return grade === "great" ? "sharp" : grade === "good" ? "well" : "soft";
+}
+
+// The printer tab. A screen shrinks a whole design to fit, so the published art stretched to print
+// size and its upscale look the same there; the difference shows only up close, at real print
+// pixels, so the tab leads with that. Before the file is made it previews the chosen version at
+// print size; after, the real print file.
 function PrinterView({
   studio,
   product,
@@ -643,46 +651,71 @@ function PrinterView({
   const zoomAfter: Layer = file ? { url: file.url ?? "", region: { left: 0, top: 0, ...canvas } } : afterLayer;
   const missing = !beforeLayer.url || !afterLayer.url || beforeLayer.url.startsWith("fake:");
   const stretch = before.width ? rect.width / before.width : 1;
+  const widthIn = rect.width / product.dpi;
+  const heightIn = rect.height / product.dpi;
+  const beforeDpi = Math.floor(sourceDpi(before.width ?? 0, before.height ?? 0, widthIn, heightIn));
+  const afterDpi = Math.floor(file ? file.dpi : sourceDpi(placed.width, placed.height, widthIn, heightIn));
+  // Nothing was upscaled between the published art and this version: one image, no comparison.
+  const compares = before.number !== placed.number;
+  const size = `${widthIn.toFixed(1)} in wide`;
+  const whole = missing ? (
+    <p className="mt-4 text-muted-foreground">The images aren’t available here.</p>
+  ) : (
+    <PlacedView
+      layer={afterLayer}
+      view={rect}
+      background={shirtHex}
+      alt={file ? "The print file" : `Version ${placed.number} at print size`}
+      className="mx-auto mt-4"
+      style={{ width: `min(100%, calc(70svh * ${rect.width / rect.height}))` }}
+    />
+  );
+  const wholeNote = file
+    ? `This exact file goes to the printer: your design where you placed it, at ${afterDpi} dots per inch.`
+    : `A preview of v${placed.number} at print size. Make the print file to see the exact file the printer gets.`;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-3xl bg-card p-4 md:p-6">
-        <p className="text-sm">
-          {file ? (
-            <>
-              Left: your art (v{before.number}, {before.width} px) stretched to {(rect.width / product.dpi).toFixed(1)} in. Right: the print file, {Math.floor(file.dpi)} DPI. Drag the line.
-            </>
-          ) : (
-            <>
-              A preview: left is your art (v{before.number}) stretched to print size, right is v{placed.number} at print size. Make the print file to see the real thing.
-            </>
-          )}
-        </p>
-        {missing ? (
-          <p className="mt-4 text-muted-foreground">The images aren’t available here.</p>
-        ) : (
-          <CompareView
-            before={beforeLayer}
-            after={afterLayer}
-            view={rect}
-            background={shirtHex}
-            afterLabel={file ? "Print file" : `v${placed.number}, preview`}
-            className="mx-auto mt-4"
-            style={{ width: `min(100%, calc(70svh * ${rect.width / rect.height}))` }}
-          />
-        )}
-      </div>
-      {!missing && (
+      {compares ? (
         <div className="rounded-3xl bg-card p-4 md:p-6">
-          <p className="text-sm font-bold uppercase tracking-wider">100% crop</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            One print pixel per screen pixel. Your art is blown up {Math.round(stretch * 10) / 10}× to the same size, pixel for pixel.
+          <p className="text-sm font-bold uppercase tracking-wider">Up close</p>
+          <p className="mt-1 text-sm">
+            Your design prints {size}. The art as published (v{before.number}, {before.width} px across) gives {beforeDpi} dots per inch
+            at that size, so it prints {printsLike(beforeDpi)}. {file ? "The print file" : `The upscaled copy (v${placed.number}, ${placed.width} px)`} gives{" "}
+            {afterDpi}, so it prints {printsLike(afterDpi)}.
           </p>
-          <div className="mt-4">
-            <CropZoom before={beforeLayer} after={zoomAfter} design={rect} mapUrl={placed.previewUrl ?? placed.url ?? ""} background={shirtHex} />
-          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A screen shrinks the whole design to fit, so the two only look different up close. This shows real print pixels, one
+            per screen pixel: the left side is the published art blown up {Math.round(stretch * 10) / 10}×. Drag the line.
+          </p>
+          {!missing && (
+            <div className="mt-4">
+              <CropZoom
+                before={beforeLayer}
+                after={zoomAfter}
+                design={rect}
+                mapUrl={placed.previewUrl ?? placed.url ?? ""}
+                background={shirtHex}
+                beforeLabel={`v${before.number}, as published`}
+                afterLabel={file ? "Print file" : `v${placed.number}, upscaled`}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-3xl bg-card p-4 md:p-6">
+          <p className="text-sm">
+            Your design prints {size}. Your art (v{placed.number}, {placed.width} px across) gives {afterDpi} dots per inch at that
+            size, so it prints {printsLike(afterDpi)}.
+            {afterDpi < DPI_GREAT_FROM && studio.upscaleEnabled && " Upscale for print makes it sharper."}
+          </p>
         </div>
       )}
+      <div className="rounded-3xl bg-card p-4 md:p-6">
+        <p className="text-sm font-bold uppercase tracking-wider">{file ? "The print file" : "The whole design"}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{wholeNote}</p>
+        {whole}
+      </div>
     </div>
   );
 }

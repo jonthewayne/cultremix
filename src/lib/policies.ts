@@ -4,7 +4,7 @@
 
 export const POLICIES_DRAFT = true;
 export const POLICIES_UPDATED = "October 10, 2026";
-export const CONTACT_EMAIL = "heyyo@cultremix.com";
+export const CONTACT_EMAIL = "hey@cultremix.com";
 
 export type Policy = {
   slug: "shipping" | "returns" | "privacy" | "terms";
@@ -172,4 +172,3 @@ export const POLICIES: Array<Policy> = [
 export function policyBySlug(slug: string): Policy | undefined {
   return POLICIES.find((policy) => policy.slug === slug);
 }
-

@@ -871,7 +871,7 @@ function StudioPage() {
                 {outOfCredits && (
                   <>
                     {" · "}
-                    <a href="mailto:heyyo@cultremix.com?subject=More%20credits" className="font-semibold text-black underline underline-offset-4">
+                    <a href="mailto:hey@cultremix.com?subject=More%20credits" className="font-semibold text-black underline underline-offset-4">
                       Ask for more
                     </a>
                   </>
@@ -1221,7 +1221,7 @@ function IdeasSheet({ onPick, onClose }: { onPick: (idea: string) => void; onClo
 // A batch still loading: its line and four grey squares, laid out like the real thing.
 // Why a batch didn't start.
 function refusalMessage(refused: "NO_CREDITS" | "GENERATION_OFF" | "BUDGET") {
-  if (refused === "NO_CREDITS") return "You're out of credits. Write to heyyo@cultremix.com for more.";
+  if (refused === "NO_CREDITS") return "You're out of credits. Write to hey@cultremix.com for more.";
   if (refused === "BUDGET") return "The studio is resting until tomorrow. Your credits are safe.";
   return "Generation is paused right now.";
 }

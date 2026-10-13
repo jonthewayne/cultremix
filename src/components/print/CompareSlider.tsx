@@ -124,6 +124,33 @@ export function CompareView({
   );
 }
 
+// One image placed by where it sits on the print canvas, framed by `view`: the whole design, with
+// nothing to compare it against.
+export function PlacedView({
+  layer,
+  view,
+  background,
+  alt,
+  className,
+  style,
+}: {
+  layer: Layer;
+  view: Region;
+  background: string;
+  alt: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={cn("relative w-full overflow-hidden rounded-2xl border border-border", className)}
+      style={{ aspectRatio: `${view.width} / ${view.height}`, background, ...style }}
+    >
+      <img src={layer.url} alt={alt} draggable={false} style={placeStyle(layer.region, view)} />
+    </div>
+  );
+}
+
 // A 100% crop: one print-file pixel to one screen pixel, the art blown up to match, pixel for pixel.
 // The small map picks which part to look at.
 export function CropZoom({
@@ -132,6 +159,8 @@ export function CropZoom({
   design,
   mapUrl,
   background,
+  beforeLabel,
+  afterLabel = "Print file, 100%",
 }: {
   before: Layer;
   after: Layer;
@@ -139,6 +168,8 @@ export function CropZoom({
   design: Region;
   mapUrl: string;
   background: string;
+  beforeLabel?: string;
+  afterLabel?: string;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const [side, setSide] = useState(360);
@@ -177,8 +208,8 @@ export function CropZoom({
           view={view}
           background={background}
           pixelated
-          beforeLabel={Number.isFinite(stretch) ? `Art at ${Math.round(stretch * 10) / 10}×` : "Your art"}
-          afterLabel="Print file, 100%"
+          beforeLabel={beforeLabel ?? (Number.isFinite(stretch) ? `Art at ${Math.round(stretch * 10) / 10}×` : "Your art")}
+          afterLabel={afterLabel}
           style={{ width: w, maxWidth: "100%" }}
         />
       </div>
@@ -214,4 +245,3 @@ export function CropZoom({
     </div>
   );
 }
-
