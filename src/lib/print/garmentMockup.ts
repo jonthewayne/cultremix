@@ -152,7 +152,15 @@ export function garmentTones(hex: string) {
   const light = luminance(hex) > 0.6;
   const base = rgb(hex);
   const shade = (amount: number) => toHex(base.map((c) => (light ? c * (1 - amount) : c + (255 - c) * amount)) as [number, number, number]);
-  return { fill: toHex(base), outline: shade(0.22), detail: shade(0.14), inside: shade(0.3), backdrop: light ? "#dcdcd8" : "#f2f2ef" };
+  return {
+    fill: toHex(base),
+    outline: shade(0.22),
+    detail: shade(0.14),
+    inside: shade(0.3),
+    backdrop: light ? "#dcdcd8" : "#f2f2ef",
+    // The print area's dashed outline and its size, readable on any garment color.
+    area: light ? "#6b6b68" : "#e4e4e0",
+  };
 }
 
 // The drawn garment as an SVG document, without the design (a server can composite it on top).

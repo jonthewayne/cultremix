@@ -16,6 +16,8 @@ import type { Box } from "../../src/lib/print/trim";
 sharp.cache(false);
 
 const PREVIEW_SIDE = 1200;
+// The work page's art: sharp on a Retina screen at the page's widest.
+const LARGE_SIDE = 2400;
 
 function load(bytes: Uint8Array) {
   return sharp(bytes, { failOn: "none", limitInputPixels: 80_000_000 });
@@ -81,6 +83,14 @@ export async function knockoutImage(bytes: Uint8Array, params: KnockoutParams) {
 export async function previewWebp(bytes: Uint8Array) {
   const out = await load(bytes)
     .resize({ width: PREVIEW_SIDE, height: PREVIEW_SIDE, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 85, alphaQuality: 95 })
+    .toBuffer();
+  return new Uint8Array(out);
+}
+
+export async function largeWebp(bytes: Uint8Array) {
+  const out = await load(bytes)
+    .resize({ width: LARGE_SIDE, height: LARGE_SIDE, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 85, alphaQuality: 95 })
     .toBuffer();
   return new Uint8Array(out);

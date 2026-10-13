@@ -11,7 +11,7 @@ import {
   markPlacement,
   onFront,
   sameRelative,
-  sizeKeyOf,
+  shareOfWidth,
   sizeWords,
   toInches,
   toRelative,
@@ -22,9 +22,15 @@ const TEE = { widthIn: 12, heightIn: 16 };
 const HOODIE = { widthIn: 14, heightIn: 14 };
 
 describe("one placement on every product", () => {
-  it("puts the default Large near the top of a tee and a hoodie, each in its own inches", () => {
-    expect(toInches(DEFAULT_PLACEMENT, 1, TEE)).toEqual({ side: "front", widthIn: 9.35, yIn: 0.95 });
-    expect(toInches(DEFAULT_PLACEMENT, 1, HOODIE)).toEqual({ side: "front", widthIn: 11.05, yIn: 0.66 });
+  it("starts at about 85% of the print width, a tenth of the room above, on a tee and a hoodie", () => {
+    const tee = toInches(DEFAULT_PLACEMENT, 1, TEE);
+    expect(tee).toEqual({ side: "front", widthIn: 10.23, yIn: 0.98 });
+    expect(shareOfWidth(tee, TEE)).toBe(85);
+    expect(toInches(DEFAULT_PLACEMENT, 1, HOODIE)).toEqual({ side: "front", widthIn: 12.09, yIn: 0.59 });
+    // A wide design, like a word mark: the same width, and a tenth of the room left goes above it.
+    const wordmark = toInches(DEFAULT_PLACEMENT, 0.64, TEE);
+    expect(wordmark.widthIn).toBe(10.23);
+    expect(wordmark.yIn).toBeCloseTo(EDGE_IN + 0.1 * (TEE.heightIn - 2 * EDGE_IN - 10.23 * 0.64), 2);
   });
 
   it("keeps the same share of each print area", () => {
@@ -77,10 +83,7 @@ describe("one placement on every product", () => {
     expect(clampRelative({ side: "back", size: 0, drop: Number.NaN })).toEqual({ side: "back", size: MIN_SIZE, drop: DEFAULT_PLACEMENT.drop });
   });
 
-  it("names the presets and centers the design", () => {
-    expect(sizeKeyOf(0.65)).toBe("medium");
-    expect(sizeKeyOf(1)).toBe("full");
-    expect(sizeKeyOf(0.7)).toBeNull();
+  it("centers the design", () => {
     expect(areaPlacement({ side: "front", widthIn: 9, yIn: 1 }, TEE)).toEqual({ xIn: 1.5, yIn: 1, widthIn: 9 });
   });
 });
@@ -91,6 +94,9 @@ describe("sizeWords", () => {
     expect(sizeWords({ side: "back", size: 0.65, drop: 0.5 })).toBe("a medium-size print centered on the back");
     expect(sizeWords({ side: "front", size: 0.3, drop: 0 })).toBe("a small print centered on the upper chest, not off to one side");
     expect(sizeWords({ side: "back", size: 1, drop: 0 })).toBe("a big print filling most of the back");
+    // With its real width, so the photo shows it the size it prints.
+    expect(sizeWords(DEFAULT_PLACEMENT, 10.23)).toBe("a large print, about 10 inches wide, centered on the upper chest");
+    expect(sizeWords({ side: "front", size: 1, drop: 0.5 }, 11)).toBe("a big print, about 11 inches wide, filling most of the front");
   });
 });
 

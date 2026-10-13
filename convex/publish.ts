@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { DEFAULT_PLACEMENT, clampRelative, sameRelative, withoutMark } from "../src/lib/print/shirtPlacement";
+import { DEFAULT_PLACEMENT, clampRelative, sameRelative, toInches, withoutMark } from "../src/lib/print/shirtPlacement";
+import { GARMENT_KINDS } from "../shared/config/print-products";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getViewerUser, isOwner } from "./identity";
@@ -631,13 +632,27 @@ export const setPrintSetup = mutation({
   },
 });
 
-// What the model photo shows: the first product a work sells on, with the design where its creator put it.
+// What the model photo shows: the first product a work sells on, with the design where its creator
+// put it, and how wide it prints there when the design's size is known.
 async function photoGarment(ctx: QueryCtx | MutationCtx, work: Doc<"works">) {
   const [first] = chosenProducts(work, await offeredShopProducts(ctx));
-  return { kind: first?.product.kind ?? ("tee" as const), placement: first?.placement ?? clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT) };
+  const kind = first?.product.kind ?? ("tee" as const);
+  const placement = first?.placement ?? clampRelative(work.printPlacement ?? DEFAULT_PLACEMENT);
+  const area = first
+    ? placement.side === "back" && first.product.back
+      ? first.product.back
+      : first.product.front
+    : GARMENT_KINDS[kind][placement.side];
+  const generation = await ctx.db.get("generations", work.generationId);
+  const aspect = generation?.width && generation.height ? generation.height / generation.width : undefined;
+  return { kind, placement, ...(aspect ? { widthIn: toInches(placement, aspect, area).widthIn } : {}) };
 }
 
-const photoGarmentValidator = v.object({ kind: garmentKindValidator, placement: relativePlacementValidator });
+const photoGarmentValidator = v.object({
+  kind: garmentKindValidator,
+  placement: relativePlacementValidator,
+  widthIn: v.optional(v.number()),
+});
 
 export const assetJob = internalQuery({
   args: { workId: v.id("works") },
@@ -691,6 +706,8 @@ export const markPublished = internalMutation({
       await ctx.db.patch("works", work._id, { status: "private", publishedAt: now, artKey: args.artKey, contentHash: args.contentHash });
       await inheritOnPublish(ctx, work._id);
       await inheritPartsOnPublish(ctx, work._id);
+      // Its art upscaled for its page and for print (convex/print.ts startArtUpscale).
+      await ctx.scheduler.runAfter(0, internal.print.upscaleArt, { workId: work._id });
       return null;
     }
     await ctx.db.patch("works", work._id, {
@@ -709,6 +726,8 @@ export const markPublished = internalMutation({
     await inheritPartsOnPublish(ctx, work._id);
     // Notes on the art for everyone who remixes it (imageNotes.analyzeWork).
     await ctx.scheduler.runAfter(0, internal.imageNotes.analyzeWork, { workId: work._id });
+    // Its art upscaled for its page and for print (convex/print.ts startArtUpscale).
+    await ctx.scheduler.runAfter(0, internal.print.upscaleArt, { workId: work._id });
     // Onchain provenance: registered by the relayer, signed by the creator's wallet once it's
     // ready, after the parent's registration for a remix (convex/lib/chain/queue.ts).
     await enqueueRegisterWork(ctx, work._id);

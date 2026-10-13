@@ -66,6 +66,11 @@ export function printPreviewKey(key: string) {
   return key.replace(/\/[^/]+\.png$/u, (name) => name.replace(/\.png$/u, "-preview.webp"));
 }
 
+// The 2400 px copy beside an upscale of the published art, which the work page shows.
+export function printLargeKey(key: string) {
+  return key.replace(/\/[^/]+\.png$/u, (name) => name.replace(/\.png$/u, "-large.webp"));
+}
+
 const PRINT_FILE = /^(?:works\/[1-9]\d*|members\/[a-z0-9]{16,64}\/kept)\/\d{3,}\/print-[a-z2-7]{26}\/print\.png$/u;
 export function isPrintFileKey(key: string) {
   return PRINT_FILE.test(key);

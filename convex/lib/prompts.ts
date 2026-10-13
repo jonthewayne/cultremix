@@ -807,7 +807,8 @@ export function pickLook(
 }
 
 // What the model wears: the first product a work sells on, and where its creator placed the design.
-export type PhotoGarment = { kind: GarmentKind; placement: RelativePlacement };
+// widthIn: how wide the design prints there, when its size is known (convex/publish.ts photoGarment).
+export type PhotoGarment = { kind: GarmentKind; placement: RelativePlacement; widthIn?: number };
 
 const GARMENT_WORDS: Record<GarmentKind, string> = {
   tee: "crew-neck t-shirt",
@@ -829,7 +830,7 @@ export function photoPrompt(
   return (
     `An editorial street-style fashion photograph of ${look.casting}, ${pose}, ${look.world}. ` +
     "The pose feels natural for the place. " +
-    `She wears a plain ${color} ${GARMENT_WORDS[garment.kind] ?? GARMENT_WORDS.tee} (color ${backgroundColor}) with this exact graphic printed as ${sizeWords(garment.placement)}, ` +
+    `She wears a plain ${color} ${GARMENT_WORDS[garment.kind] ?? GARMENT_WORDS.tee} (color ${backgroundColor}) with this exact graphic printed as ${sizeWords(garment.placement, garment.widthIn)}, ` +
     "reproduced faithfully with no changes and at that size; no jacket, hair, or anything else covers the graphic. " +
     "House style: raw on-camera flash, 35mm film grain, candid and confident, natural skin, minimal retouching. " +
     `Framed from mid-thigh up, the ${back ? "back of the garment" : "garment"} and print clearly visible.`

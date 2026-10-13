@@ -63,7 +63,7 @@ export const FEATURE_FLAGS: ReadonlyArray<FlagDefinition> = [
     key: "gen.upscale",
     label: "Print-size art",
     description:
-      "Creators can upscale art to print size (2 credits; the owner is exempt) and remove backgrounds in the Print Studio, and approving a work for sale upscales its art. Off refuses new upscales and background removals.",
+      "Publishing upscales each design's art (about 8 cents, paid by CultRemix) so its page is sharp and its print-size art is ready, approving a work for sale uses that upscale or makes one, and creators can upscale (2 credits; the owner is exempt) and remove backgrounds in the Print Studio. Off refuses new upscales and background removals.",
     defaultOn: false,
   },
   {

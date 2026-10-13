@@ -7,7 +7,7 @@ import { garmentColor } from "./lib/garments";
 import { colorLookup } from "./merch";
 import { imageUrlReader } from "./lib/imageUrls";
 import { DAILY_LIMIT } from "./lib/photoShoots";
-import { formatCr, parseCr } from "./lib/r2";
+import { formatCr, parseCr, publicUrl } from "./lib/r2";
 import {
   FOLLOWING_FANOUT_LIMIT,
   MAX_PAGE_SIZE,
@@ -44,6 +44,8 @@ export const feedItem = v.object({
   artUrl: v.optional(v.string()),
   artMediumUrl: v.optional(v.string()),
   artThumbUrl: v.optional(v.string()),
+  // The art at 2400 px, from its print upscale (convex/print.ts startArtUpscale), once that's made.
+  artLargeUrl: v.optional(v.string()),
   photoUrl: v.optional(v.string()),
   photoMediumUrl: v.optional(v.string()),
   photoThumbUrl: v.optional(v.string()),
@@ -88,6 +90,7 @@ export async function toFeedItem(ctx: QueryCtx, work: Doc<"works">, urls: Urls =
     artUrl: art.url,
     artMediumUrl: art.mediumUrl,
     artThumbUrl: art.thumbUrl,
+    artLargeUrl: work.artLargeKey ? publicUrl(work.artLargeKey) : undefined,
     photoUrl: shot.url,
     photoMediumUrl: shot.mediumUrl,
     photoThumbUrl: shot.thumbUrl,

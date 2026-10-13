@@ -9,8 +9,8 @@ import type { Placement } from "./placement";
 //   drop  a share of the room left above and below it: 0 at the top of the print area, 1 at the bottom
 //
 // It's always centered left to right. Each product turns it into inches for its own print area
-// (toInches), so "Medium, near the top" looks like Medium near the top on everything. A creator can
-// adjust any one product; that product then keeps its own.
+// (toInches), so a size and height chosen once look the same on everything. A creator can adjust any
+// one product; that product then keeps its own.
 //
 // A back print can also carry a chest mark (`mark`): the same design, small, on the front over the
 // wearer's left chest. Its width is in inches, the same on every product, since a chest mark is a
@@ -27,16 +27,9 @@ export const EDGE_IN = 0.5;
 // The smallest size: about two inches wide on a tee.
 export const MIN_SIZE = 0.2;
 
-export const SIZE_PRESETS = [
-  { key: "small", label: "Small", size: 0.4 },
-  { key: "medium", label: "Medium", size: 0.65 },
-  { key: "large", label: "Large", size: 0.85 },
-  { key: "full", label: "Full", size: 1 },
-] as const;
-export type SizeKey = (typeof SIZE_PRESETS)[number]["key"];
-
-// Large, near the top: about 9 inches wide on a tee, its top about an inch into the print area.
-export const DEFAULT_PLACEMENT: RelativePlacement = { side: "front", size: 0.85, drop: 0.08 };
+// Where Publish starts (Jon, October 12): about 85% of a tee's 12-inch print width (10.2 in),
+// centered, with a tenth of the room left above it and the rest below.
+export const DEFAULT_PLACEMENT: RelativePlacement = { side: "front", size: 0.93, drop: 0.1 };
 
 // Chest marks, in inches wide. A tall design is held to MARK_MAX_HEIGHT_IN so it stays a chest mark.
 export const MARK_MIN_IN = 2;
@@ -105,9 +98,9 @@ export function toRelative(placement: InchPlacement, aspect: number, area: Print
   });
 }
 
-// The preset a size is, if it's one.
-export function sizeKeyOf(size: number): SizeKey | null {
-  return SIZE_PRESETS.find((preset) => Math.abs(preset.size - size) < 0.015)?.key ?? null;
+// How much of the print area's width the design takes, as a whole percent.
+export function shareOfWidth(placement: InchPlacement, area: PrintArea) {
+  return Math.round((100 * placement.widthIn) / area.widthIn);
 }
 
 // The same placement in the Print Studio's terms (src/lib/print/placement.ts): from the print
@@ -120,17 +113,20 @@ export function areaPlacement(placement: InchPlacement, area: PrintArea): Placem
   };
 }
 
-// Words for the model photo's prompt: "a medium-size print centered on the upper chest".
-export function sizeWords(placement: RelativePlacement) {
+// Words for the model photo's prompt: "a large print, about 10 inches wide, centered on the upper
+// chest". widthIn, when known, is the print's real width, which keeps the model from drawing it
+// bigger than it prints.
+export function sizeWords(placement: RelativePlacement, widthIn?: number) {
   const rel = clampRelative(placement);
   const part = rel.side === "back" ? "back" : "chest";
   const where = rel.drop < 0.3 ? `upper ${part}` : rel.drop > 0.7 ? `lower ${part}` : part;
+  const wide = widthIn !== undefined && Number.isFinite(widthIn) && widthIn > 0 ? `, about ${Math.max(1, Math.round(widthIn))} inches wide,` : "";
   // Centered every time: a small print without it reads as a left-chest logo, and the print file
   // always centers the design.
-  if (rel.size < 0.5) return `a small print centered on the ${where}, not off to one side`;
-  if (rel.size < 0.75) return `a medium-size print centered on the ${where}`;
-  if (rel.size < 0.95) return `a large print centered on the ${where}`;
-  return rel.side === "back" ? "a big print filling most of the back" : "a big print filling most of the front";
+  if (rel.size < 0.5) return `a small print${wide} centered on the ${where}, not off to one side`;
+  if (rel.size < 0.75) return `a medium-size print${wide} centered on the ${where}`;
+  if (rel.size < 0.95) return `a large print${wide} centered on the ${where}`;
+  return `a big print${wide} filling most of the ${rel.side === "back" ? "back" : "front"}`;
 }
 
 export function sameRelative(a: RelativePlacement, b: RelativePlacement) {

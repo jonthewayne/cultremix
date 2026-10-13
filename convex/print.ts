@@ -635,7 +635,125 @@ export const recordVersion = internalMutation({
       ...(version.fal && args.latencyMs !== undefined ? { fal: { ...version.fal, latencyMs: args.latencyMs } } : {}),
     });
     await nudgeSalePrep(ctx, version.workId);
+    // Publishing's upscale of the art (startArtUpscale): version 1 measured starts it, and that
+    // upscale done makes the page's 2400 px copy.
+    if (version.number === 1) {
+      await ctx.scheduler.runAfter(0, internal.print.upscaleArt, { workId: version.workId });
+    } else if (version.op === "upscale" && version.parentId) {
+      const parent = await ctx.db.get("printVersions", version.parentId);
+      if (parent?.number === 1) await ctx.scheduler.runAfter(0, internal.printTools.makeLargeArt, { versionId: version._id });
+    }
     return true;
+  },
+});
+
+// ---- The published art, upscaled ----
+// Publishing upscales a design's art (Topaz, 4x, about 8 cents, paid by CultRemix; Jon, October 12),
+// so its page shows it sharp and approving it for sale finds the print-size art ready (convex/sales.ts
+// reuses an upscale of version 1). The published file never changes, since its SHA-256 is the
+// fingerprint recorded on Monad; the page shows a 2400 px copy of the upscale (works.artLargeKey, made
+// by printTools.makeLargeArt). It needs the Print-size art switch (gen.upscale) and room in today's
+// fal budget; without them the page keeps the published size and approval upscales later.
+type ArtUpscale = "started" | "measuring" | "ready" | "skipped";
+
+export async function startArtUpscale(ctx: MutationCtx, workId: Id<"works">): Promise<ArtUpscale> {
+  const work = await ctx.db.get("works", workId);
+  if (!work?.artKey || work.artLargeKey || (work.status !== "published" && work.status !== "private")) return "skipped";
+  if (!(await flagEnabled(ctx, "gen.upscale"))) return "skipped";
+  const versions = await versionsOf(ctx, work._id);
+  const first = versions.find((version) => version.number === 1);
+  if (!first) {
+    // Version 1, the published art as it is. Once it's measured, recordVersion comes back here.
+    const versionId = await ctx.db.insert("printVersions", {
+      workId: work._id,
+      number: 1,
+      op: "published",
+      status: "pending",
+      key: work.artKey,
+      ...(work.contentHash ? { sha256: work.contentHash } : {}),
+      upscaled: false,
+      charged: 0,
+      createdBy: work.creatorId,
+    });
+    await ctx.scheduler.runAfter(0, internal.printTools.measure, { versionId });
+    return "measuring";
+  }
+  if (first.status === "pending") return "measuring";
+  if (first.status !== "ready" || !first.width || !first.height) return "skipped";
+  const upscales = versions.filter((version) => version.op === "upscale" && version.parentId === first._id);
+  const done = upscales.filter((version) => version.status === "ready");
+  if (done.length > 0) {
+    await ctx.scheduler.runAfter(0, internal.printTools.makeLargeArt, { versionId: done[done.length - 1]._id });
+    return "ready";
+  }
+  if (upscales.some((version) => version.status === "pending")) return "started";
+  // Two failed tries, art Topaz can't take, or no room left: the page keeps the published size.
+  if (upscales.length >= 2 || !first.metrics?.hasAlpha || Math.max(first.width, first.height) > UPSCALE_MAX_SIDE) return "skipped";
+  if (versions.length >= MAX_VERSIONS) return "skipped";
+  const now = Date.now();
+  const worstCaseCents = topazWorstCaseCents(first.width, first.height);
+  if (!(await hasRoom(ctx, "fal", worstCaseCents, now))) return "skipped";
+  const versionId = await ctx.db.insert("printVersions", {
+    workId: work._id,
+    number: versions.reduce((max, version) => Math.max(max, version.number), 0) + 1,
+    parentId: first._id,
+    op: "upscale",
+    status: "pending",
+    upscaled: true,
+    remixSourceId: first._id,
+    fal: { state: "queued", polls: 0 },
+    charged: 0,
+    createdBy: work.creatorId,
+  });
+  await openReservation(
+    ctx,
+    { attemptKind: "upscale", attemptId: versionId, provider: "fal", userId: work.creatorId, credits: 0, worstCaseCents },
+    now,
+  );
+  await ctx.scheduler.runAfter(0, internal.upscale.submit, { versionId });
+  return "started";
+}
+
+export const upscaleArt = internalMutation({
+  args: { workId: v.id("works") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await startArtUpscale(ctx, args.workId);
+    return null;
+  },
+});
+
+// The 2400 px copy is stored: the work page shows it, as long as it came from the published file.
+export const recordLargeArt = internalMutation({
+  args: { versionId: v.id("printVersions"), largeKey: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const version = await ctx.db.get("printVersions", args.versionId);
+    const parent = version?.parentId ? await ctx.db.get("printVersions", version.parentId) : null;
+    const work = version ? await ctx.db.get("works", version.workId) : null;
+    if (!version || version.op !== "upscale" || !parent || parent.number !== 1 || !work || work.artKey !== parent.key) return null;
+    await ctx.db.patch("works", work._id, { artLargeKey: args.largeKey });
+    return null;
+  },
+});
+
+// bunx convex run print:backfillArtUpscales (production: --prod) upscales the works published before
+// publishing did it. Safe to rerun: a work with its copy, or one on its way, is left alone.
+export const backfillArtUpscales = internalMutation({
+  args: {},
+  returns: v.object({ started: v.number(), measuring: v.number(), ready: v.number(), skipped: v.number() }),
+  handler: async (ctx) => {
+    const counts = { started: 0, measuring: 0, ready: 0, skipped: 0 };
+    for (const status of ["published", "private"] as const) {
+      const works = await ctx.db
+        .query("works")
+        .withIndex("by_status_publishedAt", (q) => q.eq("status", status))
+        .collect();
+      for (const work of works) {
+        if (!work.artLargeKey) counts[await startArtUpscale(ctx, work._id)] += 1;
+      }
+    }
+    return counts;
   },
 });
 

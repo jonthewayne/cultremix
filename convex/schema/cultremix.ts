@@ -330,6 +330,9 @@ export const cultremixTables = {
     publishedAt: v.optional(v.number()),
     contentHash: v.optional(v.string()),
     artKey: v.optional(v.string()),
+    // The art at 2400 px for its page, a WebP made from its print upscale (convex/print.ts
+    // startArtUpscale). The published file at artKey never changes: its SHA-256 is the fingerprint.
+    artLargeKey: v.optional(v.string()),
     // Notes on the art, written once when it's published (convex/imageNotes.ts), so a remix
     // starts from them: what it shows, every piece of text, and how it looks.
     notes: v.optional(v.string()),

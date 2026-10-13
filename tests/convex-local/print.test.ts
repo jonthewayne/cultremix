@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { PRINT_PRODUCT } from "../../shared/config/print-products";
-import { toInches } from "../../src/lib/print/shirtPlacement";
+import { DEFAULT_PLACEMENT, toInches } from "../../src/lib/print/shirtPlacement";
 import { newTest } from "./setup";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -148,9 +148,10 @@ describe("versions", () => {
 
   it("starts from where the creator placed it on the front when publishing", async () => {
     const { t, workId } = await setup();
-    // Published before placement existed: the default, Large near the top, on the launch tee.
+    // Published before placement existed: the default (about 85% of the print width, near the top),
+    // on the launch tee.
     const opened = await t.withIdentity(ALICE).query(api.print.studio, { cr: CR });
-    expect(opened?.publishPlacement).toEqual({ side: "front", size: 0.85, drop: 0.08 });
+    expect(opened?.publishPlacement).toEqual(DEFAULT_PLACEMENT);
     expect(opened?.product.kind).toBe("tee");
     await t.run(async (ctx) => ctx.db.patch("works", workId, { printPlacement: { side: "front", size: 0.4, drop: 0.3 } }));
     expect((await t.withIdentity(ALICE).query(api.print.studio, { cr: CR }))?.publishPlacement).toEqual({ side: "front", size: 0.4, drop: 0.3 });
@@ -663,5 +664,134 @@ describe("placement and the print file", () => {
     expect(await t.query(api.print.entry, { cr: CR })).toEqual({ canPrepare: false, ready: { dpi: 85, widthIn: 12 } });
     // Bob never sees the print file's address.
     expect(await t.withIdentity(BOB).query(api.print.studio, { cr: CR })).toBeNull();
+  });
+});
+
+describe("publishing upscales the art for its page", () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-10-12T12:00:00Z"));
+  });
+
+  async function versions(t: T, workId: Id<"works">) {
+    return await t.run((ctx) =>
+      ctx.db
+        .query("printVersions")
+        .withIndex("by_work_number", (q) => q.eq("workId", workId))
+        .collect(),
+    );
+  }
+
+  async function workOf(t: T, workId: Id<"works">) {
+    return await t.run((ctx) => ctx.db.get("works", workId));
+  }
+
+  // Version 1 measured as if the action had run; recordVersion schedules upscaleArt again, which
+  // scheduled functions here never run, so the tests call it by hand.
+  async function measureFirst(t: T, workId: Id<"works">, size: number, metrics = METRICS) {
+    await t.mutation(internal.print.upscaleArt, { workId });
+    const [first] = await versions(t, workId);
+    await t.mutation(internal.print.recordVersion, { versionId: first._id, key: "fake:art.png", width: size, height: size, metrics });
+    await t.mutation(internal.print.upscaleArt, { workId });
+    return first;
+  }
+
+  it("measures the published art, upscales it once at CultRemix's cost, and shows the 2400 px copy", async () => {
+    const { t, alice, workId } = await setup();
+    await t.mutation(internal.print.upscaleArt, { workId });
+    expect(await versions(t, workId)).toMatchObject([{ number: 1, op: "published", status: "pending", key: "fake:art.png" }]);
+
+    const first = await measureFirst(t, workId, 940);
+    await t.mutation(internal.print.upscaleArt, { workId });
+    const upscales = (await versions(t, workId)).filter((version) => version.op === "upscale");
+    expect(upscales).toHaveLength(1);
+    expect(upscales[0]).toMatchObject({ parentId: first._id, status: "pending", charged: 0, createdBy: alice });
+    // 940 px comes back 3760 px square, 14 MP: 8 cents on the fal budget, and no credits.
+    const held = await t.run((ctx) =>
+      ctx.db
+        .query("reservations")
+        .withIndex("by_attempt", (q) => q.eq("attemptId", upscales[0]._id))
+        .unique(),
+    );
+    expect(held).toMatchObject({ provider: "fal", credits: 0, worstCaseCents: 8, userId: alice });
+    expect(await balance(t, alice)).toBe(10);
+
+    await t.mutation(internal.print.recordVersion, {
+      versionId: upscales[0]._id,
+      key: "works/101/001/print-x/version-2.png",
+      width: 3760,
+      height: 3760,
+      metrics: METRICS,
+    });
+    const largeKey = "works/101/001/print-x/version-2-large.webp";
+    await t.mutation(internal.print.recordLargeArt, { versionId: upscales[0]._id, largeKey });
+    // The page gets the copy; the published file and its fingerprint stay as they were.
+    expect(await workOf(t, workId)).toMatchObject({ artLargeKey: largeKey, artKey: "fake:art.png", contentHash: "a".repeat(64) });
+    await t.mutation(internal.print.upscaleArt, { workId });
+    expect((await versions(t, workId)).filter((version) => version.op === "upscale")).toHaveLength(1);
+  });
+
+  it("waits for the Print-size art switch", async () => {
+    const { t, workId } = await setup();
+    await t.run(async (ctx) => {
+      const flag = await ctx.db
+        .query("featureFlags")
+        .withIndex("by_key", (q) => q.eq("key", "gen.upscale"))
+        .unique();
+      if (flag) await ctx.db.patch("featureFlags", flag._id, { enabled: false });
+    });
+    await t.mutation(internal.print.upscaleArt, { workId });
+    expect(await versions(t, workId)).toHaveLength(0);
+  });
+
+  it("leaves art Topaz can't take, and a day without room in the budget", async () => {
+    for (const [size, metrics] of [[1600, METRICS], [940, { ...METRICS, hasAlpha: false }]] as const) {
+      const { t, workId } = await setup();
+      await measureFirst(t, workId, size, metrics);
+      expect((await versions(t, workId)).map((version) => version.op)).toEqual(["published"]);
+    }
+    const { t, workId } = await setup();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("appSettings", {
+        key: "main",
+        signupGrant: { enabled: true, credits: 24 },
+        dailyBudgetCents: 5,
+        shootsPerMemberPerDay: 3,
+        updatedAt: 0,
+      });
+    });
+    await measureFirst(t, workId, 940);
+    expect((await versions(t, workId)).map((version) => version.op)).toEqual(["published"]);
+  });
+
+  it("shows only an upscale of the published file", async () => {
+    const { t, workId } = await setup();
+    const first = await measureFirst(t, workId, 940);
+    // A trimmed version upscaled in the Print Studio prints, but the page keeps showing what was published.
+    const upscaleOfTrim = await t.run(async (ctx) => {
+      const trim = await ctx.db.insert("printVersions", {
+        workId,
+        number: 3,
+        parentId: first._id,
+        op: "trim",
+        status: "ready",
+        key: "fake:trim.png",
+        upscaled: false,
+        charged: 0,
+        createdBy: first.createdBy,
+      });
+      return await ctx.db.insert("printVersions", {
+        workId,
+        number: 4,
+        parentId: trim,
+        op: "upscale",
+        status: "ready",
+        key: "fake:trim-up.png",
+        upscaled: true,
+        charged: 0,
+        createdBy: first.createdBy,
+      });
+    });
+    await t.mutation(internal.print.recordLargeArt, { versionId: upscaleOfTrim, largeKey: "works/101/001/print-y/version-4-large.webp" });
+    expect((await workOf(t, workId))?.artLargeKey).toBeUndefined();
   });
 });

@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { assertDeploymentConsistency } from "../shared/config/chains";
 import { internal } from "./_generated/api";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { creditBalance, getAppSettings, getViewerUser } from "./identity";
 import { adminAllows, requireAdmin } from "./lib/adminAccess";
 import { memberSpendToday } from "./lib/budget";
@@ -176,23 +176,38 @@ export const setFlag = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireAdmin(ctx, "manage");
-    if (!flagDefinition(args.key)) {
-      throw new ConvexError({ code: "INVALID_INPUT", message: "Unknown flag." });
-    }
-    const row = await ctx.db
-      .query("featureFlags")
-      .withIndex("by_key", (q) => q.eq("key", args.key))
-      .unique();
-    const was = row ? row.enabled : flagDefault(args.key);
-    if (row) await ctx.db.patch("featureFlags", row._id, { enabled: args.enabled });
-    else await ctx.db.insert("featureFlags", { key: args.key, enabled: args.enabled });
-    // Checkout brings the products in Shopify along: drafts while it's off, sellable while it's on.
-    if (args.key === COMMERCE_FLAG && was !== args.enabled) {
-      await ctx.scheduler.runAfter(0, internal.shopify.applyCheckout, { open: args.enabled, cursor: null });
-    }
+    await writeFlag(ctx, args.key, args.enabled);
     return null;
   },
 });
+
+// The same switch from the command line, for ops:
+// bunx convex run --prod admin:setFlagFromCli '{"key":"gen.upscale","enabled":true}'
+export const setFlagFromCli = internalMutation({
+  args: { key: v.string(), enabled: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await writeFlag(ctx, args.key, args.enabled);
+    return null;
+  },
+});
+
+async function writeFlag(ctx: MutationCtx, key: string, enabled: boolean) {
+  if (!flagDefinition(key)) {
+    throw new ConvexError({ code: "INVALID_INPUT", message: "Unknown flag." });
+  }
+  const row = await ctx.db
+    .query("featureFlags")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  const was = row ? row.enabled : flagDefault(key);
+  if (row) await ctx.db.patch("featureFlags", row._id, { enabled });
+  else await ctx.db.insert("featureFlags", { key, enabled });
+  // Checkout brings the products in Shopify along: drafts while it's off, sellable while it's on.
+  if (key === COMMERCE_FLAG && was !== enabled) {
+    await ctx.scheduler.runAfter(0, internal.shopify.applyCheckout, { open: enabled, cursor: null });
+  }
+}
 
 function wholeNumberIn(value: number, min: number, max: number, message: string) {
   if (!Number.isInteger(value) || value < min || value > max) {

@@ -64,17 +64,22 @@ export function GarmentPreview({
         <path key={`l${i}`} d={d} fill="none" stroke={tones.detail} strokeWidth={10} strokeLinecap="round" strokeLinejoin="round" />
       ))}
       {showArea && (
-        <rect
-          x={outline.x}
-          y={outline.y}
-          width={outline.width}
-          height={outline.height}
-          fill="none"
-          stroke={tones.outline}
-          strokeWidth={3}
-          strokeDasharray="12 12"
-          opacity={0.55}
-        />
+        <g opacity={0.85}>
+          <rect
+            x={outline.x}
+            y={outline.y}
+            width={outline.width}
+            height={outline.height}
+            fill="none"
+            stroke={tones.area}
+            strokeWidth={4}
+            strokeDasharray="14 10"
+          />
+          {/* Its size in the bottom corner, where a design near the top doesn't cover it. */}
+          <text x={outline.x + 12} y={outline.y + outline.height - 14} fontSize={30} fontWeight={700} fill={tones.area}>
+            {area.widthIn} × {area.heightIn} in
+          </text>
+        </g>
       )}
       {imageUrl && (
         <image href={imageUrl} x={box.x} y={box.y} width={box.width} height={box.height} preserveAspectRatio="xMidYMid meet" />

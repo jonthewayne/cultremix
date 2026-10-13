@@ -9,8 +9,8 @@ import { areaPlacement, markPlacement, toInches } from "../src/lib/print/shirtPl
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { geometryOf } from "./lib/shopProduct";
-import { knockoutImage, measureImage, previewWebp, renderPrintFile, sha256Of, trimImage } from "./lib/printImage";
-import { printFileKey, printPreviewKey, printVersionKey, randomCode } from "./lib/printKeys";
+import { knockoutImage, largeWebp, measureImage, previewWebp, renderPrintFile, sha256Of, trimImage } from "./lib/printImage";
+import { printFileKey, printLargeKey, printPreviewKey, printVersionKey, randomCode } from "./lib/printKeys";
 import { storageMode } from "./lib/r2";
 import { fetchPublicImage, storeObject } from "./lib/storage";
 import type { PrintGeometry } from "../shared/config/print-products";
@@ -81,6 +81,26 @@ export const measure = internalAction({
       });
     } catch (error) {
       await ctx.runMutation(internal.print.failVersion, { versionId: args.versionId, error: readable(error) });
+    }
+    return null;
+  },
+});
+
+// The work page's art: a 2400 px copy of the published art's upscale, stored beside it (convex/print.ts
+// startArtUpscale). The published file stays as it is.
+export const makeLargeArt = internalAction({
+  args: { versionId: v.id("printVersions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const job: Job | null = await ctx.runQuery(internal.print.versionJob, args);
+    const key = job?.version.key;
+    if (!job || job.version.status !== "ready" || job.version.op !== "upscale" || !key || key.startsWith("fake:")) return null;
+    try {
+      const bytes = await fetchPublicImage(key, ctx);
+      const largeKey = await storeObject(ctx, printLargeKey(key), await largeWebp(bytes), "image/webp");
+      await ctx.runMutation(internal.print.recordLargeArt, { versionId: args.versionId, largeKey });
+    } catch (error) {
+      console.error("makeLargeArt failed", args.versionId, readable(error));
     }
     return null;
   },

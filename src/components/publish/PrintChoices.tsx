@@ -5,11 +5,10 @@ import {
   DEFAULT_MARK_IN,
   MARK_PRESETS,
   MIN_SIZE,
-  SIZE_PRESETS,
   markKeyOf,
   markPlacement,
   onFront,
-  sizeKeyOf,
+  shareOfWidth,
   toInches,
   withoutMark,
 } from "~/lib/print/shirtPlacement";
@@ -83,7 +82,6 @@ export function PrintChoices({
   const current = placementOn(focused, shared, own);
   const area = areaOn(focused, current.side);
   const inches = toInches(current, aspect, area);
-  const preset = sizeKeyOf(current.size);
   const separate = focused.productId in own;
   const set = (next: Partial<RelativePlacement>) => onChange({ ...current, ...next });
   const markPreset = markKeyOf(current.mark);
@@ -180,23 +178,16 @@ export function PrintChoices({
           })}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Size">
-          {SIZE_PRESETS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              aria-pressed={preset === option.key}
-              onClick={() => set({ size: option.size })}
-              className={cn("h-11 rounded-xl border-2 border-black px-4 font-bold", preset === option.key && "bg-black text-white")}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <p className="mt-3 text-sm text-neutral-600">
+          The {current.side} prints up to {area.widthIn} × {area.heightIn} in, the dashed box. The largest size stays half an inch
+          inside it.
+        </p>
         <label className="mt-3 block">
           <span className="flex items-baseline justify-between text-sm font-semibold">
             Size
-            <span className="text-neutral-600">{inches.widthIn.toFixed(1)} in wide</span>
+            <span className="text-neutral-600">
+              {inches.widthIn.toFixed(1)} in wide · {shareOfWidth(inches, area)}% of the print width
+            </span>
           </span>
           <input
             type="range"
@@ -205,6 +196,7 @@ export function PrintChoices({
             step={0.01}
             value={current.size}
             onChange={(event) => set({ size: Number(event.target.value) })}
+            aria-label="Size: smaller to larger"
             className="mt-2 w-full accent-black"
           />
         </label>
