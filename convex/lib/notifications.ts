@@ -148,6 +148,8 @@ export async function notifySale(
     test: boolean;
     // The share waits for the recipient's creator access.
     held?: boolean;
+    // The recipient earned it through their link (an affiliate) or their brand, not a design of theirs.
+    via?: "link" | "brand";
     at?: number;
   },
 ) {
@@ -171,7 +173,13 @@ export async function notifySale(
     kind: "sale",
     workId: work._id,
     ownWorkId,
-    sale: { cents: args.cents, units: args.units, test: args.test, ...(args.held ? { held: true } : {}) },
+    sale: {
+      cents: args.cents,
+      units: args.units,
+      test: args.test,
+      ...(args.held ? { held: true } : {}),
+      ...(args.via ? { via: args.via } : {}),
+    },
     createdAt: args.at ?? Date.now(),
   });
   await bumpUnread(ctx, args.recipientId);

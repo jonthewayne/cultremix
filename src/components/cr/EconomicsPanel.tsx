@@ -8,6 +8,8 @@ type Panel = NonNullable<FunctionReturnType<typeof api.workEconomics.panel>>;
 function roleLabel(role: Panel["shares"][number]["roles"][number], kind: Panel["kind"]) {
   if (role === "creator") return "made this";
   if (role === "family_root") return "started the family";
+  if (role === "affiliate") return "shared the link";
+  if (role === "brand") return "the brand";
   return kind === "fork" ? "made the design it forked from" : "made the design its family forked from";
 }
 
@@ -50,6 +52,20 @@ export function EconomicsPanel({ cr }: { cr: string }) {
             </li>
           ))}
         </ul>
+      )}
+      {panel.brand && (
+        <p className="mt-3 text-sm">
+          <span className="font-bold">{panel.brand.name}</span>{" "}
+          <a href={`/u/${panel.brand.username}`} className="text-neutral-500 hover:underline">
+            @{panel.brand.username}
+          </a>{" "}
+          gets {percent(panel.brand.bps)} of the price as the brand behind this family.
+        </p>
+      )}
+      {panel.affiliateBps !== null && (
+        <p className="mt-2 text-sm">
+          Share it: when your link brings a buyer, you get {percent(panel.affiliateBps)} of the price.
+        </p>
       )}
       <p className="mt-3 text-xs text-neutral-500">
         Rules version {panel.configVersion} ·{" "}

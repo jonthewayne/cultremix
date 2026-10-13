@@ -15,6 +15,7 @@ import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
 import type * as backs from "../backs.js";
 import type * as bootstrap from "../bootstrap.js";
+import type * as brands from "../brands.js";
 import type * as budget from "../budget.js";
 import type * as chain from "../chain.js";
 import type * as chainAdmin from "../chainAdmin.js";
@@ -207,6 +208,7 @@ declare const fullApi: ApiFromModules<{
   authVerification: typeof authVerification;
   backs: typeof backs;
   bootstrap: typeof bootstrap;
+  brands: typeof brands;
   budget: typeof budget;
   chain: typeof chain;
   chainAdmin: typeof chainAdmin;

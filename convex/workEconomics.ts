@@ -4,12 +4,21 @@ import { canonicalConfigJson, recipientShares } from "./lib/economics";
 import { CURRENT_ECONOMIC_CONFIG, economicsConfigPath, sha256Hex } from "./lib/economicsConfigs";
 import { LineageError, economicLineage } from "./lib/lineage";
 import { toLineageWork, workByCr, worksReader } from "./lineage";
+import { brandForFamily } from "./brands";
 import type { Id } from "./_generated/dataModel";
 
-const roleValidator = v.union(v.literal("creator"), v.literal("family_root"), v.literal("upstream"));
+// The creator pool's roles; affiliate and brand never come from recipientShares, but share its type.
+const roleValidator = v.union(
+  v.literal("creator"),
+  v.literal("family_root"),
+  v.literal("upstream"),
+  v.literal("affiliate"),
+  v.literal("brand"),
+);
 
 // The work page's Economics panel: who shares in a sale of this work and how much, under the
-// current published config (V1 plan U10/KTD-18). Shares are of the creator pool, not the price.
+// current published config (V1 plan U10/KTD-18). Shares are of the creator pool, not the price;
+// from v2 the family's brand and whoever's link brought the buyer get their own cut of the price.
 export const panel = query({
   args: { cr: v.string() },
   returns: v.union(
@@ -18,6 +27,10 @@ export const panel = query({
       kind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
       configVersion: v.number(),
       creatorPoolBps: v.number(),
+      // The member whose link brings a buyer gets this share of the price (null before v2).
+      affiliateBps: v.union(v.null(), v.number()),
+      // The brand that owns or licenses this design's family, and its share of the price.
+      brand: v.union(v.null(), v.object({ name: v.string(), username: v.string(), bps: v.number() })),
       configPath: v.string(),
       configSha256: v.string(),
       // Shares are recorded on Monad once the work's registration is confirmed there
@@ -35,9 +48,13 @@ export const panel = query({
     if (!work || work.status !== "published") return null;
     const config = CURRENT_ECONOMIC_CONFIG;
     const reader = worksReader(ctx);
+    const familyBrand = config.brandDefaultBps === undefined ? null : await brandForFamily(ctx, work.crFamily);
+    const brandUser = familyBrand ? await ctx.db.get("users", familyBrand.userId) : null;
     const base = {
       configVersion: config.version,
       creatorPoolBps: config.creatorPoolBps,
+      affiliateBps: config.affiliateBps ?? null,
+      brand: familyBrand ? { name: familyBrand.name, username: brandUser?.username ?? "member", bps: familyBrand.bps } : null,
       configPath: economicsConfigPath(config.version),
       configSha256: await sha256Hex(canonicalConfigJson(config)),
       provenance: work.provenanceStatus === "confirmed" ? ("confirmed" as const) : ("pending" as const),

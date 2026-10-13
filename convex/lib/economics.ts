@@ -14,13 +14,25 @@
 //                                                        U 20%, C 30%, D 50%
 // Upstream credit travels one fork generation: a fork of a fork pays the parent's creator, never
 // the grandparent's.
+//
+// Version 2 (October 13, 2026) adds two cuts on top of the creator pool, both out of CultRemix's
+// share, so creators keep their 15%: affiliateBps of each line's base to the member whose link
+// brought the buyer (the order's first-touch ref, never the buyer themselves), and a brand's rate
+// (brandDefaultBps unless it agreed another) to the brand that owns or licenses the design's family.
+// A v2 line's recipients carry their share of the base, and the line's pool is their total
+// (saleRecipients); splitUnit divides by that total, so v1 lines split exactly as before.
 
-export type EconomicRole = "creator" | "family_root" | "upstream";
+export type EconomicRole = "creator" | "family_root" | "upstream" | "affiliate" | "brand";
 
 export type EconomicConfig = {
   version: number;
   // Share of each line's base that goes to creators, in basis points.
   creatorPoolBps: number;
+  // From v2: share of each line's base paid to the member whose link brought the buyer.
+  affiliateBps?: number;
+  // From v2: a brand's share of each line's base in the families it owns or licenses, unless it
+  // agreed its own rate.
+  brandDefaultBps?: number;
   // Days after a unit ships before its earnings become Available (when no refund holds it).
   maturityDays: number;
   // Shares of the pool, in basis points of 10000, by work kind.
@@ -42,6 +54,13 @@ export const ECONOMIC_CONFIG_V1: EconomicConfig = {
     fork: { upstream: 3000, creator: 7000 },
     variationInFork: { upstream: 2000, familyRoot: 3000, creator: 5000 },
   },
+};
+
+export const ECONOMIC_CONFIG_V2: EconomicConfig = {
+  ...ECONOMIC_CONFIG_V1,
+  version: 2,
+  affiliateBps: 500,
+  brandDefaultBps: 1000,
 };
 
 // A work's lineage as economics needs it. Creators are opaque IDs (Convex user IDs).
@@ -95,12 +114,20 @@ export function linePool(
   args: { unitPriceCents: number; quantity: number; discountCents: number },
   config: EconomicConfig = ECONOMIC_CONFIG_V1,
 ): { baseCents: number; poolCents: number; units: Array<number> } {
+  return linePoolAt(args, config.creatorPoolBps);
+}
+
+// A line's pool at poolBps of its base, split per unit the same way.
+export function linePoolAt(
+  args: { unitPriceCents: number; quantity: number; discountCents: number },
+  poolBps: number,
+): { baseCents: number; poolCents: number; units: Array<number> } {
   const { unitPriceCents, quantity, discountCents } = args;
   for (const n of [unitPriceCents, quantity, discountCents]) {
     if (!Number.isInteger(n) || n < 0) throw new Error("Line amounts must be non-negative integers.");
   }
   const baseCents = Math.max(0, unitPriceCents * quantity - discountCents);
-  const poolCents = Math.floor((baseCents * config.creatorPoolBps) / 10000);
+  const poolCents = Math.floor((baseCents * poolBps) / 10000);
   const units: Array<number> = [];
   if (quantity > 0) {
     const each = Math.floor(poolCents / quantity);
@@ -110,10 +137,50 @@ export function linePool(
   return { baseCents, poolCents, units };
 }
 
-// One unit's cents split among recipients; any remainder goes to the work's own creator.
+// Who one line of a sale pays, and its pool in basis points of the line's base. Under v1 that's the
+// creator pool, split by recipientShares (summing to 10000). From v2 each recipient carries their
+// share of the base: the creators' pool shares scaled to creatorPoolBps, the affiliate's
+// affiliateBps, and the brand's rate; one person in several roles gets the sum.
+export type SaleExtras = { affiliate?: string | null; brand?: { who: string; bps: number } | null };
+
+export function saleRecipients(
+  lineage: EconomicLineage,
+  config: EconomicConfig,
+  extras: SaleExtras = {},
+): { recipients: Array<RecipientShare>; poolBps: number } {
+  const creators = recipientShares(lineage, config);
+  if (config.affiliateBps === undefined && config.brandDefaultBps === undefined) {
+    return { recipients: creators, poolBps: config.creatorPoolBps };
+  }
+  const parts: Array<RecipientShare> = creators.map((share) => {
+    const bps = (share.bps * config.creatorPoolBps) / 10000;
+    if (!Number.isInteger(bps)) throw new Error("Creator shares must come to whole basis points of the price.");
+    return { who: share.who, roles: [...share.roles], bps };
+  });
+  if (extras.affiliate && config.affiliateBps) parts.push({ who: extras.affiliate, roles: ["affiliate"], bps: config.affiliateBps });
+  if (extras.brand && Number.isInteger(extras.brand.bps) && extras.brand.bps > 0) {
+    parts.push({ who: extras.brand.who, roles: ["brand"], bps: extras.brand.bps });
+  }
+  const merged = new Map<string, RecipientShare>();
+  for (const part of parts) {
+    const existing = merged.get(part.who);
+    if (!existing) {
+      merged.set(part.who, { who: part.who, roles: [...part.roles], bps: part.bps });
+      continue;
+    }
+    existing.bps += part.bps;
+    for (const role of part.roles) if (!existing.roles.includes(role)) existing.roles.push(role);
+  }
+  const recipients = [...merged.values()];
+  return { recipients, poolBps: recipients.reduce((sum, recipient) => sum + recipient.bps, 0) };
+}
+
+// One unit's cents split among recipients in proportion to their shares (v1 shares sum to 10000;
+// v2 shares are of the base and sum to the line's pool); any remainder goes to the work's own creator.
 export function splitUnit(cents: number, shares: Array<RecipientShare>): Array<{ who: string; cents: number }> {
   if (!Number.isInteger(cents) || cents < 0) throw new Error("Cents must be a non-negative integer.");
-  const out = shares.map((share) => ({ who: share.who, cents: Math.floor((cents * share.bps) / 10000) }));
+  const total = shares.reduce((sum, share) => sum + share.bps, 0);
+  const out = shares.map((share) => ({ who: share.who, cents: total > 0 ? Math.floor((cents * share.bps) / total) : 0 }));
   const remainder = cents - out.reduce((sum, r) => sum + r.cents, 0);
   const creator = shares.findIndex((share) => share.roles.includes("creator"));
   if (creator < 0) throw new Error("A work's recipients must include its creator.");

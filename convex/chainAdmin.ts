@@ -4,7 +4,8 @@ import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { configHashFor } from "./lib/chain/ids";
 import { CHAIN_WRITES_FLAG, chainWritesEnabled, enqueueConfig, enqueueRegisterWork, resetWrite, writeBySubject } from "./lib/chain/queue";
-import { ECONOMIC_CONFIG_V1, canonicalConfigJson } from "./lib/economics";
+import { canonicalConfigJson } from "./lib/economics";
+import { CURRENT_ECONOMIC_CONFIG, ECONOMIC_CONFIGS } from "./lib/economicsConfigs";
 import { requirePlatformCapability, requireSuperAdmin } from "./lib/permissions";
 import { formatCr } from "./lib/r2";
 import { chainWriteKindValidator, chainWriteStatusValidator } from "./schema/chain";
@@ -21,9 +22,10 @@ const BACKFILL_BATCH = 100;
 
 const STATUSES = ["waiting_wallet", "waiting_parent", "pending", "submitted", "confirmed", "rejected", "failed"] as const;
 
-function economicConfigV1() {
-  const json = canonicalConfigJson(ECONOMIC_CONFIG_V1);
-  return { version: ECONOMIC_CONFIG_V1.version, json, hash: configHashFor(json) };
+// A published config's registry payload: its version and the SHA-256 of its canonical JSON.
+function economicConfig(version: number = CURRENT_ECONOMIC_CONFIG.version) {
+  const json = canonicalConfigJson(ECONOMIC_CONFIGS[version]);
+  return { version, json, hash: configHashFor(json) };
 }
 
 function deploymentSummary() {
@@ -165,7 +167,7 @@ export const overview = query({
       });
     }
 
-    const config = economicConfigV1();
+    const config = economicConfig();
     const configWrite = await writeBySubject(ctx, `config:${config.version}`);
 
     const published = await ctx.db
@@ -236,15 +238,20 @@ export const setWritesEnabled = mutation({
 });
 
 /**
- * Queues economic config v1 for the registry: the SHA-256 of canonicalConfigJson, the same bytes
- * /economics/v1.json serves. Idempotent.
+ * Queues the current economic config for the registry, after every earlier version (each waits for
+ * the one before): the SHA-256 of canonicalConfigJson, the same bytes /economics/v<n>.json serves.
+ * Idempotent.
  */
 export const registerEconomicConfig = mutation({
   args: {},
   returns: v.object({ version: v.number(), configHash: v.string() }),
   handler: async (ctx) => {
     await requirePlatformCapability(ctx, "chain:manage");
-    const config = economicConfigV1();
+    for (let version = 1; version < CURRENT_ECONOMIC_CONFIG.version; version++) {
+      const earlier = economicConfig(version);
+      await enqueueConfig(ctx, earlier.version, earlier.hash);
+    }
+    const config = economicConfig();
     await enqueueConfig(ctx, config.version, config.hash);
     return { version: config.version, configHash: config.hash };
   },

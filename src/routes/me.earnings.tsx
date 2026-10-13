@@ -6,6 +6,7 @@ import { CrMark } from "~/components/cr/CrMark";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { formatCents } from "~/lib/money";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
+import { SITE_URL } from "~/lib/site";
 
 export const Route = createFileRoute("/me/earnings")({
   beforeLoad: requireAuthenticatedRoute,
@@ -17,6 +18,8 @@ const ROLE_LABEL: Record<string, string> = {
   creator: "Your design",
   family_root: "Your family",
   upstream: "Your original",
+  affiliate: "Your link",
+  brand: "Your brand",
 };
 
 const KIND_LABEL = { sale: "Sale", refund: "Refund", cancel: "Canceled", dispute: "Chargeback" } as const;
@@ -27,6 +30,7 @@ function dateText(ms: number) {
 
 function EarningsPage() {
   const result = useQuery(convexQuery(api.earnings.mine, {}));
+  const viewer = useQuery(convexQuery(api.identity.viewer, {})).data;
   // Money sent to you for Available earnings (convex/payouts.ts).
   const payouts = useQuery(convexQuery(api.payouts.mine, {})).data ?? [];
   const data = result.data;
@@ -38,8 +42,20 @@ function EarningsPage() {
       <main className="max-w-4xl px-4 pb-24 md:px-10">
         <h1 className="pt-6 text-[16vw] font-black leading-[0.8] tracking-[-0.06em] md:pt-10 md:text-[8vw]">Earnings</h1>
         <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-          Every time someone buys something with your design on it, a share comes to you. It can be paid out 30 days after the order ships, once returns have had time to come in.
+          Every time someone buys something with your design on it, a share comes to you, and so does 5% of anything your link sells. It can be paid out 30 days after the order ships, once returns have had time to come in.
         </p>
+
+        {viewer?.username && (
+          <section className="mt-8 rounded-2xl border-2 border-border p-4">
+            <p className="text-sm font-bold uppercase tracking-wider">Your link</p>
+            <p className="mt-2 break-all font-mono text-base font-bold select-all">
+              {SITE_URL.replace(/^https?:\/\//u, "")}/?ref={viewer.username.toLowerCase()}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Share any design and the link carries your name. When it brings a buyer, you get 5% of what they spend on designs, whoever made them. The first link a buyer arrives with counts for 30 days.
+            </p>
+          </section>
+        )}
 
         <section className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Total label="Pending" cents={data?.totals.pendingCents} />

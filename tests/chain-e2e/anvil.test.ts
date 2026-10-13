@@ -19,10 +19,9 @@ import {
 } from "../../convex/lib/chain/ids";
 import {
   enqueueAmendment,
-  enqueueConfig,
   enqueueRegisterWork,
 } from "../../convex/lib/chain/queue";
-import { canonicalConfigJson } from "../../convex/lib/economics";
+import { ECONOMIC_CONFIG_V2, canonicalConfigJson } from "../../convex/lib/economics";
 import { registerConfig } from "../../scripts/chain/deployRegistry";
 import { MONAD_TESTNET } from "../../shared/config/chains";
 import {
@@ -300,10 +299,12 @@ describe("chain writes on a local Monad node", () => {
     // revert has to hold at the finalized block, and the retry backs off on the real clock.)
     await anvil("anvil_mine", [toHex(FINALITY_BLOCKS)]);
     const owner = await insertOwner(t);
+    // Registering queues v1 (already onchain) and then the current rules, v2.
+    const v2 = configHashFor(canonicalConfigJson(ECONOMIC_CONFIG_V2));
     expect(
       (await owner.mutation(api.chainAdmin.registerEconomicConfig, {}))
         .configHash,
-    ).toBe(v1);
+    ).toBe(v2);
     const configWrite = async (version: number) =>
       (await t.run((ctx) =>
         ctx.db
@@ -317,8 +318,6 @@ describe("chain writes on a local Monad node", () => {
     // Found onchain, so nothing was sent.
     expect((await configWrite(1)).txs).toEqual([]);
 
-    const v2 = configHashFor('{"version":2}');
-    await t.run((ctx) => enqueueConfig(asCtx(ctx), 2, v2));
     await settle(t, async () => (await configWrite(2)).status === "confirmed");
     expect((await configWrite(2)).txHash).toMatch(/^0x[0-9a-f]{64}$/u);
     expect(await read("economicConfigHash", [1n])).toBe(v1);

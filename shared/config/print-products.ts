@@ -37,12 +37,13 @@ export const BACK_AREA: PrintAreaInches = { widthIn: 12, heightIn: 16 };
 export const HOODIE_FRONT_AREA: PrintAreaInches = { widthIn: 14, heightIn: 14 };
 
 // Each kind's starting prices (S-XL, 2XL) until an admin sets a product's own: the tee's are the
-// launch prices; the rest keep a similar margin over what Printful charges for that kind.
+// launch prices (Jon, October 13: $24, $26 for 2XL, over Printful's $11.92 and $13.92 for the
+// Bella+Canvas 3001); the rest keep their earlier margin over what Printful charges for that kind.
 export const GARMENT_KINDS: Record<
   GarmentKind,
   { label: string; front: PrintAreaInches; back: PrintAreaInches; priceCents: number; largePriceCents: number }
 > = {
-  tee: { label: "T-shirt", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 3600, largePriceCents: 3900 },
+  tee: { label: "T-shirt", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 2400, largePriceCents: 2600 },
   longsleeve: { label: "Long sleeve", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 4200, largePriceCents: 4500 },
   sweatshirt: { label: "Sweatshirt", front: REGULAR_FRONT_AREA, back: BACK_AREA, priceCents: 5000, largePriceCents: 5400 },
   hoodie: { label: "Hoodie", front: HOODIE_FRONT_AREA, back: BACK_AREA, priceCents: 5600, largePriceCents: 6000 },
@@ -161,6 +162,8 @@ export const PRINT_COLORS: ReadonlyArray<PrintColor> = LAUNCH_COLORS.map((name) 
   return { code: name.toUpperCase().replace(/[^A-Z0-9]+/gu, ""), name: color.name, hex: color.hex, printfulVariantIds: { ...color.variants } };
 });
 
+// The built-in launch shirt's prices (Comfort Colors 1717), used only while no product is set up in
+// Admin, Products. Products added there start at their kind's prices in GARMENT_KINDS.
 export const BASE_PRICE_CENTS = 3600;
 export const LARGE_PRICE_CENTS = 3900;
 

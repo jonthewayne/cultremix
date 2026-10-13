@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
-import { ECONOMIC_CONFIG_V1 } from "./lib/economics";
+import { ECONOMIC_CONFIGS } from "./lib/economicsConfigs";
 import { saleSplits } from "./lib/creatorPool";
 import { crNumber } from "./lib/shopify/productSync";
 import { notifySale } from "./lib/notifications";
@@ -10,7 +10,7 @@ import { openDisputeCheck } from "./lib/openDisputes";
 import { scheduleSaleEmail } from "./saleEmails";
 import { getViewerUser } from "./identity";
 import type { LineLedger, UnitStatus } from "./lib/creatorPool";
-import type { EconomicConfig, RecipientShare } from "./lib/economics";
+import type { EconomicConfig, EconomicRole, RecipientShare } from "./lib/economics";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
@@ -28,13 +28,19 @@ import type { MutationCtx } from "./_generated/server";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function configFor(version: number): EconomicConfig {
-  if (version !== ECONOMIC_CONFIG_V1.version) throw new Error(`Unknown economic config v${version}.`);
-  return ECONOMIC_CONFIG_V1;
+  const config = Object.prototype.hasOwnProperty.call(ECONOMIC_CONFIGS, version) ? ECONOMIC_CONFIGS[version] : undefined;
+  if (!config) throw new Error(`Unknown economic config v${version}.`);
+  return config;
 }
 
 // Shares owed to someone without creator access when the order happened, and still without it,
 // are held ("not_creator") until releaseCreatorHolds runs for them (lib/creators.ts
-// creatorEligibleAt, plan A1).
+// creatorEligibleAt, plan A1). An affiliate's or a brand's share isn't a creator's, so it isn't held.
+const CREATOR_ROLES: ReadonlyArray<EconomicRole> = ["creator", "family_root", "upstream"];
+
+function earnsAsCreator(roles: ReadonlyArray<EconomicRole> | undefined) {
+  return !roles || roles.some((role) => CREATOR_ROLES.includes(role));
+}
 
 type Row = Doc<"earnings">;
 type Group = { sale?: Row; reversals: Array<Row> };
@@ -190,7 +196,8 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
   }
 
   const access = new Map<string, boolean>();
-  const eligible = async (who: Id<"users">) => {
+  const eligible = async (who: Id<"users">, roles: ReadonlyArray<EconomicRole> | undefined) => {
+    if (!earnsAsCreator(roles)) return true;
     if (!access.has(who)) access.set(who, await creatorEligibleAt(ctx, await ctx.db.get("users", who), order.economicEventAt!));
     return access.get(who)!;
   };
@@ -210,7 +217,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
         const recipient = item.recipients.find((r) => r.who === who);
         const group = groupFor(keyOf(item._id, unit, who));
         if (!group.sale) {
-          const ok = await eligible(who);
+          const ok = await eligible(who, recipient?.roles);
           const fields = {
             recipientId: who,
             orderId,
@@ -242,7 +249,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
             await setGroupState(ctx, group, "held", hold, now);
           }
         } else if (sale.state === "held" && (sale.holdReason === "refund" || sale.holdReason === "dispute")) {
-          const ok = await eligible(who);
+          const ok = await eligible(who, sale.roles);
           await setGroupState(ctx, group, ok ? "pending" : "held", ok ? undefined : "not_creator", now);
         }
       }
@@ -345,7 +352,7 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
   const workOf = new Map(items.map((item) => [item._id as string, item.workId]));
   const totals = new Map<
     string,
-    { recipientId: Id<"users">; workId: Id<"works">; cents: number; units: number; held: boolean }
+    { recipientId: Id<"users">; workId: Id<"works">; cents: number; units: number; held: boolean; roles: Set<EconomicRole> }
   >();
   for (const sale of rows) {
     if (sale.kind !== "sale" || !fresh.has(sale._id)) continue;
@@ -364,9 +371,10 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
     const net = sale.amountCents + reversed;
     if (net <= 0) continue;
     const key = `${sale.recipientId}|${workId}`;
-    const total = totals.get(key) ?? { recipientId: sale.recipientId, workId, cents: 0, units: 0, held: true };
+    const total = totals.get(key) ?? { recipientId: sale.recipientId, workId, cents: 0, units: 0, held: true, roles: new Set<EconomicRole>() };
     total.cents += net;
     total.units += 1;
+    for (const role of sale.roles) total.roles.add(role);
     // Held for a recipient without creator access (refund holds were skipped above).
     total.held = total.held && sale.state === "held";
     totals.set(key, total);
@@ -378,7 +386,19 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
     // A kept design sells only to its creator, so they bought it themselves: no "someone bought".
     const work = await ctx.db.get("works", total.workId);
     if (work?.status === "private" && work.creatorId === total.recipientId) continue;
-    await notifySale(ctx, { ...total, test: order.simulated, at: now });
+    // A share earned only by a link or a brand says so ("through your link").
+    const roles = [...total.roles];
+    const via = earnsAsCreator(roles) ? undefined : roles.includes("affiliate") ? ("link" as const) : ("brand" as const);
+    await notifySale(ctx, {
+      recipientId: total.recipientId,
+      workId: total.workId,
+      cents: total.cents,
+      units: total.units,
+      held: total.held,
+      test: order.simulated,
+      at: now,
+      via,
+    });
     if (!order.simulated && !total.held) {
       const list = emails.get(total.recipientId) ?? [];
       list.push({ workId: total.workId, cents: total.cents, units: total.units });

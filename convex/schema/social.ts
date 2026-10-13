@@ -106,7 +106,16 @@ export const socialTables = {
     kind: notificationKindValidator,
     workId: v.optional(v.id("works")),
     ownWorkId: v.optional(v.id("works")),
-    sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean(), held: v.optional(v.boolean()) })),
+    // via: the recipient's share came from their link (affiliate) or their brand, not their design.
+    sale: v.optional(
+      v.object({
+        cents: v.number(),
+        units: v.number(),
+        test: v.boolean(),
+        held: v.optional(v.boolean()),
+        via: v.optional(v.union(v.literal("link"), v.literal("brand"))),
+      }),
+    ),
     // For a takedown: why the design came down. For order_attention: what's wrong.
     note: v.optional(v.string()),
     // For order_attention: the Shopify order's name ("#1001").

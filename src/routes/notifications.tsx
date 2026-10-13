@@ -261,7 +261,8 @@ function Message({ item }: { item: Notification }) {
 }
 
 // "Someone bought Slow Roll CR 106-001. You earn $4.20." Buyers check out on Shopify, so they're
-// never named. For a remix of your design, it names both.
+// never named. For a remix of your design, it names both; a share earned by your link or your brand
+// says so.
 function SaleMessage({ item }: { item: Notification }) {
   const units = item.sale?.units ?? 1;
   const bought = units > 1 ? `Someone bought ${units} of ` : "Someone bought ";
@@ -291,6 +292,8 @@ function SaleMessage({ item }: { item: Notification }) {
           , a remix of your <Cr work={item.parent} />
         </>
       )}
+      {item.sale?.via === "link" && " through your link"}
+      {item.sale?.via === "brand" && ", in your brand’s family"}
       .{earned}
     </>
   );

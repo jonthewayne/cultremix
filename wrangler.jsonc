@@ -22,6 +22,8 @@
       "vars": {
         "ENVIRONMENT": "production",
         "SITE_URL": "https://cultremix.com",
+        // The live Shopify store; its Storefront token is the Worker secret SHOPIFY_STOREFRONT_PRIVATE_TOKEN.
+        "SHOPIFY_SHOP_DOMAIN": "ksbu5d-ax.myshopify.com",
         "VITE_CONVEX_URL": "https://savory-tiger-504.convex.cloud",
         "VITE_CONVEX_SITE_URL": "https://savory-tiger-504.convex.site"
       }

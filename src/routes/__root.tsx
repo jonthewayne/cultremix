@@ -16,6 +16,7 @@ import { convexAuthClient } from "~/lib/auth-client";
 import { installClientErrorReporting } from "~/lib/clientErrors";
 import { getTokenAndRenewSession } from "~/lib/auth-server";
 import { redirectForOnboarding, useOnboardingGuard } from "~/lib/onboardingGuard";
+import { useCaptureRef } from "~/lib/ref";
 import { SESSION_META } from "~/lib/sessionMeta";
 import {
   SHARE_DESCRIPTION,
@@ -101,6 +102,8 @@ function RootComponent() {
   const context = useRouteContext({ from: Route.id });
   // Errors in this browser go to Admin, Overview (src/lib/clientErrors.ts).
   useEffect(() => installClientErrorReporting(context.convexQueryClient.convexClient), [context.convexQueryClient]);
+  // The first ?ref= a visitor arrives with, on any page, is kept for 30 days for their cart.
+  useCaptureRef();
   return (
     <RootDocument signedIn={Boolean(context.token)}>
       <ConvexBetterAuthProvider

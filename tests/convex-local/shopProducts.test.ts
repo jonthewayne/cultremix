@@ -3,6 +3,7 @@ import { api, internal } from "../../convex/_generated/api";
 import {  addToCart } from "../../src/server/cart";
 import { createStorefront } from "../../src/server/storefront";
 import { productTitle } from "../../convex/lib/shopify/productSync";
+import { GARMENT_KINDS } from "../../shared/config/print-products";
 import { newTest } from "./setup";
 import { SHOP_ENV, makeOnSale, makeUser, makeWork, setFlag } from "./shopFixtures";
 import type {CartContext} from "../../src/server/cart";
@@ -176,8 +177,9 @@ describe("approving a work for sale", () => {
       kind: "tee",
       placement: { side: "front", size: 0.65, drop: 0.1 },
       printArea: { widthIn: 12, heightIn: 16 },
-      priceCents: 3600,
-      largePriceCents: 3900,
+      // A product added in Admin without its own prices starts at its kind's ($24 and $26 for a tee).
+      priceCents: GARMENT_KINDS.tee.priceCents,
+      largePriceCents: GARMENT_KINDS.tee.largePriceCents,
     });
     expect(tee.listing!.colors.map((c) => c.key)).toEqual(["black", "white"]);
     expect(hoodie.listing).toMatchObject({

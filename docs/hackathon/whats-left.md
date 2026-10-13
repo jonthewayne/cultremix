@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 13, 2026, 1:45 a.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
+As of October 13, 2026, 5 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -35,13 +35,15 @@ As of October 13, 2026, 1:45 a.m. Pacific. The Monad submission is due **Tuesday
 
 ## Waiting on Jon
 
-1. **Decisions.** Pick the launch products and their prices, and confirm $5.95 flat US shipping and the 15% creator pool for real orders.
+Done the afternoon of October 13: Jon signed up for Shopify (Basic) and Printful (billing), and the Builder set up both accounts in a Chrome profile on mighteous ([shopify-printful.md](../setup/shopify-printful.md)): the store, its app and Headless channel, $5.95 shipping, Printful's API store, token, and branded packing slip. Production is connected to both, the Bella+Canvas 3001 is the shirt at $24 ($26 for 2XL), and 11 of the 12 published designs are ready to sell. Jon also asked for brands and affiliates now: economics v2 pays 5% to the member whose link brought the buyer and 10% (or an agreed rate) to a family's brand, on top of the creators' 15% (Admin, **Brands**).
+
+1. ~~**Decisions.**~~ Done October 13: the Bella+Canvas 3001 at $24 ($26 for 2XL), $5.95 flat US shipping, creators' 15%, plus 5% for affiliates and 10% for brands.
 2. ~~**Production go.**~~ Done October 12: production went live at b737a49 and runs bcf5c0d since 9:10 p.m. (see Decided October 12).
-3. **Sign-ups only Jon can do**, because they ask for a card, identity, bank or tax details, or acceptance of terms:
+3. **Sign-ups only Jon can do** (Shopify and Printful done October 13; what's left is Shopify Payments' setup), because they ask for a card, identity, bank or tax details, or acceptance of terms:
    - Shopify: the Basic plan and Shopify Payments.
    - Printful: billing.
    - Circle: deferred (managed wallets cover member wallets). When it's wanted: a developer account and two API keys from its console (Keys), saved in `~/.config/cultremix/circle.env` as `CIRCLE_API_KEY_TEST` and `CIRCLE_API_KEY_LIVE`, then `bun run circle:setup`. Mainnet keys need Circle's compliance review first.
-4. **A Screen Sharing session on mighteous.** Jon signs in once, in a Chrome window with its own profile, and the Builder does the rest there: the development store and its app (scopes in the [launch checklist](../launch-checklist.md#the-shop)), the Headless channel's token, the shipping rate, and Printful's store and token. Then three presses in Admin finish the setup: **Connect Printful**, **Connect Shopify**, and **Check with Printful**.
+4. ~~**A Screen Sharing session on mighteous.**~~ Done October 13 in the CultRemix Chrome profile instead ([shopify-printful.md](../setup/shopify-printful.md)). Still Jon's: **Complete setup** on Shopify Payments (identity, bank, tax ID), approve the store policies, then the test-mode order and one real order. CR 102-001's print file was refused for a faint haze: open its page, **Prepare for print**, **Remove background**, then approve it again in Admin, For sale.
 5. ~~**Print-size art on.**~~ Done October 12 at night: the switch is on, publishing upscales each design (Topaz, about 8¢), and all 12 published designs have their print-size copy.
 6. **Gateway credit.** $6.60 at 1:30 a.m. on October 13, after the launch set and the night's photo and upscale tests. Admin, Overview shows it, and it's under the $10 alert line. Judges' designs, notes, and model photos are paid from it, about 13¢ a batch, so add about $50 before judging.
 7. ~~**MON.**~~ Done October 13: production's relayer received 15.77 MON, and the mainnet registry went live (see Done overnight). Dev's testnet relayer still has none, so dev has no registry; `bun run test:chain:anvil` runs the real contract and writer end to end instead.

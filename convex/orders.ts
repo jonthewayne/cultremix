@@ -2,7 +2,9 @@ import { ConvexError, v } from "convex/values";
 import { orderGid } from "../shared/config/shopify";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { linePool, recipientShares } from "./lib/economics";
+import { linePoolAt, saleRecipients } from "./lib/economics";
+import { CURRENT_ECONOMIC_CONFIG } from "./lib/economicsConfigs";
+import { brandForFamily } from "./brands";
 import { allocateRefund } from "./lib/creatorPool";
 import { ORDER_QUERY, normalizeOrder } from "./lib/shopify/orderQuery";
 import {
@@ -20,6 +22,7 @@ import { configFor, notifyNewSales, orderLedger, syncOrderEarnings } from "./ear
 import { retryDelay, shopifyAdminForAction } from "./shopify";
 import { getViewerUser, isOwner } from "./identity";
 import type { HydratedOrder, RawOrder } from "./lib/shopify/orderQuery";
+import type { EconomicRole } from "./lib/economics";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
@@ -247,13 +250,35 @@ export const hydrate = internalAction({
   },
 });
 
-type Recipient = { who: Id<"users">; roles: Array<"creator" | "family_root" | "upstream">; bps: number };
+type Recipient = { who: Id<"users">; roles: Array<EconomicRole>; bps: number };
+
+/**
+ * The member whose link brought the buyer (economics v2): the order's first-touch ref is a
+ * username. Nobody earns it for their own purchase, matched by the buyer's email.
+ */
+export async function affiliateFor(
+  ctx: Pick<MutationCtx, "db">,
+  ref: string | undefined,
+  buyerEmail: string | undefined,
+): Promise<Id<"users"> | null> {
+  const handle = ref?.trim().replace(/^@/u, "").toLowerCase();
+  if (!handle) return null;
+  const member = await ctx.db
+    .query("users")
+    .withIndex("by_usernameLower", (q) => q.eq("usernameLower", handle))
+    .first();
+  if (!member) return null;
+  const buyer = buyerEmail?.trim().toLowerCase();
+  if (buyer && member.email?.trim().toLowerCase() === buyer) return null;
+  return member._id;
+}
 
 async function createItem(
   ctx: MutationCtx,
   orderId: Id<"orders">,
   line: HydratedOrder["lines"][number],
   now: number,
+  affiliateId: Id<"users"> | null,
 ): Promise<void> {
   // The variant decides the work; the cart attributes are only a cross-check.
   const variant = line.variantId
@@ -263,10 +288,11 @@ async function createItem(
         .first()
     : null;
   const work = variant ? await ctx.db.get("works", variant.workId) : null;
-  await insertItem(ctx, orderId, line, work, variant, now);
+  await insertItem(ctx, orderId, line, work, variant, now, affiliateId);
 }
 
-// One order line, with its lineage, recipients, and creator pool frozen now.
+// One order line, with its lineage, recipients, and pool frozen now: the creators' share, plus
+// under economics v2 the affiliate's and the family's brand's.
 async function insertItem(
   ctx: MutationCtx,
   orderId: Id<"orders">,
@@ -274,18 +300,26 @@ async function insertItem(
   work: Doc<"works"> | null,
   variant: Doc<"workVariants"> | null,
   now: number,
+  affiliateId: Id<"users"> | null,
 ): Promise<void> {
-  const config = configFor(1);
-  const pool = linePool(
-    { unitPriceCents: line.unitPriceCents, quantity: line.quantity, discountCents: line.discountCents },
-    config,
-  );
+  const config = CURRENT_ECONOMIC_CONFIG;
   let recipients: Array<Recipient> = [];
+  let poolBps = config.creatorPoolBps;
   let lineageSnapshot: Doc<"orderItems">["lineageSnapshot"];
   if (work) {
     lineageSnapshot = await resolveLineage(ctx.db, work);
-    recipients = recipientShares(lineageSnapshot, config) as Array<Recipient>;
+    const brand = await brandForFamily(ctx, work.crFamily);
+    const split = saleRecipients(lineageSnapshot, config, {
+      affiliate: affiliateId,
+      brand: brand ? { who: brand.userId, bps: brand.bps } : null,
+    });
+    recipients = split.recipients as Array<Recipient>;
+    poolBps = split.poolBps;
   }
+  const pool = linePoolAt(
+    { unitPriceCents: line.unitPriceCents, quantity: line.quantity, discountCents: line.discountCents },
+    poolBps,
+  );
   await ctx.db.insert("orderItems", {
     orderId,
     shopifyLineItemId: line.lineItemId,
@@ -358,7 +392,7 @@ export const applyHydratedOrder = internalMutation({
         totalCents: snapshot.totalCents,
         ref: snapshot.ref ?? undefined,
         recipient: snapshot.recipient ?? undefined,
-        configVersion: configFor(1).version,
+        configVersion: CURRENT_ECONOMIC_CONFIG.version,
         fulfillmentState: "waiting",
         createdAt: now,
         updatedAt: now,
@@ -385,9 +419,9 @@ export const applyHydratedOrder = internalMutation({
 
     // Lines are created once, with lineage and config frozen at first sight.
     const existing = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(250);
-    for (const line of snapshot.lines) {
-      if (!existing.some((item) => item.shopifyLineItemId === line.lineItemId)) await createItem(ctx, orderId, line, now);
-    }
+    const fresh = snapshot.lines.filter((line) => !existing.some((item) => item.shopifyLineItemId === line.lineItemId));
+    const affiliateId = fresh.length > 0 ? await affiliateFor(ctx, order.ref, order.recipient?.email) : null;
+    for (const line of fresh) await createItem(ctx, orderId, line, now, affiliateId);
     // Sale rows written while applying this snapshot; their recipients hear about them at the end.
     const freshSales = await syncOrderEarnings(ctx, orderId);
 
@@ -719,9 +753,9 @@ const MAX_SIMULATED_QUANTITY = 3;
 // Lets the owner rehearse what a sale does before Shopify exists: a Test order with one line for the
 // work at its lowest price, the Test earnings its lineage splits, and each creator's "Someone bought"
 // notification. Refused in production. Nothing goes to Printful (fulfillment ignores it as a test),
-// and Test earnings are never paid.
+// and Test earnings are never paid. ref, a username, rehearses a sale that member's link brought.
 export const simulateSale = mutation({
-  args: { workId: v.id("works"), quantity: v.optional(v.number()) },
+  args: { workId: v.id("works"), quantity: v.optional(v.number()), ref: v.optional(v.string()) },
   returns: v.object({ orderName: v.string(), totalCents: v.number(), poolCents: v.number(), recipients: v.number() }),
   handler: async (ctx, args) => {
     const viewer = await getViewerUser(ctx);
@@ -752,7 +786,8 @@ export const simulateSale = mutation({
       cancelled: false,
       currency: "USD",
       totalCents: unitPriceCents * quantity,
-      configVersion: configFor(1).version,
+      ...(args.ref ? { ref: args.ref.trim().toLowerCase() } : {}),
+      configVersion: CURRENT_ECONOMIC_CONFIG.version,
       fulfillmentState: "test_ignored",
       createdAt: now,
       updatedAt: now,
@@ -767,7 +802,7 @@ export const simulateSale = mutation({
       workIdAttr: work._id,
       crAttr: cr,
     };
-    await insertItem(ctx, orderId, line, work, null, now);
+    await insertItem(ctx, orderId, line, work, null, now, await affiliateFor(ctx, args.ref, undefined));
     const fresh = await syncOrderEarnings(ctx, orderId);
     await notifyNewSales(ctx, orderId, fresh);
     const [item] = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(1);

@@ -40,7 +40,14 @@ export const earningStateValidator = v.union(
   v.literal("reversed"),
 );
 
-const roleValidator = v.union(v.literal("creator"), v.literal("family_root"), v.literal("upstream"));
+// affiliate and brand join with economics v2 (convex/lib/economics.ts).
+const roleValidator = v.union(
+  v.literal("creator"),
+  v.literal("family_root"),
+  v.literal("upstream"),
+  v.literal("affiliate"),
+  v.literal("brand"),
+);
 
 // One unit's reversal cents and how they split among its recipients, fixed when the refund is seen.
 const unitCents = v.object({
@@ -442,4 +449,20 @@ export const shopTables = {
     .index("by_orderItem_unit", ["orderItemId", "unit"])
     .index("by_order", ["orderId"])
     .index("by_state_maturesAt", ["state", "maturesAt"]),
+
+  // Brands and rights holders (economics v2): a member account that owns or licenses design
+  // families, paid its rate (bps of each sale's base) in those families on top of the creator pool.
+  // A family belongs to at most one active brand (convex/brands.ts).
+  brands: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    bps: v.number(),
+    families: v.array(v.number()),
+    active: v.boolean(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_active", ["active"]),
 };

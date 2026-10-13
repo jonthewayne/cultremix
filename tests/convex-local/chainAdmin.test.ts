@@ -3,7 +3,7 @@ import { api, internal } from "../../convex/_generated/api";
 import { setChainDepsForTests } from "../../convex/lib/chain/deps";
 import { configHashFor } from "../../convex/lib/chain/ids";
 import { CHAIN_WRITES_FLAG, enqueueRegisterWork } from "../../convex/lib/chain/queue";
-import { canonicalConfigJson } from "../../convex/lib/economics";
+import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, canonicalConfigJson } from "../../convex/lib/economics";
 import { formatCr } from "../../convex/lib/r2";
 import { RELAYER, insertMember, insertOwner, insertWork, setChainWrites, useChainEnv } from "./chainFixtures";
 import { FakeChain } from "./fakeChain";
@@ -216,23 +216,30 @@ describe("/admin/chain", () => {
     });
   });
 
-  it("registers economic config v1 as the SHA-256 of its canonical JSON", async () => {
+  it("registers economic configs v1 then v2, each as the SHA-256 of its canonical JSON", async () => {
     const { t, chain } = setup();
     await setChainWrites(t, true);
     const owner = await insertOwner(t);
-    const hash = configHashFor(canonicalConfigJson());
-    expect((await owner.query(api.chainAdmin.overview, {})).config).toEqual({ version: 1, hash, status: null });
-    expect(await owner.mutation(api.chainAdmin.registerEconomicConfig, {})).toEqual({ version: 1, configHash: hash });
+    const v1 = configHashFor(canonicalConfigJson(ECONOMIC_CONFIG_V1));
+    const hash = configHashFor(canonicalConfigJson(ECONOMIC_CONFIG_V2));
+    expect((await owner.query(api.chainAdmin.overview, {})).config).toEqual({ version: 2, hash, status: null });
+    expect(await owner.mutation(api.chainAdmin.registerEconomicConfig, {})).toEqual({ version: 2, configHash: hash });
     await owner.mutation(api.chainAdmin.registerEconomicConfig, {});
     await settle(t, chain);
-    expect(chain.state.configHash.get("1")).toBe(hash);
+    expect(chain.state.configHash.get("1")).toBe(v1);
+    expect(chain.state.configHash.get("2")).toBe(hash);
     const overview = await owner.query(api.chainAdmin.overview, {});
     expect(overview.config.status).toBe("confirmed");
-    expect(overview.recent).toHaveLength(1);
-    expect(overview.recent[0]).toMatchObject({ kind: "registerEconomicConfig", status: "confirmed", subject: "Economic config v1", nonce: 0, txUrl: null });
-    expect(overview.counts.find((row) => row.status === "confirmed")?.count).toBe(1);
+    expect(overview.recent).toHaveLength(2);
+    expect(overview.recent.map((write) => [write.subject, write.status, write.nonce])).toEqual(
+      expect.arrayContaining([
+        ["Economic config v1", "confirmed", 0],
+        ["Economic config v2", "confirmed", 1],
+      ]),
+    );
+    expect(overview.counts.find((row) => row.status === "confirmed")?.count).toBe(2);
     expect(overview.relayers).toHaveLength(1);
-    expect(overview.relayers[0]).toMatchObject({ relayerAddress: RELAYER, nextNonce: 1, stalled: null });
+    expect(overview.relayers[0]).toMatchObject({ relayerAddress: RELAYER, nextNonce: 2, stalled: null });
   });
 
   it("retries a failed registration from scratch", async () => {

@@ -22,8 +22,17 @@ const notificationItem = v.object({
   work: v.optional(workRef),
   // For a remix: your work it was made from. For a sale of someone's remix: your design it came from.
   parent: v.optional(workRef),
-  // For a sale: what you earn from the order (before the return window), and whether it was a test.
-  sale: v.optional(v.object({ cents: v.number(), units: v.number(), test: v.boolean(), held: v.optional(v.boolean()) })),
+  // For a sale: what you earn from the order (before the return window), whether it was a test, and
+  // whether you earned it through your link or your brand.
+  sale: v.optional(
+    v.object({
+      cents: v.number(),
+      units: v.number(),
+      test: v.boolean(),
+      held: v.optional(v.boolean()),
+      via: v.optional(v.union(v.literal("link"), v.literal("brand"))),
+    }),
+  ),
   // For a sale of a kept design (just for its creator): it's never named, only called a private remix.
   privateRemix: v.optional(v.boolean()),
   // For a takedown: your design that came down, and why.
