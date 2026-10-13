@@ -1,13 +1,13 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
-import { BATCH_CREDITS, DESIGNS_PER_BATCH, ENGINES, engineMakesGrid } from "../../convex/lib/studioRules";
+import { BATCH_CREDITS, DESIGNS_PER_BATCH, ENGINES, MAX_REQUEST, engineMakesGrid } from "../../convex/lib/studioRules";
 import { changeSummary } from "../../convex/lib/remixWords";
 import { GARMENT_COLORS, nearestGarmentColor } from "../../convex/lib/garments";
 import type { Engine } from "../../convex/lib/studioRules";
@@ -50,6 +50,7 @@ import { SHOW_PROMPT_IDEAS, SHOW_STYLE_MIXER } from "~/lib/studioSections";
 import { requireAuthenticatedRoute } from "~/lib/route-guards";
 import { prefetchImage } from "~/lib/saveImage";
 import { fixSpellingRequest, spellingNote } from "~/lib/spelling";
+import { withStyleOf } from "~/lib/styleRequest";
 import { COMPARE_MAX, canCompare, compareParam, parseCompare, togglePick } from "~/lib/compare";
 import { cn } from "~/lib/utils";
 import { parseScope } from "~/lib/viewerNav";
@@ -98,6 +99,7 @@ function StudioPage() {
   const search = Route.useSearch();
   const { remix, s } = search;
   const navigate = useNavigate();
+  const router = useRouter();
   const sessionQuery = useQuery(convexQuery(api.studio.session, s ? { sessionId: s } : "skip"));
   const sessionData = s ? sessionQuery.data : undefined;
   const session = sessionData && !("missing" in sessionData) ? sessionData : undefined;
@@ -135,6 +137,9 @@ function StudioPage() {
   const shirtHex = useCallback((hex: string) => nearestGarmentColor(hex, paletteRef.current).hex, []);
 
   const [instruction, setInstruction] = useState("");
+  // The request as last rendered, for handlers that finish after an await.
+  const requestRef = useRef(instruction);
+  requestRef.current = instruction;
   // A remix's new words, by field id (components/studio/RemixWordInputs.tsx).
   const [words, setWords] = useState<Record<string, string>>({});
   // A remix's filled-in parts, by part id (components/studio/RemixPartInputs.tsx).
@@ -258,29 +263,39 @@ function StudioPage() {
     [upload, shirtHex],
   );
 
-  // A design or a published work's art, brought in as an image or a style.
+  // A design or a published work's art, brought in as an image or a style. Resolves to its number (an
+  // image already there keeps its own) and how many there are then, or null if it didn't join.
   const addExisting = useCallback(
-    async (key: string, url: string, asStyle: boolean) => {
+    async (key: string, url: string, asStyle: boolean): Promise<{ n: number; count: number } | null> => {
       const list = asStyle ? stylesRef.current : imagesRef.current;
-      if (list.some((slot) => slot.previewUrl === url)) return;
+      const there = list.findIndex((slot) => slot.previewUrl === url);
+      if (there >= 0) return { n: there + 1, count: list.length };
       if (list.length >= (asStyle ? MAX_STYLES : MAX_IMAGES)) {
         imageProblem(asStyle ? `A mix holds up to ${MAX_STYLES} styles.` : `Use up to ${MAX_IMAGES} images.`);
-        return;
+        return null;
       }
       const id = newSlotId();
       const slot = { id, previewUrl: url, uploading: true };
       if (asStyle) {
+        stylesRef.current = [...stylesRef.current, { ...slot, weight: 100 }];
         setStyles((current) => [...current, { ...slot, weight: 100 }]);
         setMixerOpen(true);
       } else {
+        imagesRef.current = [...imagesRef.current, slot];
         setImages((current) => [...current, slot]);
       }
       try {
         const imageId = await adopt({ key, asStyle });
         settle(id, imageId, asStyle);
+        // As settle leaves the list: the same image already there (added another way) keeps its place.
+        const now = asStyle ? stylesRef.current : imagesRef.current;
+        const kept = now.some((other) => other.id !== id && other.imageId === imageId) ? now.filter((other) => other.id !== id) : now;
+        const at = kept.findIndex((other) => other.id === id || other.imageId === imageId);
+        return at >= 0 ? { n: at + 1, count: kept.length } : null;
       } catch (err) {
         dropSlot(id);
         imageProblem(errorMessage(err));
+        return null;
       }
     },
     [adopt],
@@ -413,11 +428,29 @@ function StudioPage() {
   const fixSpelling = (tile: Tile) => {
     if (tile.spelling?.length) startFrom(tile, { instruction: fixSpellingRequest(tile.spelling) });
   };
+  // A design's look for the next batch: a style in the mixer, or, while the mixer is hidden
+  // (src/lib/studioSections.ts), the next numbered image with the request naming it for its look,
+  // which the server reads the same way.
   const useAsStyle = (tile: Tile) => {
     const preview = tile.thumbUrl ?? tile.url;
     if (!tile.key || !preview) return;
-    void addExisting(tile.key, preview, true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    if (SHOW_STYLE_MIXER) {
+      void addExisting(tile.key, preview, true);
+      return;
+    }
+    if (imagesRef.current.length === 0 && !colorPicked.current) setColor(shirtHex(tile.backgroundColor));
+    void addExisting(tile.key, preview, false).then((added) => {
+      if (!added) return;
+      const next = withStyleOf(requestRef.current, added.n, added.count, MAX_REQUEST);
+      if (next === null) {
+        toast(`Image ${added.n} is in. Make room in your request to say “in the style of image ${added.n}.”`);
+        return;
+      }
+      setInstruction(next);
+      setError(null);
+      window.requestAnimationFrame(() => instructionRef.current?.focus({ preventScroll: true }));
+    });
   };
 
   const addImageLook = (slot: Slot) => {
@@ -593,9 +626,21 @@ function StudioPage() {
       viewerRoute.close();
     }
   };
+  // The same, for actions that fill the form at the top. The viewer usually closes by going back in
+  // history, and the router then puts the page back where it was, after the action's own scroll to
+  // the top; so the studio scrolls up again once the router is done.
+  const leaveViewerToTop = () => {
+    const stop = router.subscribe("onRendered", () => {
+      stop();
+      window.clearTimeout(giveUp);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    const giveUp = window.setTimeout(stop, 2000);
+    leaveViewer();
+  };
   // B in the viewer: the design becomes an image to work on, ready for what should change.
   const branch = (tile: Tile) => {
-    leaveViewer();
+    leaveViewerToTop();
     useAsImage(tile);
     window.requestAnimationFrame(() => instructionRef.current?.focus({ preventScroll: true }));
   };
@@ -738,7 +783,7 @@ function StudioPage() {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
                 }}
                 rows={2}
-                maxLength={600}
+                maxLength={MAX_REQUEST}
                 placeholder={
                   count === 0
                     ? "Describe your design…"
@@ -961,7 +1006,7 @@ function StudioPage() {
                         onFixSpelling={() => fixSpelling(tile)}
                         onRemixable={() => setSettingUp({ generationId: tile.generationId, tile })}
                         onInspire={() => useAsImage(tile)}
-                        onStyle={SHOW_STYLE_MIXER ? () => useAsStyle(tile) : undefined}
+                        onStyle={() => useAsStyle(tile)}
                         onFavorite={(on) => designActions.setFavorite(tile.generationId, on)}
                         onReject={(rejected) => reject(tile, rejected)}
                       />
@@ -1032,25 +1077,21 @@ function StudioPage() {
             onReject={reject}
             onBranch={branch}
             onStartFrom={(tile) => {
-              leaveViewer();
+              leaveViewerToTop();
               startFrom(tile);
             }}
             onFixSpelling={(tile) => {
-              leaveViewer();
+              leaveViewerToTop();
               fixSpelling(tile);
             }}
             onRemixable={(tile) => {
               leaveViewer();
               setSettingUp({ generationId: tile.generationId, tile });
             }}
-            onStyle={
-              SHOW_STYLE_MIXER
-                ? (tile) => {
-                    leaveViewer();
-                    useAsStyle(tile);
-                  }
-                : undefined
-            }
+            onStyle={(tile) => {
+              leaveViewerToTop();
+              useAsStyle(tile);
+            }}
             onPublish={
               canPublish
                 ? (tile) => {

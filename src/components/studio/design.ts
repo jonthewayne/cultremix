@@ -49,7 +49,8 @@ export function designItems(
     onRemixable?: () => void;
     // Adds the design to the images already there.
     onInspire: () => void;
-    // Adds it to the style mixer; absent while the mixer is hidden (src/lib/studioSections.ts).
+    // Uses its look: a style in the mixer, or, while the mixer is hidden (src/lib/studioSections.ts),
+    // the next numbered image with "in the style of image N" in the request.
     onStyle?: () => void;
     onReject?: () => void;
   },

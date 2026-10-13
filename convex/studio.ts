@@ -24,6 +24,7 @@ import {
   COMPARE_MAX,
   DESIGNS_PER_BATCH,
   MAX_IMAGES,
+  MAX_REQUEST,
   MAX_STYLES,
   MIX_ENGINES,
   creditsBack,
@@ -756,7 +757,7 @@ async function startBatch(ctx: MutationCtx, user: Doc<"users">, args: GenerateAr
   if (engine !== "gpt" && !adminAllows(user.platformRole, "manage")) {
     throw new ConvexError({ code: "FORBIDDEN", message: "Other image models are for admins for now." });
   }
-  const instruction = args.instruction.trim().slice(0, 600);
+  const instruction = args.instruction.trim().slice(0, MAX_REQUEST);
   const imageIds = args.images ?? [];
   const styleArgs = args.styles ?? [];
   if (imageIds.length > MAX_IMAGES || styleArgs.length > MAX_STYLES) {

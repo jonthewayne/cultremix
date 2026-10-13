@@ -17,6 +17,9 @@ export function creditsBack(missing: number) {
 export const MAX_IMAGES = 8;
 export const MAX_STYLES = 4;
 
+// The request box holds this many characters, and the server keeps no more of a request.
+export const MAX_REQUEST = 600;
+
 // Sessions count their batches up to this; past it the studio shows "100+".
 export const BATCH_COUNT_CAP = 100;
 
