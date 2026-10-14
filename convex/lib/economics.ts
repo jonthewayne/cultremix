@@ -21,6 +21,11 @@
 // (brandDefaultBps unless it agreed another) to the brand that owns or licenses the design's family.
 // A v2 line's recipients carry their share of the base, and the line's pool is their total
 // (saleRecipients); splitUnit divides by that total, so v1 lines split exactly as before.
+//
+// Version 3 (October 13, 2026) lets a brand's agreement set the creators' share in the families it
+// owns or licenses, in whole percents from brandCreatorPoolMinBps up, in place of creatorPoolBps (a
+// big brand might take 15% with creators at 10%). Everywhere else creators keep their 15%; the
+// creators' pool still splits among them by the table above.
 
 export type EconomicRole = "creator" | "family_root" | "upstream" | "affiliate" | "brand";
 
@@ -33,6 +38,9 @@ export type EconomicConfig = {
   // From v2: a brand's share of each line's base in the families it owns or licenses, unless it
   // agreed its own rate.
   brandDefaultBps?: number;
+  // From v3: the lowest creators' share of each line's base a brand's agreement can set in its
+  // families, in place of creatorPoolBps.
+  brandCreatorPoolMinBps?: number;
   // Days after a unit ships before its earnings become Available (when no refund holds it).
   maturityDays: number;
   // Shares of the pool, in basis points of 10000, by work kind.
@@ -61,6 +69,12 @@ export const ECONOMIC_CONFIG_V2: EconomicConfig = {
   version: 2,
   affiliateBps: 500,
   brandDefaultBps: 1000,
+};
+
+export const ECONOMIC_CONFIG_V3: EconomicConfig = {
+  ...ECONOMIC_CONFIG_V2,
+  version: 3,
+  brandCreatorPoolMinBps: 500,
 };
 
 // A work's lineage as economics needs it. Creators are opaque IDs (Convex user IDs).
@@ -137,11 +151,25 @@ export function linePoolAt(
   return { baseCents, poolCents, units };
 }
 
+// The creators' share of a line's base: creatorPoolBps, or from v3 the share a brand agreed for its
+// families when it's a whole percent from brandCreatorPoolMinBps to 100%. Anything else falls back
+// to creatorPoolBps, so a bad value can never stop an order from being recorded.
+export function creatorPoolFor(config: EconomicConfig, brandCreatorBps?: number | null): number {
+  const floor = config.brandCreatorPoolMinBps;
+  if (floor === undefined || brandCreatorBps === undefined || brandCreatorBps === null) return config.creatorPoolBps;
+  const whole = Number.isInteger(brandCreatorBps) && brandCreatorBps % 100 === 0;
+  return whole && brandCreatorBps >= floor && brandCreatorBps <= 10000 ? brandCreatorBps : config.creatorPoolBps;
+}
+
 // Who one line of a sale pays, and its pool in basis points of the line's base. Under v1 that's the
 // creator pool, split by recipientShares (summing to 10000). From v2 each recipient carries their
-// share of the base: the creators' pool shares scaled to creatorPoolBps, the affiliate's
-// affiliateBps, and the brand's rate; one person in several roles gets the sum.
-export type SaleExtras = { affiliate?: string | null; brand?: { who: string; bps: number } | null };
+// share of the base: the creators' pool shares scaled to the creators' share (creatorPoolFor), the
+// affiliate's affiliateBps, and the brand's rate; one person in several roles gets the sum.
+export type SaleExtras = {
+  affiliate?: string | null;
+  // creatorBps: the creators' share the brand agreed for its families (v3), if any.
+  brand?: { who: string; bps: number; creatorBps?: number | null } | null;
+};
 
 export function saleRecipients(
   lineage: EconomicLineage,
@@ -152,8 +180,9 @@ export function saleRecipients(
   if (config.affiliateBps === undefined && config.brandDefaultBps === undefined) {
     return { recipients: creators, poolBps: config.creatorPoolBps };
   }
+  const creatorPoolBps = creatorPoolFor(config, extras.brand ? extras.brand.creatorBps : null);
   const parts: Array<RecipientShare> = creators.map((share) => {
-    const bps = (share.bps * config.creatorPoolBps) / 10000;
+    const bps = (share.bps * creatorPoolBps) / 10000;
     if (!Number.isInteger(bps)) throw new Error("Creator shares must come to whole basis points of the price.");
     return { who: share.who, roles: [...share.roles], bps };
   });

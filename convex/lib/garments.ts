@@ -39,9 +39,13 @@ export const GARMENT_COLORS: ReadonlyArray<GarmentColor> = [
   { key: "black", name: "Black", hex: "#1f1f1f" },
 ];
 
-// The four a design is offered in unless the creator picks others.
-export const DEFAULT_COLOR_KEYS: ReadonlyArray<string> = ["ivory", "black", "true-navy", "butter"];
+// The four a design is offered in unless the creator picks others, from whichever of these the
+// shirt comes in: ivory, black, true navy and butter on the launch tee; natural, black, navy and
+// heather dust on the Bella+Canvas 3001.
+export const DEFAULT_COLOR_KEYS: ReadonlyArray<string> = ["ivory", "natural", "black", "true-navy", "navy", "butter", "heather-dust"];
 export const DEFAULT_COLOR_COUNT = 4;
+// The most colors one design can be sold in: 20 colors in 5 sizes is 100 Shopify variants.
+export const MAX_OFFERED_COLORS = 20;
 
 const BY_KEY = new Map(GARMENT_COLORS.map((color) => [color.key, color]));
 
@@ -65,6 +69,7 @@ export function validateOfferedColors(keys: ReadonlyArray<string>, palette: Pale
     out.push(key);
   }
   if (out.length === 0) return { ok: false, message: "Pick at least one shirt color." };
+  if (out.length > MAX_OFFERED_COLORS) return { ok: false, message: `Pick up to ${MAX_OFFERED_COLORS} shirt colors.` };
   return { ok: true, keys: out };
 }
 
@@ -111,6 +116,19 @@ export function nearestGarmentColor(hex: string, palette: Palette = GARMENT_COLO
     }
   }
   return best;
+}
+
+// How far apart two colors look (CIE Lab distance); Infinity when either hex can't be read.
+export function colorDistance(hexA: string, hexB: string): number {
+  const a = rgbOf(hexA);
+  const b = rgbOf(hexB);
+  return a && b ? labDistance(toLab(a), toLab(b)) : Infinity;
+}
+
+// The palette from nearest to farthest from a hex (a design's background): shades that keep its look
+// and its contrast first.
+export function colorsByNearness(hex: string, palette: Palette): Array<GarmentColor> {
+  return [...palette].sort((a, b) => colorDistance(hex, a.hex) - colorDistance(hex, b.hex));
 }
 
 // The colors a design starts with: its own background's nearest shade first, then the defaults,

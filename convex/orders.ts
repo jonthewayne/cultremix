@@ -311,7 +311,7 @@ async function insertItem(
     const brand = await brandForFamily(ctx, work.crFamily);
     const split = saleRecipients(lineageSnapshot, config, {
       affiliate: affiliateId,
-      brand: brand ? { who: brand.userId, bps: brand.bps } : null,
+      brand: brand ? { who: brand.userId, bps: brand.bps, creatorBps: brand.creatorBps } : null,
     });
     recipients = split.recipients as Array<Recipient>;
     poolBps = split.poolBps;

@@ -22,8 +22,9 @@ function percentText(bps: number) {
   return `${Number((bps / 100).toFixed(2))}%`;
 }
 
-// Brands and rights holders (economics v2): a member account paid its rate of every sale in the
-// design families it owns or licenses, on top of the creators' 15%.
+// Brands and rights holders (economics v2 and v3): a member account paid its rate of every sale in
+// the design families it owns or licenses, on top of the creators' share, which its agreement can
+// also set for those families (15% unless agreed otherwise).
 function AdminBrands() {
   const data = useQuery(api.brands.list, {});
   const save = useMutation(api.brands.save);
@@ -31,12 +32,15 @@ function AdminBrands() {
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [rate, setRate] = useState("");
+  const [creatorRate, setCreatorRate] = useState("");
   const [families, setFamilies] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
 
   const defaultRate = data ? String(data.defaultBps / 100) : "10";
+  const defaultCreatorRate = data ? String(data.defaultCreatorBps / 100) : "15";
+  const minCreatorRate = data ? data.minCreatorBps / 100 : 5;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -52,13 +56,30 @@ function AdminBrands() {
       setError("Give a rate above 0%.");
       return;
     }
+    // Left empty, creators keep the standard share.
+    const creatorText = creatorRate.trim().replace(/%$/u, "");
+    const creatorPercent = creatorText ? Number(creatorText) : null;
+    if (creatorPercent !== null && (!Number.isInteger(creatorPercent) || creatorPercent < minCreatorRate)) {
+      setError(`Give the creators’ share as a whole percent, at least ${minCreatorRate}%.`);
+      return;
+    }
     setBusy(true);
     try {
-      await save({ username, name, bps: Math.round(percent * 100), families: list });
-      setStatus(`Saved ${name.trim()}: ${percentText(Math.round(percent * 100))} of each sale in ${list.length === 1 ? "family" : "families"} ${list.join(", ")}.`);
+      await save({
+        username,
+        name,
+        bps: Math.round(percent * 100),
+        ...(creatorPercent !== null ? { creatorBps: creatorPercent * 100 } : {}),
+        families: list,
+      });
+      const creators = creatorPercent !== null ? `${creatorPercent}%` : `${defaultCreatorRate}%`;
+      setStatus(
+        `Saved ${name.trim()}: ${percentText(Math.round(percent * 100))} of each sale in ${list.length === 1 ? "family" : "families"} ${list.join(", ")}, with creators at ${creators}.`,
+      );
       setUsername("");
       setName("");
       setRate("");
+      setCreatorRate("");
       setFamilies("");
     } catch (err) {
       setError(errorMessage(err));
@@ -67,10 +88,11 @@ function AdminBrands() {
     }
   };
 
-  const edit = (brand: { username: string; name: string; bps: number; families: Array<number> }) => {
+  const edit = (brand: { username: string; name: string; bps: number; creatorBps: number | null; families: Array<number> }) => {
     setUsername(brand.username);
     setName(brand.name);
     setRate(String(brand.bps / 100));
+    setCreatorRate(brand.creatorBps === null ? "" : String(brand.creatorBps / 100));
     setFamilies(brand.families.join(", "));
     setStatus("");
     setError("");
@@ -89,7 +111,7 @@ function AdminBrands() {
     <div className="space-y-6">
       <AdminSection
         title="Brands"
-        description={`A brand or rights holder is paid its rate of every sale in the design families it owns or licenses, ${percentText(data?.defaultBps ?? 1000)} unless you agree another. It comes out of CultRemix's share: creators keep their 15%, and a brand that made a family's original gets that creator share too. Orders already paid keep the split they were sold under.`}
+        description={`A brand or rights holder is paid its rate of every sale in the design families it owns or licenses, ${percentText(data?.defaultBps ?? 1000)} unless you agree another. It comes out of CultRemix's share. Creators keep ${defaultCreatorRate}% unless the brand's agreement sets their share in its families (at least ${minCreatorRate}%), and a brand that made a family's original gets that creator share too. The design's page shows the split. Orders already paid keep the split they were sold under.`}
       >
         <form className="space-y-4" onSubmit={(event) => void submit(event)}>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -104,6 +126,16 @@ function AdminBrands() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-bold">Rate (% of the price)</span>
               <input className={adminInput} value={rate} onChange={(e) => setRate(e.target.value)} placeholder={defaultRate} inputMode="decimal" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-bold">Creators’ share in its families (% of the price)</span>
+              <input
+                className={adminInput}
+                value={creatorRate}
+                onChange={(e) => setCreatorRate(e.target.value)}
+                placeholder={defaultCreatorRate}
+                inputMode="numeric"
+              />
             </label>
             <label className="flex flex-col gap-2">
               <span className="text-sm font-bold">Families (CR numbers)</span>
@@ -133,7 +165,8 @@ function AdminBrands() {
                     {!brand.active && <span className="ml-2 text-sm font-bold text-muted-foreground">Stopped</span>}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {percentText(brand.bps)} of each sale · {brand.families.length === 1 ? "family" : "families"} {brand.families.join(", ")}
+                    {percentText(brand.bps)} of each sale · creators {percentText(brand.creatorBps ?? data.defaultCreatorBps)} ·{" "}
+                    {brand.families.length === 1 ? "family" : "families"} {brand.families.join(", ")}
                   </p>
                 </div>
                 <div className="flex gap-2">

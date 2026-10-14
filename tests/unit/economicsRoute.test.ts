@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, canonicalConfigJson } from "../../convex/lib/economics";
+import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, canonicalConfigJson } from "../../convex/lib/economics";
 import { economicsConfigFile, economicsConfigPath, sha256Hex } from "../../convex/lib/economicsConfigs";
 import { economicsConfigResponse } from "../../src/lib/economicsRoute";
 
@@ -24,7 +24,14 @@ describe("/economics/v1.json", () => {
     expect(canonicalConfigJson(ECONOMIC_CONFIG_V1)).not.toContain("affiliate");
   });
 
-  it.each(["v3.json", "v1", "v1.json.bak", "../v1.json", "V1.json", "v01x.json", "v01.json", "constructor.json", "vtoString.json"])(
+  it("serves v3, with the lowest creators' share a brand's agreement can set, and leaves v2's bytes as they were", async () => {
+    const v3 = await economicsConfigResponse("v3.json").text();
+    expect(v3).toBe(canonicalConfigJson(ECONOMIC_CONFIG_V3));
+    expect(JSON.parse(v3)).toMatchObject({ version: 3, creatorPoolBps: 1500, affiliateBps: 500, brandDefaultBps: 1000, brandCreatorPoolMinBps: 500 });
+    expect(canonicalConfigJson(ECONOMIC_CONFIG_V2)).not.toContain("brandCreatorPoolMinBps");
+  });
+
+  it.each(["v4.json", "v1", "v1.json.bak", "../v1.json", "V1.json", "v01x.json", "v01.json", "constructor.json", "vtoString.json"])(
     "returns 404 for %s",
     (file) => {
       expect(economicsConfigResponse(file).status).toBe(404);

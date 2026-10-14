@@ -69,9 +69,10 @@ function HowItWorksPage() {
           <p>
             Designs go on shirts, printed to order. 15% of every sale goes to the people behind the design: an
             original’s creator gets all of it, and a remix splits it with the designs it came from. That’s 15% of the
-            price before tax and shipping. Share a design and your link pays you 5% of what it sells, and a brand
-            that owns a family gets its own cut, both on top of the creators’ 15%. The split is{" "}
-            <a href="/economics/v2.json" className={linkClass}>
+            price before tax and shipping. Share a design and your link pays you 5% of what it sells. A brand that
+            owns a family gets its own cut, and its agreement can set a different creators’ share for that family,
+            never under 5%; the design’s page always shows the split. The rules are{" "}
+            <a href="/economics/v3.json" className={linkClass}>
               a public file
             </a>{" "}
             anyone can check. While buying isn’t open yet, a design’s page takes your email instead.

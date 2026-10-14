@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { canonicalConfigJson, recipientShares } from "./lib/economics";
+import { canonicalConfigJson, creatorPoolFor, recipientShares } from "./lib/economics";
 import { CURRENT_ECONOMIC_CONFIG, economicsConfigPath, sha256Hex } from "./lib/economicsConfigs";
 import { LineageError, economicLineage } from "./lib/lineage";
 import { toLineageWork, workByCr, worksReader } from "./lineage";
@@ -18,7 +18,8 @@ const roleValidator = v.union(
 
 // The work page's Economics panel: who shares in a sale of this work and how much, under the
 // current published config (V1 plan U10/KTD-18). Shares are of the creator pool, not the price;
-// from v2 the family's brand and whoever's link brought the buyer get their own cut of the price.
+// from v2 the family's brand and whoever's link brought the buyer get their own cut of the price,
+// and from v3 the brand's agreement can set the creators' share in its families (creatorPoolBps).
 export const panel = query({
   args: { cr: v.string() },
   returns: v.union(
@@ -26,11 +27,16 @@ export const panel = query({
     v.object({
       kind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
       configVersion: v.number(),
+      // The creators' share of the price for this design: the standard share, or its brand's.
       creatorPoolBps: v.number(),
       // The member whose link brings a buyer gets this share of the price (null before v2).
       affiliateBps: v.union(v.null(), v.number()),
-      // The brand that owns or licenses this design's family, and its share of the price.
-      brand: v.union(v.null(), v.object({ name: v.string(), username: v.string(), bps: v.number() })),
+      // The brand that owns or licenses this design's family, its share of the price, and the
+      // creators' share its agreement sets in the family (null when creators keep the standard share).
+      brand: v.union(
+        v.null(),
+        v.object({ name: v.string(), username: v.string(), bps: v.number(), creatorBps: v.union(v.null(), v.number()) }),
+      ),
       configPath: v.string(),
       configSha256: v.string(),
       // Shares are recorded on Monad once the work's registration is confirmed there
@@ -50,11 +56,19 @@ export const panel = query({
     const reader = worksReader(ctx);
     const familyBrand = config.brandDefaultBps === undefined ? null : await brandForFamily(ctx, work.crFamily);
     const brandUser = familyBrand ? await ctx.db.get("users", familyBrand.userId) : null;
+    const creatorPoolBps = creatorPoolFor(config, familyBrand ? familyBrand.creatorBps : null);
     const base = {
       configVersion: config.version,
-      creatorPoolBps: config.creatorPoolBps,
+      creatorPoolBps,
       affiliateBps: config.affiliateBps ?? null,
-      brand: familyBrand ? { name: familyBrand.name, username: brandUser?.username ?? "member", bps: familyBrand.bps } : null,
+      brand: familyBrand
+        ? {
+            name: familyBrand.name,
+            username: brandUser?.username ?? "member",
+            bps: familyBrand.bps,
+            creatorBps: creatorPoolBps === config.creatorPoolBps ? null : creatorPoolBps,
+          }
+        : null,
       configPath: economicsConfigPath(config.version),
       configSha256: await sha256Hex(canonicalConfigJson(config)),
       provenance: work.provenanceStatus === "confirmed" ? ("confirmed" as const) : ("pending" as const),

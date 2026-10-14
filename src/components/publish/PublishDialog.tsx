@@ -6,6 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import {
   GARMENT_COLORS,
   MAX_DESCRIPTION_LENGTH,
+  MAX_OFFERED_COLORS,
   defaultOfferedColors,
   garmentColor,
   visibilityOn,
@@ -163,7 +164,8 @@ export function PublishDialog({
 
   const toggle = (key: string) => {
     setFocus(key);
-    setPicked(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key]);
+    if (selected.includes(key)) setPicked(selected.filter((k) => k !== key));
+    else if (selected.length < MAX_OFFERED_COLORS) setPicked([...selected, key]);
   };
   const makeLead = (key: string) => setPicked([key, ...selected.filter((k) => k !== key)]);
 
@@ -496,7 +498,8 @@ export function PublishDialog({
             <legend className="flex w-full items-baseline justify-between text-sm font-bold uppercase tracking-wider">
               Shirt colors
               <span className="text-xs font-semibold normal-case tracking-normal text-neutral-500">
-                {selected.length} picked{paletteData?.product ? ` · ${paletteData.product.brand ?? ""} ${paletteData.product.model ?? ""}`.trimEnd() : ""}
+                {selected.length} picked{selected.length >= MAX_OFFERED_COLORS ? ", the most" : ""}
+                {paletteData?.product ? ` · ${paletteData.product.brand ?? ""} ${paletteData.product.model ?? ""}`.trimEnd() : ""}
               </span>
             </legend>
             <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">

@@ -1,19 +1,24 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { ECONOMIC_CONFIG_V2 } from "./lib/economics";
+import { CURRENT_ECONOMIC_CONFIG } from "./lib/economicsConfigs";
 import { requireAdmin } from "./lib/adminAccess";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
-// Brands and rights holders (economics v2). An admin names a member account as a brand and lists
-// the design families it owns or licenses; every sale in those families pays the brand its rate
-// (10% of the price unless agreed otherwise), on top of the creator pool and out of CultRemix's
-// share. A brand that made a family's original also gets that design's creator share.
+// Brands and rights holders (economics v2 and v3). An admin names a member account as a brand and
+// lists the design families it owns or licenses; every sale in those families pays the brand its
+// rate (10% of the price unless agreed otherwise), on top of the creators' share and out of
+// CultRemix's share. From v3 the brand's agreement can also set the creators' share in its families
+// (15% unless agreed otherwise, never under the published minimum). A brand that made a family's
+// original also gets that design's creator share.
 
 // The highest rate a brand can be given: 50% of the price.
 export const MAX_BRAND_BPS = 5000;
+// A brand's rate and the creators' share in its families can come to at most 50% of the price.
+export const MAX_BRAND_AND_CREATORS_BPS = 5000;
 
-export type FamilyBrand = { brandId: Id<"brands">; userId: Id<"users">; name: string; bps: number };
+// creatorBps: the creators' share the brand agreed for its families, or null for the standard share.
+export type FamilyBrand = { brandId: Id<"brands">; userId: Id<"users">; name: string; bps: number; creatorBps: number | null };
 
 /** The active brand that owns or licenses a design family, if any. */
 export async function brandForFamily(ctx: Pick<QueryCtx, "db">, family: number): Promise<FamilyBrand | null> {
@@ -22,7 +27,9 @@ export async function brandForFamily(ctx: Pick<QueryCtx, "db">, family: number):
     .withIndex("by_active", (q) => q.eq("active", true))
     .take(500);
   const brand = brands.find((row) => row.families.includes(family));
-  return brand ? { brandId: brand._id, userId: brand.userId, name: brand.name, bps: brand.bps } : null;
+  return brand
+    ? { brandId: brand._id, userId: brand.userId, name: brand.name, bps: brand.bps, creatorBps: brand.creatorBps ?? null }
+    : null;
 }
 
 const brandView = v.object({
@@ -30,6 +37,7 @@ const brandView = v.object({
   username: v.string(),
   name: v.string(),
   bps: v.number(),
+  creatorBps: v.union(v.null(), v.number()),
   families: v.array(v.number()),
   active: v.boolean(),
   updatedAt: v.number(),
@@ -38,7 +46,14 @@ const brandView = v.object({
 /** Admin, Brands: every brand, active first. */
 export const list = query({
   args: {},
-  returns: v.object({ defaultBps: v.number(), maxBps: v.number(), brands: v.array(brandView) }),
+  returns: v.object({
+    defaultBps: v.number(),
+    maxBps: v.number(),
+    // The creators' standard share, and the lowest a brand's agreement can set.
+    defaultCreatorBps: v.number(),
+    minCreatorBps: v.number(),
+    brands: v.array(brandView),
+  }),
   handler: async (ctx) => {
     await requireAdmin(ctx, "view");
     const rows = await ctx.db.query("brands").order("desc").take(500);
@@ -50,6 +65,7 @@ export const list = query({
           username: user?.username ?? "member",
           name: row.name,
           bps: row.bps,
+          creatorBps: row.creatorBps ?? null,
           families: row.families,
           active: row.active,
           updatedAt: row.updatedAt,
@@ -57,16 +73,30 @@ export const list = query({
       }),
     );
     brands.sort((a, b) => Number(b.active) - Number(a.active) || b.updatedAt - a.updatedAt);
-    return { defaultBps: ECONOMIC_CONFIG_V2.brandDefaultBps ?? 1000, maxBps: MAX_BRAND_BPS, brands };
+    const config = CURRENT_ECONOMIC_CONFIG;
+    return {
+      defaultBps: config.brandDefaultBps ?? 1000,
+      maxBps: MAX_BRAND_BPS,
+      defaultCreatorBps: config.creatorPoolBps,
+      minCreatorBps: config.brandCreatorPoolMinBps ?? config.creatorPoolBps,
+      brands,
+    };
   },
 });
 
 /**
- * Adds a brand, or updates the member's brand: its display name, rate, and families. Each family
- * can belong to one active brand. Orders already paid keep the split they were sold under.
+ * Adds a brand, or updates the member's brand: its display name, rate, the creators' share in its
+ * families (left out, creators keep the standard share), and families. Each family can belong to
+ * one active brand. Orders already paid keep the split they were sold under.
  */
 export const save = mutation({
-  args: { username: v.string(), name: v.string(), bps: v.number(), families: v.array(v.number()) },
+  args: {
+    username: v.string(),
+    name: v.string(),
+    bps: v.number(),
+    creatorBps: v.optional(v.number()),
+    families: v.array(v.number()),
+  },
   returns: v.id("brands"),
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx, "manage");
@@ -82,6 +112,25 @@ export const save = mutation({
     if (!name || name.length > 60) throw new ConvexError({ code: "INVALID_INPUT", message: "Give the brand a name of up to 60 characters." });
     if (!Number.isInteger(args.bps) || args.bps < 1 || args.bps > MAX_BRAND_BPS) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "The rate has to be between 0.01% and 50% of the price." });
+    }
+    const config = CURRENT_ECONOMIC_CONFIG;
+    const minCreatorBps = config.brandCreatorPoolMinBps;
+    if (args.creatorBps !== undefined) {
+      if (minCreatorBps === undefined) {
+        throw new ConvexError({ code: "INVALID_INPUT", message: "The current rules don't let a brand set the creators' share." });
+      }
+      if (!Number.isInteger(args.creatorBps) || args.creatorBps % 100 !== 0 || args.creatorBps < minCreatorBps || args.creatorBps > 10000) {
+        throw new ConvexError({
+          code: "INVALID_INPUT",
+          message: `The creators' share has to be a whole percent, at least ${minCreatorBps / 100}% of the price.`,
+        });
+      }
+    }
+    if (args.bps + (args.creatorBps ?? config.creatorPoolBps) > MAX_BRAND_AND_CREATORS_BPS) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: "The brand's rate and the creators' share can't add up to more than 50% of the price.",
+      });
     }
     const families = [...new Set(args.families)].sort((a, b) => a - b);
     if (families.length === 0 || families.length > 200 || families.some((family) => !Number.isInteger(family) || family < 1)) {
@@ -102,13 +151,21 @@ export const save = mutation({
     }
     const now = Date.now();
     if (existing) {
-      await ctx.db.patch("brands", existing._id, { name, bps: args.bps, families, active: true, updatedAt: now });
+      await ctx.db.patch("brands", existing._id, {
+        name,
+        bps: args.bps,
+        creatorBps: args.creatorBps,
+        families,
+        active: true,
+        updatedAt: now,
+      });
       return existing._id;
     }
     return await ctx.db.insert("brands", {
       userId: user._id,
       name,
       bps: args.bps,
+      ...(args.creatorBps !== undefined ? { creatorBps: args.creatorBps } : {}),
       families,
       active: true,
       createdBy: admin._id,

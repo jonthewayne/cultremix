@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, linePoolAt, saleRecipients, splitUnit } from "../../convex/lib/economics";
+import {
+  ECONOMIC_CONFIG_V1,
+  ECONOMIC_CONFIG_V2,
+  ECONOMIC_CONFIG_V3,
+  creatorPoolFor,
+  linePoolAt,
+  saleRecipients,
+  splitUnit,
+} from "../../convex/lib/economics";
 
 // Economics v2 (October 13): creators keep 15% of the price; the member whose link brought the buyer
 // gets 5%, and the brand behind the family its rate (10% unless agreed otherwise), both out of
@@ -72,5 +80,48 @@ describe("economics v2: affiliate and brand cuts", () => {
     expect(split.reduce((sum, part) => sum + part.cents, 0)).toBe(719);
     expect(split.find((part) => part.who === "cam")?.cents).toBe(119);
     expect(split.find((part) => part.who === "nike")?.cents).toBe(239);
+  });
+});
+
+// Economics v3 (October 13): a brand's agreement can set the creators' share in its families, never
+// under 5% of the price.
+describe("economics v3: a brand's creators' share", () => {
+  it("pays a big brand 15% and its family's creator 10% of a $24 shirt", () => {
+    const { recipients, poolBps } = saleRecipients(original, ECONOMIC_CONFIG_V3, {
+      affiliate: "cam",
+      brand: { who: "nike", bps: 1500, creatorBps: 1000 },
+    });
+    expect(poolBps).toBe(3000);
+    expect(recipients.map((r) => [r.who, r.bps])).toEqual([
+      ["ana", 1000],
+      ["cam", 500],
+      ["nike", 1500],
+    ]);
+    expect(sale(2400, poolBps, recipients).split).toEqual([
+      { who: "ana", cents: 240 },
+      { who: "cam", cents: 120 },
+      { who: "nike", cents: 360 },
+    ]);
+  });
+
+  it("splits the brand family's creators' share by lineage, on a $26 2XL", () => {
+    const { recipients, poolBps } = saleRecipients(variation, ECONOMIC_CONFIG_V3, { brand: { who: "nike", bps: 1500, creatorBps: 1000 } });
+    expect(poolBps).toBe(2500);
+    expect(sale(2600, poolBps, recipients).split).toEqual([
+      { who: "ana", cents: 130 },
+      { who: "ben", cents: 130 },
+      { who: "nike", cents: 390 },
+    ]);
+  });
+
+  it("keeps the standard 15% without an agreement, below the 5% floor, off whole percents, and under v2", () => {
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V3, null)).toBe(1500);
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V3, 1000)).toBe(1000);
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V3, 500)).toBe(500);
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V3, 400)).toBe(1500);
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V3, 1050)).toBe(1500);
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V2, 1000)).toBe(1500);
+    const { recipients } = saleRecipients(original, ECONOMIC_CONFIG_V2, { brand: { who: "nike", bps: 1000, creatorBps: 1000 } });
+    expect(recipients.find((r) => r.who === "ana")?.bps).toBe(1500);
   });
 });

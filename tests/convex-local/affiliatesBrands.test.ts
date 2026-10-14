@@ -55,7 +55,33 @@ describe("economics v2: brands and affiliates", () => {
 
     // The design's page shows the brand and the share for sharing it.
     const panel = await t.query(api.workEconomics.panel, { cr: "101-001" });
-    expect(panel).toMatchObject({ configVersion: 2, affiliateBps: 500, brand: { name: "Nike", username: "Nike", bps: 1000 } });
+    expect(panel).toMatchObject({ configVersion: 3, affiliateBps: 500, brand: { name: "Nike", username: "Nike", bps: 1000, creatorBps: null } });
+  });
+
+  it("lets a big brand's agreement take 15% and set its family's creators at 10% (economics v3)", async () => {
+    const { t, owner, ana, cam, nike, work } = await setup();
+    await owner.mutation(api.brands.save, { username: "nike", name: "Nike", bps: 1500, creatorBps: 1000, families: [101] });
+
+    // A $36 shirt: creators 10% ($3.60), the link 5% ($1.80), the brand 15% ($5.40).
+    const sale = await owner.mutation(api.orders.simulateSale, { workId: work, ref: "cam" });
+    expect(sale).toMatchObject({ recipients: 3, poolCents: 1080 });
+    expect(await sales(t, ana)).toEqual([[360, "pending", ["creator"]]]);
+    expect(await sales(t, cam)).toEqual([[180, "pending", ["affiliate"]]]);
+    expect(await sales(t, nike)).toEqual([[540, "pending", ["brand"]]]);
+
+    // The design's page shows the family's split.
+    const panel = await t.query(api.workEconomics.panel, { cr: "101-001" });
+    expect(panel).toMatchObject({ configVersion: 3, creatorPoolBps: 1000, brand: { name: "Nike", bps: 1500, creatorBps: 1000 } });
+
+    // Whole percents, never under 5%, and the two together at most 50% of the price.
+    const save = (bps: number, creatorBps: number) =>
+      owner.mutation(api.brands.save, { username: "nike", name: "Nike", bps, creatorBps, families: [101] });
+    await expect(save(1500, 400)).rejects.toThrow(/at least 5%/u);
+    await expect(save(1500, 1050)).rejects.toThrow(/whole percent/u);
+    await expect(save(4000, 1500)).rejects.toThrow(/more than 50%/u);
+    const list = await owner.query(api.brands.list, {});
+    expect(list).toMatchObject({ defaultCreatorBps: 1500, minCreatorBps: 500 });
+    expect(list.brands[0]).toMatchObject({ name: "Nike", bps: 1500, creatorBps: 1000 });
   });
 
   it("finds the link's member by username, never for their own purchase or an unknown name", async () => {

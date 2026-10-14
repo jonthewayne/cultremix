@@ -21,7 +21,7 @@ import {
   enqueueAmendment,
   enqueueRegisterWork,
 } from "../../convex/lib/chain/queue";
-import { ECONOMIC_CONFIG_V2, canonicalConfigJson } from "../../convex/lib/economics";
+import { ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, canonicalConfigJson } from "../../convex/lib/economics";
 import { registerConfig } from "../../scripts/chain/deployRegistry";
 import { MONAD_TESTNET } from "../../shared/config/chains";
 import {
@@ -282,7 +282,7 @@ describe("chain writes on a local Monad node", () => {
     expect(await read("amendmentCount", [workIdFor(remix)])).toBe(0n);
   });
 
-  it("confirms economic config v1 registered by the deploy script, and sends v2 itself", async () => {
+  it("confirms economic config v1 registered by the deploy script, and sends v2 and v3 itself", async () => {
     // scripts/chain/deploy-testnet.ts registers v1 right after deploying, with the relayer's key.
     const v1 = configHashFor(canonicalConfigJson());
     // viem polls for the receipt with real timers.
@@ -299,12 +299,13 @@ describe("chain writes on a local Monad node", () => {
     // revert has to hold at the finalized block, and the retry backs off on the real clock.)
     await anvil("anvil_mine", [toHex(FINALITY_BLOCKS)]);
     const owner = await insertOwner(t);
-    // Registering queues v1 (already onchain) and then the current rules, v2.
+    // Registering queues v1 (already onchain), v2, and then the current rules, v3.
     const v2 = configHashFor(canonicalConfigJson(ECONOMIC_CONFIG_V2));
+    const v3 = configHashFor(canonicalConfigJson(ECONOMIC_CONFIG_V3));
     expect(
       (await owner.mutation(api.chainAdmin.registerEconomicConfig, {}))
         .configHash,
-    ).toBe(v2);
+    ).toBe(v3);
     const configWrite = async (version: number) =>
       (await t.run((ctx) =>
         ctx.db
@@ -320,9 +321,12 @@ describe("chain writes on a local Monad node", () => {
 
     await settle(t, async () => (await configWrite(2)).status === "confirmed");
     expect((await configWrite(2)).txHash).toMatch(/^0x[0-9a-f]{64}$/u);
+    await settle(t, async () => (await configWrite(3)).status === "confirmed");
+    expect((await configWrite(3)).txHash).toMatch(/^0x[0-9a-f]{64}$/u);
     expect(await read("economicConfigHash", [1n])).toBe(v1);
     expect(await read("economicConfigHash", [2n])).toBe(v2);
-    expect(await read("latestEconomicConfigVersion")).toBe(2n);
+    expect(await read("economicConfigHash", [3n])).toBe(v3);
+    expect(await read("latestEconomicConfigVersion")).toBe(3n);
   });
 
   it("registers a work signed by a managed wallet (the stopgap until Circle)", async () => {

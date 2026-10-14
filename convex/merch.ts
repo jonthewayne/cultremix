@@ -3,7 +3,8 @@ import { garmentKindOf } from "../shared/config/print-products";
 import { internal } from "./_generated/api";
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAccess";
-import { GARMENT_COLORS, colorKey } from "./lib/garments";
+import { GARMENT_COLORS, colorDistance, colorKey, colorsByNearness, nearestGarmentColor } from "./lib/garments";
+import { formatCr } from "./lib/r2";
 import { areaFor, chosenProducts, merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
 import { garmentKindValidator, merchColor, printAreaValidator, relativePlacementValidator } from "./schema/merch";
 import { createPrintful, printfulConfigFromEnv } from "./lib/printful/client";
@@ -433,6 +434,58 @@ export const adminSetColors = mutation({
     }
     await ctx.db.patch("merchProducts", product._id, { colors: product.colors.map((c) => ({ ...c, offered: offered.has(c.key) })) });
     return null;
+  },
+});
+
+// How many colors a design gets when it's given the active shirt's colors, how close each has to be
+// to the design's background (Lab distance) so the art keeps its contrast, and how far apart two
+// picks have to be so a design isn't offered five shades of cream.
+const BACKFILL_COLOR_COUNT = 5;
+const BACKFILL_RADIUS = 50;
+const BACKFILL_DISTINCT = 12;
+
+// Gives published designs the active shirt's colors (October 13, 2026, when the 3001 went from 6
+// colors to 20). A design published before creators chose colors, or with colors the shirt doesn't
+// come in, keeps the ones it has, swaps each missing one for the shirt's nearest color, and fills to
+// five with distinct colors near its own background, so it keeps its look and its contrast.
+// Approving each design again (sales.approve) puts the colors on its Shopify product.
+export const backfillOfferedColors = internalMutation({
+  args: { dryRun: v.boolean() },
+  returns: v.array(
+    v.object({ workId: v.id("works"), cr: v.string(), from: v.union(v.null(), v.array(v.string())), to: v.array(v.string()) }),
+  ),
+  handler: async (ctx, args) => {
+    const { product, colors: palette } = await activePalette(ctx);
+    if (!product) return [];
+    const known = new Set(palette.map((color) => color.key));
+    const lookup = await colorLookup(ctx);
+    const works = await ctx.db
+      .query("works")
+      .withIndex("by_status_publishedAt", (q) => q.eq("status", "published"))
+      .take(500);
+    const out: Array<{ workId: Doc<"works">["_id"]; cr: string; from: Array<string> | null; to: Array<string> }> = [];
+    for (const work of works) {
+      const current = work.offeredColors ?? [];
+      if (current.length > 0 && current.every((key) => known.has(key))) continue;
+      const keys: Array<string> = [];
+      const hexOf = (key: string) => palette.find((color) => color.key === key)?.hex ?? "";
+      const add = (key: string) => {
+        if (known.has(key) && !keys.includes(key)) keys.push(key);
+      };
+      for (const key of current) {
+        const old = lookup.get(key);
+        add(known.has(key) || !old ? key : nearestGarmentColor(old.hex, palette).key);
+      }
+      const nearest = colorsByNearness(work.backgroundColor, palette);
+      for (const color of nearest) {
+        if (keys.length >= BACKFILL_COLOR_COUNT || colorDistance(work.backgroundColor, color.hex) > BACKFILL_RADIUS) break;
+        if (keys.every((key) => colorDistance(hexOf(key), color.hex) >= BACKFILL_DISTINCT)) add(color.key);
+      }
+      if (keys.length === 0 && nearest.length > 0) add(nearest[0].key);
+      out.push({ workId: work._id, cr: formatCr(work.crFamily, work.crExpression), from: work.offeredColors ?? null, to: keys });
+      if (!args.dryRun) await ctx.db.patch("works", work._id, { offeredColors: keys });
+    }
+    return out;
   },
 });
 

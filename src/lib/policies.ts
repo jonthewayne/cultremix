@@ -3,7 +3,7 @@
 // (Settings, Policies), which should say the same thing.
 
 export const POLICIES_DRAFT = true;
-export const POLICIES_UPDATED = "October 10, 2026";
+export const POLICIES_UPDATED = "October 13, 2026";
 export const CONTACT_EMAIL = "hey@cultremix.com";
 
 export type Policy = {
@@ -141,18 +141,35 @@ export const POLICIES: Array<Policy> = [
         ],
       },
       {
-        heading: "What you make",
+        heading: "Who owns a design",
         body: [
-          "You keep the rights you have in what you upload and create. When you share a design with the world, you let CultRemix show it, print it on the products you chose, sell it, and let others remix it on CultRemix, always crediting you as its creator or original.",
-          "A remix credits the design it came from. A variation joins its family; a fork starts a new one and still names its parent.",
+          "You own what you make. You keep whatever rights you have in your prompts, your uploads, and your designs, and CultRemix doesn't claim ownership of them. Designs are made with AI image tools, and the law on owning AI-made images is still settling; whatever rights the law gives you are yours.",
+          "When you share a design with the world, you give CultRemix a worldwide, non-exclusive, royalty-free license to show it, print it on the products you chose, sell those products, make photos and previews of it, record its fingerprint and lineage on Monad, and let other members remix it on CultRemix. The license lasts while the design is shared. Products already sold, and records already made on Monad, stay as they are. A design you keep just for you is used only for your own orders.",
+          "A remix is a new design built on another one. Its creator owns what they changed, and the design it came from stays its creator's. Remixing happens on CultRemix, with CultRemix's tools; it doesn't give anyone the right to use another member's design anywhere else. A variation joins its family; a fork starts a new one and still names its parent.",
+        ],
+      },
+      {
+        heading: "What you can upload and publish",
+        body: [
           "Only upload what you have the right to use. Don't publish anything that infringes someone else's trademark or copyright, impersonates someone, or is hateful, harassing, sexual involving minors, or illegal. We can remove designs that break these rules, and close accounts that keep doing it.",
           "If you think a design infringes your rights, write to us with the design's CR number and why. We'll take it down while we look into it.",
         ],
       },
       {
+        heading: "Lineage and corrections",
+        body: [
+          "Every shared design carries its lineage: the design it came from, if any, and who made each one. Sales are split by that lineage, so tell the truth about where a design came from.",
+          "If we learn that a design is really a copy, variation, or fork of another design, on CultRemix or anywhere else, we can correct its lineage, its credit, and whether it counts as a variation or a fork. A correction changes how its future sales are split, and we can hold or adjust earnings that haven't been paid out yet. A design that copies someone else's work without permission can be taken down, and its unpaid earnings held or reversed.",
+          "Corrections are recorded on Monad beside the design's first record, which stays as it was, so anyone can see what changed.",
+        ],
+      },
+      {
         heading: "Earnings",
         body: [
-          "When a design sells, a share of the sale goes to the creators behind it, following the published rules (/economics/v2.json). A member whose link brought the buyer gets a share too, as does a brand that owns or licenses the design's family. Earnings become payable a while after an order ships, so refunds can come off first. A payment dispute (a chargeback) holds a sale's earnings while it's open, and one the buyer wins takes them back. Payouts begin after the hackathon judging, in mid-November 2026.",
+          "When a design sells, a share of the price goes to the creators behind it, split by its lineage under the published rules (/economics/v3.json). Creators share 15% of the price before tax and shipping. A member whose link brought the buyer gets 5%.",
+          "A brand that owns or licenses a design family can have its own agreement for that family: its own share of each sale, and a different creators' share, never less than the 5% the published rules allow. A design's page always shows its current split before you remix it or buy it.",
+          "Each sale keeps the rules it was sold under. We may publish new versions of the rules for future sales, and every version stays public.",
+          "Earnings become payable a while after an order ships, so refunds can come off first. A payment dispute (a chargeback) holds a sale's earnings while it's open, and one the buyer wins takes them back. Payouts begin after the hackathon judging, in mid-November 2026.",
         ],
       },
       {
