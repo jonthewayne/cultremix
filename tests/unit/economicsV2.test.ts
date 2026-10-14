@@ -3,6 +3,8 @@ import {
   ECONOMIC_CONFIG_V1,
   ECONOMIC_CONFIG_V2,
   ECONOMIC_CONFIG_V3,
+  ECONOMIC_CONFIG_V4,
+  brandShareFor,
   creatorPoolFor,
   linePoolAt,
   saleRecipients,
@@ -123,5 +125,33 @@ describe("economics v3: a brand's creators' share", () => {
     expect(creatorPoolFor(ECONOMIC_CONFIG_V2, 1000)).toBe(1500);
     const { recipients } = saleRecipients(original, ECONOMIC_CONFIG_V2, { brand: { who: "nike", bps: 1000, creatorBps: 1000 } });
     expect(recipients.find((r) => r.who === "ana")?.bps).toBe(1500);
+  });
+});
+
+// Economics v4 (October 14): a brand family gets at most 30% of the price, the brand and its creators
+// together, whatever a deal says.
+describe("economics v4: the most a brand family gets", () => {
+  it("pays a 25% deal as agreed: 15% to the brand, 10% to the creator", () => {
+    const { recipients, poolBps } = saleRecipients(original, ECONOMIC_CONFIG_V4, { brand: { who: "nike", bps: 1500, creatorBps: 1000 } });
+    expect(recipients.map((r) => [r.who, r.bps])).toEqual([
+      ["ana", 1000],
+      ["nike", 1500],
+    ]);
+    expect(poolBps).toBe(2500);
+  });
+
+  it("trims the brand's part to fit within 30%, and keeps creators within it too", () => {
+    const { recipients } = saleRecipients(original, ECONOMIC_CONFIG_V4, { affiliate: "cam", brand: { who: "nike", bps: 2500, creatorBps: 1000 } });
+    expect(recipients.map((r) => [r.who, r.bps])).toEqual([
+      ["ana", 1000],
+      ["cam", 500],
+      ["nike", 2000],
+    ]);
+    // A creators' share over 30% isn't a v4 share: creators get the standard 15%, the brand what fits.
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V4, 3500)).toBe(1500);
+    expect(creatorPoolFor(ECONOMIC_CONFIG_V4, 3000)).toBe(3000);
+    expect(brandShareFor(ECONOMIC_CONFIG_V4, 1500, 3000)).toBe(0);
+    // Before v4 there was no most.
+    expect(brandShareFor(ECONOMIC_CONFIG_V3, 2500, 1000)).toBe(2500);
   });
 });

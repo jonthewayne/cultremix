@@ -3,7 +3,7 @@
 // (Settings, Policies), which should say the same thing.
 
 export const POLICIES_DRAFT = true;
-export const POLICIES_UPDATED = "October 13, 2026";
+export const POLICIES_UPDATED = "October 14, 2026";
 export const CONTACT_EMAIL = "hey@cultremix.com";
 
 export type Policy = {
@@ -166,8 +166,8 @@ export const POLICIES: Array<Policy> = [
       {
         heading: "Earnings",
         body: [
-          "When a design sells, a share of the price goes to the creators behind it, split by its lineage under the published rules (/economics/v3.json). Creators share 15% of the price before tax and shipping. A member whose link brought the buyer gets 5%.",
-          "A brand that owns or licenses a design family can have its own agreement for that family: its own share of each sale, and a different creators' share, never less than the 5% the published rules allow. A design's page always shows its current split before you remix it or buy it.",
+          "When a design sells, a share of the price goes to the creators behind it, split by its lineage under the published rules (/economics/v4.json). Creators share 15% of the price before tax and shipping. A member whose link brought the buyer gets 5%.",
+          "A brand that owns or licenses a design family can have its own deal with CultRemix for that family: a share of each sale for the brand and the family's creators together, never more than 30% of the price. The brand decides how much of it goes to the family's creators, never less than 5%. A design's page always shows its current split before you remix it or buy it.",
           "Each sale keeps the rules it was sold under. We may publish new versions of the rules for future sales, and every version stays public.",
           "Earnings become payable a while after an order ships, so refunds can come off first. A payment dispute (a chargeback) holds a sale's earnings while it's open, and one the buyer wins takes them back. Payouts begin after the hackathon judging, in mid-November 2026.",
         ],

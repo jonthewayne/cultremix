@@ -34,6 +34,8 @@ export const viewerValidator = v.object({
   canManage: v.optional(v.boolean()),
   // A hackathon judge's account (convex/judges.ts): the studio shows them where to start.
   isJudge: v.optional(v.boolean()),
+  // A brand's account (convex/brands.ts): the header menu links to its brand page.
+  isBrand: v.optional(v.boolean()),
 });
 
 export async function getViewerUser(ctx: Ctx): Promise<Doc<"users"> | null> {
@@ -91,7 +93,18 @@ async function toViewer(ctx: Ctx, user: Doc<"users">) {
     isAdmin: adminAllows(user.platformRole, "view"),
     canManage: adminAllows(user.platformRole, "manage"),
     isJudge: (await activeCreatorAccess(ctx, user._id))?.note === JUDGE_ACCESS_NOTE,
+    isBrand: await hasActiveBrand(ctx, user._id),
   };
+}
+
+// Whether the member's account is an active brand (convex/brands.ts). Read here, not imported, so
+// identity and brands don't import each other.
+async function hasActiveBrand(ctx: Ctx, userId: Id<"users">) {
+  const row = await ctx.db
+    .query("brands")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .first();
+  return row?.active === true;
 }
 
 export const viewer = query({

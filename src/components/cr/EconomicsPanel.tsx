@@ -60,7 +60,7 @@ export function EconomicsPanel({ cr }: { cr: string }) {
             @{panel.brand.username}
           </a>{" "}
           gets {percent(panel.brand.bps)} of the price as the brand behind this family.
-          {panel.brand.creatorBps !== null && ` Its agreement sets the creators’ share in this family at ${percent(panel.brand.creatorBps)}.`}
+          {panel.brand.creatorBps !== null && ` The brand sets the creators’ share in this family at ${percent(panel.brand.creatorBps)}.`}
         </p>
       )}
       {panel.affiliateBps !== null && (

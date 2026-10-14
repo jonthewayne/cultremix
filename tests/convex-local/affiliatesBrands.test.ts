@@ -5,8 +5,9 @@ import { newTest } from "./setup";
 import { makeUser, makeWork } from "./shopFixtures";
 import type { Id } from "../../convex/_generated/dataModel";
 
-// Economics v2: a sale pays the design's creators their 15%, the family's brand its rate, and the
-// member whose link brought the buyer 5%, each exact to the cent.
+// Economics v2 to v4: a sale pays the design's creators their share, the family's brand its part,
+// and the member whose link brought the buyer 5%, each exact to the cent. From v4 a brand's deal is
+// its families' share of each sale, set by an admin, which the brand splits with their creators.
 
 type T = ReturnType<typeof newTest>;
 
@@ -29,17 +30,18 @@ async function setup() {
   const owner = t.withIdentity({ subject: "owner" });
   const ana = await member(t, "Ana", { creatorNumber: 1 });
   const cam = await member(t, "Cam", { authId: "auth-cam" });
-  const nike = await member(t, "Nike");
+  const nike = await member(t, "Nike", { authId: "auth-nike" });
   const work = await makeWork(t, { creatorId: ana, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
   return { t, owner, ana, cam, nike, work };
 }
 
-describe("economics v2: brands and affiliates", () => {
+describe("economics: brands and affiliates", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("pays the brand and the member whose link brought the buyer, on top of the creator's 15%", async () => {
+  it("pays the brand and the member whose link brought the buyer, on top of the creators' 15%", async () => {
     const { t, owner, ana, cam, nike, work } = await setup();
-    await owner.mutation(api.brands.save, { username: "@nike", name: "Nike", bps: 1000, families: [101] });
+    // A families' share of 25%: 10% to the brand, creators keeping their standard 15%.
+    await owner.mutation(api.brands.save, { username: "@nike", name: "Nike", totalBps: 2500, creatorBps: 1500, families: [101] });
 
     // A $36 shirt (the built-in launch shirt): 15% + 5% + 10% = $10.80.
     const sale = await owner.mutation(api.orders.simulateSale, { workId: work, ref: "CAM" });
@@ -55,12 +57,12 @@ describe("economics v2: brands and affiliates", () => {
 
     // The design's page shows the brand and the share for sharing it.
     const panel = await t.query(api.workEconomics.panel, { cr: "101-001" });
-    expect(panel).toMatchObject({ configVersion: 3, affiliateBps: 500, brand: { name: "Nike", username: "Nike", bps: 1000, creatorBps: null } });
+    expect(panel).toMatchObject({ configVersion: 4, affiliateBps: 500, brand: { name: "Nike", username: "Nike", bps: 1000, creatorBps: null } });
   });
 
-  it("lets a big brand's agreement take 15% and set its family's creators at 10% (economics v3)", async () => {
+  it("starts a deal at 25%, 15% to the brand and 10% to creators, and keeps it within the published bounds", async () => {
     const { t, owner, ana, cam, nike, work } = await setup();
-    await owner.mutation(api.brands.save, { username: "nike", name: "Nike", bps: 1500, creatorBps: 1000, families: [101] });
+    await owner.mutation(api.brands.save, { username: "nike", name: "Nike", totalBps: 2500, creatorBps: 1000, families: [101], note: "Promotes us" });
 
     // A $36 shirt: creators 10% ($3.60), the link 5% ($1.80), the brand 15% ($5.40).
     const sale = await owner.mutation(api.orders.simulateSale, { workId: work, ref: "cam" });
@@ -71,17 +73,68 @@ describe("economics v2: brands and affiliates", () => {
 
     // The design's page shows the family's split.
     const panel = await t.query(api.workEconomics.panel, { cr: "101-001" });
-    expect(panel).toMatchObject({ configVersion: 3, creatorPoolBps: 1000, brand: { name: "Nike", bps: 1500, creatorBps: 1000 } });
+    expect(panel).toMatchObject({ configVersion: 4, creatorPoolBps: 1000, brand: { name: "Nike", bps: 1500, creatorBps: 1000 } });
 
-    // Whole percents, never under 5%, and the two together at most 50% of the price.
-    const save = (bps: number, creatorBps: number) =>
-      owner.mutation(api.brands.save, { username: "nike", name: "Nike", bps, creatorBps, families: [101] });
-    await expect(save(1500, 400)).rejects.toThrow(/at least 5%/u);
-    await expect(save(1500, 1050)).rejects.toThrow(/whole percent/u);
-    await expect(save(4000, 1500)).rejects.toThrow(/more than 50%/u);
+    // Whole percents; the families' share from 5% to 30%; creators from 5% to the families' share.
+    const save = (totalBps: number, creatorBps: number) =>
+      owner.mutation(api.brands.save, { username: "nike", name: "Nike", totalBps, creatorBps, families: [101] });
+    await expect(save(2500, 400)).rejects.toThrow(/from 5%/u);
+    await expect(save(2500, 1050)).rejects.toThrow(/whole percent/u);
+    await expect(save(3500, 1000)).rejects.toThrow(/to 30%/u);
+    await expect(save(2500, 2600)).rejects.toThrow(/family's 25%/u);
     const list = await owner.query(api.brands.list, {});
-    expect(list).toMatchObject({ defaultCreatorBps: 1500, minCreatorBps: 500 });
-    expect(list.brands[0]).toMatchObject({ name: "Nike", bps: 1500, creatorBps: 1000 });
+    expect(list.limits).toEqual({
+      maxTotalBps: 3000,
+      minCreatorBps: 500,
+      defaultCreatorBps: 1000,
+      defaultTotalBps: 2500,
+      standardCreatorBps: 1500,
+      affiliateBps: 500,
+    });
+    expect(list.brands[0]).toMatchObject({ name: "Nike", totalBps: 2500, creatorBps: 1000, brandBps: 1500, note: "Promotes us", setByBrand: false });
+  });
+
+  it("lets the brand split its families' share with their creators on its own page", async () => {
+    const { t, owner, ana, cam, nike, work } = await setup();
+    await owner.mutation(api.brands.save, { username: "nike", name: "Nike", totalBps: 2500, creatorBps: 1000, families: [101] });
+    const brand = t.withIdentity({ subject: "auth-nike" });
+    const someone = t.withIdentity({ subject: "auth-cam" });
+    expect(await brand.query(api.identity.viewer, {})).toMatchObject({ isBrand: true });
+    expect(await someone.query(api.identity.viewer, {})).toMatchObject({ isBrand: false });
+    expect(await brand.query(api.brands.mine, {})).toMatchObject({
+      name: "Nike",
+      families: [101],
+      totalBps: 2500,
+      creatorBps: 1000,
+      brandBps: 1500,
+      minCreatorBps: 500,
+      suggestedCreatorBps: 1000,
+      examplePriceCents: 3600,
+      setByBrand: false,
+    });
+
+    // From 5% to the families' 25%, in whole percents; only a brand can.
+    await expect(brand.mutation(api.brands.setCreatorShare, { creatorBps: 400 })).rejects.toThrow(/from 5%/u);
+    await expect(brand.mutation(api.brands.setCreatorShare, { creatorBps: 2600 })).rejects.toThrow(/25%/u);
+    await expect(brand.mutation(api.brands.setCreatorShare, { creatorBps: 850 })).rejects.toThrow(/whole percent/u);
+    await expect(someone.mutation(api.brands.setCreatorShare, { creatorBps: 1000 })).rejects.toThrow(/Only a brand/u);
+    expect(await someone.query(api.brands.mine, {})).toBeNull();
+
+    await brand.mutation(api.brands.setCreatorShare, { creatorBps: 800 });
+    expect(await brand.query(api.brands.mine, {})).toMatchObject({ creatorBps: 800, brandBps: 1700, setByBrand: true });
+    // The owner hears about it.
+    const notes = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(notes.some((note) => note.kind === "ops_alert" && /Nike set its creators' share to 8%/u.test(note.note ?? ""))).toBe(true);
+    // An admin editing the deal's other terms leaves the brand's split as the brand set it.
+    await owner.mutation(api.brands.save, { username: "nike", name: "Nike Inc", totalBps: 2500, creatorBps: 800, families: [101] });
+    expect((await owner.query(api.brands.list, {})).brands[0]).toMatchObject({ name: "Nike Inc", creatorBps: 800, setByBrand: true });
+
+    // A $36 shirt now: creators 8% ($2.88), the brand 17% ($6.12).
+    const sale = await owner.mutation(api.orders.simulateSale, { workId: work });
+    expect(sale).toMatchObject({ recipients: 2, poolCents: 900 });
+    expect(await sales(t, ana)).toEqual([[288, "pending", ["creator"]]]);
+    expect(await sales(t, nike)).toEqual([[612, "pending", ["brand"]]]);
+    expect(await sales(t, cam)).toEqual([]);
   });
 
   it("finds the link's member by username, never for their own purchase or an unknown name", async () => {
@@ -96,20 +149,26 @@ describe("economics v2: brands and affiliates", () => {
 
   it("keeps each family to one brand, stops a brand on new sales, and lets only managers set brands", async () => {
     const { t, owner, ana, work } = await setup();
-    const brandId = await owner.mutation(api.brands.save, { username: "nike", name: "Nike", bps: 1000, families: [101, 104] });
+    const deal = { totalBps: 2500, creatorBps: 1500 };
+    const brandId = await owner.mutation(api.brands.save, { username: "nike", name: "Nike", ...deal, families: [101, 104] });
     await member(t, "Adidas");
-    await expect(owner.mutation(api.brands.save, { username: "adidas", name: "Adidas", bps: 800, families: [104] })).rejects.toThrow(
+    await expect(owner.mutation(api.brands.save, { username: "adidas", name: "Adidas", ...deal, families: [104] })).rejects.toThrow(
       /already belongs to Nike/u,
     );
-    await expect(owner.mutation(api.brands.save, { username: "adidas", name: "Adidas", bps: 6000, families: [105] })).rejects.toThrow(/50%/u);
-    await expect(t.withIdentity({ subject: "auth-cam" }).mutation(api.brands.save, { username: "cam", name: "Cam", bps: 1000, families: [106] })).rejects.toThrow();
+    await expect(
+      owner.mutation(api.brands.save, { username: "adidas", name: "Adidas", totalBps: 6000, creatorBps: 1500, families: [105] }),
+    ).rejects.toThrow(/30%/u);
+    await expect(
+      t.withIdentity({ subject: "auth-cam" }).mutation(api.brands.save, { username: "cam", name: "Cam", ...deal, families: [106] }),
+    ).rejects.toThrow();
 
     await owner.mutation(api.brands.deactivate, { brandId });
+    expect(await t.withIdentity({ subject: "auth-nike" }).query(api.identity.viewer, {})).toMatchObject({ isBrand: false });
     const sale = await owner.mutation(api.orders.simulateSale, { workId: work });
     expect(sale).toMatchObject({ recipients: 1, poolCents: 540 });
     expect(await sales(t, ana)).toEqual([[540, "pending", ["creator"]]]);
     // Stopped, its families are free for another brand.
-    await owner.mutation(api.brands.save, { username: "adidas", name: "Adidas", bps: 800, families: [104] });
+    await owner.mutation(api.brands.save, { username: "adidas", name: "Adidas", ...deal, families: [104] });
     const list = await owner.query(api.brands.list, {});
     expect(list.brands.map((brand) => [brand.name, brand.active, brand.families])).toEqual([
       ["Adidas", true, [104]],

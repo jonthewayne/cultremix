@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { canonicalConfigJson, creatorPoolFor, recipientShares } from "./lib/economics";
+import { brandShareFor, canonicalConfigJson, creatorPoolFor, recipientShares } from "./lib/economics";
 import { CURRENT_ECONOMIC_CONFIG, economicsConfigPath, sha256Hex } from "./lib/economicsConfigs";
 import { LineageError, economicLineage } from "./lib/lineage";
 import { toLineageWork, workByCr, worksReader } from "./lineage";
@@ -65,7 +65,7 @@ export const panel = query({
         ? {
             name: familyBrand.name,
             username: brandUser?.username ?? "member",
-            bps: familyBrand.bps,
+            bps: brandShareFor(config, familyBrand.bps, creatorPoolBps),
             creatorBps: creatorPoolBps === config.creatorPoolBps ? null : creatorPoolBps,
           }
         : null,

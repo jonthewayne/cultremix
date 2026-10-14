@@ -134,6 +134,10 @@ export const cleanupTestUserByEmail = mutation({
       for (const row of await ctx.db.query("creditLedger").withIndex("by_user", (q) => q.eq("userId", user._id)).take(100)) {
         await ctx.db.delete("creditLedger", row._id);
       }
+      // A brand the test member was made (the brand page's screenshots and tests).
+      for (const row of await ctx.db.query("brands").withIndex("by_user", (q) => q.eq("userId", user._id)).take(5)) {
+        await ctx.db.delete("brands", row._id);
+      }
       for (const membership of await ctx.db
         .query("memberships")
         .withIndex("by_userId", (q) => q.eq("userId", user._id))

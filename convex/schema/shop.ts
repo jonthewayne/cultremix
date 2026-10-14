@@ -457,9 +457,18 @@ export const shopTables = {
     userId: v.id("users"),
     name: v.string(),
     bps: v.number(),
-    // The creators' share of the price its agreement sets in its families (economics v3), in basis
-    // points; unset, creators keep the standard 15%.
+    // The creators' share of the price in its families (economics v3), in basis points; unset,
+    // creators keep the standard 15%. bps is the brand's own share.
     creatorBps: v.optional(v.number()),
+    // The family's share of each sale, the brand and the creators together, set by an admin
+    // (economics v4): bps + creatorBps. The brand splits it on its page (/brand). Absent on deals
+    // from before v4.
+    totalBps: v.optional(v.number()),
+    // Who last set the creators' share (an admin, or the brand itself), and when.
+    creatorBpsSetBy: v.optional(v.id("users")),
+    creatorBpsSetAt: v.optional(v.number()),
+    // What CultRemix agreed with the brand, for admins only.
+    note: v.optional(v.string()),
     families: v.array(v.number()),
     active: v.boolean(),
     createdBy: v.id("users"),

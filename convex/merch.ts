@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { garmentKindOf } from "../shared/config/print-products";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAccess";
 import { GARMENT_COLORS, colorDistance, colorKey, colorsByNearness, nearestGarmentColor } from "./lib/garments";
@@ -363,6 +363,37 @@ export const checkAdmin = internalQuery({
   args: { level: v.union(v.literal("view"), v.literal("manage")) },
   returns: v.id("users"),
   handler: async (ctx, args) => (await requireAdmin(ctx, args.level))._id,
+});
+
+type ProductCosts = { productId: number; sizes: Array<{ size: string; cents: number }> };
+
+// Admin, Brands: what Printful charges for each product on offer, by size (the highest across its
+// colors), from its public catalog. A product the catalog didn't answer for comes back with no sizes.
+export const adminCosts = action({
+  args: {},
+  returns: v.array(v.object({ productId: v.number(), sizes: v.array(v.object({ size: v.string(), cents: v.number() })) })),
+  handler: async (ctx): Promise<Array<ProductCosts>> => {
+    await ctx.runQuery(internal.merch.checkAdmin, { level: "view" });
+    const products: Array<{ productId: number }> = await ctx.runQuery(api.merch.offered, {});
+    return await Promise.all(
+      products.map(async ({ productId }): Promise<ProductCosts> => {
+        try {
+          const response = await fetch(`${PRINTFUL}/products/${productId}`, { signal: AbortSignal.timeout(FETCH_MS) });
+          if (!response.ok) return { productId, sizes: [] };
+          const data = (await response.json()) as { result?: { variants?: Array<{ size?: string; price?: string }> } };
+          const most = new Map<string, number>();
+          for (const variant of data.result?.variants ?? []) {
+            const cents = Math.round(Number(variant.price) * 100);
+            if (!variant.size || !Number.isFinite(cents) || cents <= 0) continue;
+            most.set(variant.size, Math.max(most.get(variant.size) ?? 0, cents));
+          }
+          return { productId, sizes: [...most].map(([size, cents]) => ({ size, cents })) };
+        } catch {
+          return { productId, sizes: [] };
+        }
+      }),
+    );
+  },
 });
 
 export const saveProduct = internalMutation({

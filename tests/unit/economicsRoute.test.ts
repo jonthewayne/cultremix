@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, canonicalConfigJson } from "../../convex/lib/economics";
+import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, canonicalConfigJson } from "../../convex/lib/economics";
 import { economicsConfigFile, economicsConfigPath, sha256Hex } from "../../convex/lib/economicsConfigs";
 import { economicsConfigResponse } from "../../src/lib/economicsRoute";
 
@@ -31,7 +31,22 @@ describe("/economics/v1.json", () => {
     expect(canonicalConfigJson(ECONOMIC_CONFIG_V2)).not.toContain("brandCreatorPoolMinBps");
   });
 
-  it.each(["v4.json", "v1", "v1.json.bak", "../v1.json", "V1.json", "v01x.json", "v01.json", "constructor.json", "vtoString.json"])(
+  it("serves v4, with a brand deal's cap and starting split, and leaves v3's bytes as they were", async () => {
+    const v4 = await economicsConfigResponse("v4.json").text();
+    expect(v4).toBe(canonicalConfigJson(ECONOMIC_CONFIG_V4));
+    expect(JSON.parse(v4)).toMatchObject({
+      version: 4,
+      creatorPoolBps: 1500,
+      affiliateBps: 500,
+      brandDefaultBps: 1500,
+      brandCreatorDefaultBps: 1000,
+      brandCreatorPoolMinBps: 500,
+      brandFamilyMaxBps: 3000,
+    });
+    expect(canonicalConfigJson(ECONOMIC_CONFIG_V3)).not.toContain("brandFamilyMaxBps");
+  });
+
+  it.each(["v5.json", "v1", "v1.json.bak", "../v1.json", "V1.json", "v01x.json", "v01.json", "constructor.json", "vtoString.json"])(
     "returns 404 for %s",
     (file) => {
       expect(economicsConfigResponse(file).status).toBe(404);

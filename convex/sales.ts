@@ -10,7 +10,15 @@ import { printfulConfigFromEnv } from "./lib/printful/client";
 import { topazWorstCaseCents } from "./lib/pricing";
 import { publicUrl } from "./lib/r2";
 import { commerceOpen, simulatesTestOrders } from "./lib/shopFlags";
-import { chosenProducts, filesReady, listingFor, listingsOf, offeredShopProducts, printTargetForWork } from "./lib/shopProduct";
+import {
+  chosenProducts,
+  filesReady,
+  listingColors,
+  listingFor,
+  listingsOf,
+  offeredShopProducts,
+  printTargetForWork,
+} from "./lib/shopProduct";
 import { shopifyAdminConfigFromEnv } from "./lib/shopify/adminClient";
 import { crNumber, keptHandle, productHandle } from "./lib/shopify/productSync";
 import { MAX_VERSIONS, UPSCALE_MAX_SIDE } from "./print";
@@ -439,6 +447,42 @@ export const pause = mutation({
 async function draftInShopify(ctx: MutationCtx, rows: Array<Doc<"shopProducts">>) {
   const productIds = rows.flatMap((row) => (row.shopifyProductId ? [row.shopifyProductId] : []));
   if (productIds.length > 0) await ctx.scheduler.runAfter(0, internal.shopify.draftProducts, { productIds });
+}
+
+/**
+ * After a work's colors change (publish.setOfferedColors): each of its listings sells the new colors
+ * its product comes in, keeping its print files, placement, and status. Listings on sale, waiting
+ * for Shopify, or retrying sync again now (a live one stays on sale while it does); paused and
+ * preparing ones keep the new colors for when they go on. A product that comes in none of the new
+ * colors keeps selling the colors it had, and its name comes back in kept.
+ */
+export async function relistColors(ctx: MutationCtx, workId: Id<"works">): Promise<{ synced: number; kept: Array<string> }> {
+  const work = await ctx.db.get("works", workId);
+  if (!work) return { synced: 0, kept: [] };
+  const products = await offeredShopProducts(ctx);
+  const now = Date.now();
+  let synced = 0;
+  const kept: Array<string> = [];
+  for (const row of await listingsOf(ctx, workId)) {
+    const listing = row.listing;
+    if (!listing) continue;
+    const product = products.find((candidate) => candidate.key === listing.productKey);
+    if (!product) continue;
+    const colors = listingColors(work.offeredColors, product);
+    if (colors.length === 0) {
+      kept.push(listing.name);
+      continue;
+    }
+    if (colors.map((color) => color.key).join() === listing.colors.map((color) => color.key).join()) continue;
+    await ctx.db.patch("shopProducts", row._id, { listing: { ...listing, colors }, updatedAt: now });
+    if (row.status !== "live" && row.status !== "pending" && row.status !== "failed") continue;
+    if (row.status !== "live") {
+      await ctx.db.patch("shopProducts", row._id, { status: "pending", attempts: 0, lastError: undefined, nextAttemptAt: now });
+    }
+    await ctx.scheduler.runAfter(0, internal.shopify.syncListing, { listingId: row._id });
+    synced += 1;
+  }
+  return { synced, kept };
 }
 
 export const resume = mutation({

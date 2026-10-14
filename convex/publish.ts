@@ -16,6 +16,7 @@ import { inheritOnPublish } from "./remixFields";
 import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
 import { activePalette, colorLookup } from "./merch";
+import { relistColors } from "./sales";
 import { chosenProducts, offeredShopProducts, retireKeptListings } from "./lib/shopProduct";
 import { followPublishPlacement } from "./lib/printSync";
 import { crNumber } from "./lib/shopify/productSync";
@@ -629,6 +630,73 @@ export const setPrintSetup = mutation({
     await ctx.db.patch("works", work._id, { printPlacement, printProducts });
     await followPublishPlacement(ctx, work._id, user._id);
     return null;
+  },
+});
+
+// On a design's page, for its creator and the owner: its shirt colors, lead first, from the colors
+// on offer now (convex/merch.ts palette), and whether it's on sale. Null for everyone else.
+export const colorSetup = query({
+  args: { workId: v.id("works") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      colors: v.array(v.string()),
+      onSale: v.boolean(),
+      isOwner: v.boolean(),
+      // A shared design has a model photo, which can be shot again on a new lead color.
+      canRetake: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const user = await getViewerUser(ctx);
+    const work = await ctx.db.get("works", args.workId);
+    if (!user || !work || (work.creatorId !== user._id && !isOwner(user))) return null;
+    if (work.status !== "published" && work.status !== "private") return null;
+    const palette = (await activePalette(ctx)).colors;
+    const known = new Set(palette.map((color) => color.key));
+    const current = (work.offeredColors ?? []).filter((key) => known.has(key));
+    const listings = await ctx.db
+      .query("shopProducts")
+      .withIndex("by_work", (q) => q.eq("workId", work._id))
+      .take(20);
+    return {
+      colors: current.length > 0 ? current : defaultOfferedColors(work.backgroundColor, new Set(), palette),
+      onSale: listings.some((row) => row.listing !== undefined && row.status !== "paused"),
+      isOwner: isOwner(user),
+      canRetake: work.status === "published",
+    };
+  },
+});
+
+// Changes a design's shirt colors after publishing, for its creator and the owner: colors on offer,
+// lead first, up to 20. The lead is its background (the feed, the model photo, and remixes use it).
+// Its shop products sell the new colors at once and keep their print files (sales.relistColors).
+// When the lead changed and retakePhoto is set, a new model photo is shot on it: the owner's don't
+// count against the day's photo shoots, and a creator's do.
+export const setOfferedColors = mutation({
+  args: { workId: v.id("works"), colors: v.array(v.string()), retakePhoto: v.optional(v.boolean()) },
+  returns: v.object({ colors: v.array(v.string()), relisted: v.number(), kept: v.array(v.string()), photo: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await requireMember(ctx);
+    const work = await ctx.db.get("works", args.workId);
+    if (!work || (work.creatorId !== user._id && !isOwner(user)) || (work.status !== "published" && work.status !== "private")) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "That design isn't yours to change." });
+    }
+    const palette = (await activePalette(ctx)).colors;
+    const result = validateOfferedColors(args.colors, palette);
+    if (!result.ok) throw new ConvexError({ code: "INVALID_COLORS", message: result.message });
+    const lead = garmentColor(result.keys[0], palette)!;
+    const leadChanged = (work.offeredColors?.[0] ?? null) !== lead.key;
+    await ctx.db.patch("works", work._id, { offeredColors: result.keys, backgroundColor: lead.hex });
+    const relisted = await relistColors(ctx, work._id);
+    const photo = Boolean(args.retakePhoto && leadChanged && work.status === "published" && work.artKey);
+    if (photo) {
+      await ctx.scheduler.runAfter(0, internal.imageGen.reshoot, {
+        cr: formatCr(work.crFamily, work.crExpression),
+        skipLimit: isOwner(user),
+      });
+    }
+    return { colors: result.keys, relisted: relisted.synced, kept: relisted.kept, photo };
   },
 });
 

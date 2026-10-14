@@ -2,6 +2,8 @@
 
 **Submitted October 13, 2026, about 9 p.m. Pacific.** Production (4e90c3b) is frozen while judging runs, October 14 to 27: new work is built and tested on dev only (see AGENTS.md). Below is the state at submission.
 
+Built since, on dev only and waiting for the freeze to lift: brand deals that CultRemix sets and the brand splits with its creators (economics v4), and changing a published design's shirt colors. See [2026-10-14-after-judging.md](../plans/2026-10-14-after-judging.md). Shopify Payments is set up (accepting payments and receiving payouts, October 14); checkout on cultremix.com stays off until then.
+
 As of October 13, 2026, 6:30 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
 
 ## Decided October 7

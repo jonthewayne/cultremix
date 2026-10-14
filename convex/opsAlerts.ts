@@ -15,7 +15,7 @@ const GATEWAY_KEY = "gateway-credit";
 const RELAYER_KEY = "relayer-mon";
 
 // The owner and ops staff, who hear about these.
-async function staff(ctx: MutationCtx) {
+export async function staff(ctx: MutationCtx) {
   const owners = await ctx.db
     .query("users")
     .withIndex("by_platformRole", (q) => q.eq("platformRole", "super_admin_owner"))

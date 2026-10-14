@@ -26,6 +26,11 @@
 // owns or licenses, in whole percents from brandCreatorPoolMinBps up, in place of creatorPoolBps (a
 // big brand might take 15% with creators at 10%). Everywhere else creators keep their 15%; the
 // creators' pool still splits among them by the table above.
+//
+// Version 4 (October 14, 2026) makes a brand deal one number CultRemix sets: the family's share of
+// each sale, the brand and the family's creators together, at most brandFamilyMaxBps. The brand
+// splits it with the creators, who get at least brandCreatorPoolMinBps; a new deal starts at
+// brandDefaultBps for the brand and brandCreatorDefaultBps for the creators. The sale math is v3's.
 
 export type EconomicRole = "creator" | "family_root" | "upstream" | "affiliate" | "brand";
 
@@ -41,6 +46,11 @@ export type EconomicConfig = {
   // From v3: the lowest creators' share of each line's base a brand's agreement can set in its
   // families, in place of creatorPoolBps.
   brandCreatorPoolMinBps?: number;
+  // From v4: the most a brand's family gets of each line's base, the brand and the family's
+  // creators together.
+  brandFamilyMaxBps?: number;
+  // From v4: the creators' share a new brand deal starts with; the brand can change it.
+  brandCreatorDefaultBps?: number;
   // Days after a unit ships before its earnings become Available (when no refund holds it).
   maturityDays: number;
   // Shares of the pool, in basis points of 10000, by work kind.
@@ -75,6 +85,14 @@ export const ECONOMIC_CONFIG_V3: EconomicConfig = {
   ...ECONOMIC_CONFIG_V2,
   version: 3,
   brandCreatorPoolMinBps: 500,
+};
+
+export const ECONOMIC_CONFIG_V4: EconomicConfig = {
+  ...ECONOMIC_CONFIG_V3,
+  version: 4,
+  brandDefaultBps: 1500,
+  brandCreatorDefaultBps: 1000,
+  brandFamilyMaxBps: 3000,
 };
 
 // A work's lineage as economics needs it. Creators are opaque IDs (Convex user IDs).
@@ -152,13 +170,23 @@ export function linePoolAt(
 }
 
 // The creators' share of a line's base: creatorPoolBps, or from v3 the share a brand agreed for its
-// families when it's a whole percent from brandCreatorPoolMinBps to 100%. Anything else falls back
-// to creatorPoolBps, so a bad value can never stop an order from being recorded.
+// families when it's a whole percent from brandCreatorPoolMinBps up to 100% (from v4, up to
+// brandFamilyMaxBps). Anything else falls back to creatorPoolBps, so a bad value can never stop an
+// order from being recorded.
 export function creatorPoolFor(config: EconomicConfig, brandCreatorBps?: number | null): number {
   const floor = config.brandCreatorPoolMinBps;
   if (floor === undefined || brandCreatorBps === undefined || brandCreatorBps === null) return config.creatorPoolBps;
   const whole = Number.isInteger(brandCreatorBps) && brandCreatorBps % 100 === 0;
-  return whole && brandCreatorBps >= floor && brandCreatorBps <= 10000 ? brandCreatorBps : config.creatorPoolBps;
+  const ceiling = config.brandFamilyMaxBps ?? 10000;
+  return whole && brandCreatorBps >= floor && brandCreatorBps <= ceiling ? brandCreatorBps : config.creatorPoolBps;
+}
+
+// The brand's share of a line's base: its rate, and from v4 no more than what brandFamilyMaxBps leaves
+// after the family's creators, so a brand family never gets more than the published most.
+export function brandShareFor(config: EconomicConfig, brandBps: number, creatorPoolBps: number): number {
+  if (!Number.isInteger(brandBps) || brandBps <= 0) return 0;
+  if (config.brandFamilyMaxBps === undefined) return brandBps;
+  return Math.max(0, Math.min(brandBps, config.brandFamilyMaxBps - creatorPoolBps));
 }
 
 // Who one line of a sale pays, and its pool in basis points of the line's base. Under v1 that's the
@@ -187,9 +215,8 @@ export function saleRecipients(
     return { who: share.who, roles: [...share.roles], bps };
   });
   if (extras.affiliate && config.affiliateBps) parts.push({ who: extras.affiliate, roles: ["affiliate"], bps: config.affiliateBps });
-  if (extras.brand && Number.isInteger(extras.brand.bps) && extras.brand.bps > 0) {
-    parts.push({ who: extras.brand.who, roles: ["brand"], bps: extras.brand.bps });
-  }
+  const brandBps = extras.brand ? brandShareFor(config, extras.brand.bps, creatorPoolBps) : 0;
+  if (extras.brand && brandBps > 0) parts.push({ who: extras.brand.who, roles: ["brand"], bps: brandBps });
   const merged = new Map<string, RecipientShare>();
   for (const part of parts) {
     const existing = merged.get(part.who);

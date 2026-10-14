@@ -33,6 +33,7 @@ import { HeartButton } from "~/components/social/HeartButton";
 import { ShareButton } from "~/components/social/ShareButton";
 import { PrintEntry } from "~/components/print/PrintEntry";
 import { PlacementEditor } from "~/components/publish/PlacementEditor";
+import { ColorEditor } from "~/components/publish/ColorEditor";
 import { pageColors, selectedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
 import { keepHyphens } from "~/lib/utils";
@@ -244,6 +245,7 @@ function ShopPage() {
             <Backers workId={item.workId} cr={item.cr} />
             <PrintEntry cr={item.cr} />
             <PlacementEditor workId={item.workId} artUrl={item.artMediumUrl ?? item.artUrl} colors={data.colors} />
+            <ColorEditor workId={item.workId} artUrl={item.artMediumUrl ?? item.artUrl} backgroundColor={item.backgroundColor} />
             <PhotoRetake cr={item.cr} />
             <HomeFeature workId={item.workId} />
             <TakeDown workId={item.workId} cr={item.cr} />

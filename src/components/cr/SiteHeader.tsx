@@ -98,6 +98,11 @@ export function SiteHeader() {
                 <Link to="/me/earnings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
                   Earnings
                 </Link>
+                {viewer.isBrand && (
+                  <Link to="/brand" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
+                    Your brand
+                  </Link>
+                )}
                 <Link to="/settings" className="block px-4 py-3 hover:bg-neutral-100" onClick={() => setOpen(false)}>
                   Settings
                 </Link>

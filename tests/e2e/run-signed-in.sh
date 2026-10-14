@@ -132,6 +132,10 @@ a11y
 go "$BASE_URL/settings"
 wait_text "Settings"
 a11y
+# The brand page, for an account that isn't a brand.
+go "$BASE_URL/brand"
+wait_text "This page is for brands on CultRemix"
+a11y
 
 # As an owner: the admin tabs load.
 bun scripts/e2e-helper.ts role "$EMAIL" super_admin_owner
@@ -168,6 +172,11 @@ go "$BASE_URL/admin/chain"
 wait_text "Relayer"
 wait_text "Member wallets"
 a11y
+go "$BASE_URL/admin/brands"
+wait_text "What we agreed"
+wait_text "Brands on CultRemix"
+a11y
+agent-browser screenshot body .tmp/screenshots/signed-in-admin-brands.png >/dev/null
 agent-browser screenshot body .tmp/screenshots/signed-in-admin-metrics.png >/dev/null
 # The Print Studio, which owners can open for any design (the work page's Prepare for print).
 if [[ -n "$work_path" ]]; then
@@ -175,6 +184,14 @@ if [[ -n "$work_path" ]]; then
   wait_text "Prepare for print"
   wait_text "Placement"
   a11y
+  # An owner can change any design's shirt colors from its page.
+  go "$BASE_URL$work_path"
+  wait_ready "main button"
+  agent-browser find role button click --name "Change its shirt colors" >/dev/null
+  wait_text "Pick the colors it sells in"
+  a11y
+  agent-browser screenshot body .tmp/screenshots/signed-in-colors.png >/dev/null
+  agent-browser press Escape >/dev/null
 fi
 
 # Every page above was a full load while signed in. React reports a server render that the browser
@@ -184,4 +201,3 @@ hydration=$(agent-browser errors --json 2>/dev/null | bun -e 'const text = await
 [[ "$hydration" == "0" ]] || fail "Signed-in pages failed to hydrate: $hydration hydration errors"
 
 echo "Signed-in E2E complete for $BASE_URL"
-

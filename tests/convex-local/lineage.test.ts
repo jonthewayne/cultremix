@@ -265,7 +265,7 @@ describe("work page lineage", () => {
       { username: "cara", roles: ["family_root"], bps: 3000 },
       { username: "bob", roles: ["upstream"], bps: 2000 },
     ]);
-    expect(panel).toMatchObject({ configVersion: 3, configPath: "/economics/v3.json", provenance: "pending", affiliateBps: 500, brand: null });
+    expect(panel).toMatchObject({ configVersion: 4, configPath: "/economics/v4.json", provenance: "pending", affiliateBps: 500, brand: null });
     expect(panel?.configSha256).toMatch(/^[0-9a-f]{64}$/u);
     expect(panel!.shares.reduce((sum, share) => sum + share.bps, 0)).toBe(10000);
   });

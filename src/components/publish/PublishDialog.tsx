@@ -513,7 +513,7 @@ export function PublishDialog({
                     onClick={() => toggle(color.key)}
                     onMouseEnter={() => setFocus(color.key)}
                     aria-pressed={on}
-                    aria-label={`${color.name}${on ? ", picked" : ""}${seen === "disappears" ? ", the design gets lost" : seen === "faint" ? ", the design looks faint" : ""}`}
+                    aria-label={`${color.name}${on ? ", picked" : ""}${lead === color.key ? ", the lead color" : ""}${seen === "disappears" ? ", the design gets lost" : seen === "faint" ? ", the design looks faint" : ""}`}
                     className={cn(
                       "relative flex aspect-square items-center justify-center overflow-hidden rounded-xl p-[14%] outline-offset-2 transition-transform active:scale-95",
                       on ? "ring-4 ring-black ring-offset-2" : "ring-1 ring-black/10",
