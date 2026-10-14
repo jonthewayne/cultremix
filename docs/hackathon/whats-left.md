@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-As of October 13, 2026, 5 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
+As of October 13, 2026, 6:30 p.m. Pacific. The Monad submission is due **Tuesday, October 13, 20:59 PDT** (11:59 p.m. Eastern), and judging runs October 14 to 27. This replaces the October 7 version.
 
 ## Decided October 7
 
@@ -33,6 +33,13 @@ As of October 13, 2026, 5 p.m. Pacific. The Monad submission is due **Tuesday, O
 - **Use as style** works while the style mixer is hidden: it adds the design as the next image and writes "in the style of image N".
 - **Monad mainnet is live.** At 1:04 a.m. the registry deployed at `0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0` from production's relayer, with economic config v1 registered in the same run and the source verified on Sourcify. Production got the address (c490dc2), Monad records went on, and the config and all 12 published designs confirmed within 25 seconds. The deploy and those records cost about 0.47 MON; 15.29 MON is left, about 700 more records. **Backs** went on too. On production, **Verify it yourself** passes: the file's fingerprint and Monad's record both match. /onchain links the registry on MonadVision, where its verified source shows.
 
+## Done the evening of October 13
+
+- **Economics v3** ([/economics/v3.json](https://cultremix.com/economics/v3.json)): a brand's agreement can set the creators' share in the families it owns or licenses, in whole percents and never under 5% of the price, so a big brand can take 15% with creators at 10%. Admin, **Brands** has the field (empty means the standard 15%), the brand's rate and the creators' share together stay at or under 50%, and the design's Economics panel says when a brand's agreement sets its family's share. Order lines keep the split they were sold under. v3's hash is registered on Monad mainnet beside v1 and v2.
+- **The 3001 in 20 colors** (it was six of Printful's 84). A design can be sold in up to 20, and the 11 designs published without colors, plus Shittles, got five each that suit their art; approving them again put the colors on their Shopify products.
+- **Terms** now say who owns a design (its creator; CultRemix gets a license while it's shared), what can be uploaded, and how lineage corrections work: a design found to be a copy, variation, or fork of another can have its lineage, credit, and future split corrected, with unpaid earnings held or adjusted. They still say "Draft" until Jon approves them.
+- **Shopify checkout** carries the CultRemix logo, black buttons and links, and Inter, and Shopify's Return and refund, Privacy, Terms of service, and Shipping policies hold the site's words ([shopify-printful.md](../setup/shopify-printful.md)).
+
 ## Waiting on Jon
 
 Done the afternoon of October 13: Jon signed up for Shopify (Basic) and Printful (billing), and the Builder set up both accounts in a Chrome profile on mighteous ([shopify-printful.md](../setup/shopify-printful.md)): the store, its app and Headless channel, $5.95 shipping, Printful's API store, token, and branded packing slip. Production is connected to both, the Bella+Canvas 3001 is the shirt at $24 ($26 for 2XL), and 11 of the 12 published designs are ready to sell. Jon also asked for brands and affiliates now: economics v2 pays 5% to the member whose link brought the buyer and 10% (or an agreed rate) to a family's brand, on top of the creators' 15% (Admin, **Brands**).
@@ -43,14 +50,14 @@ Done the afternoon of October 13: Jon signed up for Shopify (Basic) and Printful
    - Shopify: the Basic plan and Shopify Payments.
    - Printful: billing.
    - Circle: deferred (managed wallets cover member wallets). When it's wanted: a developer account and two API keys from its console (Keys), saved in `~/.config/cultremix/circle.env` as `CIRCLE_API_KEY_TEST` and `CIRCLE_API_KEY_LIVE`, then `bun run circle:setup`. Mainnet keys need Circle's compliance review first.
-4. ~~**A Screen Sharing session on mighteous.**~~ Done October 13 in the CultRemix Chrome profile instead ([shopify-printful.md](../setup/shopify-printful.md)). Still Jon's: **Complete setup** on Shopify Payments (identity, bank, tax ID), approve the store policies, then the test-mode order and one real order. CR 102-001's print file was refused for a faint haze: open its page, **Prepare for print**, **Remove background**, then approve it again in Admin, For sale.
+4. ~~**A Screen Sharing session on mighteous.**~~ Done October 13 in the CultRemix Chrome profile instead ([shopify-printful.md](../setup/shopify-printful.md)). Still Jon's: **Complete setup** on Shopify Payments (identity, bank, tax ID), approve the store policies (Shopify already has the same words), then the test-mode order and one real order. CR 102-001's print file was refused for a faint haze: open its page, **Prepare for print**, **Remove background**, then approve it again in Admin, For sale.
 5. ~~**Print-size art on.**~~ Done October 12 at night: the switch is on, publishing upscales each design (Topaz, about 8¢), and all 12 published designs have their print-size copy.
 6. **Gateway credit.** $6.60 at 1:30 a.m. on October 13, after the launch set and the night's photo and upscale tests. Admin, Overview shows it, and it's under the $10 alert line. Judges' designs, notes, and model photos are paid from it, about 13¢ a batch, so add about $50 before judging.
 7. ~~**MON.**~~ Done October 13: production's relayer received 15.77 MON, and the mainnet registry went live (see Done overnight). Dev's testnet relayer still has none, so dev has no registry; `bun run test:chain:anvil` runs the real contract and writer end to end instead.
 8. **Backups in Jon's password manager:** production's relayer key (`MONAD_RELAYER_PRIVATE_KEY_PROD`) and the managed-wallet secret (`MANAGED_WALLET_SECRET_PROD`), both in `~/.config/cultremix/chain.env` on mighteous.
 9. **The hackathon pieces.**
    - Make the repo public. Checked October 11: none of the 404 commits holds a secret (the known keys, and the shapes of OpenAI, Cloudflare, Shopify, Circle, fal, Resend, Gateway, and private keys). Your Gmail address is gone from the current docs but stays in two September 29 commits; rewriting history would change every later commit hash the build log cites, so leave it unless that matters to you. The ChatGPT archive in `docs/reference/` has no memories or custom instructions (the share link strips them). There's no LICENSE file, so the code stays all rights reserved unless you add one.
-   - Approve the store policies at /policies, then paste them into Shopify.
+   - Approve the store policies at /policies; Shopify already has the same words, and the Builder drops the Draft label once you say they're good.
    - Check the submission form against [submission.md](submission.md#event-requirements), which lists its fields as of October 12, with drafts of the prior-work and AI tools disclosures to confirm and paste.
    - Invite the first creators.
    - Once production is deployed, publish 8 to 10 designs there and a few remixes of them (variations and a fork), so judges land on a full feed, Trending, and family trees. [launch-set.md](launch-set.md) has requests that worked on dev, and `bun run launch:batches -- --prod` starts all nine originals in your studio at once, about $2 and half an hour in all.

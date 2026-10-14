@@ -15,6 +15,8 @@ The store is `ksbu5d-ax.myshopify.com`, on the Basic plan ($1 a month until Janu
 - **Headless sales channel:** installed, with a storefront named "Cult Remix Headless". Its private Storefront token is `SHOPIFY_STOREFRONT_PRIVATE_TOKEN`. Checked: it creates a cart. The token's public counterpart isn't used.
 - **Shipping:** the General profile's one zone (United States) now has a single rate, **Standard, $5.95 flat**, 5 to 8 business days, with the note "Printed to order; usually arrives in 5 to 9 business days". Shopify's starter rates are gone: Express at $15 and free shipping over $70.
 - **Webhooks**, subscribed by Connect Shopify (below): orders paid, orders cancelled, refunds created, and disputes created and updated, all to `https://savory-tiger-504.convex.site/webhooks/shopify`.
+- **Checkout branding** (Settings, Checkout, **Customize**, Settings tab), October 13 evening: the CultRemix logo ([checkout-logo.png](checkout-logo.png), the icon and wordmark from the packing-slip logo without the tagline) at 200 px, black accent and buttons, and Inter for headings and body, the site's typeface. Shopify noted that the store's checkout configuration is part of a paused rollout; the changes saved and show in the preview.
+- **Policies** (Settings, Policies): Shopify keeps one slot per policy. Return and refund, Privacy, Terms of service, and Shipping hold the same words as cultremix.com/policies (Privacy replaced Shopify's automated policy), so checkout's footer links match the site. Contact information and Legal notice stay empty: the first asks for a business address and phone, which can wait for the LLC. When the site's wording changes, paste it into the matching slot again.
 
 ## Printful
 
@@ -29,14 +31,15 @@ The store is `ksbu5d-ax.myshopify.com`, on the Basic plan ($1 a month until Janu
 
 - **Environment:** production's Convex has `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `PRINTFUL_API_TOKEN`, `PRINTFUL_STORE_ID`, and `PRINTFUL_AUTO_CONFIRM=true`; the `cultremix-prod` Worker has the secret `SHOPIFY_STOREFRONT_PRIVATE_TOKEN` and the var `SHOPIFY_SHOP_DOMAIN` (`wrangler.jsonc`). All set without printing a value.
 - **Connected:** Connect Printful and Connect Shopify ran as the owner (the same functions as Admin, For sale). Shopify reported the Headless channel present.
-- **The shirt:** the Bella+Canvas 3001 ("Staple T-Shirt", Printful product 71) is the default product: **$24, $26 for 2XL**, a back print $6 more, a 12 × 16 in print area front and back (read from Printful), in White, Black, Natural, Athletic Heather, Navy, and Maroon. Printful charges $11.92 ($13.92 for 2XL) plus shipping.
-- **Shittles (CR 107-001)** was published on the built-in Comfort Colors 1717, which production doesn't offer, so it moved to the 3001 with its placement unchanged. It sells in White; its other color, Ivory, isn't a 3001 color (Natural is the closest).
+- **The shirt:** the Bella+Canvas 3001 ("Staple T-Shirt", Printful product 71) is the default product: **$24, $26 for 2XL**, a back print $6 more, a 12 × 16 in print area front and back (read from Printful). Printful charges $11.92 ($13.92 for 2XL) plus shipping.
+- **Its colors:** Printful lists 84 for the 3001. Twenty are on offer since the evening of October 13 (they were six): White, Black, Natural, Soft Cream, Heather Dust, Athletic Heather, Dark Grey Heather, Navy, True Royal, Steel Blue, Baby Blue, Red, Maroon, Pink, Forest, Military Green, Sage, Mustard, Autumn, and Lilac. Each comes in S to 2XL. A creator picks up to 20 when publishing (20 colors in 5 sizes is 100 Shopify variants); new designs start on the color nearest their background plus Natural, Black, Navy, and Heather Dust. Change the list in Admin, Products.
+- **Designs published before that** got five colors each from `merch:backfillOfferedColors`: the colors they had, with a color the 3001 doesn't come in swapped for its nearest, then distinct colors near the design's own background, so the art keeps its contrast (light designs got light shirts, dark designs dark ones). Shittles (CR 107-001), first published on the Comfort Colors 1717 in Ivory and White, now sells in Heather Dust, White, Baby Blue, Sage, and Pink. Approving each design again put the colors on its Shopify product.
 - **On sale:** all 12 published designs are approved. Each gets its print file, then a Shopify product that stays a draft until Checkout is on. Pause any of them in Admin, For sale.
 
 ## Still Jon's
 
 1. **Finish Shopify Payments:** Settings, Payments, **Complete setup**. It asks for identity, a bank account, and a tax ID or SSN. Until it's done, checkout can't take a card.
-2. **Approve the store policies** at cultremix.com/policies (they say "Draft, under review"), then paste them into Shopify's Settings, Policies.
+2. **Approve the store policies** at cultremix.com/policies (they say "Draft, under review"). Shopify already has the same words. Once they're approved, the Builder turns off the Draft label (`POLICIES_DRAFT` in `src/lib/policies.ts`) and pastes any changes into Shopify.
 3. Then the order steps in the [launch checklist](../launch-checklist.md#orders-in-four-steps): Checkout on, one order in Shopify Payments' test mode, then one real order.
 
 Shopify's own online store still shows its password page. Buyers never see it, because they shop on cultremix.com and check out on Shopify's checkout; whether that checkout opens while the password is on gets checked with the test order.
