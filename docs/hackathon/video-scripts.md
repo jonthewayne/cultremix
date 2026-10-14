@@ -6,45 +6,40 @@ Two videos for the submission: a demo of 3 minutes or less, and a pitch of 2 min
 
 Rewritten October 13 at 5:40 p.m. from the opening of the product vision (docs/CultRemix_Product_Vision_Architecture_Build_Plan.md, "Product Thesis"). One or two takes, phone or webcam, facing a window. Read it like you mean it; cut lines rather than rush.
 
-> **Culture itself is a remix.**
+> **What if a t-shirt design wasn't the end? What if it was just the beginning?**
 >
-> Every artist, designer, musician, filmmaker, writer, brand, and movement builds on what came before it. We borrow ideas, reinterpret aesthetics, combine influences, change context, and make things our own. Culture moves forward because each generation remixes what it inherits.
+> What if you could remix it a thousand different ways? You never know if remix number three, number ten, or number one thousand is the one that goes viral. Maybe it's several of them.
 >
-> Picasso supposedly said, "Good artists copy, great artists steal." The point was never literal copying. Great work absorbs its influences so completely that they become raw material for something new. Designers are literally trained on the artists before them. When you remix something, you make it yours, and that's where new things come from.
->
-> AI changes the scale. Take a great typography shirt. Normally a designer makes one phrase in one look and sells that finished design. But what if that design isn't the end of the creative process? What if it's just the beginning? The same composition and lettering could carry thousands of phrases. One person loves the design but wants different words. Another changes the phrase and makes the version that goes viral.
+> **Culture itself is a remix.** Every artist, designer, musician, and movement builds on what came before it. We borrow ideas, reinterpret aesthetics, and make things our own. Picasso supposedly said, "Good artists copy, great artists steal." But it was never about stealing. Designers are trained on the artists before them, and when you remix something, you make it yours. That's where new things come from. AI lets us do it at light speed.
 >
 > I'm Jon Shumate, and this is **CultRemix**: a social creative-commerce platform where every work remembers where it came from, and everyone who adds to its value shares in what it earns.
 >
-> In the studio you drop in images, say what you want, and get four print-ready designs in one press. Publish one and it gets a permanent number, like CR 101-001, a photo of someone wearing it, and a shop page, printed to order with no inventory. Then anyone can remix it. Keep the art and change the words, and it's 101-002 in the same family. Change the whole look and it forks into a family of its own, still connected to where it came from.
+> Drop in images, say what you want, and get four print-ready designs in one press. Publish one and it gets a permanent number, like CR 101-001, a photo of someone wearing it, and a shop page, printed to order. Then anyone can remix it. Keep the art and change the words, and it's 101-002 in the same family. Change the whole look and it forks into a new family that still credits where it came from.
 >
-> **Monad is our shared memory.** Every design's fingerprint, creator, and family tree is recorded on Monad mainnet, live right now. So credit has layers: the original creator, every remixer, the creator a fork came from, a brand whose world it lives in, and the person whose link brought the buyer. When a shirt sells, the split follows public rules whose fingerprint is on Monad too. Nobody needs a wallet or MON to take part; we pay the gas.
+> **Monad is our shared memory.** Every design's fingerprint, creator, and family tree is recorded on Monad mainnet, live right now. So credit has layers: the original creator, every remixer, the creator a fork came from, a brand whose world it lives in, and the person whose link brought the buyer. When a shirt sells, the split follows public rules whose fingerprint is on Monad too. Nobody needs a wallet; we pay the gas.
 >
-> Don't just make something people like. Make something people want to make their own. "I love that" becomes "I want my version."
->
-> It's live at cultremix.com. **Remix culture. Get paid.**
+> "I love that" becomes "I want my version." It's live at cultremix.com. **Remix culture. Get paid.**
 
-Under two minutes at a natural pace (about 330 words). If it runs long, drop the typography-shirt paragraph's last two sentences first.
+About 1:55 at a natural pace (about 300 words). If it runs long, cut the Picasso sentence's last clause first.
 
-## Demo (about 1:35): the motion video, "Everything Is a Remix"
+## Demo (about 1:39): the motion video, "Everything Is a Remix"
 
-Built in Remotion from real screens of cultremix.com and motion graphics, cut to an up-tempo beat (about 124 BPM, so a bar is about 2 seconds). Text on screen carries the story; no voice-over. 1920 x 1080, 30 fps; a 9:16 cut follows. Type: bold Swiss, JetBrains Mono ExtraBold for CR numbers, black and white with the designs as the color.
+Built in Remotion (~/Projects/CultRemix-video) from real screens and designs on cultremix.com, cut to a 120 BPM beat (a beat is 15 frames). Text on screen carries the story; no voice-over. 1920 x 1080, 30 fps. Render: bunx remotion render src/index.ts Demo out/cultremix-demo.mp4.
 
-| # | Time | Scene | On screen | Text |
-| --- | --- | --- | --- | --- |
-| 1 | 0:00–0:06 | Cold open | Black; words slam in on the beat, then glitch | EVERYTHING / IS A / REMIX |
-| 2 | 0:06–0:14 | Picasso | Big type: GOOD ARTISTS COPY. Then GREAT ARTISTS STEAL; STEAL is struck out and REMIX stamps over it | — |
-| 3 | 0:14–0:22 | Culture | Published designs flip one per beat, faster and faster | Make it your own. At light speed. |
-| 4 | 0:22–0:26 | Logo | The CULTREMIX wordmark lands on the drop | Remix culture. Get paid. |
-| 5 | 0:26–0:38 | Create | Studio footage: images in, the request, Generate, four designs popping in on the beat | 4 DESIGNS. ONE PRESS. |
-| 6 | 0:38–0:46 | Number | Digits roll to CR 101-001, full screen | Every design gets a number. Forever. |
-| 7 | 0:46–0:54 | Real | The work page and model photo; the design on shirt colors, one per beat | Worn. Printed to order. |
-| 8 | 0:54–1:06 | Remix | Words change (FAR OUT to STAY WEIRD); 101-001 becomes 101-002; the family tree grows; a fork branches off | KEEP THE ART. CHANGE THE WORDS. / Fork the look. Start a family. |
-| 9 | 1:06–1:18 | Everyone gets credit | The tree's nodes light up with their roles: original creator, remixer, upstream (fork), brand, affiliate; the 15% creator pool splits, plus affiliate and brand shares | EVERYONE WHO BUILDS IT GETS CREDIT. |
-| 10 | 1:18–1:28 | Monad | A fingerprint scrolls; Registered on Monad; the registry address; Verify it yourself turns green; /onchain footage | RECORDED ON MONAD. Every design. Every family. Verifiable. |
-| 11 | 1:28–1:35 | Outro | Logo, cultremix.com, Built on Monad | Remix culture. Get paid. |
-
-Footage comes from bun run clips (home, work page, family tree, /onchain, how it works) and Jon's studio recording; stills from the published designs. The registry: 0x9bc9f1E1d076563130b4109DD6AfFd8708CeDBE0 on Monad mainnet.
+| # | Time | Scene | On screen |
+| --- | --- | --- | --- |
+| 1 | 0:00–0:08 | What if | WHAT IF A T-SHIRT DESIGN WASN'T THE END? / WHAT IF IT WAS JUST THE BEGINNING? |
+| 2 | 0:08–0:16 | A thousand remixes | Published designs flip faster and faster; a counter runs #1, #3, #10, #100, #1,000: "Remix it a thousand ways. Which one goes viral? Maybe all of them." |
+| 3 | 0:16–0:23 | Picasso | GOOD ARTISTS COPY. GREAT ARTISTS STEAL. (struck out) REMIX. "When you remix something, you make it yours." |
+| 4 | 0:23–0:26 | Thesis | EVERYTHING IS A REMIX |
+| 5 | 0:26–0:30 | Logo on the drop | CULTREMIX, Remix culture. Get paid. |
+| 6 | 0:30–0:42 | Create | The studio: two images, a request, Generate, four designs pop in: 4 DESIGNS. ONE PRESS. |
+| 7 | 0:42–0:50 | Number | CR 101-001 rolls in: Every design gets a number. Forever. |
+| 8 | 0:50–0:58 | Real | Model photos, one per beat: Worn. Printed to order. Then the live feed: Live at cultremix.com |
+| 9 | 0:58–1:10 | Remix | The 102 family grows: Keep the art. Change the words. A fork branches off: Fork the look. Start a family. |
+| 10 | 1:10–1:22 | Credit | Original creator, remixer, upstream creator, brand, affiliate; the split bar (creator pool 15%, affiliate 5%, brand 10%); "You earn" |
+| 11 | 1:22–1:32 | Monad | CR 101-001's real fingerprint, the registry address, two green checks, then /onchain on the live site |
+| 12 | 1:32–1:39 | Outro | CULTREMIX, cultremix.com, BUILT ON MONAD |
 
 ### The older, narrated demo (fallback)
 
