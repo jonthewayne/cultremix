@@ -10,6 +10,8 @@ The Monad hackathon submission is in. Judging runs October 14 to 27, and judges 
 
 There is one copy of the code: this folder (`~/Projects/CultRemix`), with no clones or worktrees (Jon, October 12). The CultRemix Builder thread builds, commits to `dev`, pushes, and deploys production, all from this folder, in the order in `docs/deployment-cloudflare.md`. Production's settings (`wrangler.jsonc`'s `env.production` block and `.env.production`, non-secret values) are committed here like everything else. Pull with `--rebase` before pushing. Secrets live only in `~/.config/cultremix/*.env` and deployment env; never commit or print them.
 
+**Production is frozen for judging** (Jon, October 13, 2026, after the hackathon submission; judging runs October 14 to 27). Don't deploy production or change it in any other way: no Convex or Worker deploys, migrations, data scripts, switches, or environment changes on `--prod`, and no changes to its Shopify, Printful, Cloudflare, or Monad setup. Build, test, and deploy on dev only, and commit to `dev` as usual. Read-only checks of production are fine. Jon lifts the freeze.
+
 ## Plans And Docs
 
 - Save implementation plans in `docs/plans/`.
