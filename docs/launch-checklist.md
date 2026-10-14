@@ -64,8 +64,8 @@ While judges use the site, [Judging days](hackathon/judging-runbook.md) says wha
 
 ### What Jon does first
 
-- [ ] Decide: the launch shirts and prices, $5.95 flat US shipping, and the 15% creator pool.
-- [ ] Sign up: Shopify Basic with Shopify Payments (as an individual for now; business details can change later), Printful billing, and Circle with a live key.
+- [x] Decide: the launch shirts and prices, $5.95 flat US shipping, and the 15% creator pool. Done October 13: the Bella+Canvas 3001 at $24 ($26 for 2XL), $5.95 shipping, creators' 15%, plus 5% for affiliates and 10% for brands (economics v2).
+- [x] Sign up: Shopify Basic with Shopify Payments (as an individual for now; business details can change later), Printful billing, and Circle with a live key. Shopify (Basic) and Printful billing done October 13; Shopify Payments' **Complete setup** is still Jon's. Circle is deferred.
 - [ ] About 2 MON for production's relayer, and a backup of its key in the password manager. At mainnet's 102 gwei (October 12) the deploy burns about 0.2 MON (the script wants 0.47 on hand), each design's record about 0.021 MON, and a Back about 0.011, so 2 MON covers the deploy and about 85 records. At about 3¢ a MON (October 12), $5 buys about 165 MON.
 - [ ] Approve the store policies at /policies (they say "Draft, under review" until then), and paste the same text into Shopify's Settings, Policies.
 - [ ] Credit on the CultRemix Gateway account for the judging days: about $50. Admin, Overview shows what's left (Gateway credit); every design, note, and model photo is paid from it, about 13¢ a batch, and a judge using all 40 credits spends about $2.60.
@@ -73,8 +73,8 @@ While judges use the site, [Judging days](hackathon/judging-runbook.md) says wha
 ### Deploy (Ops)
 
 - [ ] Follow the latest Ops message: pull, install, set production's env, back up production, build, `bunx convex deploy` and `wrangler deploy` back to back, then the seeds and backfills in one command (`bun run deploy:migrate -- --prod`).
-- [ ] Production's env for the shop: the live store's `SHOPIFY_*` values, Printful's live `PRINTFUL_API_TOKEN` and `PRINTFUL_STORE_ID`, and `PRINTFUL_AUTO_CONFIRM=true`. The live store's app has the same scopes as dev's, and its privacy webhooks point at `https://savory-tiger-504.convex.site/webhooks/shopify`.
-- [ ] On production's Admin, For sale: **Connect Printful** and **Connect Shopify**. In Admin, Products: **Check with Printful** on each product.
+- [x] Production's env for the shop: the live store's `SHOPIFY_*` values, Printful's live `PRINTFUL_API_TOKEN` and `PRINTFUL_STORE_ID`, and `PRINTFUL_AUTO_CONFIRM=true`. The live store's app has the same scopes as dev's, and its privacy webhooks point at `https://savory-tiger-504.convex.site/webhooks/shopify`. Done October 13 ([shopify-printful.md](setup/shopify-printful.md)).
+- [x] On production's Admin, For sale: **Connect Printful** and **Connect Shopify**. In Admin, Products: **Check with Printful** on each product. Done October 13 from the command line as the owner; the 3001 is the one product.
 
 ### Monad mainnet
 
