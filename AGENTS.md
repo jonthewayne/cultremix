@@ -2,6 +2,10 @@
 
 CultRemix, built from starter `4b5d609`. Today's plan: `docs/plans/2026-09-29-sprint-4pm.md`.
 
+## Production freeze (from 2026-10-13, 9 p.m. Pacific)
+
+The Monad hackathon submission is in. Judging runs October 14 to 27, and judges use cultremix.com. **Do not deploy anything to production** (no `convex` --prod deploys, no `deploy:prod`, no production env changes, no registry admin transactions) until Jon lifts this freeze in writing. Production runs `4e90c3b`, tagged `hackathon-submission`. Keep building on `dev` and the dev deployment. If production has a breaking bug, stop and ask Jon before touching it.
+
 ## Git
 
 There is one copy of the code: this folder (`~/Projects/CultRemix`), with no clones or worktrees (Jon, October 12). The CultRemix Builder thread builds, commits to `dev`, pushes, and deploys production, all from this folder, in the order in `docs/deployment-cloudflare.md`. Production's settings (`wrangler.jsonc`'s `env.production` block and `.env.production`, non-secret values) are committed here like everything else. Pull with `--rebase` before pushing. Secrets live only in `~/.config/cultremix/*.env` and deployment env; never commit or print them.
