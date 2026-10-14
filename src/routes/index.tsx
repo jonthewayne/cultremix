@@ -19,17 +19,17 @@ import { prefetchFirstPage, usePagedQuery } from "~/hooks/use-paged-query";
 import { remixOfLabel } from "~/lib/familyTree";
 import { cn } from "~/lib/utils";
 
-type FeedTab = "latest" | "trending" | "following";
+type FeedTab = "featured" | "latest" | "trending" | "following";
 const PAGE_SIZE = 6;
-const feeds = { latest: api.feed.latest, trending: api.feed.trending, following: api.feed.following };
+const feeds = { featured: api.feed.featured, latest: api.feed.latest, trending: api.feed.trending, following: api.feed.following };
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): { tab?: "trending" | "following" } =>
-    search.tab === "following" || search.tab === "trending" ? { tab: search.tab } : {},
+  validateSearch: (search: Record<string, unknown>): { tab?: "latest" | "trending" | "following" } =>
+    search.tab === "following" || search.tab === "trending" || search.tab === "latest" ? { tab: search.tab } : {},
   loaderDeps: ({ search }) => ({ tab: search.tab }),
   loader: ({ context, deps }) =>
     Promise.all([
-      prefetchFirstPage(context, feeds[deps.tab ?? "latest"], {}, PAGE_SIZE),
+      prefetchFirstPage(context, feeds[deps.tab ?? "featured"], {}, PAGE_SIZE),
       prefetchFirstPage(context, api.social.activeCreators, {}, ACTIVE_CREATORS_PAGE_SIZE),
     ]).then(() => undefined),
   component: FeedPage,
@@ -38,9 +38,14 @@ export const Route = createFileRoute("/")({
 function FeedPage() {
   const { tab: requested } = Route.useSearch();
   const { signedIn } = useMemberAction();
-  // Following is for members; signed out, it falls back to Latest.
+  // The homepage opens on Featured, the designs an admin picked. Following is for members; signed
+  // out, it falls back to Featured.
   const tab: FeedTab =
-    requested === "trending" ? "trending" : requested === "following" && signedIn !== false ? "following" : "latest";
+    requested === "trending" || requested === "latest"
+      ? requested
+      : requested === "following" && signedIn !== false
+        ? "following"
+        : "featured";
   return (
     <div className="min-h-svh bg-white text-black">
       <SiteHeader />
@@ -69,7 +74,15 @@ function FeedPage() {
         <ActiveCreators />
         <section className="mt-20">
           <FeedTabs tab={tab} signedIn={signedIn === true} />
-          {tab === "following" ? <FollowingFeed /> : tab === "trending" ? <TrendingFeed /> : <LatestFeed />}
+          {tab === "following" ? (
+            <FollowingFeed />
+          ) : tab === "trending" ? (
+            <TrendingFeed />
+          ) : tab === "latest" ? (
+            <LatestFeed />
+          ) : (
+            <FeaturedFeed />
+          )}
         </section>
       </main>
       <SiteFooter />
@@ -79,6 +92,7 @@ function FeedPage() {
 
 function FeedTabs({ tab, signedIn }: { tab: FeedTab; signedIn: boolean }) {
   const tabs: Array<{ id: FeedTab; label: string }> = [
+    { id: "featured", label: "Featured" },
     { id: "latest", label: "Latest" },
     { id: "trending", label: "Trending" },
     ...(signedIn ? [{ id: "following" as const, label: "Following" }] : []),
@@ -89,7 +103,7 @@ function FeedTabs({ tab, signedIn }: { tab: FeedTab; signedIn: boolean }) {
         <Link
           key={id}
           to="/"
-          search={id === "latest" ? {} : { tab: id }}
+          search={id === "featured" ? {} : { tab: id }}
           resetScroll={false}
           aria-current={tab === id ? "page" : undefined}
           className={cn(
@@ -101,6 +115,19 @@ function FeedTabs({ tab, signedIn }: { tab: FeedTab; signedIn: boolean }) {
         </Link>
       ))}
     </nav>
+  );
+}
+
+// The designs an admin put on the homepage (convex/feed.ts featured).
+function FeaturedFeed() {
+  const { items, status, loadMore } = usePagedQuery(api.feed.featured, {}, PAGE_SIZE);
+  return (
+    <FeedList items={items} status={status} loadMore={loadMore}>
+      <p className="max-w-xl text-2xl font-semibold text-neutral-500">Nothing featured yet.</p>
+      <Link to="/" search={{ tab: "latest" }} resetScroll={false} className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
+        See the latest
+      </Link>
+    </FeedList>
   );
 }
 
@@ -124,7 +151,7 @@ function TrendingFeed() {
       <p className="max-w-xl text-2xl font-semibold text-neutral-500">
         Nothing trending this week yet. Heart or remix something you love.
       </p>
-      <Link to="/" search={{}} resetScroll={false} className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
+      <Link to="/" search={{ tab: "latest" }} resetScroll={false} className="mt-4 inline-block text-lg font-bold underline underline-offset-4">
         See the latest
       </Link>
     </FeedList>

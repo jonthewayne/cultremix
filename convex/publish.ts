@@ -15,7 +15,7 @@ import { recordPublishActivity, recordRemix } from "./lib/social";
 import { inheritOnPublish } from "./remixFields";
 import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
-import { activePalette } from "./merch";
+import { activePalette, colorLookup } from "./merch";
 import { chosenProducts, offeredShopProducts, retireKeptListings } from "./lib/shopProduct";
 import { followPublishPlacement } from "./lib/printSync";
 import { crNumber } from "./lib/shopify/productSync";
@@ -845,11 +845,13 @@ export const beginReshoot = internalMutation({
       await ctx.db.patch("shootPhotos", current._id, { state: "pending", reason: undefined });
     }
     const attempt = await reservePhoto(ctx, shootId, undefined, now);
+    // The shirt is the design's lead color, which can change after publishing.
+    const lead = work.offeredColors && work.offeredColors.length > 0 ? (await colorLookup(ctx)).get(work.offeredColors[0]) : undefined;
     return {
       attemptId: attempt === null || attempt === "resting" ? undefined : attempt,
       shootId,
       artKey: work.artKey,
-      backgroundColor: work.backgroundColor,
+      backgroundColor: lead?.hex ?? work.backgroundColor,
       garment: await photoGarment(ctx, work),
       look,
       crFamily: work.crFamily,

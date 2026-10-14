@@ -39,6 +39,8 @@ As of October 13, 2026, 6:30 p.m. Pacific. The Monad submission is due **Tuesday
 - **The 3001 in 20 colors** (it was six of Printful's 84). A design can be sold in up to 20, and the 11 designs published without colors, plus Shittles, got five each that suit their art; approving them again put the colors on their Shopify products.
 - **Terms** now say who owns a design (its creator; CultRemix gets a license while it's shared), what can be uploaded, and how lineage corrections work: a design found to be a copy, variation, or fork of another can have its lineage, credit, and future split corrected, with unpaid earnings held or adjusted. They still say "Draft" until Jon approves them.
 - **Shopify checkout** carries the CultRemix logo, black buttons and links, and Inter, and Shopify's Return and refund, Privacy, Terms of service, and Shipping policies hold the site's words ([shopify-printful.md](../setup/shopify-printful.md)).
+- **A curated homepage.** The homepage opens on **Featured**, the designs an admin puts there from a design's page (**Feature it on the homepage**, or take it off). A new design shows up in Latest and on its creator's profile, not on Featured, until it's picked. The 12 designs published before this were featured, in publish order. On any design's page the owner can also **Retake the model photo with this size and color** after changing its placement or colors under "Change what it comes on and where it sits".
+- **Colors to pick from:** [3001-colors.png](../setup/3001-colors.png) shows the 20 on sale and Printful's other 64 for the 3001, each with its size range.
 
 ## Waiting on Jon
 

@@ -224,3 +224,41 @@ describe("activity events", () => {
     ]);
   });
 });
+
+describe("Featured", () => {
+  it("opens the homepage on the designs an admin picked, most recently picked first; new designs stay in Latest", async () => {
+    const t = newTest();
+    const alice = await addMember(t, "alice");
+    const ownerId = await t.run((ctx) =>
+      ctx.db.insert("users", { authId: "test|owner", username: "owner", usernameLower: "owner", email: "owner@example.com", platformRole: "super_admin_owner" }),
+    );
+    const owner = t.withIdentity({ subject: "test|owner", issuer: "test" });
+    const first = await addWork(t, alice.userId, { publishedAt: 1000, title: "first" });
+    const second = await addWork(t, alice.userId, { publishedAt: 2000, title: "second" });
+    await addWork(t, alice.userId, { publishedAt: 3000, title: "third" });
+    const featuredTitles = async () => (await t.query(api.feed.featured, { paginationOpts: page(10) })).page.map((item) => item.title);
+
+    // Designs published before curation are featured once, in publish order.
+    expect(await t.mutation(internal.feed.featureEarlierDesigns, {})).toBe(3);
+    expect(await featuredTitles()).toEqual(["third", "second", "first"]);
+    expect(await t.mutation(internal.feed.featureEarlierDesigns, {})).toBe(0);
+
+    // A new design is in Latest, not Featured, until an admin features it; then it leads.
+    const fresh = await addWork(t, alice.userId, { publishedAt: 4000, title: "fresh" });
+    expect(await featuredTitles()).toEqual(["third", "second", "first"]);
+    expect((await t.query(api.feed.latest, { paginationOpts: page(10) })).page[0].title).toBe("fresh");
+    expect(await owner.query(api.feed.homeState, { workId: fresh })).toEqual({ featured: false });
+    await owner.mutation(api.feed.setFeatured, { workId: fresh, featured: true });
+    await owner.mutation(api.feed.setFeatured, { workId: second, featured: false });
+    expect(await featuredTitles()).toEqual(["fresh", "third", "first"]);
+    expect(await owner.query(api.feed.homeState, { workId: second })).toEqual({ featured: false });
+
+    // Members can't feature anything or see the control; a taken-down design leaves Featured.
+    await expect(alice.as.mutation(api.feed.setFeatured, { workId: second, featured: true })).rejects.toThrow();
+    expect(await alice.as.query(api.feed.homeState, { workId: first })).toBeNull();
+    await t.run((ctx) => ctx.db.patch("works", first, { status: "withdrawn" }));
+    expect(await featuredTitles()).toEqual(["fresh", "third"]);
+    expect(ownerId).toBeTruthy();
+  });
+});
+

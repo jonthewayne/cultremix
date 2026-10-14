@@ -24,6 +24,8 @@ import { PartChangesNote, RemixOffer, RemixableParts } from "~/components/cr/Rem
 import { SiteFooter } from "~/components/cr/SiteFooter";
 import { SiteHeader } from "~/components/cr/SiteHeader";
 import { TakeDown } from "~/components/cr/TakeDown";
+import { HomeFeature } from "~/components/cr/HomeFeature";
+import { PhotoRetake } from "~/components/cr/PhotoRetake";
 import { WorkPageSkeleton } from "~/components/cr/PageSkeletons";
 import { Backers } from "~/components/work/Backers";
 import { FollowButton } from "~/components/social/FollowButton";
@@ -242,6 +244,8 @@ function ShopPage() {
             <Backers workId={item.workId} cr={item.cr} />
             <PrintEntry cr={item.cr} />
             <PlacementEditor workId={item.workId} artUrl={item.artMediumUrl ?? item.artUrl} colors={data.colors} />
+            <PhotoRetake cr={item.cr} />
+            <HomeFeature workId={item.workId} />
             <TakeDown workId={item.workId} cr={item.cr} />
           </div>
         </section>

@@ -323,6 +323,9 @@ export const cultremixTables = {
     withdrawnAt: v.optional(v.number()),
     withdrawnBy: v.optional(v.id("users")),
     withdrawReason: v.optional(v.string()),
+    // When an admin put it on the homepage's Featured feed (convex/feed.ts setFeatured). Absent, it's
+    // in Latest, Trending, and its creator's profile, but not on the feed the homepage opens on.
+    featuredAt: v.optional(v.number()),
     // A kept design's creator asked to have it printed (keeps.requestPrint); an admin approves it
     // for its creator alone in Admin, For sale.
     printRequestedAt: v.optional(v.number()),
@@ -364,6 +367,8 @@ export const cultremixTables = {
     printSha256: v.optional(v.string()),
   })
     .index("by_status_publishedAt", ["status", "publishedAt"])
+    // The homepage's Featured feed: published designs an admin picked, most recently picked first.
+    .index("by_status_featuredAt", ["status", "featuredAt"])
     // Published designs with no Monad record queued yet (Admin, Monad: the count and its Queue button).
     .index("by_status_chainWrite", ["status", "chainWriteId"])
     .index("by_family_expression", ["crFamily", "crExpression"])

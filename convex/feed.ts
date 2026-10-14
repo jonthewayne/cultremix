@@ -1,7 +1,8 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
-import { query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
+import { adminAllows, requireAdmin } from "./lib/adminAccess";
 import { colorName } from "./lib/colors";
 import { garmentColor } from "./lib/garments";
 import { colorLookup } from "./merch";
@@ -163,6 +164,76 @@ export const latest = query({
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
+  },
+});
+
+// Featured: the published designs an admin put on the homepage, most recently featured first. The
+// homepage opens on it; a new design starts in Latest only.
+export const featured = query({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: feedPage,
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("works")
+      .withIndex("by_status_featuredAt", (q) => q.eq("status", "published").gt("featuredAt", 0))
+      .order("desc")
+      .paginate(boundedOpts(args.paginationOpts));
+    const urls = imageUrlReader(ctx);
+    return {
+      page: await Promise.all(result.page.map((work) => toFeedItem(ctx, work, urls))),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// On a work's page, for admins who manage: whether the design is on the homepage. Null for everyone
+// else, and for designs that aren't published.
+export const homeState = query({
+  args: { workId: v.id("works") },
+  returns: v.union(v.null(), v.object({ featured: v.boolean() })),
+  handler: async (ctx, args) => {
+    const viewer = await getViewerUser(ctx);
+    if (!viewer || !adminAllows(viewer.platformRole, "manage")) return null;
+    const work = await ctx.db.get("works", args.workId);
+    if (!work || work.status !== "published") return null;
+    return { featured: work.featuredAt !== undefined };
+  },
+});
+
+// Puts a published design on the homepage's Featured feed (at the top), or takes it off.
+export const setFeatured = mutation({
+  args: { workId: v.id("works"), featured: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, "manage");
+    const work = await ctx.db.get("works", args.workId);
+    if (!work || work.status !== "published") {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Only a published design can go on the homepage." });
+    }
+    await ctx.db.patch("works", work._id, { featuredAt: args.featured ? Date.now() : undefined });
+    return null;
+  },
+});
+
+// One-off for October 13, 2026, when the homepage became curated: features every design published
+// before then, in publish order, so the homepage keeps them until an admin takes any off.
+// bunx convex run --prod feed:featureEarlierDesigns
+export const featureEarlierDesigns = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const works = await ctx.db
+      .query("works")
+      .withIndex("by_status_publishedAt", (q) => q.eq("status", "published"))
+      .take(500);
+    let featured = 0;
+    for (const work of works) {
+      if (work.featuredAt !== undefined) continue;
+      await ctx.db.patch("works", work._id, { featuredAt: work.publishedAt ?? work._creationTime });
+      featured += 1;
+    }
+    return featured;
   },
 });
 

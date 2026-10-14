@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
-import { getViewerUser } from "./identity";
+import { getViewerUser, isOwner } from "./identity";
 import { DAILY_LIMIT, DAILY_LIMIT_MESSAGE, shootsLeftToday, startPhotoShoot } from "./lib/photoShoots";
 import { formatCr, parseCr } from "./lib/r2";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -84,5 +84,27 @@ export const retry = mutation({
     });
     if (photo) await ctx.db.patch("shootPhotos", photo._id, { state: "pending", reason: undefined });
     return { started: true };
+  },
+});
+
+// For the owner, on any published design: a new model photo with the design's current product,
+// size, place, and lead color (changed under "Change what it comes on and where it sits"). The
+// photo that's up stays until the new one is recorded; the owner's retakes don't count against
+// anyone's photo shoots for the day.
+export const retake = mutation({
+  args: { cr: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const viewer = await getViewerUser(ctx);
+    if (!viewer || !isOwner(viewer)) {
+      throw new ConvexError({ code: "FORBIDDEN", message: "Only the owner can retake a design's photo." });
+    }
+    const found = await photoOf(ctx, args.cr);
+    if (!found) throw new ConvexError({ code: "NOT_FOUND", message: "Design not found." });
+    await ctx.scheduler.runAfter(0, internal.imageGen.reshoot, {
+      cr: formatCr(found.work.crFamily, found.work.crExpression),
+      skipLimit: true,
+    });
+    return null;
   },
 });
