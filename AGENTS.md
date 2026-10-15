@@ -14,6 +14,7 @@ There is one copy of the code: this folder (`~/Projects/CultRemix`), with no clo
 
 ## Plans And Docs
 
+- Read [docs/decisions.md](docs/decisions.md) before changing economics, brand agreements, remixing, or lineage. It records the agreed direction and implementation gaps, including costs before sharing, private brand deals, the five-point creator minimum, and phrase attribution. It supersedes conflicting assumptions in older plans; an agreed decision is not evidence that code already implements it. Record future product and architecture decisions there.
 - Save implementation plans in `docs/plans/`.
 - Record starter-template changes and lessons in `docs/starter-improvements.md`.
 - Keep README and relevant docs updated when setup, env vars, deployment, auth, or testing behavior changes.

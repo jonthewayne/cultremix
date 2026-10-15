@@ -1,5 +1,7 @@
 # After judging: what's waiting on dev
 
+> **Economics direction updated October 15:** [Decisions](../decisions.md) supersedes this plan's price-based sharing and public brand-rate assumptions. Recover protected costs first, then share the remainder; the creator minimum is five percentage points of that remainder, taken from the brand's allocation. Individual brand agreements must remain confidential. These changes are not yet implemented. The v4 behavior and margin examples below describe the existing dev implementation, not the final approved economics. Review and implement those decisions before following this plan's economics release steps.
+
 Production is frozen while the Monad hackathon is judged, October 14 to 27, 2026 (AGENTS.md). Everything below is built and tested on the dev branch and the dev deployment (`vibrant-rook-798`, viewed at https://mighteous.tailb6e2ea.ts.net:3000 over the tailnet). None of it is on cultremix.com, and the public repo's `main` branch stays at the submitted commit (`4e90c3b`, tag `hackathon-submission`).
 
 ## Brand deals (economics v4)
@@ -25,6 +27,6 @@ On a design's page, its creator and the owner have **Change its shirt colors**: 
 ## When the freeze lifts
 
 1. Deploy from this folder in the usual order (`docs/deployment-cloudflare.md`; `.tmp/deploy-prod.sh` backs up production first).
-2. Register the new rules on Monad: `bunx convex run --prod --identity <owner> chainAdmin:registerEconomicConfig`, then check /admin/chain shows v4 confirmed.
-3. Paste the updated Terms (cultremix.com/policies/terms, "Earnings") into Shopify, Settings, Policies, Terms of service.
+2. After implementing and verifying the October 15 decisions, register the corresponding new rules on Monad: `bunx convex run --prod --identity <owner> chainAdmin:registerEconomicConfig`, then check /admin/chain shows the intended version confirmed. Registering v4 alone does not implement the revised economics.
+3. Update the Terms (cultremix.com/policies/terms, "Earnings") to match the implemented cost basis and confidentiality rules, then paste them into Shopify, Settings, Policies, Terms of service.
 4. Look over Admin, Brands and one design's **Change its shirt colors** on production.

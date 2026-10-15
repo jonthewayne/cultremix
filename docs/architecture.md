@@ -1,5 +1,7 @@
 # Architecture
 
+Agreed product and architecture constraints are recorded in [Decisions](decisions.md). Read that file alongside this description of the current runtime; it distinguishes accepted direction from implementation still pending.
+
 ## Runtime
 
 The frontend is a TanStack Start app built by Vite and deployed to Cloudflare Workers. TanStack Start server-renders the first request. After hydration, TanStack Router performs internal navigation without full page reloads.
