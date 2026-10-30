@@ -2,6 +2,10 @@
 
 This is the durable record of agreed product behavior and the architectural constraints it creates. Read it before changing economics, brand agreements, remixing, or lineage. Implementation plans belong in `docs/plans/`; this file records what they must deliver and why. Add dated decisions here, and explicitly supersede an entry when the direction changes.
 
+## 2026-10-29: Official description of CultRemix
+
+**Status: agreed.** Jon set the official wording for what CultRemix is and why it exists. It lives in [positioning.md](positioning.md). Use it for the site, pitches, applications, and bios, and cut shorter versions from it rather than writing new ones.
+
 ## 2026-10-15: Recover protected costs before sharing earnings
 
 **Status: agreed; implementation pending.** The current dev economics v4 still calculates shares from the discounted item price before costs. Its admin margin table can show a loss on expensive products. That is evidence of an unsafe deal or price, rather than permission to sell at a loss. This decision supersedes the price-based sharing assumptions in the October 14 after-judging plan.
