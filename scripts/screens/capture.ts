@@ -305,16 +305,16 @@ try {
       waitFor("Boolean(document.querySelector('[aria-label=\"Design viewer\"]'))", "the viewer");
       Bun.sleepSync(1200);
     }, { full: false });
-    screen(make, "publish-top", "Publishing: who it's for", "The publish sheet. First choice: share it with the world (a CR number, the feed, anyone can order or remix it) or keep it just for you.", () => {
+    screen(make, "publish-top", "Publishing: who it's for", "The publish sheet, with the design drawn on the shirt at its real size. First choice: share it with the world (a CR number, the feed, anyone can order or remix it) or keep it just for you. Then an optional title and a few words.", () => {
       js("[...document.querySelectorAll('[aria-label=\"Design viewer\"] button')].find((b) => b.textContent?.trim() === 'Publish')?.click(); true");
       waitText("Who it", 30_000);
       Bun.sleepSync(1200);
     }, { full: false, prepare: () => scrollDialog(0) });
-    screen(make, "publish-middle", "Publishing: products and placement", "Which products it comes on and where it sits: front or back, a size slider in inches, and the drawn garment with its real print area outlined.", () => {}, {
+    screen(make, "publish-middle", "Publishing: shirt colors", "The colors it sells in, each previewed with the design (contrast warnings mark faint ones), and which color leads: the shop page opens on it and the model photo is shot on it.", () => {}, {
       full: false,
       prepare: () => scrollDialog(0.45),
     });
-    screen(make, "publish-bottom", "Publishing: colors and title", "The shirt colors it sells in, with contrast warnings, and its title. The script stops here and publishes nothing.", () => {}, {
+    screen(make, "publish-bottom", "Publishing: products and placement", "Which products it comes on (here a tee and a hoodie; the hoodie only matches 2 of the picked colors) and where it sits: front or back, size in inches, and height. One placement fits every product. The script stops here and publishes nothing.", () => {}, {
       full: false,
       prepare: () => scrollDialog(1),
     });

@@ -128,6 +128,10 @@
 <script>
 (() => {
   const data = window.SCREENS || { screens: [] };
+  // Viewed over the tailnet, page links go to the dev server's tailnet address (same port).
+  if (data.base && /\.ts\.net$/.test(location.hostname)) {
+    data.base = data.base.replace(/^http:\/\/(localhost|127\.0\.0\.1)/, "https://" + location.hostname);
+  }
   const screens = data.screens;
   const $ = (id) => document.getElementById(id);
   let index = 0;
