@@ -31,6 +31,7 @@
     "test:e2e:publish": "bash tests/e2e/run-publish.sh",
     "test:a11y": "bash tests/e2e/run-a11y.sh",
     "test:image": "bun tests/image-e2e/run.ts",
+    "screens": "bun run scripts/screens/capture.ts",
     "test:chain:anvil": "vitest run --config vitest.chain-e2e.config.ts",
     "chain:deploy:testnet": "bun run scripts/chain/deploy-testnet.ts",
     "chain:deploy:mainnet": "bun run scripts/chain/deploy-testnet.ts --env prod",

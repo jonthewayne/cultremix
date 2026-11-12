@@ -21,7 +21,7 @@ Protected costs are non-negotiable. A brand cannot reduce them by adjusting its 
 
 The exact operating allowance, fee allocation across multi-item orders, and treatment of production-cost changes still need implementation choices. Do not treat the illustrative $14 below as a real catalog cost. Distinguish estimated costs shown before checkout from the cost basis saved for a sale. The admin display and backend earnings calculation must use the same rules, with costs and rounding auditable on the saved order. Preserve the terms and version of orders already sold; this decision does not retroactively recalculate their earnings.
 
-Percentages of the remainder pay different dollar amounts than the same percentages of retail price. Update the admin, brand and creator explanations, policies, versioned rules, and earnings calculation together. Recording v4 on Monad alone does not implement this decision. Choose and register the appropriate new rules version only after implementation and verification, and only after Jon lifts the production freeze.
+Percentages of the remainder pay different dollar amounts than the same percentages of retail price. Update the admin, brand and creator explanations, policies, versioned rules, and earnings calculation together. Recording v4 on Monad alone does not implement this decision. Choose and register the appropriate new rules version only after implementation and verification.
 
 ## 2026-10-15: A brand controls the creator portion of its allocation
 
@@ -65,4 +65,4 @@ Example: an independently created “Grow Slow” design does not owe the first 
 
 The entries above record decisions, not proof that the features are implemented. Before calling them complete, verify backend earnings and admin examples agree; brand creator-share changes respect the five-point floor and fixed allocation; affiliate rewards leave that allocation intact; public responses cannot reveal individual deals; and phrase matches alone cannot create ancestry. Exercise the unchanged-style character swap and full-restyle cases when checking variation/fork classification.
 
-Implementation context: [after-judging dev work](plans/2026-10-14-after-judging.md), [architecture](architecture.md), [onchain provenance ADR](adr/0001-onchain-provenance.md), and [testing](testing.md). **Production remains frozen until Jon explicitly lifts the freeze.**
+Implementation context: [after-judging dev work](plans/2026-10-14-after-judging.md), [architecture](architecture.md), [onchain provenance ADR](adr/0001-onchain-provenance.md), and [testing](testing.md). Jon lifted the judging freeze on November 11, 2026; these decisions still have to be implemented before the waiting economics work goes to production.

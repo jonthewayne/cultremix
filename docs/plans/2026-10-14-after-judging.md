@@ -2,7 +2,7 @@
 
 > **Economics direction updated October 15:** [Decisions](../decisions.md) supersedes this plan's price-based sharing and public brand-rate assumptions. Recover protected costs first, then share the remainder; the creator minimum is five percentage points of that remainder, taken from the brand's allocation. Individual brand agreements must remain confidential. These changes are not yet implemented. The v4 behavior and margin examples below describe the existing dev implementation, not the final approved economics. Review and implement those decisions before following this plan's economics release steps.
 
-Production is frozen while the Monad hackathon is judged, October 14 to 27, 2026 (AGENTS.md). Everything below is built and tested on the dev branch and the dev deployment (`vibrant-rook-798`, viewed at https://mighteous.tailb6e2ea.ts.net:3000 over the tailnet). None of it is on cultremix.com, and the public repo's `main` branch stays at the submitted commit (`4e90c3b`, tag `hackathon-submission`).
+Production was frozen while the Monad hackathon was judged, October 14 to 27, 2026; Jon lifted the freeze on November 11. Everything below is built and tested on the dev branch and the dev deployment (`vibrant-rook-798`, viewed at https://mighteous.tailb6e2ea.ts.net:3000 over the tailnet). None of it is on cultremix.com, and the public repo's `main` branch stays at the submitted commit (`4e90c3b`, tag `hackathon-submission`).
 
 ## Brand deals (economics v4)
 

@@ -2,15 +2,13 @@
 
 CultRemix, built from starter `4b5d609`. Today's plan: `docs/plans/2026-09-29-sprint-4pm.md`.
 
-## Production freeze (from 2026-10-13, 9 p.m. Pacific)
+## Production (judging freeze lifted 2026-11-11)
 
-The Monad hackathon submission is in. Judging runs October 14 to 27, and judges use cultremix.com. **Do not deploy anything to production** (no `convex` --prod deploys, no `deploy:prod`, no production env changes, no registry admin transactions) until Jon lifts this freeze in writing. Production runs `4e90c3b`, tagged `hackathon-submission`. Keep building on `dev` and the dev deployment. If production has a breaking bug, stop and ask Jon before touching it.
+Jon lifted the judging freeze in writing on November 11, 2026. Production can be deployed again from this folder, in the order in `docs/deployment-cloudflare.md`, after the usual checks pass on dev. Production ran `4e90c3b` (tag `hackathon-submission`) through judging. The economics work waiting on dev must follow `docs/decisions.md` before it reaches production: ship costs-first sharing and private brand deals together as one new rules version, and don't register v4 on Monad by itself. The priorities after the hackathon are in `docs/roadmap.md`.
 
 ## Git
 
 There is one copy of the code: this folder (`~/Projects/CultRemix`), with no clones or worktrees (Jon, October 12). The CultRemix Builder thread builds, commits to `dev`, pushes, and deploys production, all from this folder, in the order in `docs/deployment-cloudflare.md`. Production's settings (`wrangler.jsonc`'s `env.production` block and `.env.production`, non-secret values) are committed here like everything else. Pull with `--rebase` before pushing. Secrets live only in `~/.config/cultremix/*.env` and deployment env; never commit or print them.
-
-**Production is frozen for judging** (Jon, October 13, 2026, after the hackathon submission; judging runs October 14 to 27). Don't deploy production or change it in any other way: no Convex or Worker deploys, migrations, data scripts, switches, or environment changes on `--prod`, and no changes to its Shopify, Printful, Cloudflare, or Monad setup. Build, test, and deploy on dev only, and commit to `dev` as usual. Read-only checks of production are fine. Jon lifts the freeze.
 
 ## Plans And Docs
 

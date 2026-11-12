@@ -1,6 +1,6 @@
 # What's left for the hackathon
 
-**Submitted October 13, 2026, about 9 p.m. Pacific.** Production (4e90c3b) is frozen while judging runs, October 14 to 27: new work is built and tested on dev only (see AGENTS.md). Below is the state at submission.
+**Submitted October 13, 2026, about 9 p.m. Pacific.** Production (4e90c3b) was frozen while judging ran, October 14 to 27; Jon lifted the freeze on November 11. Below is the state at submission. What comes next is in [the roadmap](../roadmap.md).
 
 Built since, on dev only and waiting for the freeze to lift: brand deals that CultRemix sets and the brand splits with its creators (economics v4), and changing a published design's shirt colors. See [2026-10-14-after-judging.md](../plans/2026-10-14-after-judging.md). Shopify Payments is set up (accepting payments and receiving payouts, October 14); checkout on cultremix.com stays off until then.
 
