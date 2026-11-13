@@ -61,6 +61,21 @@ Suggested brand-page wording: “Your allocation: 25% of the amount remaining af
 
 Example: an independently created “Grow Slow” design does not owe the first CultRemix member to use those words. Opening that member's design and asking to keep the words while completely reimagining the artwork deliberately builds from that work and can publish as a fork.
 
+## 2026-11-12: Reserved shares for outside artists (proposed)
+
+**Status: proposed by Jon and the builder; not decided or built.** A creator sometimes builds a design on an outside artist's work: a piece found online, a sketch they love, a style that's clearly someone's. Jon wants CultRemix to set part of each sale aside for that artist before they've ever heard of CultRemix, held until they claim it, the way a label claims a song on YouTube, except reviewed by people.
+
+Proposed shape:
+
+- **Credit.** A design can name up to three outside artists as "Inspired by", each an *unclaimed artist* record: a name and links to where their work lives (portfolio, Instagram). The work page shows "Inspired by Jane Doe (unclaimed)".
+- **Who adds credit.** The creator can add it in the studio or while publishing, most naturally on the reference image they uploaded ("This is someone's art: credit them"). Admins can add or correct credit afterwards through the lineage-correction path. A credit is never added automatically from image matching; studio image notes might later *suggest* one.
+- **Where the money comes from.** Whoever adds the credit funds it. A creator's credit comes out of the creator pool, from that creator's own part, so family roots and upstream creators keep theirs. A credit added by CultRemix comes out of CultRemix's share, so a creator isn't penalized for our decision. Proposed size: one fifth of the creator pool, split evenly among the credited artists.
+- **Holding it.** Their earnings use the existing ledger's holds: recorded per sale and held, not paid, while the artist is unclaimed.
+- **Claiming.** A claim page per artist. The claimant proves they control the linked account or site (a code posted there, or an email from the site's domain), an admin approves, and they get an account with the held earnings, payable through creator payouts. A claimed artist can keep the credit, change how they're named, or ask for the designs to come down (the existing takedown path).
+- **Unclaimed money.** Policy for money that's never claimed (how long it's held and where it goes after) needs a lawyer's and accountant's answer before launch; it may count as unclaimed property.
+- **Rules and Monad.** This adds a role to the economics rules, so it ships as a new rules version, ideally the same one as costs-first sharing. Monad records the credit by a hashed artist ID, never the artist's private details.
+- **What it isn't.** A reserved share is goodwill and credit; it doesn't license the artist's work or make copying acceptable. The Terms should say so, and a claimed artist's takedown request outranks the reserve.
+
 ## Builder handoff
 
 The entries above record decisions, not proof that the features are implemented. Before calling them complete, verify backend earnings and admin examples agree; brand creator-share changes respect the five-point floor and fixed allocation; affiliate rewards leave that allocation intact; public responses cannot reveal individual deals; and phrase matches alone cannot create ancestry. Exercise the unchanged-style character swap and full-restyle cases when checking variation/fork classification.

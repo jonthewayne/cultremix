@@ -23,6 +23,8 @@ Most of the hoodie work already exists. A design can come on several products, e
 
 Recommendation: keep the 3001 tee, add one premium hoodie now, and consider a heavyweight tee later. Three products is enough choice without turning publishing into a catalog chore. Prices and colors below are Printful's public catalog, fetched November 11, 2026; every candidate stocks all its colors in S to 2XL in the US.
 
+Pictures of every candidate, with a real CultRemix design rendered on each garment by Printful's mockup generator in black, white, and a light color, are on the comparison page at https://mighteous.tailb6e2ea.ts.net:3021/products/ (tailnet only; built November 12 into `.tmp/screens/products/`). It covers six tees (3001, Comfort Colors 1717, Bella+Canvas 4810GD and 3010, AS Colour 5001, Lane Seven LS15000) and six hoodies (M2580, LS14001, Gildan 18500, SS4500, Bella+Canvas 4719, Comfort Colors 1567).
+
 ### Hoodie candidates
 
 | Hoodie | Printful cost (M / 2XL) | Colors | Sizes | Feel |
