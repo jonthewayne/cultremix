@@ -65,20 +65,43 @@ Example: an independently created “Grow Slow” design does not owe the first 
 
 **Status: decided by Jon and built on dev.** The remix boxes only change words the creator made remixable, but the request box can ask for anything, including the creator's kept words. CultRemix doesn't block that. A remix whose lettering no longer shows a kept word publishes only as a fork: a new family that still credits the original, where the remixer may take the design anywhere. Kept words are checked by reading the remix's lettering back beside the remix comparison; misspellings, restyled or rewrapped lettering, and added words still count as kept. A public variation waits for that reading when the original keeps words; a private remix doesn't. Details in [prompt protection](image-generation/prompt-protection.md).
 
-## 2026-11-12: Reserved shares for outside artists (proposed)
+## 2026-11-12: Credit and a reserved share for outside artists (updated 2026-11-16)
 
-**Status: proposed by Jon and the builder; not decided or built.** A creator sometimes builds a design on an outside artist's work: a piece found online, a sketch they love, a style that's clearly someone's. Jon wants CultRemix to set part of each sale aside for that artist before they've ever heard of CultRemix, held until they claim it, the way a label claims a song on YouTube, except reviewed by people.
+**Status: direction agreed by Jon; not built.** A creator sometimes builds a design on an outside artist's work or distinctive style. CultRemix can credit that artist and set part of each sale aside for them before they've heard of CultRemix, held until they claim it. The credit is goodwill. It doesn't mean the artist owns a style, and it doesn't make copying acceptable.
 
-Proposed shape:
+**Who credits an artist.**
 
-- **Credit.** A design can name up to three outside artists as "Inspired by", each an *unclaimed artist* record: a name and links to where their work lives (portfolio, Instagram). The work page shows "Inspired by Jane Doe (unclaimed)".
-- **Who adds credit.** The creator can add it in the studio or while publishing, most naturally on the reference image they uploaded ("This is someone's art: credit them"). Admins can add or correct credit afterwards through the lineage-correction path. A credit is never added automatically from image matching; studio image notes might later *suggest* one.
-- **Where the money comes from.** Whoever adds the credit funds it. A creator's credit comes out of the creator pool, from that creator's own part, so family roots and upstream creators keep theirs. A credit added by CultRemix comes out of CultRemix's share, so a creator isn't penalized for our decision. Proposed size: one fifth of the creator pool, split evenly among the credited artists.
-- **Holding it.** Their earnings use the existing ledger's holds: recorded per sale and held, not paid, while the artist is unclaimed.
-- **Claiming.** A claim page per artist. The claimant proves they control the linked account or site (a code posted there, or an email from the site's domain), an admin approves, and they get an account with the held earnings, payable through creator payouts. A claimed artist can keep the credit, change how they're named, or ask for the designs to come down (the existing takedown path).
-- **Unclaimed money.** Policy for money that's never claimed (how long it's held and where it goes after) needs a lawyer's and accountant's answer before launch; it may count as unclaimed property.
-- **Rules and Monad.** This adds a role to the economics rules, so it ships as a new rules version, ideally the same one as costs-first sharing. Monad records the credit by a hashed artist ID, never the artist's private details.
-- **What it isn't.** A reserved share is goodwill and credit; it doesn't license the artist's work or make copying acceptable. The Terms should say so, and a claimed artist's takedown request outranks the reserve.
+- **The creator, while publishing.** An optional question: "Is this inspired by a known artist with a distinctive style you'd like to credit?" They can name up to three artists, each with a name and a link to their work. Skipping it is fine.
+- **Staff, afterward.** When a design clearly comes from a particular artist, an admin can add or correct the credit through the lineage-correction path.
+- **Never automatically.** Studio image notes may later *suggest* a credit, but a person decides.
+
+The work page shows "Inspired by Jane Doe (unclaimed)." Remixes of that work inherit the credit, because they build from it.
+
+**Where the money comes from.** The credit always comes from the creator's share, whoever adds it. It reduces the part of the creator pool that belongs to the creator of the credited work; the family root's and upstream creators' parts stay whole. CultRemix's share and brand allocations don't change. Proposed size: one fifth of that creator's part, split evenly among up to three credited artists.
+
+Examples on $10 remaining after protected costs, with the standard 15% creator pool ($1.50):
+
+| Work | Without a credit | With one credited artist |
+| --- | --- | --- |
+| An original that credits an artist | creator $1.50 | creator $1.20, artist $0.30 |
+| A variation of that original (inherits the credit) | root $0.75, variation creator $0.75 | root $0.60, artist $0.15, variation creator $0.75 |
+| A variation whose own creator adds a credit | root $0.75, variation creator $0.75 | root $0.75, variation creator $0.60, artist $0.15 |
+
+With two or three artists, each artist gets an equal part of the same one fifth. These figures are examples. The final numbers ship in the same rules version as costs-first sharing.
+
+**Holding and claiming.**
+
+- **Holding.** Earnings go into the existing ledger and stay held while the artist is unclaimed.
+- **Claiming.** Each credited artist has a claim page showing their credited designs and the amount held. To claim, the artist proves they control the linked account or site, either by posting a code there or emailing from the site's domain. An admin approves the claim. After that, the artist gets an account and is paid through creator payouts. A claimed artist can change how they're named or decline the credit; if they decline, their share goes back to the creator.
+- **Unclaimed money.** A lawyer and an accountant need to decide how long unclaimed money is held and where it goes afterward before this launches, because it may count as unclaimed property.
+
+**When an artist objects.** A style can't be owned, and CultRemix doesn't take designs down just because an artist dislikes the influence. Staff make a judgment call:
+
+- **Inspired by the style:** the design stays up. The artist can keep the credit, rename it, or decline it.
+- **Too close to the artist's style or work:** staff suspend the design and ask its creator to remix it further until it's distinct. The creator's own design keeps its place in its family; the change shows in its history.
+- **A copy of a specific artwork, or a trademark:** that's a different question from style. A valid copyright or trademark notice goes through the existing takedown path, and staff follow the law.
+
+**Rules and Monad.** This adds an "artist" role to the economics rules, so it ships as a new rules version, ideally together with costs-first sharing. Monad records the credit under a hashed artist ID and never stores the artist's private details. The Terms should explain that a credit is recognition, not a license.
 
 ## Builder handoff
 
