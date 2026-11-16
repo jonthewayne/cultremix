@@ -11,6 +11,10 @@ export type RemixKind = "variation" | "fork";
 export type RemixRelation = {
   status: "words" | "none" | "pending" | "variation" | "fork" | "failed";
   reason?: string;
+  // It changed words the original's creator keeps: a fork only.
+  required?: boolean;
+  // The original keeps some words, so a variation waits for the comparison.
+  waits?: boolean;
 };
 
 // In the publish dialog, for a remix: join the parent's family or start a new one. A remix that
@@ -37,6 +41,20 @@ export function RemixKindChoice({
   const variationLabel = `A variation of ${parent}`;
   const forkLabel = "This changed the design itself: start a new family";
   const forkDetail = `It gets a new family number, and its page says Forked from ${parent}.`;
+
+  if (relation.required) {
+    return (
+      <div className="mt-6">
+        <p className="text-sm font-bold uppercase tracking-wider">How it relates</p>
+        <div className="mt-3 rounded-2xl border-2 border-black bg-neutral-100 p-4">
+          <p className="font-bold leading-snug">A fork of {parent}: it starts a new family</p>
+          <p className="mt-1 text-sm text-neutral-600">
+            {relation.reason ? `${relation.reason} ` : ""}As a fork it's yours to take anywhere. {forkDetail}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (relation.status === "words" || relation.status === "variation") {
     const why =
@@ -68,7 +86,12 @@ export function RemixKindChoice({
       suggested: relation.status === "fork",
       waiting: comparing,
     },
-    { kind: "variation", label: variationLabel, detail: joins },
+    {
+      kind: "variation",
+      label: variationLabel,
+      detail: comparing && relation.waits ? "Available once it's compared with the original." : joins,
+      waiting: comparing && relation.waits,
+    },
   ];
   return (
     <fieldset className="mt-6" disabled={disabled}>

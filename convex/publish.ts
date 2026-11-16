@@ -15,6 +15,7 @@ import { recordPublishActivity, recordRemix } from "./lib/social";
 import { inheritOnPublish } from "./remixFields";
 import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
+import { keptPieces } from "./lib/keptWords";
 import { activePalette, colorLookup } from "./merch";
 import { relistColors } from "./sales";
 import { chosenProducts, offeredShopProducts, retireKeptListings } from "./lib/shopProduct";
@@ -56,23 +57,58 @@ export const relationStatus = v.union(
   v.literal("failed"),
 );
 type RelationStatus = "words" | "none" | "pending" | "variation" | "fork" | "failed";
+// required: it changed words the original's creator keeps (convex/lib/keptWords.ts), so it can only
+// be a fork. waits: the original keeps some words, so a variation waits for the comparison, which
+// reads them back.
+type Relation = { status: RelationStatus; reason?: string; required?: boolean; waits?: boolean };
 
 // A pending comparison older than this is started again (its action may have died).
 const CHECK_STALE_MS = 2 * 60_000;
 // A remix design is compared at most this many times.
 const CHECK_ATTEMPTS = 3;
 
-function remixRelation(
-  generation: Doc<"generations">,
-  batch: Doc<"batches">,
-  parent: Doc<"works">,
-): { status: RelationStatus; reason?: string } {
+function remixRelation(generation: Doc<"generations">, batch: Doc<"batches">, parent: Doc<"works">): Relation {
   if (remixChangedOnlyWords(batch, parent.artKey)) return { status: "words" };
+  const waits = keptPieces(parent.remixFields).length > 0 || undefined;
   const check = generation.remixCheck;
-  if (!check) return { status: "none" };
-  if (check.status === "pending") return { status: "pending" };
+  if (!check) return { status: "none", waits };
+  if (check.status === "pending") return { status: "pending", waits };
   if (check.status === "failed") return { status: "failed" };
+  if (check.keptMissing && check.keptMissing.length > 0) {
+    const words = check.keptMissing.map((word) => `“${word}”`).join(", ");
+    return { status: "fork", required: true, reason: `It changes words its creator keeps as they are (${words}), so it publishes as a fork.` };
+  }
   return { status: check.verdict === "fork" ? "fork" : "variation", reason: check.reason };
+}
+
+const STILL_COMPARING = "Still comparing it with the original. Try again in a moment.";
+const FORK_REQUIRED = "This remix changes words its creator keeps as they are, so it publishes as a fork: a new family that credits the original.";
+
+// Refuses a public remix kind its comparison doesn't allow. A kept (private) remix may be either.
+function checkRemixKind(relation: Relation, kind: "variation" | "fork") {
+  if (kind === "fork") {
+    if (relation.status !== "fork" && relation.status !== "failed") {
+      throw new ConvexError({ code: "VARIATION_ONLY", message: FORK_REFUSED[relation.status] });
+    }
+    return;
+  }
+  if (relation.required) throw new ConvexError({ code: "FORK_REQUIRED", message: FORK_REQUIRED });
+  if (relation.waits && (relation.status === "none" || relation.status === "pending")) {
+    throw new ConvexError({ code: "STILL_COMPARING", message: STILL_COMPARING });
+  }
+}
+
+// Starts a remix design's comparison with its original, unless one is running or done.
+async function startRemixCheck(ctx: MutationCtx, generation: Doc<"generations">) {
+  const check = generation.remixCheck;
+  const now = Date.now();
+  if (check?.status === "done") return;
+  if (check?.status === "pending" && now - check.requestedAt < CHECK_STALE_MS) return;
+  if (check && check.attempts >= CHECK_ATTEMPTS) return;
+  await ctx.db.patch("generations", generation._id, {
+    remixCheck: { status: "pending", requestedAt: now, attempts: (check?.attempts ?? 0) + 1 },
+  });
+  await ctx.scheduler.runAfter(0, internal.remixCheck.compare, { generationId: generation._id });
 }
 
 const FORK_REFUSED: Record<Exclude<RelationStatus, "fork" | "failed">, string> = {
@@ -96,15 +132,7 @@ export const checkRemix = mutation({
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     if (!batch || !parent?.artKey || (parent.status !== "published" && parent.status !== "withdrawn")) return null;
     if (remixChangedOnlyWords(batch, parent.artKey)) return null;
-    const check = generation.remixCheck;
-    const now = Date.now();
-    if (check?.status === "done") return null;
-    if (check?.status === "pending" && now - check.requestedAt < CHECK_STALE_MS) return null;
-    if (check && check.attempts >= CHECK_ATTEMPTS) return null;
-    await ctx.db.patch("generations", generation._id, {
-      remixCheck: { status: "pending", requestedAt: now, attempts: (check?.attempts ?? 0) + 1 },
-    });
-    await ctx.scheduler.runAfter(0, internal.remixCheck.compare, { generationId: generation._id });
+    await startRemixCheck(ctx, generation);
     return null;
   },
 });
@@ -112,7 +140,7 @@ export const checkRemix = mutation({
 // For convex/remixCheck.ts: the parent's art and the design to compare.
 export const remixCheckJob = internalQuery({
   args: { generationId: v.id("generations") },
-  returns: v.union(v.null(), v.object({ parentKey: v.string(), designKey: v.string(), allowed: v.optional(v.string()) })),
+  returns: v.union(v.null(), v.object({ parentKey: v.string(), designKey: v.string(), allowed: v.optional(v.string()), kept: v.array(v.string()) })),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation?.fullKey || generation.remixCheck?.status !== "pending") return null;
@@ -122,7 +150,8 @@ export const remixCheckJob = internalQuery({
     // The parts the parent's creator made remixable, so changing them (five elves where there were
     // three) doesn't count toward a fork.
     const allowed = allowedChangesNote(parent.remixParts ?? []) || undefined;
-    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed };
+    // The words its creator keeps, which the comparison reads back from the remix.
+    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields) };
   },
 });
 
@@ -137,6 +166,8 @@ export const saveRemixCheck = internalMutation({
     layout: aspectValue,
     style: aspectValue,
     model: v.optional(v.string()),
+    // Kept words the remix no longer shows (convex/lib/keptWords.ts); absent when none were checked.
+    keptMissing: v.optional(v.array(v.string())),
     error: v.optional(v.string()),
   },
   returns: v.null(),
@@ -158,6 +189,7 @@ export const saveRemixCheck = internalMutation({
             layout: args.layout,
             style: args.style,
             model: args.model,
+            keptMissing: args.keptMissing,
           }
         : { status: "failed", requestedAt, attempts, finishedAt, error: (args.error ?? "The comparison failed.").slice(0, 200) },
     });
@@ -344,12 +376,7 @@ export const quick = mutation({
       throw new ConvexError({ code: "PARENT_UNAVAILABLE", message: "The design you remixed isn't published anymore." });
     }
     const keep = args.keep === "private";
-    if (parent && args.remixKind === "fork" && !keep) {
-      const relation = remixRelation(generation, batch, parent);
-      if (relation.status !== "fork" && relation.status !== "failed") {
-        throw new ConvexError({ code: "VARIATION_ONLY", message: FORK_REFUSED[relation.status] });
-      }
-    }
+    if (parent && !keep) checkRemixKind(remixRelation(generation, batch, parent), args.remixKind ?? "variation");
     let crFamily: number;
     let crExpression: number;
     let placement: ReturnType<typeof publishPlacement>;
@@ -418,13 +445,15 @@ export const shareKeep = mutation({
     }
     const generation = await ctx.db.get("generations", work.generationId);
     const batch = generation ? await ctx.db.get("batches", generation.batchId) : null;
-    if (parent && args.remixKind === "fork") {
-      const relation = generation && batch ? remixRelation(generation, batch, parent) : { status: "none" as const };
-      if (relation.status !== "fork" && relation.status !== "failed") {
-        throw new ConvexError({ code: "VARIATION_ONLY", message: FORK_REFUSED[relation.status] });
-      }
+    // A kept remix that changed words its creator keeps shares as a fork; the keep page doesn't ask.
+    let remixKind = args.remixKind ?? "variation";
+    if (parent) {
+      const relation: Relation = generation && batch ? remixRelation(generation, batch, parent) : { status: "none" };
+      if (!args.remixKind && relation.required) remixKind = "fork";
+      if (relation.waits && relation.status === "none" && generation?.fullKey) await startRemixCheck(ctx, generation);
+      checkRemixKind(relation, remixKind);
     }
-    const { placement, crFamily, crExpression } = await allocateNumber(ctx, parent, args.remixKind ?? "variation");
+    const { placement, crFamily, crExpression } = await allocateNumber(ctx, parent, remixKind);
     const startsFamily = placement.family === "new";
     await ctx.db.patch("works", work._id, {
       crFamily,
@@ -502,7 +531,7 @@ export const preview = query({
           summary: v.string(),
           // How it relates (remixRelation): the dialog offers a fork for "fork" (suggested) and
           // "failed" (the remixer chooses); otherwise it's a variation.
-          relation: v.object({ status: relationStatus, reason: v.optional(v.string()) }),
+          relation: v.object({ status: relationStatus, reason: v.optional(v.string()), required: v.optional(v.boolean()), waits: v.optional(v.boolean()) }),
           // What the parent comes on and where it sits, still on offer: where the remix starts.
           setup: v.object({ printPlacement: relativePlacementValidator, printProducts: printProductsValidator }),
         }),

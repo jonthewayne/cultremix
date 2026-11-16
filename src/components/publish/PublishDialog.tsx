@@ -172,7 +172,10 @@ export function PublishDialog({
   const isRemix = Boolean(preview?.remix);
   const relation = preview?.remix?.relation ?? { status: "words" as const };
   const forkOpen = relation.status === "fork" || relation.status === "failed";
-  const remixKind: RemixKind = forkOpen ? (pickedKind ?? (relation.status === "fork" ? "fork" : "variation")) : "variation";
+  const forkOnly = "required" in relation && relation.required === true;
+  const remixKind: RemixKind = forkOnly ? "fork" : forkOpen ? (pickedKind ?? (relation.status === "fork" ? "fork" : "variation")) : "variation";
+  // The original keeps some of its words, so a public remix waits until its lettering is read back.
+  const waiting = "waits" in relation && relation.waits === true && (relation.status === "none" || relation.status === "pending");
 
   // A remix that changed more than its words is compared with its original when the dialog opens
   // (convex/publish.ts checkRemix); the answer arrives through the preview.
@@ -191,7 +194,7 @@ export function PublishDialog({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (selected.length === 0 || paused || (offered && chosenProducts.length === 0)) return;
+    if (selected.length === 0 || paused || (offered && chosenProducts.length === 0) || (waiting && !keep)) return;
     setSaving(true);
     setError(null);
     try {
@@ -636,7 +639,7 @@ export function PublishDialog({
             )}
             <button
               type="submit"
-              disabled={saving || selected.length === 0 || paused || (Boolean(offered) && chosenProducts.length === 0)}
+              disabled={saving || selected.length === 0 || paused || (Boolean(offered) && chosenProducts.length === 0) || (waiting && !keep)}
               className="h-14 w-full rounded-2xl bg-black px-8 text-lg font-black text-white disabled:opacity-40 md:w-auto md:self-start"
             >
               {keep ? (saving ? "Keeping…" : "Keep it") : saving ? "Publishing…" : crPreview ? `Publish as CR ${crPreview}` : "Publish"}

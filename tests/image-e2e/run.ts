@@ -31,6 +31,9 @@ import { describePart, proposeParts } from "../../convex/lib/partsReader";
 import { readRoles } from "../../convex/lib/roleReader";
 import { spellingMisses, wordsToCheck } from "../../convex/lib/spelling";
 import { readDesignWords } from "../../convex/lib/wordReader";
+import { screenRequest } from "../../convex/lib/requestGuard";
+import { missingKeptWords } from "../../convex/lib/keptWords";
+import { LEAK_THRESHOLD, leakedWords, mightAskForPrompt, promptOnlyWords } from "../../convex/lib/promptLeak";
 import { caseBoard } from "./board";
 import { CASES, keepsParts } from "./cases";
 import { renderCatalog } from "./catalog";
@@ -38,7 +41,7 @@ import { fixture, fixturePath } from "./fixtures";
 import { checkImage, readWords, throttled, wordsMatch } from "./judge";
 import { PIN } from "./pin";
 import type { Answers } from "./judge";
-import type { Ask, Case, CompareCase, GenerateCase, KeepsCheck, Notes, NotesCase, PartsCase, PhotoCase, ReaderCase, SpellingCase, WordsCheck } from "./cases";
+import type { Ask, Case, CompareCase, GenerateCase, GuardCase, KeepsCheck, KeptCase, Notes, NotesCase, PartsCase, PhotoCase, ReaderCase, SpellingCase, WordsCheck } from "./cases";
 import type { SpellingMiss } from "../../convex/lib/spelling";
 import type { RemixPart } from "../../convex/lib/remixParts";
 import type { RemixField } from "../../convex/lib/remixFields";
@@ -361,6 +364,10 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
   // The request reader inside batchPrompt has a 10-second limit, so it waits its turn with the other calls.
   const prompt = await throttled(() => batchPrompt({ instruction: c.request, presets: [], attachments, styles, remixOfParent: Boolean(c.remix), wordChanges, partChanges }));
   writeFileSync(join(dir, "prompt.txt"), prompt.text);
+  // A design request the screen refused is a regression: the screen must never stop real requests.
+  if (prompt.refused && !c.unscreened) {
+    return { ...base, passed: false, checks, seconds: (Date.now() - started) / 1000, costCents: 0, error: "The request screen refused this design request." };
+  }
   const roles = `read as ${prompt.roles.join("/") || "no images"}${prompt.styleHair ? ", style hair" : ""}${prompt.read ? "" : " (phrases)"}`;
   if (ctx.args.dryRun) {
     return { ...base, passed: true, checks, seconds: (Date.now() - started) / 1000, costCents: 0, note: `dry run; ${roles}; ${prompt.text.length} characters` };
@@ -395,6 +402,37 @@ async function runGenerate(c: GenerateCase, ctx: Context): Promise<CaseResult> {
   const cut = designs.filter(Boolean).length;
   checks.push({ id: "cut", label: "four designs cut from one grid", passed: cut === 4, detail: `${cut}/4` });
   checks.push({ id: "transparent", label: "a transparent background", passed: clearShare >= 0.15, detail: `${Math.round(clearShare * 100)}% clear` });
+  // Production reads the lettering of a batch whose request might be after the prompt and drops a
+  // design that letters it (convex/lib/promptLeak.ts). On an ordinary request it must drop nothing;
+  // on guard-no-leak, every design that letters the prompt must be dropped.
+  if (mightAskForPrompt(c.request)) {
+    const only = promptOnlyWords(prompt.text, c.request);
+    const found = await Promise.all(
+      designs.map((design) =>
+        design
+          ? throttled(() => readDesignWords(design, PIN.wordReader))
+              .then((read) => {
+                cost += read.costCents ?? 0;
+                return leakedWords(only, read.words);
+              })
+              .catch((error) => {
+                noteFailure(ctx, error);
+                return null;
+              })
+          : Promise.resolve(null),
+      ),
+    );
+    const dropped = found.map((words) => Boolean(words && words.length >= LEAK_THRESHOLD));
+    const passed = c.leakCheck === "drops"
+      ? found.every((words, i) => words !== null && (dropped[i] || words.length <= 1))
+      : found.every((words, i) => words !== null && !dropped[i]);
+    checks.push({
+      id: "lettering",
+      label: c.leakCheck === "drops" ? "drops every design that letters the prompt" : "drops no design",
+      passed,
+      detail: found.map((words, i) => (words === null ? "unread" : `${dropped[i] ? "dropped" : "kept"} (${words.length}${words.length ? ": " + words.slice(0, 4).join(" ") : ""})`)).join("; "),
+    });
+  }
   const refs = await Promise.all((c.shows ?? []).map(async (shown) => ({ as: shown.as, bytes: await ctx.png(shown.fixture) })));
   const original = c.keeps ? await ctx.png(numbered[0]) : null;
   // Why a design went unchecked, for the report.
@@ -564,6 +602,64 @@ async function runReader(c: ReaderCase, ctx: Context): Promise<CaseResult> {
     seconds: (Date.now() - started) / 1000,
     costCents: 0,
     error: silent ? "The reader didn't answer every try." : undefined,
+  };
+}
+
+// The request screen, as convex/lib/batchPrompt.ts runs it. Every try must give the expected answer.
+async function runGuard(c: GuardCase, ctx: Context): Promise<CaseResult> {
+  const started = Date.now();
+  const base = { id: c.id, group: c.group, kind: c.kind, status: c.status ?? "supported", title: c.title } as const;
+  const trials = ctx.args.trials ?? 2;
+  const answers = await Promise.all(
+    Array.from({ length: trials }, async () => {
+      const read = await throttled(() => screenRequest(c.request));
+      return read ? (read.reveal ? "refused" : "allowed") : "no answer";
+    }),
+  );
+  const want = c.refuse ? "refused" : "allowed";
+  const matched = answers.filter((a) => a === want).length;
+  const silent = answers.includes("no answer");
+  return {
+    ...base,
+    passed: !silent && matched === trials,
+    checks: [{ id: "screen", label: want, passed: matched === trials, detail: `${matched}/${trials}: ${answers.join(", ")}` }],
+    seconds: (Date.now() - started) / 1000,
+    costCents: 0,
+    error: silent ? "The screen didn't answer every try." : undefined,
+  };
+}
+
+// Kept words, as convex/remixCheck.ts checks them: the remix's lettering read back, then the kept
+// words it no longer shows. Every reading must name exactly the case's missing words.
+async function runKept(c: KeptCase, ctx: Context): Promise<CaseResult> {
+  const started = Date.now();
+  const base = { id: c.id, group: c.group, kind: c.kind, status: c.status ?? "supported", title: c.title } as const;
+  const trials = ctx.args.trials ?? 2;
+  const design = await ctx.png(c.remix);
+  const reads = await Promise.all(
+    Array.from({ length: trials }, async (): Promise<{ words: Array<string>; missing: Array<string> } | { error: string }> => {
+      try {
+        const { words, costCents } = await throttled(() => readDesignWords(design, PIN.wordReader));
+        ctx.spent.cents += costCents ?? 0;
+        return { words, missing: missingKeptWords(c.kept, words) };
+      } catch (error) {
+        return { error: noteFailure(ctx, error) };
+      }
+    }),
+  );
+  const want = [...c.missing].sort().join(",");
+  const matched = reads.filter((r) => "missing" in r && [...r.missing].sort().join(",") === want).length;
+  const failed = reads.find((r): r is { error: string } => "error" in r);
+  const shown = reads
+    .map((r) => ("missing" in r ? `read ${r.words.join(" / ") || "nothing"}; missing ${r.missing.join(", ") || "none"}` : "failed"))
+    .join(" | ");
+  return {
+    ...base,
+    passed: !failed && matched === trials,
+    checks: [{ id: "kept", label: `missing: ${c.missing.join(", ") || "none"}`, passed: matched === trials, detail: `${matched}/${trials}: ${shown}` }],
+    seconds: (Date.now() - started) / 1000,
+    costCents: 0,
+    error: failed ? `The reading failed: ${failed.error.slice(0, 120)}` : undefined,
   };
 }
 
@@ -815,7 +911,11 @@ async function main() {
                   ? await runCompare(c, ctx)
                   : c.kind === "parts"
                     ? await runParts(c, ctx)
-                    : await runSpelling(c, ctx);
+                    : c.kind === "guard"
+                      ? await runGuard(c, ctx)
+                      : c.kind === "kept"
+                        ? await runKept(c, ctx)
+                        : await runSpelling(c, ctx);
       const mark = result.error ? "ERROR" : result.passed ? "PASS" : result.status === "known-limit" ? "LIMIT" : "FAIL";
       const detail = result.error ?? result.checks.filter((k) => !k.passed).map((k) => `${k.id} ${k.detail}`).join("; ");
       console.log(`${mark.padEnd(5)} ${c.id.padEnd(44)} ${detail}`);

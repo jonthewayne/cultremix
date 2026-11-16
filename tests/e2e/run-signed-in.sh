@@ -189,6 +189,8 @@ if [[ -n "$work_path" ]]; then
   wait_ready "main button"
   agent-browser find role button click --name "Change its shirt colors" >/dev/null
   wait_text "Pick the colors it sells in"
+  # The dialog fades in; checked mid-fade, its text reads as low contrast (November 15).
+  sleep 1
   a11y
   agent-browser screenshot body .tmp/screenshots/signed-in-colors.png >/dev/null
   agent-browser press Escape >/dev/null

@@ -274,6 +274,8 @@ export const cultremixTables = {
         layout: v.optional(v.union(v.literal("same"), v.literal("changed"))),
         style: v.optional(v.union(v.literal("same"), v.literal("changed"))),
         model: v.optional(v.string()),
+        // Kept words the remix no longer shows (convex/lib/keptWords.ts).
+        keptMissing: v.optional(v.array(v.string())),
         error: v.optional(v.string()),
       }),
     ),

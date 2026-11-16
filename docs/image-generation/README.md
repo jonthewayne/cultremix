@@ -190,6 +190,8 @@ Nothing the vision model writes about an image, and no prompt, reaches the brows
 - The style library from Style Of will follow the same rule: its style definitions live in Convex, public queries return a style's name, category, and preview images, and a member's pick reaches the server as an ID and a slider value. Keep the definitions out of this repository.
 - Whenever this repository is public (it was for the September 29 judging; it's private now), anyone can read the prompt templates in `convex/lib/prompts.ts`, this README, and the experiment scripts on GitHub. The notes for each image and the prompts built from them live only in the database.
 
+Requests can't get the prompt or the notes out, break the grid and the transparent background, or publish a remix that changed kept words as a variation. See [Prompt protection](prompt-protection.md).
+
 ## Storage and sizes
 
 Every image is kept in up to four versions:

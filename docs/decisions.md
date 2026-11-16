@@ -61,6 +61,10 @@ Suggested brand-page wording: “Your allocation: 25% of the amount remaining af
 
 Example: an independently created “Grow Slow” design does not owe the first CultRemix member to use those words. Opening that member's design and asking to keep the words while completely reimagining the artwork deliberately builds from that work and can publish as a fork.
 
+## 2026-11-15: A remix that changes kept words becomes a fork
+
+**Status: decided by Jon and built on dev.** The remix boxes only change words the creator made remixable, but the request box can ask for anything, including the creator's kept words. CultRemix doesn't block that. A remix whose lettering no longer shows a kept word publishes only as a fork: a new family that still credits the original, where the remixer may take the design anywhere. Kept words are checked by reading the remix's lettering back beside the remix comparison; misspellings, restyled or rewrapped lettering, and added words still count as kept. A public variation waits for that reading when the original keeps words; a private remix doesn't. Details in [prompt protection](image-generation/prompt-protection.md).
+
 ## 2026-11-12: Reserved shares for outside artists (proposed)
 
 **Status: proposed by Jon and the builder; not decided or built.** A creator sometimes builds a design on an outside artist's work: a piece found online, a sketch they love, a style that's clearly someone's. Jon wants CultRemix to set part of each sale aside for that artist before they've ever heard of CultRemix, held until they claim it, the way a label claims a song on YouTube, except reviewed by people.

@@ -32,6 +32,12 @@ const GROUPS: Array<{ group: Group; title: string; about: string }> = [
     about:
       "The studio's Typo? chip: a finished design's lettering read back letter for letter and compared with the words its batch asked for, flagging an asked word drawn a letter or two off and leaving lettering spelled right alone.",
   },
+  {
+    group: "guard",
+    title: "Prompt protection",
+    about:
+      "The request screen (GPT-6 Luna) that refuses requests for the studio's own prompt or notes and lets every design request through, the prompt's closing rules on requests that try to break the format or print the prompt, and the kept-words check that makes a remix that changed words its creator keeps a fork.",
+  },
 ];
 
 const quote = (text: string) => (text ? `"${text}"` : "(nothing typed)");
@@ -109,6 +115,28 @@ export function renderCatalog(cases: Array<Case> = CASES) {
         out.push(`| ${c.title} | \`${c.original}\` | \`${c.remix}\` | ${c.expect} | ${c.since} |`);
       }
       out.push("");
+      continue;
+    }
+    if (group === "guard") {
+      out.push("| Case | Request | Expected | Since |", "|---|---|---|---|");
+      for (const c of list) {
+        if (c.kind !== "guard") continue;
+        out.push(`| ${c.title} | ${quote(c.request)} | ${c.refuse ? "refused" : "allowed"} | ${c.since} |`);
+      }
+      out.push("", "| Case | Remix | Kept words | Should be missing | Since |", "|---|---|---|---|---|");
+      for (const c of list) {
+        if (c.kind !== "kept") continue;
+        out.push(`| ${c.title} | \`${c.remix}\` | ${c.kept.join("; ")} | ${c.missing.length ? c.missing.join(", ") : "none"} | ${c.since} |`);
+      }
+      out.push("");
+      for (const c of list) {
+        if (c.kind !== "generate") continue;
+        out.push(`### \`${c.id}\`: ${c.title}${c.status === "known-limit" ? " (known limit)" : ""}`, "", c.supports, "");
+        for (const line of generateLines(c)) out.push(`- ${line}`);
+        if (c.unscreened) out.push("- Sent without the request screen");
+        if (c.leakCheck === "drops") out.push("- Checks: the lettering check drops every design that letters the prompt");
+        out.push(`- First tested ${c.since}`, "");
+      }
       continue;
     }
     for (const c of list) {

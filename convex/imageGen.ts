@@ -7,7 +7,10 @@ import { batchPrompt } from "./lib/batchPrompt";
 import { clearShare, keyOut } from "./lib/chromaKey";
 import { cutGrid } from "./lib/gridCut";
 import { gatewayImage, nanoBananaImage, recraftImage } from "./lib/imageCalls";
-import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY, isOutOfCreditError } from "./lib/imageErrors";
+import { GRID_EMPTY, GRID_MERGED, NO_IMAGE_REPLY, PROMPT_LETTERED, REQUEST_REFUSED, isOutOfCreditError } from "./lib/imageErrors";
+import { isLeak, mightAskForPrompt, promptOnlyWords } from "./lib/promptLeak";
+import { readDesignWords } from "./lib/wordReader";
+import { screenRequest } from "./lib/requestGuard";
 import { imageTypeOf, mimeOf } from "./lib/mime";
 import {
   DEFAULT_QUALITY,
@@ -398,7 +401,9 @@ export const runTile = internalAction({
         // prompt is read and built as for a grid batch, as one design.
         const one = job.model === NANO_BANANA_MODEL ? "nano-banana" : job.model === RECRAFT_MODEL ? "recraft" : "gpt";
         const blind = one === "recraft";
-        ({ text } = await batchPrompt({ ...job, layout: "single", blind }));
+        let refused: boolean;
+        ({ text, refused } = await batchPrompt({ ...job, layout: "single", blind }));
+        if (refused) throw new Error(REQUEST_REFUSED);
         const images = blind ? [] : await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
         imageCount = images.length;
         provider = "gateway";
@@ -425,6 +430,7 @@ export const runTile = internalAction({
           info = pngInfo(bytes);
         }
       } else {
+        if ((await screenRequest(job.instruction))?.reveal) throw new Error(REQUEST_REFUSED);
         text = studioPrompt({
           layout: "single",
           // Style words from the previous studio's buttons, on batches it started.
@@ -519,7 +525,8 @@ export const runBatch = internalAction({
       if (!job) throw new Error("The batch was removed.");
       // What the request wants from each numbered image (GPT-6 Luna, about 2.5 s) and the prompt
       // itself, built the way the image test suite builds it (convex/lib/batchPrompt.ts).
-      const { text, roles, read, styleJobs } = await batchPrompt(job);
+      const { text, roles, read, styleJobs, refused } = await batchPrompt(job);
+      if (refused) throw new Error(REQUEST_REFUSED);
       // Nano Banana can't make a transparent background: its grid is drawn on a key color that
       // chromaKey clears before the cut.
       const nano = job.engine === "nano-banana";
@@ -547,6 +554,18 @@ export const runBatch = internalAction({
       const cells = cutGrid(pixels);
       const cut = Date.now();
       const cpu1 = process.cpuUsage(cpu0);
+      // A request that might be after the prompt: each design's lettering is read before it's stored,
+      // and one that prints the prompt is dropped (convex/lib/promptLeak.ts). About 0.3 cents a design.
+      const promptOnly = mightAskForPrompt(job.instruction) ? promptOnlyWords(text, job.instruction) : null;
+      const lettersPrompt = async (png: Uint8Array) => {
+        if (!promptOnly) return false;
+        try {
+          return isLeak(promptOnly, (await readDesignWords(png)).words);
+        } catch (error) {
+          console.error("runBatch lettering check failed", error instanceof Error ? error.message : error);
+          return false;
+        }
+      };
       // Two designs at a time: four at once ran Convex's 512 MB Node runtime short of memory.
       const results: Array<DesignResult> = [];
       for (let i = 0; i < cells.length; i += 2) {
@@ -554,9 +573,14 @@ export const runBatch = internalAction({
           ...(await Promise.all(
             cells.slice(i, i + 2).map(async (cell): Promise<DesignResult> => {
               if (!cell.tile) return { index: cell.index, error: cell.reason === "merged" ? GRID_MERGED : GRID_EMPTY };
+              const png = await encodePng(cell.tile);
+              if (await lettersPrompt(png)) {
+                console.log("runBatch dropped a design that lettered the prompt", batchId, cell.index);
+                return { index: cell.index, error: PROMPT_LETTERED };
+              }
               const { key, sha256 } = await storeNew(
                 ctx,
-                await encodePng(cell.tile),
+                png,
                 "image/png",
                 () => designKey(place, cell.index + 1, randomCode()),
                 cell.tile,

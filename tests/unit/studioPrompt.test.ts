@@ -132,7 +132,8 @@ describe("studio prompt", () => {
     expect(prompt).not.toContain("TRASH ROYALTY");
     expect(prompt).not.toContain("inside an oval of mushrooms");
     expect(prompt).not.toContain("patterned dresses");
-    expect(prompt.split("\n\n").at(-1)).toMatch(/^Request \(this wins/u);
+    // The member's request comes last but for the closing rules (tests/unit/promptProtection.test.ts).
+    expect(prompt.split("\n\n").at(-2)).toMatch(/^Request \(this wins/u);
   });
 
   it("blends two styles by their sliders, and the smaller one has to show", () => {

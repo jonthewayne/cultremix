@@ -12,6 +12,12 @@ export const NO_IMAGE_REPLY = "The image service answered without an image:";
 export const GRID_MERGED = "Grid: two designs ran together.";
 export const GRID_EMPTY = "Grid: this quarter came back empty.";
 
+// The request asked for the studio's own prompt or notes (convex/lib/requestGuard.ts). Thrown before
+// the image call, so the batch costs nothing.
+export const REQUEST_REFUSED = "Request refused: it asks for the studio's own prompt or notes.";
+// A design that lettered the studio's own prompt (convex/lib/promptLeak.ts): dropped before it's stored.
+export const PROMPT_LETTERED = "Dropped: the design lettered the studio's own prompt.";
+
 // The gateway refused the call because the account's credit ran out.
 const OUT_OF_CREDIT = [/credit balance/i, /insufficient (?:funds|credits?|balance)/i, /\b402\b/, /payment required/i];
 
@@ -32,6 +38,8 @@ export function publicTileError(error: string | undefined) {
   if (error === "Timed out.") return "It took too long.";
   if (error === GRID_MERGED) return "This one ran into the design next to it.";
   if (error === GRID_EMPTY) return "This one came out empty.";
+  if (error === REQUEST_REFUSED) return "CultRemix keeps how it builds designs private. Describe the design you want and try again.";
+  if (error === PROMPT_LETTERED) return "This one tried to print CultRemix's private instructions, so we took it out.";
   if (error === "Generation is paused.") return "Generation is paused right now.";
   if (error.startsWith("Image unavailable") || error.startsWith("Image fetch failed")) {
     return "One of the images couldn't be loaded.";

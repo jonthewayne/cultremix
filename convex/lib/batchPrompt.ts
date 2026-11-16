@@ -1,6 +1,7 @@
 "use node";
 
 import { readRoles } from "./roleReader";
+import { screenRequest } from "./requestGuard";
 import { rolesFromWords, smallerStyles, studioPrompt, styleJobs, styleMixOf } from "./prompts";
 import { chooseStyleParts } from "./styleParts";
 import type { ImageRole, StyleJob } from "./prompts";
@@ -42,6 +43,9 @@ export async function batchPrompt(job: {
   styleHair: boolean;
   // What each style of a mix of two or more does, by attachment number (prompts.ts styleJobs).
   styleJobs: Array<{ attachment: number; job: StyleJob }>;
+  // The request asks for the studio's own prompt or notes (convex/lib/requestGuard.ts): the batch
+  // stops before the image call.
+  refused: boolean;
 }> {
   // Style words from the previous studio's buttons, on batches it started.
   const instruction = job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction;
@@ -49,16 +53,21 @@ export async function batchPrompt(job: {
   const summaryOf = (a: BatchAttachment) => (a.analysis === "ready" ? a.summary : undefined);
   const numbered = attachments.filter((a) => !a.styleOnly);
   const mixerStyles = job.styles.filter((style) => style.weight > 0 && attachments[style.attachment - 1]);
-  const read = await readRoles({
-    instruction: job.instruction,
-    images: numbered.map((a) => ({ summary: summaryOf(a), kind: a.kind })),
-    mixer: mixerStyles.map((style): number | { summary?: string; kind?: "photo" | "art" } => {
-      const a = attachments[style.attachment - 1];
-      return a.styleOnly ? { summary: summaryOf(a), kind: a.kind } : style.attachment;
+  // The screen runs beside the reader, so a batch with images waits no longer for it. A remix's
+  // character changes carry the member's own words too.
+  const [read, screen] = await Promise.all([
+    readRoles({
+      instruction: job.instruction,
+      images: numbered.map((a) => ({ summary: summaryOf(a), kind: a.kind })),
+      mixer: mixerStyles.map((style): number | { summary?: string; kind?: "photo" | "art" } => {
+        const a = attachments[style.attachment - 1];
+        return a.styleOnly ? { summary: summaryOf(a), kind: a.kind } : style.attachment;
+      }),
+      mixerPositions: mixerStyles.map((style, i) => style.position ?? i + 1),
+      remix: job.remixOfParent,
     }),
-    mixerPositions: mixerStyles.map((style, i) => style.position ?? i + 1),
-    remix: job.remixOfParent,
-  });
+    screenRequest([job.instruction, job.partChanges ?? ""].join("\n")),
+  ]);
   // A part's photo is always worked on (its likeness), whatever the request says about it.
   const roles = (read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent)).map((role, i) =>
     numbered[i]?.partFor ? "content" : role,
@@ -95,5 +104,6 @@ export async function batchPrompt(job: {
     read: Boolean(read),
     styleHair,
     styleJobs: Object.entries(jobs).map(([n, job]) => ({ attachment: Number(n), job })),
+    refused: screen?.reveal === true,
   };
 }

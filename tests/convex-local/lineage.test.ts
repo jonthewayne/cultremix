@@ -189,6 +189,70 @@ describe("publishing a remix as a variation or a fork", () => {
     expect(await check(other)).toBeNull();
   });
 
+  it("makes a remix that changed words its creator keeps a fork, and makes a variation wait for that check", async () => {
+    const t = newTest();
+    const alice = await member(t, "alice");
+    const bob = await member(t, "bob");
+    const root = await publish(t, alice);
+    const artKey = "works/101/001/original.png";
+    // GROW is open to remixes; SLOW stays as it is.
+    await t.run((ctx) =>
+      ctx.db.patch("works", root.workId, {
+        artKey,
+        remixFields: [
+          { id: "f1", kind: "text", label: "Headline", text: "GROW", maxLength: 12, on: true },
+          { id: "f2", kind: "text", label: "Headline 2", text: "SLOW", maxLength: 12, on: false },
+        ],
+      }),
+    );
+    const relation = async (generationId: Id<"generations">) =>
+      (await bob.as.query(api.publish.preview, { generationId }))?.remix?.relation;
+    const publishAs = (generationId: Id<"generations">, requestId: string, remixKind?: "variation" | "fork", keep?: "private") =>
+      bob.as.mutation(api.publish.quick, { requestId, generationId, remixKind, ...(keep ? { keep } : {}) });
+
+    // The boxes alone can't touch SLOW, so nothing waits.
+    const wordsOnly = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: artKey });
+    expect(await relation(wordsOnly)).toEqual({ status: "words" });
+
+    // A request in words: a variation waits until the lettering is read back.
+    const asked = await tile(t, bob.userId, root.workId, { instruction: "Change SLOW to FAST", inspirationKey: artKey });
+    expect(await relation(asked)).toEqual({ status: "none", waits: true });
+    await expect(publishAs(asked, "early")).rejects.toThrow(/Still comparing/);
+    await bob.as.mutation(api.publish.checkRemix, { generationId: asked });
+    expect(await relation(asked)).toEqual({ status: "pending", waits: true });
+    await expect(publishAs(asked, "pending")).rejects.toThrow(/Still comparing/);
+    // A kept (private) remix doesn't wait.
+    const kept = await publishAs(asked, "kept", undefined, "private");
+    expect(kept.kept).toBe(true);
+
+    // The comparison calls it the same design, but SLOW is gone: a fork, never a variation.
+    const changed = await tile(t, bob.userId, root.workId, { instruction: "Change SLOW to FAST", inspirationKey: artKey });
+    await bob.as.mutation(api.publish.checkRemix, { generationId: changed });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: changed, verdict: "variation", reason: "New words.", keptMissing: ["SLOW"] });
+    expect(await relation(changed)).toMatchObject({ status: "fork", required: true });
+    await expect(publishAs(changed, "changed-variation", "variation")).rejects.toThrow(/publishes as a fork/);
+    expect((await publishAs(changed, "changed-fork", "fork")).cr).toBe("102-001");
+
+    // It kept SLOW and changed something else: a variation as usual.
+    const fine = await tile(t, bob.userId, root.workId, { instruction: "Make the mushrooms blue", inspirationKey: artKey });
+    await bob.as.mutation(api.publish.checkRemix, { generationId: fine });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: fine, verdict: "variation", reason: "Recolored.", keptMissing: [] });
+    expect(await relation(fine)).toEqual({ status: "variation", reason: "Recolored." });
+    expect((await publishAs(fine, "fine")).cr).toBe("101-002");
+
+    // Sharing a kept remix that dropped a kept word makes it a fork without asking.
+    // (Kept designs finish preparing in an action that can't run here.)
+    await t.run((ctx) => ctx.db.patch("works", kept.workId, { status: "private" }));
+    await t.run((ctx) =>
+      ctx.db.patch("generations", asked, {
+        remixCheck: { status: "done", requestedAt: Date.now(), attempts: 1, verdict: "variation", keptMissing: ["SLOW"] },
+      }),
+    );
+    const shared = await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId });
+    expect(shared.cr).toBe("103-001");
+    expect((await getWork(t, kept.workId))!.kind).toBe("fork");
+  });
+
   it("refuses to publish a remix, public or kept, of a design taken down after it was made", async () => {
     const t = newTest();
     const alice = await member(t, "alice");

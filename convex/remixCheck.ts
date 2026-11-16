@@ -4,11 +4,15 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { compareRemix } from "./lib/remixCompare";
+import { missingKeptWords } from "./lib/keptWords";
 import { fetchPublicImage } from "./lib/storage";
+import { readDesignWords } from "./lib/wordReader";
 
 // Compares a remix design with the design it remixes when its creator opens the publish dialog
 // (publish.checkRemix starts it). publish.quick allows a fork only when the remix reads as a new
-// design (convex/lib/remixJudge.ts); if the comparison can't run, the remixer chooses.
+// design (convex/lib/remixJudge.ts); if the comparison can't run, the remixer chooses. When the
+// original's creator keeps some of its words, the remix's lettering is read back beside the
+// comparison (about 0.3 cents), and a remix that dropped or replaced one publishes as a fork.
 export const compare = internalAction({
   args: { generationId: v.id("generations") },
   returns: v.null(),
@@ -24,8 +28,21 @@ export const compare = internalAction({
       try {
         const started = Date.now();
         const [original, remix] = await Promise.all([fetchPublicImage(job.parentKey, ctx), fetchPublicImage(job.designKey, ctx)]);
-        const result = await compareRemix(original, remix, undefined, job.allowed);
-        console.log("remixCheck ok", generationId, result.verdict, Date.now() - started, "ms", result.costCents ?? "?", "cents");
+        const [result, lettering] = await Promise.all([
+          compareRemix(original, remix, undefined, job.allowed),
+          job.kept.length > 0 ? readDesignWords(remix) : null,
+        ]);
+        const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words) : undefined;
+        console.log(
+          "remixCheck ok",
+          generationId,
+          result.verdict,
+          keptMissing ? `kept words missing: ${keptMissing.join(", ") || "none"}` : "no kept words",
+          Date.now() - started,
+          "ms",
+          result.costCents ?? "?",
+          "cents",
+        );
         await ctx.runMutation(internal.publish.saveRemixCheck, {
           generationId,
           verdict: result.verdict,
@@ -34,6 +51,7 @@ export const compare = internalAction({
           layout: result.layout,
           style: result.style,
           model: result.model,
+          keptMissing,
         });
         return null;
       } catch (error) {
