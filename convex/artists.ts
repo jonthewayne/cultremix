@@ -311,7 +311,10 @@ export const startClaim = mutation({
     if (open) return open._id;
     // A member can have a few claims open at once, so claims can't be opened in bulk.
     const mine = await ctx.db.query("artistClaims").withIndex("by_user", (q) => q.eq("userId", user._id)).order("desc").take(100);
-    if (mine.filter((c) => c.status === "started" || c.status === "submitted").length >= MAX_OPEN_CLAIMS) {
+    // A claim started and never sent for a week no longer counts, so abandoned ones don't block.
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const counted = mine.filter((c) => c.status === "submitted" || (c.status === "started" && c.createdAt > weekAgo));
+    if (counted.length >= MAX_OPEN_CLAIMS) {
       throw new ConvexError({ code: "TOO_MANY_CLAIMS", message: "You have a few claims open already. Finish one first." });
     }
     return await ctx.db.insert("artistClaims", {
@@ -516,24 +519,29 @@ export const approveClaim = mutation({
 const MOVE_ROWS = 100;
 const MOVE_ORDERS = 10;
 export const moveHeld = internalMutation({
-  args: { payeeId: v.id("users"), userId: v.id("users") },
+  // after: rows created before this were left behind (their line no longer names the payee).
+  args: { payeeId: v.id("users"), userId: v.id("users"), after: v.optional(v.number()) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const rows = await ctx.db
       .query("earnings")
-      .withIndex("by_recipient_created", (q) => q.eq("recipientId", args.payeeId))
+      .withIndex("by_recipient_created", (q) =>
+        args.after === undefined ? q.eq("recipientId", args.payeeId) : q.eq("recipientId", args.payeeId).gt("createdAt", args.after),
+      )
       .take(MOVE_ROWS);
     if (rows.length > 0) {
       const orders = [...new Set(rows.map((row) => row.orderId))].slice(0, MOVE_ORDERS);
       for (const orderId of orders) await redirectClaimedPayees(ctx, orderId);
-      // The first row moved (or folded away), so there's progress: go on. A row that can't move
-      // (its line no longer names the payee) would otherwise loop forever.
-      const first = await ctx.db.get("earnings", rows[0]._id);
-      if (first?.recipientId !== args.payeeId) {
-        await ctx.scheduler.runAfter(0, internal.artists.moveHeld, args);
-        return null;
+      // While rows move, the next run starts where this one did. When none did (their lines no
+      // longer name the payee), it steps past them so later rows still move.
+      let moved = false;
+      for (const row of rows) {
+        if (orders.includes(row.orderId) && (await ctx.db.get("earnings", row._id))?.recipientId !== args.payeeId) moved = true;
       }
-      console.warn(`moveHeld: earnings row ${rows[0]._id} stays on artist payee ${args.payeeId}`);
+      if (!moved) console.warn(`moveHeld: ${rows.length} earnings rows stay on artist payee ${args.payeeId}`);
+      const after = moved ? args.after : Math.max(...rows.filter((row) => orders.includes(row.orderId)).map((row) => row.createdAt));
+      await ctx.scheduler.runAfter(0, internal.artists.moveHeld, { ...args, after });
+      return null;
     }
     await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: args.userId });
     return null;

@@ -168,16 +168,14 @@ export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"order
     }
   }
   if (target.size === 0) return;
-  // Which (line, payee) pairs move, and on which lines the member was already paid.
+  // Which (line, payee) pairs move.
   const moves = new Map<string, Map<string, Id<"users">>>();
-  const folded = new Set<string>();
   for (const item of items) {
     const here = new Map<string, Id<"users">>();
     for (const recipient of item.recipients) {
       const to = target.get(recipient.who);
       if (!to) continue;
       here.set(recipient.who, to);
-      if (item.recipients.some((r) => r.who === to)) folded.add(`${item._id}|${recipient.who}`);
     }
     if (here.size === 0) continue;
     moves.set(item._id, here);
@@ -221,25 +219,34 @@ export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"order
   }
   const rows = await ctx.db.query("earnings").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(8000);
   const now = Date.now();
-  for (const row of rows) {
+  // The sale each (line, unit, member) has: theirs already, or the first payee sale moved to them.
+  // Any further one (a member who claimed two artists on the same line) folds into it.
+  const saleOf = new Map<string, Row>();
+  for (const row of rows) if (row.kind === "sale") saleOf.set(keyOf(row.orderItemId, row.unit, row.recipientId), row);
+  const foldedInto = new Map<string, Row>();
+  const mirror = (sale: Row, row: Row) => {
+    const state =
+      row.state === "reversed" || sale.state === "reversed"
+        ? ("reversed" as const)
+        : sale.state === "available" || sale.state === "paid"
+          ? ("available" as const)
+          : sale.state;
+    return { state, holdReason: state === "held" ? sale.holdReason : undefined };
+  };
+  // Sales first, so each reversal knows where its sale went.
+  for (const row of [...rows.filter((r) => r.kind === "sale"), ...rows.filter((r) => r.kind !== "sale")]) {
     const to = moves.get(row.orderItemId)?.get(row.recipientId);
     if (!to) continue;
-    const memberSale = folded.has(`${row.orderItemId}|${row.recipientId}`)
-      ? rows.find((r) => r.kind === "sale" && r.orderItemId === row.orderItemId && r.unit === row.unit && r.recipientId === to)
-      : undefined;
-    if (!memberSale) {
-      await ctx.db.patch("earnings", row._id, { recipientId: to, updatedAt: now });
-      continue;
-    }
-    // Folded into the member's own sale on this unit: the row joins that sale's group, in its state.
-    const state =
-      row.state === "reversed" || memberSale.state === "reversed"
-        ? ("reversed" as const)
-        : memberSale.state === "available" || memberSale.state === "paid"
-          ? ("available" as const)
-          : memberSale.state;
-    const holdReason = state === "held" ? memberSale.holdReason : undefined;
     if (row.kind === "sale") {
+      const memberKey = keyOf(row.orderItemId, row.unit, to);
+      const sale = saleOf.get(memberKey);
+      if (!sale) {
+        await ctx.db.patch("earnings", row._id, { recipientId: to, updatedAt: now });
+        saleOf.set(memberKey, { ...row, recipientId: to });
+        continue;
+      }
+      // Folded into the member's sale on this unit: the share joins that sale's group, in its state.
+      foldedInto.set(keyOf(row.orderItemId, row.unit, row.recipientId), sale);
       await ctx.db.insert("earnings", {
         recipientId: to,
         orderId,
@@ -249,15 +256,15 @@ export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"order
         reason: "claim",
         roles: row.roles,
         amountCents: row.amountCents,
-        state,
-        holdReason,
+        ...mirror(sale, row),
         simulated: row.simulated,
         createdAt: now,
         updatedAt: now,
       });
       await ctx.db.delete("earnings", row._id);
     } else {
-      await ctx.db.patch("earnings", row._id, { recipientId: to, state, holdReason, updatedAt: now });
+      const sale = foldedInto.get(keyOf(row.orderItemId, row.unit, row.recipientId));
+      await ctx.db.patch("earnings", row._id, { recipientId: to, ...(sale ? mirror(sale, row) : {}), updatedAt: now });
     }
   }
 }
@@ -418,7 +425,10 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
           const existing = group.reversals
             .filter((r) => r.refundId === refund._id)
             .reduce((sum, r) => sum + r.amountCents, 0);
-          const delta = -part.cents - existing;
+          // Never past what the group still holds: a folded artist share can round a cent apart
+          // from the line's merged split.
+          const left = grossOf(group) + group.reversals.filter((r) => r.reason !== "claim").reduce((sum, r) => sum + r.amountCents, 0);
+          const delta = Math.max(-part.cents - existing, -left);
           if (delta < 0) await insertReversal(group, delta, "refund", refund._id);
         }
       }

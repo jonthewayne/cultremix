@@ -156,6 +156,46 @@ describe("crediting an outside artist", () => {
     expect(net).toBe(0);
   });
 
+  it("folds two artist pages one member claims on the same line into one sale, so a cancellation clears both", async () => {
+    const t = newTest();
+    await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });
+    const a = await makeUser(t, { name: "A", creatorNumber: 2 });
+    const b = await makeUser(t, { name: "B", creatorNumber: 3 });
+    const jane = await t.run((ctx) => ctx.db.insert("users", { name: "Jane", authId: ARTIST.subject, username: "janedoe", usernameLower: "janedoe" }));
+    const root = await makeWork(t, { creatorId: a, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
+    const work = await makeWork(t, { creatorId: b, family: 101, expression: 2, parent: root, root, printKey: "works/101/002/print-y/print.png" });
+    await makeOnSale(t, work, "101-002", 1000);
+    const owner = t.withIdentity(ADMIN);
+    // The same person, credited by two different links: two artist pages, two held shares.
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [{ name: "Jane Doe", link: "instagram.com/janedoe" }] });
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-002", artists: [{ name: "Jane Doe", link: "janedoe.art" }] });
+    const artists = await t.run((ctx) => ctx.db.query("artists").collect());
+    expect(artists).toHaveLength(2);
+    shopify.set(rawOrder({ id: ORDER_ID, lines: [{ id: 11, variant: 1002, quantity: 1, price: "36.00" }] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+
+    // She claims both, and both are approved before either move runs.
+    const her = t.withIdentity(ARTIST);
+    for (const artist of artists) {
+      const claimId = await her.mutation(api.artists.startClaim, { artistId: artist._id });
+      await her.mutation(api.artists.submitClaim, { claimId, proofUrl: "https://janedoe.art/claim" });
+      await owner.mutation(api.artists.approveClaim, { claimId });
+    }
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    for (const artist of artists) expect(await earningsFor(t, artist.payeeId)).toHaveLength(0);
+    const rows = await earningsFor(t, jane);
+    expect(rows.filter((r) => r.kind === "sale")).toHaveLength(1);
+    expect(rows.filter((r) => r.reason === "claim")).toHaveLength(1);
+    const item = await t.run(async (ctx) => (await ctx.db.query("orderItems").collect())[0]);
+    expect(item.recipients.filter((r) => r.who === jane)).toHaveLength(1);
+    const earned = rows.reduce((sum, r) => sum + r.amountCents, 0);
+    expect(earned).toBeGreaterThan(0);
+
+    shopify.set(rawOrder({ id: ORDER_ID, lines: [{ id: 11, variant: 1002, quantity: 1, price: "36.00" }], cancelledAt: "2026-11-03T00:00:00Z" }));
+    await deliver(t, { topic: "orders/cancelled", body: { id: ORDER_ID } });
+    expect((await earningsFor(t, jane)).reduce((sum, r) => sum + r.amountCents, 0)).toBe(0);
+  });
+
   it("treats the same link as the same artist, whatever the name, and keeps a declined artist declined", async () => {
     const t = newTest();
     await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });

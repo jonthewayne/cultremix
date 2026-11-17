@@ -68,7 +68,10 @@ describe("prompt protection", () => {
     expect(leakedWords(only, ["Arrange them in a 2x2 grid on a fully transparent background: one complete graphic centered in each quarter"]).length).toBeGreaterThanOrEqual(5);
     expect(isLeak(only, ["Arrange them in a 2x2 grid on a fully transparent background: one complete graphic centered in each quarter"])).toBe(true);
     // Five ordinary prompt words scattered through a design's own lettering aren't a leak.
-    expect(isLeak(new Set(["MAKE", "BOLD", "CLEAN", "COLOR", "SPACE", "FOUR"]), ["MAKE IT LOUD", "BOLD MOVES", "CLEAN UP CREW", "COLOR ME", "SPACE CADET"])).toBe(false);
+    const ordinary = new Set(["MAKE", "BOLD", "CLEAN", "COLOR", "SPACE", "FOUR"]);
+    expect(isLeak(ordinary, ["MAKE IT LOUD", "THE BOLD AND THE BEAUTIFUL", "COLOR OUTSIDE THE LINES", "SPACE CADET CLUB", "CLEAN SLATE"])).toBe(false);
+    // A stray word inside the prompt's sentence doesn't hide it.
+    expect(isLeak(only, ["Arrange them in a 2x2 PIZZA grid on a fully transparent background: one complete graphic centered in each quarter"])).toBe(true);
   });
 
   it("finds kept words a remix dropped or replaced, and forgives slips", () => {
@@ -86,6 +89,9 @@ describe("prompt protection", () => {
     expect(missingKeptWords(["WILD AT HEART"], [])).toEqual(["WILD", "HEART"]);
     // Run together is kept; a kept word inside another word isn't.
     expect(missingKeptWords(["NIGHT SHIFT"], ["NIGHTSHIFT"])).toEqual([]);
+    expect(missingKeptWords(["EVER"], ["NEVER"], ["change EVER to NEVER"])).toEqual(["EVER"]);
+    expect(missingKeptWords(["KIND WORDS"], ["UNKIND WORDS"])).toEqual(["KIND"]);
+    expect(missingKeptWords(["HOPE"], ["HOPELESS"])).toEqual(["HOPE"]);
     expect(missingKeptWords(["ART"], ["SMART PEOPLE"])).toEqual(["ART"]);
     expect(missingKeptWords(["THE END"], ["OTHER BENDS"])).toEqual(["THE", "END"]);
     // Swapped for a neighbouring word: two letters off a short word is a different word.

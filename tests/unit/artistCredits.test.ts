@@ -83,6 +83,14 @@ describe("artist credit inputs", () => {
     expect(normalizeLink("javascript:alert(1)")).toBeNull();
     expect(normalizeLink("not a link")).toBeNull();
     expect(linkKey("https://www.Instagram.com/Jane/?hl=en")).toBe(linkKey("https://instagram.com/jane"));
+    // A query that names the page keeps two artists apart; tracking parameters don't.
+    expect(linkKey("https://youtube.com/watch?v=abc")).not.toBe(linkKey("https://youtube.com/watch?v=xyz"));
+    expect(linkKey("https://facebook.com/profile.php?id=1&utm_source=x")).toBe(linkKey("https://facebook.com/profile.php?id=1"));
+    expect(linkKey("https://facebook.com/profile.php?id=1")).not.toBe(linkKey("https://facebook.com/profile.php?id=2"));
+    // A shared site's front page can't stand for an artist.
+    expect(cleanArtistInputs([{ name: "Jane", link: "instagram.com" }])).toMatchObject({ ok: false });
+    expect(cleanArtistInputs([{ name: "Jane", link: "https://www.instagram.com/?hl=en" }])).toMatchObject({ ok: false });
+    expect(cleanArtistInputs([{ name: "Jane", link: "janedoe.art" }])).toMatchObject({ ok: true });
   });
 
   it("needs a name and a link for each artist, at most three, and drops repeats", () => {

@@ -31,6 +31,7 @@ export function missingKeptWords(
     for (let k = 2; k <= 3 && i + k <= tokens.length; k++) have.add(tokens.slice(i, i + k).join(""));
   }
   const requested = new Set(asked.flatMap((text) => normalizeWords(text).split(" ").filter(Boolean)));
+  const keptWords = new Set(kept.flatMap((piece) => normalizeWords(piece).split(" ").filter(Boolean)));
   const missing: Array<string> = [];
   const seen = new Set<string>();
   for (const piece of kept) {
@@ -38,7 +39,13 @@ export function missingKeptWords(
       if ([...word].length < 3 || seen.has(word)) continue;
       seen.add(word);
       if (have.has(word)) continue;
-      const runTogether = [...word].length >= 4 && tokens.some((token) => token.length > word.length && (token.startsWith(word) || token.endsWith(word)));
+      // Run together with another kept word (NIGHTSHIFT for NIGHT SHIFT). Grown into a different
+      // word (EVER into NEVER, KIND into UNKIND) isn't kept.
+      const runTogether = tokens.some(
+        (token) =>
+          !requested.has(token) &&
+          ((token.startsWith(word) && keptWords.has(token.slice(word.length))) || (token.endsWith(word) && keptWords.has(token.slice(0, -word.length)))),
+      );
       if (runTogether) continue;
       const close = tokens.some((token) => !requested.has(token) && editDistance(word, token) <= allowedSlip(word));
       if (!close) missing.push(word);

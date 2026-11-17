@@ -32,21 +32,26 @@ export function leakedWords(promptOnly: ReadonlySet<string>, lettering: Readonly
   return [...found];
 }
 
-// Five distinct prompt-only words, three of them in a row (shorter words between them don't break
-// the run), is a leak. A design's own lettering rarely shares more than a word or two with the
-// prompt that isn't in the request, and scattered ordinary words (MAKE, BOLD, COLOR) aren't a
-// sentence of it; the leaks in the suite showed dozens, in the prompt's own order.
+// A leak: five distinct prompt-only words with four of them inside any six lettered words in a row
+// (words under four letters don't count), or twelve distinct anywhere. A design's own lettering
+// rarely shares more than a word or two with the prompt that isn't in the request, and scattered
+// ordinary words (MAKE, BOLD, COLOR) aren't a sentence of it; the leaks in the suite showed
+// dozens, in the prompt's own order. A window, not a strict run, so a stray word or misread
+// doesn't hide one.
 export const LEAK_THRESHOLD = 5;
-export const LEAK_RUN = 3;
+const LEAK_ANYWHERE = 12;
+const WINDOW = 6;
+const IN_WINDOW = 4;
 export function isLeak(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray<string>) {
-  if (leakedWords(promptOnly, lettering).length < LEAK_THRESHOLD) return false;
-  let run = 0;
-  for (const piece of lettering) {
-    for (const word of normalizeWords(piece).split(" ")) {
-      if ([...word].length < 4) continue;
-      run = promptOnly.has(word) ? run + 1 : 0;
-      if (run >= LEAK_RUN) return true;
-    }
+  const distinct = leakedWords(promptOnly, lettering).length;
+  if (distinct >= LEAK_ANYWHERE) return true;
+  if (distinct < LEAK_THRESHOLD) return false;
+  const hits = lettering
+    .flatMap((piece) => normalizeWords(piece).split(" "))
+    .filter((word) => [...word].length >= 4)
+    .map((word) => promptOnly.has(word));
+  for (let i = 0; i < hits.length; i++) {
+    if (hits.slice(i, i + WINDOW).filter(Boolean).length >= IN_WINDOW) return true;
   }
   return false;
 }
