@@ -43,7 +43,7 @@ export function LineageNote({ cr }: { cr: string }) {
           {trail.amended && (
             <span className="rounded-full bg-neutral-200 px-3 py-1">
               Lineage amended
-              {trail.history.find((row) => row.status === "confirmed")?.chain === "recorded" && " · recorded on Monad"}
+              {trail.history.find((row) => row.status === "confirmed" && !row.artistCredit)?.chain === "recorded" && " · recorded on Monad"}
             </span>
           )}
         </p>
@@ -88,6 +88,9 @@ export function LineageSection({ cr }: { cr: string }) {
   if (!trail) return null;
   if (trail.steps.length === 0 && trail.history.length === 0 && !trail.broken) return null;
   const groups = families(trail.steps, { cr, family: trail.family });
+  // Artist credit records go to Monad through the lineage correction call but change nothing.
+  const credits = trail.history.filter((row) => row.artistCredit);
+  const corrections = trail.history.filter((row) => !row.artistCredit);
   return (
     <section className="mt-20">
       <h2 className="border-t-2 border-black pt-4 text-sm font-bold uppercase tracking-wider">Lineage</h2>
@@ -133,11 +136,26 @@ export function LineageSection({ cr }: { cr: string }) {
           </Fragment>
         ))}
       </ol>
-      {trail.history.length > 0 && (
+      {credits.length > 0 && (
+        <div className="mt-6 rounded-2xl bg-neutral-100 p-4 text-sm">
+          <p className="font-bold">Artist credits on Monad</p>
+          <ul className="mt-2 space-y-2">
+            {credits.map((row) => (
+              <li key={row.sequence}>
+                {row.status === "confirmed" ? `${day(row.effectiveFrom ?? row.requestedAt)}: ` : "Pending: "}
+                the design's artist credits, each artist named only by a hashed ID.
+                <span className="block break-all font-mono text-xs text-neutral-600">{row.reason}</span>
+                <CorrectionOnchain row={row} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {corrections.length > 0 && (
         <div className="mt-6 rounded-2xl bg-neutral-100 p-4 text-sm">
           <p className="font-bold">{trail.amended ? "This lineage was amended." : "A correction to this lineage is pending."}</p>
           <ul className="mt-2 space-y-2">
-            {trail.history.map((row) => {
+            {corrections.map((row) => {
               const { was, now } = describe(row);
               return (
                 <li key={row.sequence}>

@@ -330,7 +330,7 @@ describe("lineage.trail corrections onchain", () => {
       [1, "recorded", TX(8)],
     ]);
     expect(Object.keys(trail.history[2]).sort()).toEqual(
-      ["chain", "chainTxUrl", "effectiveFrom", "fromKind", "fromParentCr", "newKind", "newParentCr", "offchainOnly", "reason", "requestedAt", "sequence", "status"].sort(),
+      ["artistCredit", "chain", "chainTxUrl", "effectiveFrom", "fromKind", "fromParentCr", "newKind", "newParentCr", "offchainOnly", "reason", "requestedAt", "sequence", "status"].sort(),
     );
   });
 });

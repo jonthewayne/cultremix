@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { artistSharesOn } from "./lib/economicsConfigs";
+import { recordCredits } from "./artists";
 import { DEFAULT_PLACEMENT, clampRelative, sameRelative, toInches, withoutMark } from "../src/lib/print/shirtPlacement";
 import { GARMENT_KINDS } from "../shared/config/print-products";
 import { internal } from "./_generated/api";
@@ -506,6 +507,8 @@ export const shareKeep = mutation({
       status: "preparing",
     });
     if (startsFamily) await ctx.db.insert("crFamilies", { family: crFamily, nextExpression: 2, rootWorkId: work._id });
+    // Its credits go on Monad now that it's public.
+    await recordCredits(ctx, work._id, user._id);
     // What it sold to its creator alone comes off sale, and Shopify archives those products; once
     // shared, it sells under its public number after an admin approves it.
     const retired = await retireKeptListings(ctx, work._id, crNumber(crFamily, crExpression));

@@ -43,6 +43,9 @@ export const lineageTables = {
     offchainOnly: v.optional(v.boolean()),
     // The chain engine's write for this amendment (its own table's ID, kept as a string).
     chainWriteId: v.optional(v.string()),
+    // A record of the work's artist credits sent through the same registry call with the lineage
+    // unchanged (convex/lineage.ts queueCreditRecord); confirming it changes nothing on the work.
+    artistCredit: v.optional(v.boolean()),
   })
     .index("by_work_sequence", ["workId", "sequence"])
     .index("by_status", ["status", "requestedAt"]),

@@ -7,6 +7,8 @@ import { requireAdmin } from "./lib/adminAccess";
 import { imageUrlReader } from "./lib/imageUrls";
 import { formatCr, parseCr } from "./lib/r2";
 import { setCreatorAccess } from "./lib/creators";
+import { sha256Hex } from "./lib/economicsConfigs";
+import { queueCreditRecord } from "./lineage";
 import { notifyArtistClaim } from "./lib/notifications";
 import { cleanArtistInputs, claimCode, linkKey, normalizeLink, slugBase } from "./lib/artistCredits";
 import { artistSharesOn } from "./lib/economicsConfigs";
@@ -113,6 +115,28 @@ export async function setWorkCredits(
     const artist = await artistFor(ctx, input, by, source);
     await ctx.db.insert("artistCredits", { workId, artistId: artist._id, source, addedBy: by, createdAt: now });
   }
+  await recordCredits(ctx, workId, by);
+}
+
+// A credited artist as Monad knows them: a SHA-256 of their CultRemix artist ID, never their name
+// or links.
+async function artistHash(artistId: Id<"artists">) {
+  return await sha256Hex(`cultremix-artist:${artistId}`);
+}
+
+// Queues a record of a public work's current credits for Monad (lineage.ts queueCreditRecord). A
+// private keep's credits are recorded when it's shared. Only where sales pay credited artists.
+export async function recordCredits(ctx: MutationCtx, workId: Id<"works">, by: Id<"users">) {
+  if (!artistSharesOn()) return;
+  const work = await ctx.db.get("works", workId);
+  if (!work || work.keep !== undefined || work.status === "private" || work.status === "withdrawn") return;
+  const artists = await creditedArtists(ctx, workId);
+  const hashes = [];
+  for (const artist of artists) hashes.push(await artistHash(artist._id));
+  const existing = await ctx.db.query("lineageAmendments").withIndex("by_work_sequence", (q) => q.eq("workId", workId)).take(1);
+  // A work never credited needs no "none" record.
+  if (hashes.length === 0 && existing.length === 0) return;
+  await queueCreditRecord(ctx, work, by, hashes);
 }
 
 // ---- Which credits a sale pays, and which a page shows ----

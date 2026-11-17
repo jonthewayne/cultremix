@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import { rawOrder } from "../fixtures/shopifyOrder";
 import { newTest } from "./setup";
 import { SHOP_ENV, deliver, fakeShopify, makeOnSale, makeUser, makeWork } from "./shopFixtures";
@@ -323,6 +323,30 @@ describe("crediting an outside artist", () => {
     expect((await earningsFor(t, jane)).length).toBe(1);
     expect((await notes()).at(-1)).toMatch(/in your earnings now/u);
     await expect(owner.mutation(api.artists.adminUnclaim, { artistId: artist._id, reason: "" })).rejects.toThrow(/by hand/u);
+  });
+
+  it("queues a record of a public design's credits for Monad, naming artists only by a hash, without touching its lineage", async () => {
+    const t = newTest();
+    await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });
+    const a = await makeUser(t, { name: "A", creatorNumber: 2 });
+    const work = await makeWork(t, { creatorId: a, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
+    const owner = t.withIdentity(ADMIN);
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [{ name: "Jane Doe", link: "instagram.com/janedoe" }] });
+    const rows = await t.run((ctx) => ctx.db.query("lineageAmendments").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ artistCredit: true, status: "requested", newKind: "original", fromKind: "original" });
+    expect(rows[0].reason).toMatch(/^Artist credit: [0-9a-f]{64}$/u);
+    expect(rows[0].reason).not.toMatch(/Jane|instagram/iu);
+    // Changing the credits before it's sent replaces the waiting record.
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [] });
+    const after = await t.run((ctx) => ctx.db.query("lineageAmendments").collect());
+    expect(after.map((row) => row.reason)).toEqual(["Artist credit: none"]);
+    // Confirmed on Monad, it leaves the lineage as it was, and the page never calls it a correction.
+    await t.mutation(internal.lineage.markConfirmed, { amendmentId: after[0]._id });
+    expect((await t.run((ctx) => ctx.db.get("works", work)))?.effectiveKind).toBeUndefined();
+    const trail = await t.query(api.lineage.trail, { cr: "101-001" });
+    expect(trail).toMatchObject({ amended: false, pending: false });
+    expect(trail?.history.map((row) => row.artistCredit)).toEqual([true]);
   });
 
   it("lets a creator credit artists while publishing, and checks what they typed", async () => {

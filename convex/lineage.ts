@@ -125,6 +125,8 @@ const historyItem = v.object({
   // explorer once the write has a transaction hash.
   chain: v.optional(v.union(v.literal("recorded"), v.literal("recording"))),
   chainTxUrl: v.optional(v.string()),
+  // A record of the work's artist credits, not a change to its lineage (queueCreditRecord).
+  artistCredit: v.boolean(),
 });
 
 async function crById(ctx: Ctx, id: Id<"works"> | undefined) {
@@ -163,6 +165,7 @@ async function historyOf(ctx: Ctx, workId: Id<"works">, limit: number) {
       requestedAt: row.requestedAt,
       effectiveFrom: row.effectiveFrom,
       offchainOnly: row.offchainOnly === true,
+      artistCredit: row.artistCredit === true,
     })),
   );
 }
@@ -224,7 +227,7 @@ export const trail = query({
       truncated,
       broken,
       amended: work.effectiveKind !== undefined,
-      pending: history.some((row) => row.status === "requested" || row.status === "submitted"),
+      pending: history.some((row) => !row.artistCredit && (row.status === "requested" || row.status === "submitted")),
       history,
     };
   },
@@ -470,15 +473,19 @@ export const publishOptions = query({
 
 const OPEN = new Set(["requested", "submitted"]);
 
+// An open lineage correction (a credit record doesn't count: it never changes the lineage).
 async function openAmendment(ctx: Ctx, workId: Id<"works">) {
   const recent = await ctx.db
     .query("lineageAmendments")
     .withIndex("by_work_sequence", (q) => q.eq("workId", workId))
     .order("desc")
     .take(20);
-  return recent.find((row) => OPEN.has(row.status)) ?? null;
+  return recent.find((row) => OPEN.has(row.status) && !row.artistCredit) ?? null;
 }
 
+// The next row's place in the work's history, and its place in the registry's amendment sequence:
+// after the last one recorded on Monad and after any still waiting to be (a credit record can be
+// waiting beside a correction).
 async function nextSequences(ctx: Ctx, workId: Id<"works">) {
   const recent = await ctx.db
     .query("lineageAmendments")
@@ -486,7 +493,49 @@ async function nextSequences(ctx: Ctx, workId: Id<"works">) {
     .order("desc")
     .take(200);
   const lastOnchain = recent.find((row) => row.status === "confirmed" && !row.offchainOnly);
-  return { sequence: (recent[0]?.sequence ?? 0) + 1, chainSequence: (lastOnchain?.chainSequence ?? 0) + 1 };
+  const waiting = recent.filter((row) => OPEN.has(row.status)).map((row) => row.chainSequence);
+  const chainSequence = Math.max(lastOnchain?.chainSequence ?? 0, ...waiting) + 1;
+  return { sequence: (recent[0]?.sequence ?? 0) + 1, chainSequence };
+}
+
+/**
+ * Records a published work's artist credits on Monad (docs/decisions.md, "Credit and a reserved
+ * share for outside artists"). The registry has no credit field, so the credit goes through its
+ * lineage correction call with the lineage left as it is: the reason names each credited artist
+ * only by a hashed ID, its keccak256 is what Monad keeps, and the work page lists it in the
+ * work's history. The chain kick sends it like any requested correction.
+ */
+export async function queueCreditRecord(ctx: MutationCtx, work: Doc<"works">, by: Id<"users">, artistHashes: ReadonlyArray<string>) {
+  const reason = artistHashes.length > 0 ? `Artist credit: ${artistHashes.join(", ")}` : "Artist credit: none";
+  const recent = await ctx.db
+    .query("lineageAmendments")
+    .withIndex("by_work_sequence", (q) => q.eq("workId", work._id))
+    .order("desc")
+    .take(20);
+  // A credit record still waiting to be sent is replaced, so only the latest credits go out.
+  const waiting = recent.find((row) => row.artistCredit && row.status === "requested");
+  if (waiting) {
+    await ctx.db.patch("lineageAmendments", waiting._id, { reason, requestedAt: Date.now() });
+    return waiting._id;
+  }
+  const last = recent.find((row) => row.artistCredit && row.status !== "rejected");
+  if (last?.reason === reason) return last._id;
+  const current = effectiveOf(toLineageWork(work));
+  const { sequence, chainSequence } = await nextSequences(ctx, work._id);
+  return await ctx.db.insert("lineageAmendments", {
+    workId: work._id,
+    sequence,
+    chainSequence,
+    fromKind: current.kind,
+    fromParentId: current.parentId as Id<"works"> | undefined,
+    newKind: current.kind,
+    newParentId: current.parentId as Id<"works"> | undefined,
+    reason,
+    adminId: by,
+    status: "requested",
+    requestedAt: Date.now(),
+    artistCredit: true,
+  });
 }
 
 async function refuseUnlessValid(
@@ -499,7 +548,8 @@ async function refuseUnlessValid(
 }
 
 async function applyConfirmed(ctx: MutationCtx, row: Doc<"lineageAmendments">, at: number, offchainOnly: boolean) {
-  await ctx.db.patch("works", row.workId, {
+  // A credit record leaves the lineage as it was.
+  if (!row.artistCredit) await ctx.db.patch("works", row.workId, {
     effectiveKind: row.newKind,
     effectiveParentWorkId: row.newParentId,
     lineageAmendedAt: at,
