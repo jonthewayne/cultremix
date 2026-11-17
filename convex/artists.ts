@@ -26,6 +26,11 @@ type Role = keyof ArtistCredits;
 const inputValidator = v.object({ name: v.string(), link: v.string() });
 // Claims one member can have open at once.
 const MAX_OPEN_CLAIMS = 5;
+// A claim started and not sent within a week expires: it can't be sent, and asking again starts a new one.
+const CLAIM_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000;
+function claimExpired(claim: Doc<"artistClaims">) {
+  return claim.status === "started" && Date.now() - claim.createdAt > CLAIM_EXPIRES_MS;
+}
 
 // ---- Creating artists and credits ----
 
@@ -307,13 +312,12 @@ export const startClaim = mutation({
       throw new ConvexError({ code: "NOT_CLAIMABLE", message: "This page has already been claimed." });
     }
     const claims = await ctx.db.query("artistClaims").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(100);
-    const open = claims.find((c) => c.userId === user._id && (c.status === "started" || c.status === "submitted"));
+    const open = claims.find((c) => c.userId === user._id && (c.status === "submitted" || (c.status === "started" && !claimExpired(c))));
     if (open) return open._id;
     // A member can have a few claims open at once, so claims can't be opened in bulk.
     const mine = await ctx.db.query("artistClaims").withIndex("by_user", (q) => q.eq("userId", user._id)).order("desc").take(100);
-    // A claim started and never sent for a week no longer counts, so abandoned ones don't block.
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const counted = mine.filter((c) => c.status === "submitted" || (c.status === "started" && c.createdAt > weekAgo));
+    // A claim started and never sent for a week has expired, so abandoned ones don't block.
+    const counted = mine.filter((c) => c.status === "submitted" || (c.status === "started" && !claimExpired(c)));
     if (counted.length >= MAX_OPEN_CLAIMS) {
       throw new ConvexError({ code: "TOO_MANY_CLAIMS", message: "You have a few claims open already. Finish one first." });
     }
@@ -334,7 +338,7 @@ export const submitClaim = mutation({
   handler: async (ctx, args) => {
     const user = await requireMember(ctx);
     const claim = await ctx.db.get("artistClaims", args.claimId);
-    if (!claim || claim.userId !== user._id || (claim.status !== "started" && claim.status !== "submitted")) {
+    if (!claim || claim.userId !== user._id || (claim.status !== "started" && claim.status !== "submitted") || claimExpired(claim)) {
       throw new ConvexError({ code: "NOT_FOUND", message: "That claim isn't open." });
     }
     const proofUrl = args.proofUrl.trim().slice(0, 300);
@@ -539,7 +543,7 @@ export const moveHeld = internalMutation({
         if (orders.includes(row.orderId) && (await ctx.db.get("earnings", row._id))?.recipientId !== args.payeeId) moved = true;
       }
       if (!moved) console.warn(`moveHeld: ${rows.length} earnings rows stay on artist payee ${args.payeeId}`);
-      const after = moved ? args.after : Math.max(...rows.filter((row) => orders.includes(row.orderId)).map((row) => row.createdAt));
+      const after = moved ? args.after : rows[0].createdAt;
       await ctx.scheduler.runAfter(0, internal.artists.moveHeld, { ...args, after });
       return null;
     }

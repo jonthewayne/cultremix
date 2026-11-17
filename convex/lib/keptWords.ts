@@ -39,15 +39,21 @@ export function missingKeptWords(
       if ([...word].length < 3 || seen.has(word)) continue;
       seen.add(word);
       if (have.has(word)) continue;
-      // Run together with another kept word (NIGHTSHIFT for NIGHT SHIFT). Grown into a different
-      // word (EVER into NEVER, KIND into UNKIND) isn't kept.
+      // Run together with another kept word or one the remix asked for (NIGHTSHIFT for NIGHT
+      // SHIFT, SUNSET for SUN and a new SET). Grown into a different word (EVER into NEVER, KIND
+      // into UNKIND) isn't kept.
+      const joins = (rest: string) => [...rest].length >= 3 && (keptWords.has(rest) || requested.has(rest));
       const runTogether = tokens.some(
         (token) =>
           !requested.has(token) &&
-          ((token.startsWith(word) && keptWords.has(token.slice(word.length))) || (token.endsWith(word) && keptWords.has(token.slice(0, -word.length)))),
+          ((token.startsWith(word) && joins(token.slice(word.length))) || (token.endsWith(word) && joins(token.slice(0, -word.length)))),
       );
       if (runTogether) continue;
-      const close = tokens.some((token) => !requested.has(token) && editDistance(word, token) <= allowedSlip(word));
+      // A slip changes letters inside the word; letters added at either end make another word
+      // (LOVE into GLOVE, RAIN into TRAIN).
+      const close = tokens.some(
+        (token) => !requested.has(token) && !token.startsWith(word) && !token.endsWith(word) && editDistance(word, token) <= allowedSlip(word),
+      );
       if (!close) missing.push(word);
     }
   }

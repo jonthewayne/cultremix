@@ -43,7 +43,7 @@ const SHARED_HOSTS = new Set([
 // "youtube.com/watch?v=abc" and "youtube.com/watch?v=xyz" don't.
 export function linkKey(link: string): string {
   const url = new URL(link);
-  const host = url.hostname.toLowerCase().replace(/^www\./u, "");
+  const host = url.hostname.toLowerCase().replace(/^(?:www|m|mobile)\./u, "");
   const path = url.pathname.replace(/\/+$/u, "").toLowerCase();
   const params = [...url.searchParams.entries()]
     .filter(([name]) => !TRACKING.test(name))

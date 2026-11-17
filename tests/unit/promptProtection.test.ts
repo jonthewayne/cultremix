@@ -92,6 +92,9 @@ describe("prompt protection", () => {
     expect(missingKeptWords(["EVER"], ["NEVER"], ["change EVER to NEVER"])).toEqual(["EVER"]);
     expect(missingKeptWords(["KIND WORDS"], ["UNKIND WORDS"])).toEqual(["KIND"]);
     expect(missingKeptWords(["HOPE"], ["HOPELESS"])).toEqual(["HOPE"]);
+    expect(missingKeptWords(["EVER"], ["NEVER"], ["put an N in front of the first word"])).toEqual(["EVER"]);
+    expect(missingKeptWords(["LOVE"], ["GLOVE"])).toEqual(["LOVE"]);
+    expect(missingKeptWords(["SUN"], ["SUNSET"], ["", "SET"])).toEqual([]);
     expect(missingKeptWords(["ART"], ["SMART PEOPLE"])).toEqual(["ART"]);
     expect(missingKeptWords(["THE END"], ["OTHER BENDS"])).toEqual(["THE", "END"]);
     // Swapped for a neighbouring word: two letters off a short word is a different word.
