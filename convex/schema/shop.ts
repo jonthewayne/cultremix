@@ -47,6 +47,7 @@ const roleValidator = v.union(
   v.literal("upstream"),
   v.literal("affiliate"),
   v.literal("brand"),
+  v.literal("artist"),
 );
 
 // One unit's reversal cents and how they split among its recipients, fixed when the refund is seen.

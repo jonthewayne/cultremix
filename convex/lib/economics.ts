@@ -31,8 +31,16 @@
 // each sale, the brand and the family's creators together, at most brandFamilyMaxBps. The brand
 // splits it with the creators, who get at least brandCreatorPoolMinBps; a new deal starts at
 // brandDefaultBps for the brand and brandCreatorDefaultBps for the creators. The sale math is v3's.
+//
+// Version 5 (November 2026) credits outside artists (docs/decisions.md, "Credit and a reserved share
+// for outside artists"). A work can credit up to three artists who inspired it; each credit comes out
+// of the part of the creator pool belonging to the creator of the work that added it, never from
+// anyone else's part, CultRemix's share, or a brand's. artistShareBps of that part (one fifth) goes
+// to the credited artists, split evenly in whole hundreds of basis points of the pool so every share
+// stays a whole basis point of the price; any rounding stays with the creator. Credits travel with
+// the lineage: a variation of a credited original pays the artist out of the family root's part.
 
-export type EconomicRole = "creator" | "family_root" | "upstream" | "affiliate" | "brand";
+export type EconomicRole = "creator" | "family_root" | "upstream" | "affiliate" | "brand" | "artist";
 
 export type EconomicConfig = {
   version: number;
@@ -51,6 +59,9 @@ export type EconomicConfig = {
   brandFamilyMaxBps?: number;
   // From v4: the creators' share a new brand deal starts with; the brand can change it.
   brandCreatorDefaultBps?: number;
+  // From v5: the share of a crediting creator's part of the pool that goes to the outside artists
+  // they credited, in basis points of that part.
+  artistShareBps?: number;
   // Days after a unit ships before its earnings become Available (when no refund holds it).
   maturityDays: number;
   // Shares of the pool, in basis points of 10000, by work kind.
@@ -95,6 +106,17 @@ export const ECONOMIC_CONFIG_V4: EconomicConfig = {
   brandFamilyMaxBps: 3000,
 };
 
+export const ECONOMIC_CONFIG_V5: EconomicConfig = {
+  ...ECONOMIC_CONFIG_V4,
+  version: 5,
+  artistShareBps: 2000,
+};
+
+// The outside artists credited by each paid role's work, by recipient id (an artist's payee):
+// creator for the work itself, family_root for its family's first work, upstream for the work a
+// fork came from. Each list holds at most three.
+export type ArtistCredits = Partial<Record<"creator" | "family_root" | "upstream", ReadonlyArray<string>>>;
+
 // A work's lineage as economics needs it. Creators are opaque IDs (Convex user IDs).
 export type EconomicLineage =
   | { kind: "original"; creator: string }
@@ -110,7 +132,11 @@ export type RecipientShare = { who: string; roles: Array<EconomicRole>; bps: num
 
 // Each recipient's share of the pool in basis points (summing to 10000), largest first. A person
 // in two roles appears once with both roles.
-export function recipientShares(lineage: EconomicLineage, config: EconomicConfig = ECONOMIC_CONFIG_V1): Array<RecipientShare> {
+export function recipientShares(
+  lineage: EconomicLineage,
+  config: EconomicConfig = ECONOMIC_CONFIG_V1,
+  credits: ArtistCredits = {},
+): Array<RecipientShare> {
   const parts: Array<{ who: string; role: EconomicRole; bps: number }> = [];
   if (lineage.kind === "original") {
     parts.push({ who: lineage.creator, role: "creator", bps: config.shares.original.creator });
@@ -126,12 +152,23 @@ export function recipientShares(lineage: EconomicLineage, config: EconomicConfig
     parts.push({ who: lineage.root.creator, role: "family_root", bps: shares.familyRoot });
     parts.push({ who: lineage.creator, role: "creator", bps: shares.creator });
   }
+  // From v5: each crediting creator's part gives artistShareBps to the artists it credits.
+  if (config.artistShareBps) {
+    for (const part of [...parts]) {
+      const artists = [...new Set(credits[part.role as keyof ArtistCredits] ?? [])].slice(0, MAX_ARTIST_CREDITS);
+      if (artists.length === 0) continue;
+      const each = Math.floor((part.bps * config.artistShareBps) / 10000 / artists.length / 100) * 100;
+      if (each <= 0) continue;
+      part.bps -= each * artists.length;
+      for (const who of artists) parts.push({ who, role: "artist", bps: each });
+    }
+  }
   const merged = new Map<string, RecipientShare>();
   for (const part of parts) {
     const existing = merged.get(part.who);
     if (existing) {
       existing.bps += part.bps;
-      existing.roles.push(part.role);
+      if (!existing.roles.includes(part.role)) existing.roles.push(part.role);
     } else {
       merged.set(part.who, { who: part.who, roles: [part.role], bps: part.bps });
     }
@@ -140,6 +177,9 @@ export function recipientShares(lineage: EconomicLineage, config: EconomicConfig
   if (total !== 10000) throw new Error("Economic shares must sum to 10000 basis points.");
   return [...merged.values()].sort((a, b) => b.bps - a.bps);
 }
+
+// The most outside artists one work can credit.
+export const MAX_ARTIST_CREDITS = 3;
 
 // The creator pool for one paid line, split per unit: unit i (1-based) gets units[i - 1] cents.
 export function linePool(
@@ -197,6 +237,8 @@ export type SaleExtras = {
   affiliate?: string | null;
   // creatorBps: the creators' share the brand agreed for its families (v3), if any.
   brand?: { who: string; bps: number; creatorBps?: number | null } | null;
+  // From v5: the outside artists each paid role's work credits (their payees).
+  artists?: ArtistCredits;
 };
 
 export function saleRecipients(
@@ -204,7 +246,7 @@ export function saleRecipients(
   config: EconomicConfig,
   extras: SaleExtras = {},
 ): { recipients: Array<RecipientShare>; poolBps: number } {
-  const creators = recipientShares(lineage, config);
+  const creators = recipientShares(lineage, config, extras.artists);
   if (config.affiliateBps === undefined && config.brandDefaultBps === undefined) {
     return { recipients: creators, poolBps: config.creatorPoolBps };
   }

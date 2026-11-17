@@ -3,6 +3,7 @@ import { orderGid } from "../shared/config/shopify";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { linePoolAt, saleRecipients } from "./lib/economics";
+import { saleCredits } from "./artists";
 import { CURRENT_ECONOMIC_CONFIG } from "./lib/economicsConfigs";
 import { brandForFamily } from "./brands";
 import { allocateRefund } from "./lib/creatorPool";
@@ -309,9 +310,12 @@ async function insertItem(
   if (work) {
     lineageSnapshot = await resolveLineage(ctx.db, work);
     const brand = await brandForFamily(ctx, work.crFamily);
+    // Outside artists the lineage's works credit (economics v5), paid from their creators' parts.
+    const artists = config.artistShareBps ? (await saleCredits(ctx, work)).credits : undefined;
     const split = saleRecipients(lineageSnapshot, config, {
       affiliate: affiliateId,
       brand: brand ? { who: brand.userId, bps: brand.bps, creatorBps: brand.creatorBps } : null,
+      artists,
     });
     recipients = split.recipients as Array<Recipient>;
     poolBps = split.poolBps;

@@ -5,6 +5,7 @@ import { CURRENT_ECONOMIC_CONFIG, economicsConfigPath, sha256Hex } from "./lib/e
 import { LineageError, economicLineage } from "./lib/lineage";
 import { toLineageWork, workByCr, worksReader } from "./lineage";
 import { brandForFamily } from "./brands";
+import { saleCredits } from "./artists";
 import type { Id } from "./_generated/dataModel";
 
 // The creator pool's roles; affiliate and brand never come from recipientShares, but share its type.
@@ -14,6 +15,7 @@ const roleValidator = v.union(
   v.literal("upstream"),
   v.literal("affiliate"),
   v.literal("brand"),
+  v.literal("artist"),
 );
 
 // The work page's Economics panel: who shares in a sale of this work and how much, under the
@@ -44,8 +46,14 @@ export const panel = query({
       provenance: v.union(v.literal("pending"), v.literal("confirmed")),
       // Lineage the panel couldn't resolve (a missing ancestor); no shares are shown.
       unavailable: v.boolean(),
+      // An outside artist's share names the artist (convex/artists.ts), not their account.
       shares: v.array(
-        v.object({ username: v.string(), roles: v.array(roleValidator), bps: v.number() }),
+        v.object({
+          username: v.string(),
+          roles: v.array(roleValidator),
+          bps: v.number(),
+          artist: v.union(v.null(), v.object({ name: v.string(), slug: v.string() })),
+        }),
       ),
     }),
   ),
@@ -80,10 +88,17 @@ export const panel = query({
       if (!(error instanceof LineageError)) throw error;
       return { ...base, kind: work.effectiveKind ?? work.kind, unavailable: true, shares: [] };
     }
+    const credits = config.artistShareBps ? await saleCredits(ctx, work) : null;
     const shares = await Promise.all(
-      recipientShares(lineage, config).map(async (share) => {
+      recipientShares(lineage, config, credits?.credits).map(async (share) => {
         const user = await ctx.db.get("users", share.who as Id<"users">);
-        return { username: user?.username ?? "member", roles: share.roles, bps: share.bps };
+        const artist = share.roles.includes("artist") ? credits?.byRecipient.get(share.who) : undefined;
+        return {
+          username: user?.username ?? "member",
+          roles: share.roles,
+          bps: share.bps,
+          artist: artist ? { name: artist.name, slug: artist.slug } : null,
+        };
       }),
     );
     return { ...base, kind: lineage.kind, unavailable: false, shares };

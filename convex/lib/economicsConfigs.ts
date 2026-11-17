@@ -1,7 +1,7 @@
 // Published economics configs by version (V1 plan U10, judging evidence). Each is served at
 // /economics/v<version>.json as exactly canonicalConfigJson(config); its SHA-256 is what work pages
 // show and the registry records.
-import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, canonicalConfigJson } from "./economics";
+import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, ECONOMIC_CONFIG_V5, canonicalConfigJson } from "./economics";
 import type { EconomicConfig } from "./economics";
 
 export const ECONOMIC_CONFIGS: Readonly<Record<number, EconomicConfig>> = {
@@ -9,10 +9,13 @@ export const ECONOMIC_CONFIGS: Readonly<Record<number, EconomicConfig>> = {
   2: ECONOMIC_CONFIG_V2,
   3: ECONOMIC_CONFIG_V3,
   4: ECONOMIC_CONFIG_V4,
+  5: ECONOMIC_CONFIG_V5,
 };
 
 // New orders follow the current rules; each order line keeps the version it was sold under.
-export const CURRENT_ECONOMIC_CONFIG = ECONOMIC_CONFIG_V4;
+// v5 adds artist credits and isn't registered on Monad yet: costs-first sharing (docs/decisions.md)
+// joins it before it reaches production.
+export const CURRENT_ECONOMIC_CONFIG = ECONOMIC_CONFIG_V5;
 
 export function economicsConfigPath(version: number) {
   return `/economics/v${version}.json`;

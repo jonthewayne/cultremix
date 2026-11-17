@@ -28,6 +28,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VerifyPhoneRouteImport } from './routes/verify-phone'
 import { Route as VersionDotjsonRouteImport } from './routes/version[.]json'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminArtistsRouteImport } from './routes/admin.artists'
 import { Route as AdminBrandsRouteImport } from './routes/admin.brands'
 import { Route as AdminJudgesRouteImport } from './routes/admin.judges'
 import { Route as AdminLineageRouteImport } from './routes/admin.lineage'
@@ -39,6 +40,7 @@ import { Route as AdminProductsRouteImport } from './routes/admin.products'
 import { Route as AdminSaleRouteImport } from './routes/admin.sale'
 import { Route as AdminWaitlistRouteImport } from './routes/admin.waitlist'
 import { Route as AdminChainRouteImport } from './routes/admin_.chain'
+import { Route as ArtistSlugRouteImport } from './routes/artist.$slug'
 import { Route as AuthCompleteRouteImport } from './routes/auth/complete'
 import { Route as CrCrRouteImport } from './routes/cr.$cr'
 import { Route as EconomicsFileRouteImport } from './routes/economics.$file'
@@ -148,6 +150,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminArtistsRoute = AdminArtistsRouteImport.update({
+  id: '/artists',
+  path: '/artists',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminBrandsRoute = AdminBrandsRouteImport.update({
   id: '/brands',
   path: '/brands',
@@ -201,6 +208,11 @@ const AdminWaitlistRoute = AdminWaitlistRouteImport.update({
 const AdminChainRoute = AdminChainRouteImport.update({
   id: '/admin_/chain',
   path: '/admin/chain',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArtistSlugRoute = ArtistSlugRouteImport.update({
+  id: '/artist/$slug',
+  path: '/artist/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCompleteRoute = AuthCompleteRouteImport.update({
@@ -288,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
   '/version.json': typeof VersionDotjsonRoute
+  '/admin/artists': typeof AdminArtistsRoute
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
@@ -299,6 +312,7 @@ export interface FileRoutesByFullPath {
   '/admin/sale': typeof AdminSaleRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin/chain': typeof AdminChainRoute
+  '/artist/$slug': typeof ArtistSlugRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
@@ -332,6 +346,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
   '/version.json': typeof VersionDotjsonRoute
+  '/admin/artists': typeof AdminArtistsRoute
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
@@ -343,6 +358,7 @@ export interface FileRoutesByTo {
   '/admin/sale': typeof AdminSaleRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin/chain': typeof AdminChainRoute
+  '/artist/$slug': typeof ArtistSlugRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
@@ -378,6 +394,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/verify-phone': typeof VerifyPhoneRoute
   '/version.json': typeof VersionDotjsonRoute
+  '/admin/artists': typeof AdminArtistsRoute
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/judges': typeof AdminJudgesRoute
   '/admin/lineage': typeof AdminLineageRoute
@@ -389,6 +406,7 @@ export interface FileRoutesById {
   '/admin/sale': typeof AdminSaleRoute
   '/admin/waitlist': typeof AdminWaitlistRoute
   '/admin_/chain': typeof AdminChainRoute
+  '/artist/$slug': typeof ArtistSlugRoute
   '/auth/complete': typeof AuthCompleteRoute
   '/cr/$cr': typeof CrCrRoute
   '/economics/$file': typeof EconomicsFileRoute
@@ -425,6 +443,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/verify-phone'
     | '/version.json'
+    | '/admin/artists'
     | '/admin/brands'
     | '/admin/judges'
     | '/admin/lineage'
@@ -436,6 +455,7 @@ export interface FileRouteTypes {
     | '/admin/sale'
     | '/admin/waitlist'
     | '/admin/chain'
+    | '/artist/$slug'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
@@ -469,6 +489,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/verify-phone'
     | '/version.json'
+    | '/admin/artists'
     | '/admin/brands'
     | '/admin/judges'
     | '/admin/lineage'
@@ -480,6 +501,7 @@ export interface FileRouteTypes {
     | '/admin/sale'
     | '/admin/waitlist'
     | '/admin/chain'
+    | '/artist/$slug'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
@@ -514,6 +536,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/verify-phone'
     | '/version.json'
+    | '/admin/artists'
     | '/admin/brands'
     | '/admin/judges'
     | '/admin/lineage'
@@ -525,6 +548,7 @@ export interface FileRouteTypes {
     | '/admin/sale'
     | '/admin/waitlist'
     | '/admin_/chain'
+    | '/artist/$slug'
     | '/auth/complete'
     | '/cr/$cr'
     | '/economics/$file'
@@ -561,6 +585,7 @@ export interface RootRouteChildren {
   VerifyPhoneRoute: typeof VerifyPhoneRoute
   VersionDotjsonRoute: typeof VersionDotjsonRoute
   AdminChainRoute: typeof AdminChainRoute
+  ArtistSlugRoute: typeof ArtistSlugRoute
   AuthCompleteRoute: typeof AuthCompleteRoute
   CrCrRoute: typeof CrCrRoute
   EconomicsFileRoute: typeof EconomicsFileRoute
@@ -711,6 +736,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/artists': {
+      id: '/admin/artists'
+      path: '/artists'
+      fullPath: '/admin/artists'
+      preLoaderRoute: typeof AdminArtistsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/brands': {
       id: '/admin/brands'
       path: '/brands'
@@ -786,6 +818,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/chain'
       fullPath: '/admin/chain'
       preLoaderRoute: typeof AdminChainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/artist/$slug': {
+      id: '/artist/$slug'
+      path: '/artist/$slug'
+      fullPath: '/artist/$slug'
+      preLoaderRoute: typeof ArtistSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/complete': {
@@ -883,6 +922,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminArtistsRoute: typeof AdminArtistsRoute
   AdminBrandsRoute: typeof AdminBrandsRoute
   AdminJudgesRoute: typeof AdminJudgesRoute
   AdminLineageRoute: typeof AdminLineageRoute
@@ -897,6 +937,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminArtistsRoute: AdminArtistsRoute,
   AdminBrandsRoute: AdminBrandsRoute,
   AdminJudgesRoute: AdminJudgesRoute,
   AdminLineageRoute: AdminLineageRoute,
@@ -932,6 +973,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyPhoneRoute: VerifyPhoneRoute,
   VersionDotjsonRoute: VersionDotjsonRoute,
   AdminChainRoute: AdminChainRoute,
+  ArtistSlugRoute: ArtistSlugRoute,
   AuthCompleteRoute: AuthCompleteRoute,
   CrCrRoute: CrCrRoute,
   EconomicsFileRoute: EconomicsFileRoute,

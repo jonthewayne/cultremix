@@ -10,6 +10,7 @@ import { shopTables } from "./schema/shop";
 import { publishTables } from "./schema/publish";
 import { budgetTables } from "./schema/budget";
 import { merchTables } from "./schema/merch";
+import { artistsTables } from "./schema/artists";
 
 export const platformRoleValidator = v.union(
   v.literal("user"),
@@ -76,6 +77,10 @@ export default defineSchema({
     bio: v.optional(v.string()),
     // False when the member turned off sale emails in Settings (convex/saleEmails.ts).
     saleEmails: v.optional(v.boolean()),
+    // A hidden account that holds an unclaimed outside artist's shares (convex/artists.ts). Never
+    // signs in; claimedBy is the member its shares moved to once the artist claimed them.
+    artistPayee: v.optional(v.boolean()),
+    claimedBy: v.optional(v.id("users")),
   })
     .index("by_authId", ["authId"])
     .index("by_email", ["email"])
@@ -225,4 +230,5 @@ export default defineSchema({
   ...publishTables,
   ...budgetTables,
   ...merchTables,
+  ...artistsTables,
 });

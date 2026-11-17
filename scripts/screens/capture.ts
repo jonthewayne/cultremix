@@ -249,6 +249,9 @@ try {
   screen(visit, "followers", "Followers", "Who follows a creator, each with a Follow button.", () => {
     go("/u/" + creator + "/followers");
   });
+  screen(visit, "artist", "An artist's page", "An outside artist designs credit as an inspiration: the designs that credit them, what's set aside from sales, and where they claim it.", () => {
+    go("/artist/" + (process.env.SCREENS_ARTIST ?? "mara-sol"));
+  });
   screen(visit, "onchain", "On Monad", "What CultRemix records on Monad and how anyone can check a design's record themselves, by dropping in its file.", () => {
     go("/onchain");
   });
@@ -372,6 +375,7 @@ try {
     ["/admin/waitlist", "admin-waitlist", "Waitlist", "Early-access emails, and the one email they get when buying opens."],
     ["/admin/chain", "admin-chain", "Monad", "The relayer, the record queue, and members' wallets."],
     ["/admin/brands", "admin-brands", "Brands", "Brand deals and what one shirt pays everyone under each deal."],
+    ["/admin/artists", "admin-artists", "Artists", "Outside artists designs credit: claims waiting for a look, a design's credits by CR number, and what's held for each artist."],
     ["/admin/lineage", "admin-lineage", "Lineage corrections", "Fixing a design's lineage when it turns out to remix something else."],
     ["/admin/judges", "admin-judges", "Judges", "Judge accounts from the hackathon."],
   ];

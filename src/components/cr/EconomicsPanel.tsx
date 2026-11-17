@@ -10,6 +10,7 @@ function roleLabel(role: Panel["shares"][number]["roles"][number], kind: Panel["
   if (role === "family_root") return "started the family";
   if (role === "affiliate") return "shared the link";
   if (role === "brand") return "the brand";
+  if (role === "artist") return "inspired the design";
   return kind === "fork" ? "made the design it forked from" : "made the design its family forked from";
 }
 
@@ -41,11 +42,17 @@ export function EconomicsPanel({ cr }: { cr: string }) {
       ) : (
         <ul aria-label="Split of the creator share" className="mt-3 divide-y divide-neutral-200">
           {panel.shares.map((share) => (
-            <li key={share.username} className="flex items-baseline justify-between gap-4 py-2">
+            <li key={share.artist?.slug ?? share.username} className="flex items-baseline justify-between gap-4 py-2">
               <span className="min-w-0">
-                <a href={`/u/${share.username}`} className="font-bold hover:underline">
-                  @{share.username}
-                </a>
+                {share.artist && share.roles.every((role) => role === "artist") ? (
+                  <a href={`/artist/${share.artist.slug}`} className="font-bold hover:underline">
+                    {share.artist.name}
+                  </a>
+                ) : (
+                  <a href={`/u/${share.username}`} className="font-bold hover:underline">
+                    @{share.username}
+                  </a>
+                )}
                 <span className="text-sm text-neutral-500"> · {share.roles.map((role) => roleLabel(role, panel.kind)).join(" and ")}</span>
               </span>
               <span className="font-cr text-2xl tabular-nums">{percent(share.bps)}</span>

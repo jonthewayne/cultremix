@@ -14,6 +14,7 @@ const tabs = [
   { to: "/admin/orders", label: "Orders", exact: false },
   { to: "/admin/payouts", label: "Payouts", exact: false },
   { to: "/admin/brands", label: "Brands", exact: false },
+  { to: "/admin/artists", label: "Artists", exact: false },
   { to: "/admin/waitlist", label: "Waitlist", exact: false },
   { to: "/admin/chain", label: "Monad", exact: false },
 ] as const;

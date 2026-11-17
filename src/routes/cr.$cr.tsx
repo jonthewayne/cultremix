@@ -34,6 +34,7 @@ import { ShareButton } from "~/components/social/ShareButton";
 import { PrintEntry } from "~/components/print/PrintEntry";
 import { PlacementEditor } from "~/components/publish/PlacementEditor";
 import { ColorEditor } from "~/components/publish/ColorEditor";
+import { InspiredBy } from "~/components/cr/InspiredBy";
 import { pageColors, selectedColor } from "~/lib/pickedColor";
 import { shareMeta, workShareCard } from "~/lib/share";
 import { keepHyphens } from "~/lib/utils";
@@ -138,6 +139,7 @@ function ShopPage() {
               </Link>
               {item.creator.creatorNumber === 1 && <span className="text-neutral-500"> · Creator № 1</span>}
             </p>
+            <InspiredBy cr={item.cr} />
             <LineageNote cr={item.cr} />
             <WordChangesNote workId={item.workId} />
             <PartChangesNote workId={item.workId} />

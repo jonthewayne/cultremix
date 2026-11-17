@@ -16,6 +16,7 @@ import { inheritOnPublish } from "./remixFields";
 import { carrySetup, inheritPartsOnPublish } from "./remixParts";
 import { allowedChangesNote } from "./lib/remixParts";
 import { keptPieces } from "./lib/keptWords";
+import { setWorkCredits } from "./artists";
 import { activePalette, colorLookup } from "./merch";
 import { relistColors } from "./sales";
 import { chosenProducts, offeredShopProducts, retireKeptListings } from "./lib/shopProduct";
@@ -320,6 +321,9 @@ export const quick = mutation({
     // on the default product.
     printPlacement: v.optional(relativePlacementValidator),
     printProducts: v.optional(v.array(v.object({ productId: v.number(), placement: v.optional(relativePlacementValidator) }))),
+    // Up to three known artists who inspired it ("Inspired by"), each with a link to their work.
+    // Their share comes out of this creator's part of each sale (convex/artists.ts).
+    artists: v.optional(v.array(v.object({ name: v.string(), link: v.string() }))),
   },
   returns: v.object({ workId: v.id("works"), cr: v.string(), kept: v.optional(v.boolean()) }),
   handler: async (ctx, args) => {
@@ -416,6 +420,7 @@ export const quick = mutation({
     }
     // Remixable words and parts the creator set up in the studio come along.
     await carrySetup(ctx, workId, generation);
+    if (args.artists?.length) await setWorkCredits(ctx, workId, args.artists, user._id, "creator");
     await ctx.scheduler.runAfter(0, internal.imageGen.publishAssets, { workId });
     return keep ? { workId, cr: "", kept: true } : { workId, cr: formatCr(crFamily, crExpression) };
   },

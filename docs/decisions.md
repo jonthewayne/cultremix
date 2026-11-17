@@ -67,7 +67,7 @@ Example: an independently created “Grow Slow” design does not owe the first 
 
 ## 2026-11-12: Credit and a reserved share for outside artists (updated 2026-11-16)
 
-**Status: direction agreed by Jon; not built.** A creator sometimes builds a design on an outside artist's work or distinctive style. CultRemix can credit that artist and set part of each sale aside for them before they've heard of CultRemix, held until they claim it. The credit is goodwill. It doesn't mean the artist owns a style, and it doesn't make copying acceptable.
+**Status: agreed by Jon and built on dev (November 16, 2026), as economics v5. Not on production until costs-first sharing joins v5.** A creator sometimes builds a design on an outside artist's work or distinctive style. CultRemix can credit that artist and set part of each sale aside for them before they've heard of CultRemix, held until they claim it. The credit is goodwill. It doesn't mean the artist owns a style, and it doesn't make copying acceptable.
 
 **Who credits an artist.**
 
@@ -100,6 +100,8 @@ With two or three artists, each artist gets an equal part of the same one fifth.
 - **Inspired by the style:** the design stays up. The artist can keep the credit, rename it, or decline it.
 - **Too close to the artist's style or work:** staff suspend the design and ask its creator to remix it further until it's distinct. The creator's own design keeps its place in its family; the change shows in its history.
 - **A copy of a specific artwork, or a trademark:** that's a different question from style. A valid copyright or trademark notice goes through the existing takedown path, and staff follow the law.
+
+**As built (dev, November 16).** The publish sheet asks "Inspired by an artist?" (optional, up to three, a name and a link each). Admin, **Artists** has waiting claims, a design's credits by CR number, and every artist with what's held. Each design page shows "Inspired by Jane Doe (unclaimed)" (with "via CR …" when the credit comes from an earlier design in the lineage), and its economics panel lists the artist's share. /artist/<slug> lists the designs that credit them and what's set aside, and is where they claim it. An unclaimed artist's shares are paid to a hidden payee account and held there; approving a claim gives the claimant creator access, moves everything held to their account, and redirects later syncs of those orders too. Splitting among artists rounds to whole hundredths of the pool, so three artists get 600 basis points each and the creator keeps the 200 left over. Code: `convex/artists.ts`, `convex/lib/artistCredits.ts`, v5 in `convex/lib/economics.ts`; tests in `tests/unit/artistCredits.test.ts` and `tests/convex-local/artists.test.ts`. Not built yet: the Monad record of credits (a hashed artist ID), notifications when a claim is decided, and the Terms' wording.
 
 **Rules and Monad.** This adds an "artist" role to the economics rules, so it ships as a new rules version, ideally together with costs-first sharing. Monad records the credit under a hashed artist ID and never stores the artist's private details. The Terms should explain that a credit is recognition, not a license.
 

@@ -36,7 +36,9 @@ export function configFor(version: number): EconomicConfig {
 // Shares owed to someone without creator access when the order happened, and still without it,
 // are held ("not_creator") until releaseCreatorHolds runs for them (lib/creators.ts
 // creatorEligibleAt, plan A1). An affiliate's or a brand's share isn't a creator's, so it isn't held.
-const CREATOR_ROLES: ReadonlyArray<EconomicRole> = ["creator", "family_root", "upstream"];
+// An outside artist's share is held the same way: its hidden payee account (convex/artists.ts) never
+// has creator access, so the share waits until the artist claims it.
+const CREATOR_ROLES: ReadonlyArray<EconomicRole> = ["creator", "family_root", "upstream", "artist"];
 
 function earnsAsCreator(roles: ReadonlyArray<EconomicRole> | undefined) {
   return !roles || roles.some((role) => CREATOR_ROLES.includes(role));
@@ -147,9 +149,69 @@ async function setGroupState(
 
 // Brings an order's earnings up to date with its stored inputs. Safe to call any number of times.
 // Returns the sale rows it wrote, for notifyNewSales once the caller has applied everything.
+// An outside artist's shares move to their own account once their claim is approved
+// (convex/artists.ts approveClaim): on this order, every line, refund split, and earnings row that
+// names their hidden payee names the member instead, so a later sync keeps paying the member. A
+// line that already pays the member in another role keeps the payee, so no share is counted twice.
+export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"orders">) {
+  const items = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(250);
+  const target = new Map<string, Id<"users">>();
+  for (const item of items) {
+    for (const recipient of item.recipients) {
+      if (target.has(recipient.who)) continue;
+      const user = await ctx.db.get("users", recipient.who);
+      if (user?.artistPayee && user.claimedBy) target.set(recipient.who, user.claimedBy);
+    }
+  }
+  if (target.size === 0) return;
+  // Which (line, payee) pairs move.
+  const moves = new Map<string, Map<string, Id<"users">>>();
+  for (const item of items) {
+    const here = new Map<string, Id<"users">>();
+    for (const recipient of item.recipients) {
+      const to = target.get(recipient.who);
+      if (to && !item.recipients.some((r) => r.who === to)) here.set(recipient.who, to);
+    }
+    if (here.size === 0) continue;
+    moves.set(item._id, here);
+    await ctx.db.patch("orderItems", item._id, {
+      recipients: item.recipients.map((r) => (here.has(r.who) ? { ...r, who: here.get(r.who)! } : r)),
+    });
+  }
+  if (moves.size === 0) return;
+  const refunds = await ctx.db.query("refunds").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(100);
+  for (const refund of refunds) {
+    let changed = false;
+    const lines = refund.lines.map((line) => {
+      const here = moves.get(line.orderItemId);
+      if (!here) return line;
+      return {
+        ...line,
+        units: line.units.map((unit) => ({
+          ...unit,
+          split: unit.split.map((part) => {
+            const to = here.get(part.who);
+            if (!to) return part;
+            changed = true;
+            return { ...part, who: to };
+          }),
+        })),
+      };
+    });
+    if (changed) await ctx.db.patch("refunds", refund._id, { lines });
+  }
+  const rows = await ctx.db.query("earnings").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(8000);
+  const now = Date.now();
+  for (const row of rows) {
+    const to = moves.get(row.orderItemId)?.get(row.recipientId);
+    if (to) await ctx.db.patch("earnings", row._id, { recipientId: to, updatedAt: now });
+  }
+}
+
 export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">): Promise<Array<Id<"earnings">>> {
   const order = await ctx.db.get("orders", orderId);
   if (!order || order.economicEventAt === undefined) return [];
+  await redirectClaimedPayees(ctx, orderId);
   // A production test order never creates earnings.
   if (order.isTest && !order.simulated) return [];
   const now = Date.now();
@@ -383,6 +445,8 @@ export async function notifyNewSales(ctx: MutationCtx, orderId: Id<"orders">, fr
   // What each recipient gets an email about (real orders, shares they can be paid).
   const emails = new Map<Id<"users">, Array<{ workId: Id<"works">; cents: number; units: number }>>();
   for (const total of totals.values()) {
+    // An unclaimed artist's hidden payee never signs in, so it hears nothing.
+    if ((await ctx.db.get("users", total.recipientId))?.artistPayee) continue;
     // A kept design sells only to its creator, so they bought it themselves: no "someone bought".
     const work = await ctx.db.get("works", total.workId);
     if (work?.status === "private" && work.creatorId === total.recipientId) continue;

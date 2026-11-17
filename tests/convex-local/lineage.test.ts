@@ -325,11 +325,11 @@ describe("work page lineage", () => {
 
     const panel = await t.query(api.workEconomics.panel, { cr: deep.cr });
     expect(panel?.shares).toEqual([
-      { username: "alice", roles: ["creator"], bps: 5000 },
-      { username: "cara", roles: ["family_root"], bps: 3000 },
-      { username: "bob", roles: ["upstream"], bps: 2000 },
+      { username: "alice", roles: ["creator"], bps: 5000, artist: null },
+      { username: "cara", roles: ["family_root"], bps: 3000, artist: null },
+      { username: "bob", roles: ["upstream"], bps: 2000, artist: null },
     ]);
-    expect(panel).toMatchObject({ configVersion: 4, configPath: "/economics/v4.json", provenance: "pending", affiliateBps: 500, brand: null });
+    expect(panel).toMatchObject({ configVersion: 5, configPath: "/economics/v5.json", provenance: "pending", affiliateBps: 500, brand: null });
     expect(panel?.configSha256).toMatch(/^[0-9a-f]{64}$/u);
     expect(panel!.shares.reduce((sum, share) => sum + share.bps, 0)).toBe(10000);
   });
@@ -433,7 +433,7 @@ describe("lineage amendments", () => {
     expect(doc.effectiveKind).toBe("original");
     expect(doc.effectiveParentWorkId).toBeUndefined();
     const panel = await t.query(api.workEconomics.panel, { cr: fork.cr });
-    expect(panel?.shares).toEqual([{ username: "bob", roles: ["creator"], bps: 10000 }]);
+    expect(panel?.shares).toEqual([{ username: "bob", roles: ["creator"], bps: 10000, artist: null }]);
   });
 
   it("refuses offchain confirmation while chain writes are on, and runs the chain path", async () => {

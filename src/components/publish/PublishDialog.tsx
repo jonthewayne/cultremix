@@ -21,6 +21,8 @@ import type { RelativePlacement } from "~/lib/print/shirtPlacement";
 import { Art } from "~/components/cr/Art";
 import { CrMark } from "~/components/cr/CrMark";
 import { RemixKindChoice } from "~/components/cr/RemixKindChoice";
+import { ArtistCreditChoice, artistsToSend } from "~/components/publish/ArtistCreditChoice";
+import type { ArtistDraft } from "~/components/publish/ArtistCreditChoice";
 import { RemixableParts } from "~/components/cr/RemixableParts";
 import { useDesignPixels } from "~/lib/designPixels";
 import { errorMessage, inkOn } from "~/lib/imagePrep";
@@ -64,6 +66,7 @@ export function PublishDialog({
   const colorOf = (key: string) => garmentColor(key, palette);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [artists, setArtists] = useState<Array<ArtistDraft>>([]);
   // A remix is a variation unless it reads as a new design, when fork starts selected until the
   // member picks; if it couldn't be compared, variation starts selected
   // (components/cr/RemixKindChoice.tsx).
@@ -203,6 +206,7 @@ export function PublishDialog({
         generationId: tile.generationId,
         title: title || undefined,
         description: description.trim() || undefined,
+        artists: artistsToSend(artists),
         remixKind: keep ? undefined : remixKind,
         offeredColors: selected,
         ...(keep ? { keep: "private" as const } : {}),
@@ -496,6 +500,8 @@ export function PublishDialog({
               className="mt-2 w-full resize-none rounded-2xl border-2 border-neutral-200 bg-transparent p-3 text-base outline-none placeholder:text-neutral-400 focus:border-black"
             />
           </label>
+
+          <ArtistCreditChoice value={artists} onChange={setArtists} disabled={saving} />
 
           <fieldset disabled={saving}>
             <legend className="flex w-full items-baseline justify-between text-sm font-bold uppercase tracking-wider">

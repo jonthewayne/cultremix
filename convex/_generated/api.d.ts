@@ -11,6 +11,7 @@
 import type * as activity from "../activity.js";
 import type * as admin from "../admin.js";
 import type * as amendments from "../amendments.js";
+import type * as artists from "../artists.js";
 import type * as auth from "../auth.js";
 import type * as authVerification from "../authVerification.js";
 import type * as backs from "../backs.js";
@@ -40,6 +41,7 @@ import type * as invites from "../invites.js";
 import type * as judges from "../judges.js";
 import type * as keeps from "../keeps.js";
 import type * as lib_adminAccess from "../lib/adminAccess.js";
+import type * as lib_artistCredits from "../lib/artistCredits.js";
 import type * as lib_authEmail from "../lib/authEmail.js";
 import type * as lib_authRateLimit from "../lib/authRateLimit.js";
 import type * as lib_authVerification from "../lib/authVerification.js";
@@ -169,6 +171,7 @@ import type * as remixPartsActions from "../remixPartsActions.js";
 import type * as resources from "../resources.js";
 import type * as saleEmails from "../saleEmails.js";
 import type * as sales from "../sales.js";
+import type * as schema_artists from "../schema/artists.js";
 import type * as schema_budget from "../schema/budget.js";
 import type * as schema_chain from "../schema/chain.js";
 import type * as schema_cultremix from "../schema/cultremix.js";
@@ -207,6 +210,7 @@ declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   admin: typeof admin;
   amendments: typeof amendments;
+  artists: typeof artists;
   auth: typeof auth;
   authVerification: typeof authVerification;
   backs: typeof backs;
@@ -236,6 +240,7 @@ declare const fullApi: ApiFromModules<{
   judges: typeof judges;
   keeps: typeof keeps;
   "lib/adminAccess": typeof lib_adminAccess;
+  "lib/artistCredits": typeof lib_artistCredits;
   "lib/authEmail": typeof lib_authEmail;
   "lib/authRateLimit": typeof lib_authRateLimit;
   "lib/authVerification": typeof lib_authVerification;
@@ -365,6 +370,7 @@ declare const fullApi: ApiFromModules<{
   resources: typeof resources;
   saleEmails: typeof saleEmails;
   sales: typeof sales;
+  "schema/artists": typeof schema_artists;
   "schema/budget": typeof schema_budget;
   "schema/chain": typeof schema_chain;
   "schema/cultremix": typeof schema_cultremix;
