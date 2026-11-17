@@ -747,3 +747,23 @@ export const rejectClaim = mutation({
     return null;
   },
 });
+
+// Records every credited public work's credits on Monad that aren't recorded yet (a design credited
+// while ARTIST_HASH_SECRET was missing, say). Safe to rerun: a work whose latest record already says
+// the same is left alone (lineage.ts queueCreditRecord). A page of credits per call; deploy:migrate's
+// credits step follows the cursor.
+export const recordAllCredits = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  returns: v.object({ checked: v.number(), cursor: v.union(v.string(), v.null()), secret: v.boolean() }),
+  handler: async (ctx, args) => {
+    const secret = Boolean(process.env.ARTIST_HASH_SECRET?.trim());
+    if (!secret) return { checked: 0, cursor: null, secret };
+    const page = await ctx.db.query("artistCredits").paginate({ numItems: 100, cursor: args.cursor ?? null });
+    const works = [...new Set(page.page.map((row) => row.workId))];
+    for (const workId of works) {
+      const work = await ctx.db.get("works", workId);
+      if (work) await recordCredits(ctx, workId, work.creatorId);
+    }
+    return { checked: works.length, cursor: page.isDone ? null : page.continueCursor, secret };
+  },
+});

@@ -50,8 +50,8 @@ export type LineLedger = {
   itemId: string;
   lineItemId: string;
   baseCents: number;
-  // Costs first (economics v6): what the line had left to share after its costs. A refund comes
-  // out of that first, since the costs were spent either way.
+  // Costs first (economics v6): what the line had left to share after its costs. A whole-unit refund
+  // takes back that unit's share; other refunded amounts come out of what's left first (costsFirstTarget).
   distributableCents?: number;
   // Units earlier refunds that haven't failed gave back whole.
   refundedQuantity?: number;

@@ -281,6 +281,24 @@ export const STEPS: Array<Step> = [
       return { line };
     },
   },
+  {
+    name: "credits",
+    fn: "artists:recordAllCredits",
+    does: "queues a Monad record of each credited public design's artist credits that isn't recorded yet",
+    copy: "new on November 16, 2026 (no rehearsal figure)",
+    async run({ call }) {
+      let checked = 0;
+      let cursor: string | null = null;
+      for (;;) {
+        const page = (await call("artists:recordAllCredits", cursor ? { cursor } : {})) as { checked: number; cursor: string | null; secret: boolean };
+        if (!page.secret) return { line: "skipped", attention: "ARTIST_HASH_SECRET isn't set, so artist credits aren't recorded on Monad. Set it (docs/environment-variables.md) and run --only credits." };
+        checked += page.checked;
+        if (!page.cursor) break;
+        cursor = page.cursor;
+      }
+      return { line: "checked " + plural(checked, "credited design") };
+    },
+  },
 ];
 
 function valueOf(argv: Array<string>, flag: string) {
