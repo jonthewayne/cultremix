@@ -4,7 +4,7 @@ CultRemix, built from starter `4b5d609`. Today's plan: `docs/plans/2026-09-29-sp
 
 ## Production (judging freeze lifted 2026-11-11)
 
-Jon lifted the judging freeze in writing on November 11, 2026. Production can be deployed again from this folder, in the order in `docs/deployment-cloudflare.md`, after the usual checks pass on dev. Production ran `4e90c3b` (tag `hackathon-submission`) through judging, and `982012c` from November 16 (prompt protection and artist credits, after a cross-model review). From the next deploy, every deployment runs economics v6 (costs first, with artist credits). Costs-first sharing and private brand deals shipped together as v6 (`docs/decisions.md`); register rules versions on Monad in order, never v4 by itself. The priorities after the hackathon are in `docs/roadmap.md`.
+Jon lifted the judging freeze in writing on November 11, 2026. Production can be deployed again from this folder, in the order in `docs/deployment-cloudflare.md`, after the usual checks pass on dev. Production ran `4e90c3b` (tag `hackathon-submission`) through judging, `982012c` on November 16 (prompt protection and artist credits), and `69ea9a4` later that day (costs-first sharing as economics v6, artist claims and Monad credit records; both after cross-model reviews). Every deployment runs economics v6. Costs-first sharing and private brand deals shipped together as v6 (`docs/decisions.md`); register rules versions on Monad in order, never v4 by itself. The priorities after the hackathon are in `docs/roadmap.md`.
 
 ## Git
 
