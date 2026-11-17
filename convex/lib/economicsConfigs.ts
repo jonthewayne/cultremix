@@ -13,21 +13,15 @@ export const ECONOMIC_CONFIGS: Readonly<Record<number, EconomicConfig>> = {
   6: ECONOMIC_CONFIG_V6,
 };
 
-// New orders follow the current rules; each order line keeps the version it was sold under.
-// v6 is costs-first sharing with artist credits (docs/decisions.md). Dev and staging run it by
-// themselves; production, and a deployment whose DEPLOYMENT_ENV isn't recognized, stay on v4 until
-// ECONOMICS_VERSION=6 is set there on purpose. Lines keep their version, so a rules version that
-// reached production by accident couldn't be taken back. v5 (artist credits on the price) only ever
-// ran on dev and is kept for the lines sold under it. ECONOMICS_VERSION names any published
-// version explicitly (the in-memory tests run v5's math unless a test asks for v6).
+// New orders follow the current rules; each order line keeps the version it was sold under. The
+// current rules are v6, costs-first sharing with artist credits (docs/decisions.md), everywhere.
+// ECONOMICS_VERSION can name another published version for a deployment (the in-memory tests run
+// v5's math unless a test asks for v6); an unknown value is ignored. v5 only ever ran on dev and is
+// kept for the lines sold under it.
 export function currentEconomicConfig(env: Record<string, string | undefined> = process.env): EconomicConfig {
-  // DEPLOYMENT_ENV read as convex/lib/shopFlags.ts deploymentEnv reads it (not imported: this file
-  // also ships to the browser for /economics/v<n>.json).
-  const where = env.DEPLOYMENT_ENV?.trim().toLowerCase();
   const named = Number(env.ECONOMICS_VERSION?.trim());
   if (Number.isInteger(named) && Object.prototype.hasOwnProperty.call(ECONOMIC_CONFIGS, named)) return ECONOMIC_CONFIGS[named];
-  const latestHere = where === "dev" || where === "development" || where === "staging";
-  return latestHere ? ECONOMIC_CONFIG_V6 : ECONOMIC_CONFIG_V4;
+  return ECONOMIC_CONFIG_V6;
 }
 
 // Whether new sales pay credited artists, which is what the publish sheet's credit question and

@@ -30,6 +30,8 @@ export const artistsTables = {
     // (convex/artists.ts approveClaim, finishClaim, adminUnclaim). reviewJob is finishClaim's run.
     reviewUntil: v.optional(v.number()),
     reviewJob: v.optional(v.id("_scheduled_functions")),
+    // The admin who approved the claim, for the creator-access record when the review ends.
+    approvedBy: v.optional(v.id("users")),
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.number(),

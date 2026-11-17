@@ -216,11 +216,11 @@ describe("publishing a remix as a variation or a fork", () => {
     expect(await relation(wordsOnly)).toEqual({ status: "none", waits: true });
     await expect(publishAs(wordsOnly, "boxes-early")).rejects.toThrow(/Still comparing/);
     await bob.as.mutation(api.publish.checkRemix, { generationId: wordsOnly });
-    await t.mutation(internal.publish.saveRemixCheck, { generationId: wordsOnly, verdict: "variation", reason: "Same.", keptMissing: [] });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: wordsOnly, verdict: "variation", reason: "Same.", keptMissing: [], keptCompared: ["SLOW"] });
     expect(await relation(wordsOnly)).toEqual({ status: "words" });
     const boxesChanged = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: artKey });
     await bob.as.mutation(api.publish.checkRemix, { generationId: boxesChanged });
-    await t.mutation(internal.publish.saveRemixCheck, { generationId: boxesChanged, verdict: "variation", reason: "Same.", keptMissing: ["SLOW"] });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: boxesChanged, verdict: "variation", reason: "Same.", keptMissing: ["SLOW"], keptCompared: ["SLOW"] });
     expect(await relation(boxesChanged)).toMatchObject({ status: "fork", required: true });
     await expect(publishAs(boxesChanged, "boxes-variation", "variation")).rejects.toThrow(/publishes as a fork/);
 
@@ -238,7 +238,7 @@ describe("publishing a remix as a variation or a fork", () => {
     // The comparison calls it the same design, but SLOW is gone: a fork, never a variation.
     const changed = await tile(t, bob.userId, root.workId, { instruction: "Change SLOW to FAST", inspirationKey: artKey });
     await bob.as.mutation(api.publish.checkRemix, { generationId: changed });
-    await t.mutation(internal.publish.saveRemixCheck, { generationId: changed, verdict: "variation", reason: "New words.", keptMissing: ["SLOW"] });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: changed, verdict: "variation", reason: "New words.", keptMissing: ["SLOW"], keptCompared: ["SLOW"] });
     expect(await relation(changed)).toMatchObject({ status: "fork", required: true });
     await expect(publishAs(changed, "changed-variation", "variation")).rejects.toThrow(/publishes as a fork/);
     expect((await publishAs(changed, "changed-fork", "fork")).cr).toBe("102-001");
@@ -246,7 +246,7 @@ describe("publishing a remix as a variation or a fork", () => {
     // It kept SLOW and changed something else: a variation as usual.
     const fine = await tile(t, bob.userId, root.workId, { instruction: "Make the mushrooms blue", inspirationKey: artKey });
     await bob.as.mutation(api.publish.checkRemix, { generationId: fine });
-    await t.mutation(internal.publish.saveRemixCheck, { generationId: fine, verdict: "variation", reason: "Recolored.", keptMissing: [] });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: fine, verdict: "variation", reason: "Recolored.", keptMissing: [], keptCompared: ["SLOW"] });
     expect(await relation(fine)).toEqual({ status: "variation", reason: "Recolored." });
 
     // The original's creator keeps GROW too: a comparison read against SLOW alone is stale and runs again.
@@ -272,7 +272,7 @@ describe("publishing a remix as a variation or a fork", () => {
     expect((await t.run((ctx) => ctx.db.get("generations", asked)))?.remixCheck).toMatchObject({ status: "pending", attempts: 1 });
     await t.run((ctx) =>
       ctx.db.patch("generations", asked, {
-        remixCheck: { status: "done", requestedAt: Date.now(), attempts: 1, verdict: "variation", keptMissing: ["SLOW"] },
+        remixCheck: { status: "done", requestedAt: Date.now(), attempts: 1, verdict: "variation", keptMissing: ["SLOW"], keptCompared: ["SLOW"] },
       }),
     );
     const shared = (await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId })) as { cr: string };

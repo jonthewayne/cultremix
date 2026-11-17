@@ -41,8 +41,8 @@ async function registered(t: T, chain: FakeChain, options: Parameters<typeof ins
   return workId;
 }
 
-function amend(t: T, workId: Id<"works">, newParentWorkId: Id<"works"> | null, newKind: Kind, sequence: number, reasonHash: string = REASON) {
-  return t.mutation(internal.amendments.queueLineageAmendment, { workId, newParentWorkId, newKind, reasonHash, sequence });
+async function amend(t: T, workId: Id<"works">, newParentWorkId: Id<"works"> | null, newKind: Kind, sequence: number, reasonHash: string = REASON) {
+  return (await t.mutation(internal.amendments.queueLineageAmendment, { workId, newParentWorkId, newKind, reasonHash, sequence })).writeId;
 }
 
 async function refusal(promise: Promise<unknown>) {
@@ -198,6 +198,34 @@ describe("lineage corrections from the admin page", () => {
       effectiveParentWorkId: harbor,
       lineageAmendedAt: confirmed.effectiveFrom,
     });
+  });
+
+  it("sends an artist credit record after an open correction, carrying the corrected lineage", async () => {
+    const { t, chain } = setup();
+    await setChainWrites(t, true);
+    const owner = await insertOwner(t);
+    const harbor = await registered(t, chain, addressable());
+    const work = await registered(t, chain, addressable());
+    const amendmentId = await request(t, owner, work, "fork", harbor);
+    // Credits saved while the correction is open: the record waits for it.
+    const creditId = await t.run(async (ctx) => {
+      const { queueCreditRecord } = await import("../../convex/lineage");
+      const row = (await ctx.db.get("works", work))!;
+      return await queueCreditRecord(asCtx(ctx), row, row.creatorId, ["ab".repeat(32)]);
+    });
+    await t.mutation(internal.chain.kick, {});
+    expect((await correction(t, creditId)).status).toBe("requested");
+    await settle(t, chain);
+    expect((await correction(t, amendmentId)).status).toBe("confirmed");
+    // Now it goes, as amendment 2, with the lineage the correction set.
+    await t.mutation(internal.chain.kick, {});
+    await settle(t, chain);
+    expect(await correction(t, creditId)).toMatchObject({ status: "confirmed", chainSequence: 2, newKind: "fork", newParentId: harbor });
+    expect(chain.work(workIdFor(work))).toMatchObject({ kind: 2, parentId: workIdFor(harbor) });
+    // It changed nothing on the work.
+    expect((await t.run((ctx) => ctx.db.get("works", work)))!).toMatchObject({ effectiveKind: "fork", effectiveParentWorkId: harbor });
+    // A credit record isn't something to cancel or confirm by hand.
+    await expect(owner.mutation(api.lineage.cancelAmendment, { amendmentId: creditId })).rejects.toThrow();
   });
 
   it("waits while chain writes are off or the work is still registering", async () => {

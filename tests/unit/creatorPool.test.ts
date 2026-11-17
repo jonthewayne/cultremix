@@ -191,3 +191,28 @@ describe("helpers", () => {
     expect(shipmentUnits(3, 1, 3)).toBeNull();
   });
 });
+
+describe("refunds under costs first (v6)", () => {
+  it("takes a refund from what was left after costs first", () => {
+    const recipients = [{ who: "c", roles: ["creator" as const], bps: 1500 }];
+    const line = {
+      itemId: "i",
+      lineItemId: "L",
+      baseCents: 3000,
+      distributableCents: 1400,
+      poolCents: 210,
+      unitPoolCents: [210],
+      recipients,
+      unitStatus: ["unshipped" as const],
+      consumed: [new Map<string, number>()],
+      refundedAmountCents: 0,
+      refundedPoolCents: 0,
+    };
+    // $15 back of a line that left $14 after costs: the whole pool goes back.
+    const all = allocateRefund([line], { lines: [{ lineItemId: "L", quantity: 0, subtotalCents: 1500, taxCents: 0 }], shippingCents: 0, totalCents: 1500 });
+    expect(all.lines[0].units.reduce((sum, u) => sum + u.cents, 0)).toBe(210);
+    // $7 back: half the pool.
+    const half = allocateRefund([line], { lines: [{ lineItemId: "L", quantity: 0, subtotalCents: 700, taxCents: 0 }], shippingCents: 0, totalCents: 700 });
+    expect(half.lines[0].units.reduce((sum, u) => sum + u.cents, 0)).toBe(105);
+  });
+});

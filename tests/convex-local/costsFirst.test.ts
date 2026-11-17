@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import { PRINT_PRODUCT } from "../../shared/config/print-products";
 import { rawOrder } from "../fixtures/shopifyOrder";
 import { newTest } from "./setup";
@@ -76,17 +76,20 @@ describe("costs before sharing", () => {
     expect((await earningsFor(t, a)).map((r) => r.amountCents)).toEqual([310]);
   });
 
-  it("shares nothing and tells staff when a discount takes a sale below cost", async () => {
+  it("shares nothing when a discount takes a sale below cost, and holds it from printing", async () => {
     const t = newTest();
-    const { a, owner } = await setup(t, 1295);
+    const { a } = await setup(t, 1295);
     shopify.set(rawOrder({ id: 7002, name: "#2002", lines: [{ id: 12, variant: 1002, quantity: 1, price: "36.00", discount: "24.00" }] }));
     await deliver(t, { topic: "orders/paid", body: { id: 7002 } });
     const item = await t.run(async (ctx) => (await ctx.db.query("orderItems").collect())[0]);
     expect(item.costs).toMatchObject({ distributableCents: 0, belowCost: true });
     expect(item.poolCents).toBe(0);
     expect(await earningsFor(t, a)).toHaveLength(0);
-    const notes = await t.run((ctx) => ctx.db.query("notifications").filter((q) => q.eq(q.field("recipientId"), owner)).collect());
-    expect(notes.map((n) => [n.kind, n.orderName])).toEqual([["order_attention", "#2002"]]);
+    // Printing waits for the owner (convex/fulfillment.ts createPlan).
+    const order = await t.run(async (ctx) => (await ctx.db.query("orders").collect())[0]);
+    await t.mutation(internal.fulfillment.advance, { orderId: order._id });
+    const held = await t.run((ctx) => ctx.db.get("orders", order._id));
+    expect(held).toMatchObject({ fulfillmentState: "needs_attention", attentionReason: expect.stringMatching(/less than it costs/u) });
   });
 
   it("shares nothing until a product's cost is saved", async () => {

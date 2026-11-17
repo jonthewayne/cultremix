@@ -621,7 +621,12 @@ export const adminSetSale = mutation({
       a?.widthIn === b?.widthIn && a?.heightIn === b?.heightIn;
     // Areas typed in by hand are no longer the ones Printful's print files gave.
     const keepsChecked = same(frontArea, product.frontArea) && same(backArea, product.backArea);
-    // Every price has to cover what the sale costs before anything is shared (economics v6).
+    // Every price has to cover what the sale costs before anything is shared (economics v6), so a
+    // price can't be set before Printful's prices are saved to check it against.
+    const pricing = priceCents !== undefined || largePriceCents !== undefined || backExtraCents !== undefined;
+    if (pricing && !product.colors.some((color) => color.variants.some((variant) => variant.costCents !== undefined))) {
+      throw new ConvexError({ code: "NO_COSTS", message: "Printful's prices for this product aren't saved yet, so a price can't be checked. Refresh the product first." });
+    }
     const short = priceShortfall({ ...product, priceCents, largePriceCents, backExtraCents });
     if (short) throw new ConvexError({ code: "BELOW_COST", message: short });
     await ctx.db.patch("merchProducts", product._id, {
@@ -746,8 +751,13 @@ export function priceShortfall(product: Doc<"merchProducts">): string | null {
     { label: "The 2XL price", price: shop.largePriceCents, cost: most(true) },
   ];
   if (shop.back) {
-    checks.push({ label: "The price with a back print", price: shop.priceCents + shop.backExtraCents, cost: most(false) === null ? null : most(false)! + backCost });
-    checks.push({ label: "The 2XL price with a back print", price: shop.largePriceCents + shop.backExtraCents, cost: most(true) === null ? null : most(true)! + backCost });
+    // A chest mark with a back print is a second placement at Printful, for the same price.
+    const markCost = Math.max(product.placements?.find((p) => p.id === "front")?.extraCents ?? 0, backCost);
+    const plus = (cents: number | null, extra: number) => (cents === null ? null : cents + extra);
+    checks.push({ label: "The price with a back print", price: shop.priceCents + shop.backExtraCents, cost: plus(most(false), backCost) });
+    checks.push({ label: "The 2XL price with a back print", price: shop.largePriceCents + shop.backExtraCents, cost: plus(most(true), backCost) });
+    checks.push({ label: "The price with a back print and chest mark", price: shop.priceCents + shop.backExtraCents, cost: plus(most(false), backCost + markCost) });
+    checks.push({ label: "The 2XL price with a back print and chest mark", price: shop.largePriceCents + shop.backExtraCents, cost: plus(most(true), backCost + markCost) });
   }
   for (const check of checks) {
     if (check.cost === null || unitDistributable(check.price, check.cost, allowance) >= 0) continue;

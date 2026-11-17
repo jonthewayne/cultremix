@@ -74,8 +74,15 @@ function split(word: string, promptOnly: ReadonlySet<string>): Array<string> {
   return parts.length > 0 ? parts : [word];
 }
 
+// Only runs rebuilt from spaced-out letters are split; a word lettered whole stays as it was
+// (a long word the member asked for isn't taken apart into prompt words).
+function lettered(lettering: ReadonlyArray<string>) {
+  return new Set(lettering.flatMap((piece) => normalizeWords(piece).split(" ")).flatMap((word) => [word, [...word].reverse().join("")]));
+}
+
 function wordsFor(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray<string>) {
-  return letteredWords(lettering).flatMap((word) => split(word, promptOnly));
+  const whole = lettered(lettering);
+  return letteredWords(lettering).flatMap((word) => (whole.has(word) ? [word] : split(word, promptOnly)));
 }
 
 // The prompt-only words a design's lettering shows, each once.
@@ -100,11 +107,12 @@ export function isLeak(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray
   if (distinct >= LEAK_ANYWHERE) return true;
   if (distinct < LEAK_THRESHOLD) return false;
   const read = letteredWords(lettering);
+  const whole = lettered(lettering);
   const half = read.length / 2;
   // Forwards, then backwards (a mirrored leak reads the prompt's order backwards).
   const ordered = [...read.slice(0, half), ...read.slice(half).reverse()];
   const hits = ordered
-    .flatMap((word) => split(word, promptOnly))
+    .flatMap((word) => (whole.has(word) ? [word] : split(word, promptOnly)))
     .filter((word) => [...word].length >= 4)
     .map((word) => promptOnly.has(word));
   for (let i = 0; i < hits.length; i++) {

@@ -74,8 +74,9 @@ const CHECK_ATTEMPTS = 3;
 // has since kept other words, the comparison is stale and runs again.
 function staleKept(check: Doc<"generations">["remixCheck"], kept: ReadonlyArray<string>) {
   if (check?.status !== "done") return false;
-  const compared = check.keptCompared ?? (check.keptMissing ? undefined : []);
-  if (!compared) return false;
+  // A check from before keptCompared was saved is trusted only when the original keeps no words.
+  const compared = check.keptCompared;
+  if (!compared) return kept.length > 0;
   return compared.length !== kept.length || compared.some((word, i) => word !== kept[i]);
 }
 

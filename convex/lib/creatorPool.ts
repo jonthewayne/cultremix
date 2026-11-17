@@ -50,6 +50,9 @@ export type LineLedger = {
   itemId: string;
   lineItemId: string;
   baseCents: number;
+  // Costs first (economics v6): what the line had left to share after its costs. A refund comes
+  // out of that first, since the costs were spent either way.
+  distributableCents?: number;
   poolCents: number;
   unitPoolCents: Array<number>;
   recipients: Array<RecipientShare>;
@@ -122,10 +125,17 @@ export function allocateRefund(lines: Array<LineLedger>, refund: RefundInput): R
     if (amountCents <= 0 && quantity <= 0) return;
     const remainders = line.unitPoolCents.map((_, i) => unitRemaining(line, i + 1));
     const available = remainders.reduce((sum, m) => sum + sumValues(m), 0);
+    const refundedSoFar = line.refundedAmountCents + amountCents;
+    // Shares are of what's left after costs, so a refund takes from that first: refunding $15 of
+    // a line that left $14 after costs takes the whole pool.
     const target =
-      line.baseCents > 0
-        ? Math.floor((line.poolCents * Math.min(line.baseCents, line.refundedAmountCents + amountCents)) / line.baseCents)
-        : 0;
+      line.distributableCents !== undefined
+        ? line.distributableCents > 0
+          ? line.poolCents - Math.floor((line.poolCents * Math.max(0, line.distributableCents - refundedSoFar)) / line.distributableCents)
+          : line.poolCents
+        : line.baseCents > 0
+          ? Math.floor((line.poolCents * Math.min(line.baseCents, refundedSoFar)) / line.baseCents)
+          : 0;
     let cents = Math.min(available, Math.max(0, target - line.refundedPoolCents));
     const order = line.unitPoolCents
       .map((_, i) => i + 1)

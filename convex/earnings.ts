@@ -120,6 +120,7 @@ export async function orderLedger(ctx: MutationCtx, orderId: Id<"orders">, now: 
       itemId: item._id,
       lineItemId: item.shopifyLineItemId,
       baseCents: item.baseCents,
+      ...(item.costs ? { distributableCents: item.costs.distributableCents } : {}),
       poolCents: item.poolCents,
       unitPoolCents: item.unitPoolCents,
       recipients: item.recipients,

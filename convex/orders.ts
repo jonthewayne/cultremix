@@ -4,6 +4,7 @@ import { internalAction, internalMutation, internalQuery, mutation, query } from
 import { internal } from "./_generated/api";
 import { linePoolAt, poolFromAmount, saleRecipients } from "./lib/economics";
 import { orderLineCosts } from "./lib/saleCosts";
+import { SHOP_COSTS } from "../shared/config/shopCosts";
 import { unitCostFor } from "./lib/saleCostBasis";
 import { staff } from "./opsAlerts";
 import { notifyOrderAttention } from "./lib/notifications";
@@ -316,16 +317,12 @@ async function linesCosts(
   return orderLineCosts(order, inputs, config.operatingAllowanceCents ?? 0);
 }
 
-// Tells the owner and ops when a sale can't pay its shares: the price after discounts didn't cover
-// what it costs, or what it costs isn't known. The order still goes to print; shares wait for them.
+// Tells the owner and ops when a sale can't pay its shares because what it costs isn't known. (A
+// sale below cost is held from printing, convex/fulfillment.ts, and the stuck-order alert tells them.)
 async function flagCosts(ctx: MutationCtx, orderName: string, costs: ReadonlyArray<LineCosts | undefined>) {
-  const below = costs.filter((c) => c?.belowCost).length;
   const unknown = costs.filter((c) => c && !c.costKnown).length;
-  if (below === 0 && unknown === 0) return;
-  const reason =
-    below > 0
-      ? "Its price after discounts doesn't cover what it costs, so it shares nothing. Check the discount, or the product's prices in Admin, Products."
-      : "What it costs to make isn't saved yet, so it shares nothing. Run merch:refreshCosts and look at the product in Admin, Products.";
+  if (unknown === 0) return;
+  const reason = "What it costs to make isn't saved yet, so it shares nothing. Run merch:refreshCosts and look at the product in Admin, Products.";
   for (const user of (await staff(ctx)).everyone) await notifyOrderAttention(ctx, { recipientId: user._id, orderName, reason });
 }
 
@@ -478,11 +475,21 @@ export const applyHydratedOrder = internalMutation({
     const existing = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(250);
     const fresh = snapshot.lines.filter((line) => !existing.some((item) => item.shopifyLineItemId === line.lineItemId));
     const affiliateId = fresh.length > 0 ? await affiliateFor(ctx, order.ref, order.recipient?.email) : null;
-    const prepared = [];
-    for (const line of fresh) prepared.push(await prepareLine(ctx, line));
-    const costs = await linesCosts(ctx, { totalCents: snapshot.totalCents, shippingCollectedCents: snapshot.shippingCents ?? null }, prepared);
-    for (const [i, { line, work, variant }] of prepared.entries()) await insertItem(ctx, orderId, line, work, variant, now, affiliateId, costs[i]);
-    if (!snapshot.test) await flagCosts(ctx, snapshot.name, costs);
+    // Costs are worked out across every line of the order (the card fee and any shipping shortfall
+    // are the order's), and saved on the lines seen for the first time.
+    if (fresh.length > 0) {
+      const prepared = [];
+      for (const line of snapshot.lines) prepared.push(await prepareLine(ctx, line));
+      const costs = await linesCosts(ctx, { totalCents: snapshot.totalCents, shippingCollectedCents: snapshot.shippingCents ?? null }, prepared);
+      const freshIds = new Set(fresh.map((line) => line.lineItemId));
+      const freshCosts = [];
+      for (const [i, { line, work, variant }] of prepared.entries()) {
+        if (!freshIds.has(line.lineItemId)) continue;
+        await insertItem(ctx, orderId, line, work, variant, now, affiliateId, costs[i]);
+        freshCosts.push(costs[i]);
+      }
+      if (!snapshot.test) await flagCosts(ctx, snapshot.name, freshCosts);
+    }
     // Sale rows written while applying this snapshot; their recipients hear about them at the end.
     const freshSales = await syncOrderEarnings(ctx, orderId);
 
@@ -863,7 +870,12 @@ export const simulateSale = mutation({
       workIdAttr: work._id,
       crAttr: cr,
     };
-    const [costs] = await linesCosts(ctx, { totalCents: unitPriceCents * quantity, shippingCollectedCents: null }, [{ line, work, variant: null }]);
+    // As a real order would be: standard shipping paid with it, for the card fee.
+    const [costs] = await linesCosts(
+      ctx,
+      { totalCents: unitPriceCents * quantity + SHOP_COSTS.shippingChargedCents, shippingCollectedCents: SHOP_COSTS.shippingChargedCents },
+      [{ line, work, variant: null }],
+    );
     await insertItem(ctx, orderId, line, work, null, now, await affiliateFor(ctx, args.ref, undefined), costs);
     const fresh = await syncOrderEarnings(ctx, orderId);
     await notifyNewSales(ctx, orderId, fresh);

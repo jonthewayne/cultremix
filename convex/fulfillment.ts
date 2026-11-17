@@ -118,6 +118,15 @@ async function createPlan(db: Db, order: Order): Promise<CreatePlan> {
     if (work.status === "withdrawn") {
       return { ok: false, state: "needs_attention", reason: `${cr} was taken down. Refund the buyer, or make the order in Printful by hand if it should still ship.` };
     }
+    // A sale whose price after discounts doesn't cover what it costs (economics v6) isn't made at a
+    // loss on its own (docs/decisions.md); the owner decides.
+    if (item.costs?.belowCost) {
+      return {
+        ok: false,
+        state: "needs_attention",
+        reason: `${cr} sold for less than it costs to make and ship (a discount, most likely). Refund the buyer, or make the order in Printful by hand if it should still ship.`,
+      };
+    }
     // The listing's print file and side; variants from before products could be chosen use the
     // work's Print Studio file on the front.
     const listing = variant.listingId ? await db.get("shopProducts", variant.listingId) : null;

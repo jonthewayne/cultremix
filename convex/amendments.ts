@@ -65,26 +65,36 @@ export const queueLineageAmendment = internalMutation({
     newKind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
     // keccak256 of the written reason (reasonHashFor in convex/lib/chain/ids.ts).
     reasonHash: v.string(),
-    sequence: v.number(),
+    // Absent: the next one after the amendments the registry has confirmed, worked out now.
+    sequence: v.optional(v.number()),
+    // A record that leaves the lineage as the registry holds it (an artist credit record,
+    // convex/lineage.ts queueCreditRecord): newKind and newParentWorkId are ignored.
+    keepLineage: v.optional(v.boolean()),
   },
-  returns: v.id("chainWrites"),
+  returns: v.object({ writeId: v.id("chainWrites"), sequence: v.number(), newKind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")), newParentWorkId: v.union(v.null(), v.id("works")) }),
   handler: async (ctx, args) => {
     if (!/^0x[0-9a-f]{64}$/iu.test(args.reasonHash)) refuse("BAD_REASON_HASH", "The reason hash must be 32 bytes of hex.");
     const work = await ctx.db.get("works", args.workId);
     if (!work) refuse("NOT_FOUND", "That work doesn't exist.");
     if (work.provenanceStatus !== "confirmed") refuse("NOT_REGISTERED", "This work isn't registered on Monad yet.");
-    const newParent = args.newParentWorkId ? await ctx.db.get("works", args.newParentWorkId) : null;
-    if (args.newParentWorkId && !newParent) refuse("NOT_FOUND", "The new parent doesn't exist.");
-    const request = { work, newParent, newKind: args.newKind, reasonHash: args.reasonHash as Hex, sequence: args.sequence };
+    const current = await effectiveLineage(ctx, work);
+    const sequence = args.sequence ?? current.confirmed + 1;
+    const newKind = args.keepLineage ? current.kind : args.newKind;
+    const newParentWorkId = args.keepLineage ? current.parentWorkId : args.newParentWorkId;
+    const newParent = newParentWorkId ? await ctx.db.get("works", newParentWorkId) : null;
+    if (newParentWorkId && !newParent) refuse("NOT_FOUND", "The new parent doesn't exist.");
+    const request = { work, newParent, newKind, reasonHash: args.reasonHash as Hex, sequence };
+    const sent = (writeId: Id<"chainWrites">) => ({ writeId, sequence, newKind, newParentWorkId });
 
     const writes = await amendmentWrites(ctx, work._id);
     const last = writes[writes.length - 1];
     if (last && last.status !== "confirmed" && last.status !== "failed" && last.status !== "rejected") {
-      if (writes.length === args.sequence && last.payload === amendmentPayload(request)) return last._id;
+      if (writes.length === sequence && last.payload === amendmentPayload(request)) return sent(last._id);
       refuse("IN_FLIGHT", `Amendment ${writes.length} for this work is still being recorded.`);
     }
-    const current = await effectiveLineage(ctx, work);
-    if (args.sequence !== current.confirmed + 1) refuse("BAD_SEQUENCE", `The next amendment for this work is #${current.confirmed + 1}.`);
+    if (sequence !== current.confirmed + 1) refuse("BAD_SEQUENCE", `The next amendment for this work is #${current.confirmed + 1}.`);
+    // The registry already holds this lineage, so it accepts it unchanged.
+    if (args.keepLineage) return sent(await enqueueAmendment(ctx, request));
 
     if (args.newKind !== current.kind) {
       const swap = new Set([args.newKind, current.kind]);
@@ -108,7 +118,7 @@ export const queueLineageAmendment = internalMutation({
         cursor = ancestor ? (await effectiveLineage(ctx, ancestor)).parentWorkId : null;
       }
     }
-    return await enqueueAmendment(ctx, request);
+    return sent(await enqueueAmendment(ctx, request));
   },
 });
 
@@ -126,15 +136,23 @@ export async function sendRequestedCorrections(ctx: MutationCtx): Promise<number
   const rows = await ctx.runQuery(internal.lineage.requestedForChain, { limit: 100 });
   let sent = 0;
   for (const row of rows) {
+    // A credit record waits while a correction of the same work is open, so it goes out after it
+    // and carries the corrected lineage.
+    if (row.heldByCorrection) continue;
     let writeId: Id<"chainWrites">;
+    let sentAs: { sequence: number; newKind: WorkKind; newParentWorkId: Id<"works"> | null };
     try {
-      writeId = await ctx.runMutation(internal.amendments.queueLineageAmendment, {
+      // Each one takes its place in the registry's sequence when it's sent, so a row cancelled or
+      // rejected ahead of it never leaves it with a sequence the registry won't take.
+      const result = await ctx.runMutation(internal.amendments.queueLineageAmendment, {
         workId: row.workId,
         newParentWorkId: row.newParentId ?? null,
         newKind: row.newKind,
         reasonHash: reasonHashFor(row.reason),
-        sequence: row.chainSequence,
+        ...(row.artistCredit ? { keepLineage: true } : {}),
       });
+      writeId = result.writeId;
+      sentAs = result;
     } catch (error) {
       if (!(error instanceof ConvexError)) throw error;
       const { code, message } = error.data as { code: string; message: string };
@@ -149,7 +167,12 @@ export async function sendRequestedCorrections(ctx: MutationCtx): Promise<number
       if (other && (other.status === "requested" || other.status === "submitted")) continue;
     }
     await ctx.db.patch("chainWrites", writeId, { amendmentId: row.amendmentId });
-    await ctx.runMutation(internal.lineage.markSubmitted, { amendmentId: row.amendmentId, chainWriteId: writeId });
+    await ctx.runMutation(internal.lineage.markSubmitted, {
+      amendmentId: row.amendmentId,
+      chainWriteId: writeId,
+      chainSequence: sentAs.sequence,
+      ...(row.artistCredit ? { newKind: sentAs.newKind, newParentId: sentAs.newParentWorkId ?? undefined } : {}),
+    });
     sent += 1;
   }
   return sent;

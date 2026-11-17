@@ -615,7 +615,7 @@ export const confirmOffchain = mutation({
       throw new ConvexError({ code: "CHAIN_ON", message: "Chain writes are on, so corrections confirm on Monad." });
     }
     const row = await ctx.db.get("lineageAmendments", args.amendmentId);
-    if (!row || row.status !== "requested") {
+    if (!row || row.status !== "requested" || row.artistCredit) {
       throw new ConvexError({ code: "NOT_REQUESTED", message: "Only a requested correction can be confirmed." });
     }
     const work = await ctx.db.get("works", row.workId);
@@ -637,7 +637,7 @@ export const cancelAmendment = mutation({
   handler: async (ctx, args) => {
     await requireLineageAdmin(ctx);
     const row = await ctx.db.get("lineageAmendments", args.amendmentId);
-    if (!row || row.status !== "requested") {
+    if (!row || row.status !== "requested" || row.artistCredit) {
       throw new ConvexError({ code: "NOT_REQUESTED", message: "Only a requested correction can be cancelled." });
     }
     await ctx.db.patch("lineageAmendments", row._id, {
@@ -665,6 +665,8 @@ const adminAmendment = v.object({
   decidedAt: v.optional(v.number()),
   offchainOnly: v.boolean(),
   rejectReason: v.optional(v.string()),
+  // A record of the work's artist credits, not a correction (queueCreditRecord).
+  artistCredit: v.boolean(),
 });
 
 // The admin page: recent corrections, newest first, and whether chain writes are on.
@@ -691,6 +693,7 @@ export const adminHistory = query({
         decidedAt: row.decidedAt,
         offchainOnly: row.offchainOnly === true,
         rejectReason: row.rejectReason,
+        artistCredit: row.artistCredit === true,
       })),
     );
     return { chainWrites: await chainWritesOn(ctx), amendments };
@@ -750,6 +753,9 @@ export const requestedForChain = internalQuery({
       newKind: workKindValidator,
       newParentId: v.optional(v.id("works")),
       reason: v.string(),
+      artistCredit: v.boolean(),
+      // A credit record whose work has a correction open: it goes after that one.
+      heldByCorrection: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -757,19 +763,30 @@ export const requestedForChain = internalQuery({
       .query("lineageAmendments")
       .withIndex("by_status", (q) => q.eq("status", "requested"))
       .take(Math.min(Math.max(args.limit ?? 20, 1), 100));
-    return rows.map((row) => ({
-      amendmentId: row._id,
-      workId: row.workId,
-      chainSequence: row.chainSequence,
-      newKind: row.newKind,
-      newParentId: row.newParentId,
-      reason: row.reason,
-    }));
+    return await Promise.all(
+      rows.map(async (row) => ({
+        amendmentId: row._id,
+        workId: row.workId,
+        chainSequence: row.chainSequence,
+        newKind: row.newKind,
+        newParentId: row.newParentId,
+        reason: row.reason,
+        artistCredit: row.artistCredit === true,
+        heldByCorrection: row.artistCredit === true && (await openAmendment(ctx, row.workId)) !== null,
+      })),
+    );
   },
 });
 
 export const markSubmitted = internalMutation({
-  args: { amendmentId: v.id("lineageAmendments"), chainWriteId: v.string() },
+  args: {
+    amendmentId: v.id("lineageAmendments"),
+    chainWriteId: v.string(),
+    // Where it went in the registry's sequence, and for a credit record the lineage it carried.
+    chainSequence: v.optional(v.number()),
+    newKind: v.optional(workKindValidator),
+    newParentId: v.optional(v.id("works")),
+  },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const row = await ctx.db.get("lineageAmendments", args.amendmentId);
@@ -780,6 +797,8 @@ export const markSubmitted = internalMutation({
       status: "submitted",
       submittedAt: Date.now(),
       chainWriteId: args.chainWriteId,
+      ...(args.chainSequence !== undefined ? { chainSequence: args.chainSequence } : {}),
+      ...(row.artistCredit && args.newKind ? { newKind: args.newKind, fromKind: args.newKind, newParentId: args.newParentId, fromParentId: args.newParentId } : {}),
     });
     return true;
   },

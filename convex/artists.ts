@@ -118,10 +118,12 @@ export async function setWorkCredits(
   await recordCredits(ctx, workId, by);
 }
 
-// A credited artist as Monad knows them: a SHA-256 of their CultRemix artist ID, never their name
-// or links.
+// A credited artist as Monad knows them: a SHA-256 of their CultRemix artist ID keyed with a server
+// secret (ARTIST_HASH_SECRET, or AUTH_SECRET where it isn't set), never their name or links, so the
+// public artist ID can't be matched to the record. The same artist always gets the same hash.
 async function artistHash(artistId: Id<"artists">) {
-  return await sha256Hex(`cultremix-artist:${artistId}`);
+  const secret = process.env.ARTIST_HASH_SECRET ?? process.env.AUTH_SECRET ?? "";
+  return await sha256Hex(`cultremix-artist:${secret}:${artistId}`);
 }
 
 // Queues a record of a public work's current credits for Monad (lineage.ts queueCreditRecord). A
@@ -133,9 +135,9 @@ export async function recordCredits(ctx: MutationCtx, workId: Id<"works">, by: I
   const artists = await creditedArtists(ctx, workId);
   const hashes = [];
   for (const artist of artists) hashes.push(await artistHash(artist._id));
-  const existing = await ctx.db.query("lineageAmendments").withIndex("by_work_sequence", (q) => q.eq("workId", workId)).take(1);
-  // A work never credited needs no "none" record.
-  if (hashes.length === 0 && existing.length === 0) return;
+  const rows = await ctx.db.query("lineageAmendments").withIndex("by_work_sequence", (q) => q.eq("workId", workId)).take(200);
+  // A work never credited on Monad needs no "none" record.
+  if (hashes.length === 0 && !rows.some((row) => row.artistCredit)) return;
   await queueCreditRecord(ctx, work, by, hashes);
 }
 
@@ -397,6 +399,10 @@ export const updateMine = mutation({
     const user = await requireMember(ctx);
     const artist = await ctx.db.get("artists", args.artistId);
     if (!artist || artist.claimedBy !== user._id) throw new ConvexError({ code: "FORBIDDEN", message: "Only the artist can change this." });
+    // While a new claim is in review, staff can still undo it, so the page stays as it was.
+    if (artist.reviewUntil !== undefined) {
+      throw new ConvexError({ code: "IN_REVIEW", message: "Your claim is still in review. You can rename the page or turn the credit down once it's done." });
+    }
     const patch: Partial<Doc<"artists">> = { updatedAt: Date.now() };
     if (args.name !== undefined) {
       const name = args.name.replace(/\s+/gu, " ").trim();
@@ -576,6 +582,7 @@ export const approveClaim = mutation({
       claimedAt: now,
       reviewUntil: now + CLAIM_REVIEW_MS,
       reviewJob: job,
+      approvedBy: admin._id,
       updatedAt: now,
     });
     // Other open claims on this artist are closed.
@@ -607,7 +614,7 @@ export const finishClaim = internalMutation({
     if (!user) return null;
     await ctx.db.patch("artists", artist._id, { reviewUntil: undefined, reviewJob: undefined, updatedAt: Date.now() });
     await ctx.db.patch("users", artist.payeeId, { claimedBy: user._id });
-    await setCreatorAccess(ctx, user, true, { grantedBy: user._id, note: `artist: ${artist.name}` });
+    await setCreatorAccess(ctx, user, true, { grantedBy: artist.approvedBy ?? user._id, note: `artist: ${artist.name}` });
     await ctx.scheduler.runAfter(0, internal.artists.moveHeld, { payeeId: artist.payeeId, userId: user._id });
     await notifyArtistClaim(ctx, { recipientId: user._id, slug: artist.slug, message: `What was set aside for ${artist.name} is in your earnings now.` });
     return null;
@@ -635,6 +642,7 @@ export const adminUnclaim = mutation({
       claimedAt: undefined,
       reviewUntil: undefined,
       reviewJob: undefined,
+      approvedBy: undefined,
       updatedAt: now,
     });
     const reason = args.reason.trim().slice(0, 300) || "We couldn't confirm it after all.";

@@ -5,17 +5,12 @@ import { currentEconomicConfig, economicsConfigFile, economicsConfigPath, sha256
 import { economicsConfigResponse } from "../../src/lib/economicsRoute";
 
 describe("the current rules version", () => {
-  it("keeps production on v4 until v6 is turned on there on purpose", () => {
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod" })).toBe(ECONOMIC_CONFIG_V4);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "6" })).toBe(ECONOMIC_CONFIG_V6);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "dev" })).toBe(ECONOMIC_CONFIG_V6);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "staging" })).toBe(ECONOMIC_CONFIG_V6);
-    // A named version wins; an unknown one is ignored.
+  it("runs v6 everywhere unless a deployment names another published version", () => {
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod" })).toBe(ECONOMIC_CONFIG_V6);
+    expect(currentEconomicConfig({})).toBe(ECONOMIC_CONFIG_V6);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "4" })).toBe(ECONOMIC_CONFIG_V4);
     expect(currentEconomicConfig({ DEPLOYMENT_ENV: "dev", ECONOMICS_VERSION: "5" })).toBe(ECONOMIC_CONFIG_V5);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "9" })).toBe(ECONOMIC_CONFIG_V4);
-    // An unset or unrecognized environment is treated like production.
-    expect(currentEconomicConfig({})).toBe(ECONOMIC_CONFIG_V4);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "production" })).toBe(ECONOMIC_CONFIG_V4);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "9" })).toBe(ECONOMIC_CONFIG_V6);
   });
 });
 

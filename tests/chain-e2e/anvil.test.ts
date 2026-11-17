@@ -222,13 +222,13 @@ describe("chain writes on a local Monad node", () => {
   });
 
   it("amends lineage in sequence, keeping the original record offchain", async () => {
-    const first = await t.mutation(internal.amendments.queueLineageAmendment, {
+    const first = (await t.mutation(internal.amendments.queueLineageAmendment, {
       workId: river,
       newParentWorkId: harbor,
       newKind: "fork",
       reasonHash: REASON,
       sequence: 1,
-    });
+    })).writeId;
     await settle(
       t,
       async () => (await writeOf(t, first)).status === "confirmed",
@@ -238,13 +238,13 @@ describe("chain writes on a local Monad node", () => {
       parentId: workIdFor(harbor),
     });
 
-    const second = await t.mutation(internal.amendments.queueLineageAmendment, {
+    const second = (await t.mutation(internal.amendments.queueLineageAmendment, {
       workId: river,
       newParentWorkId: null,
       newKind: "original",
       reasonHash: REASON,
       sequence: 2,
-    });
+    })).writeId;
     await settle(
       t,
       async () => (await writeOf(t, second)).status === "confirmed",

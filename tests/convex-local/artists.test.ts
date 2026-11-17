@@ -268,9 +268,9 @@ describe("crediting an outside artist", () => {
     await owner.mutation(api.artists.adminUpdateArtist, { artistId: artist._id, hidden: false });
     expect(await t.query(api.artists.forWork, { cr: "101-001" })).toHaveLength(1);
 
-    // Production without v5 turned on: nothing promises an artist a share.
+    // A deployment pinned to rules without artist shares: nothing promises an artist a share.
     vi.stubEnv("DEPLOYMENT_ENV", "prod");
-    vi.stubEnv("ECONOMICS_VERSION", "");
+    vi.stubEnv("ECONOMICS_VERSION", "4");
     expect(await t.query(api.artists.page, { slug: "jane-doe" })).toBeNull();
     expect(await t.query(api.artists.forWork, { cr: "101-001" })).toEqual([]);
     expect((await t.query(api.workEconomics.panel, { cr: "101-001" }))?.configVersion).toBe(4);
