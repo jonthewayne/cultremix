@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { artistSharesOn } from "./lib/economicsConfigs";
 import { DEFAULT_PLACEMENT, clampRelative, sameRelative, toInches, withoutMark } from "../src/lib/print/shirtPlacement";
 import { GARMENT_KINDS } from "../shared/config/print-products";
 import { internal } from "./_generated/api";
@@ -447,7 +448,8 @@ export const quick = mutation({
     }
     // Remixable words and parts the creator set up in the studio come along.
     await carrySetup(ctx, workId, generation);
-    if (args.artists?.length) await setWorkCredits(ctx, workId, args.artists, user._id, "creator");
+    // Credits are taken only where new sales pay them; elsewhere the sheet doesn't ask.
+    if (args.artists?.length && artistSharesOn()) await setWorkCredits(ctx, workId, args.artists, user._id, "creator");
     await ctx.scheduler.runAfter(0, internal.imageGen.publishAssets, { workId });
     return keep ? { workId, cr: "", kept: true } : { workId, cr: formatCr(crFamily, crExpression) };
   },
@@ -563,6 +565,8 @@ export const preview = query({
       publishing: v.boolean(),
       // Whether Publish offers a chest mark with a back print.
       chestMarks: v.boolean(),
+      // Whether the sheet asks about artist credits: only where new sales pay them (economics v5).
+      artistCredits: v.boolean(),
       newFamilyCr: v.string(),
       remix: v.optional(
         v.object({
@@ -610,6 +614,7 @@ export const preview = query({
     return {
       publishing: await isFlagOn(ctx, "publishing"),
       chestMarks: await isFlagOn(ctx, CHEST_MARKS_FLAG),
+      artistCredits: artistSharesOn(),
       newFamilyCr,
       remix,
       defaultColors: defaultOfferedColors(batch.backgroundColor, new Set(), (await activePalette(ctx)).colors),

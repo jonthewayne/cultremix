@@ -78,7 +78,8 @@ function ArtistRow({ artist }: { artist: ArtistView }) {
             {artist.name}
           </Link>{" "}
           <span className="text-sm text-muted-foreground">
-            {artist.status === "claimed" ? `claimed by @${artist.claimedBy ?? "member"}` : artist.status === "declined" ? "hidden" : artist.status} ·{" "}
+            {artist.hidden ? "hidden · " : ""}
+            {artist.status === "claimed" ? `claimed by @${artist.claimedBy ?? "member"}` : artist.status} ·{" "}
             {artist.credits} {artist.credits === 1 ? "design" : "designs"} · {artist.links.join(", ")}
           </span>
         </div>
@@ -87,8 +88,8 @@ function ArtistRow({ artist }: { artist: ArtistView }) {
           <button type="button" className={adminQuietButton} onClick={() => setEditing(!editing)}>
             Rename
           </button>
-          <button type="button" className={adminQuietButton} onClick={() => void run(() => update({ artistId: id, hidden: artist.status !== "declined" }))}>
-            {artist.status === "declined" ? "Show" : "Hide"}
+          <button type="button" className={adminQuietButton} onClick={() => void run(() => update({ artistId: id, hidden: !artist.hidden }))}>
+            {artist.hidden ? "Show" : "Hide"}
           </button>
         </div>
       </div>
@@ -146,9 +147,14 @@ function ClaimRow({ claim }: { claim: Claim }) {
         )}
       </p>
       {claim.note && <p className="text-sm text-muted-foreground">{claim.note}</p>}
-      {!claim.proofOnArtistSite && (
+      {claim.proofMatch === "elsewhere" && (
         <p className="text-sm font-semibold text-destructive">
-          The proof isn't on any of the artist's own sites. A comment or a lookalike page anyone can post to isn't proof.
+          The proof isn't on any of the artist's own sites. A page anyone can post to isn't proof.
+        </p>
+      )}
+      {claim.proofMatch === "site" && (
+        <p className="text-sm font-semibold text-destructive">
+          The proof is on the same site but not the artist's credited page. Check who posted it: a comment or a lookalike account isn't proof.
         </p>
       )}
       {claim.creditedBy.length > 0 && (

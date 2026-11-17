@@ -8,6 +8,7 @@ import { imageUrlReader } from "./lib/imageUrls";
 import { formatCr, parseCr } from "./lib/r2";
 import { setCreatorAccess } from "./lib/creators";
 import { cleanArtistInputs, claimCode, linkKey, normalizeLink, slugBase } from "./lib/artistCredits";
+import { artistSharesOn } from "./lib/economicsConfigs";
 import { redirectClaimedPayees } from "./earnings";
 import type { ArtistCredits } from "./lib/economics";
 import type { ArtistInput, CleanArtist } from "./lib/artistCredits";
@@ -148,7 +149,7 @@ async function paidWorks(ctx: Ctx, work: Doc<"works">): Promise<Partial<Record<R
 async function creditedArtists(ctx: Ctx, workId: Id<"works">) {
   const rows = await ctx.db.query("artistCredits").withIndex("by_work", (q) => q.eq("workId", workId)).take(10);
   const artists = await Promise.all(rows.map((row) => ctx.db.get("artists", row.artistId)));
-  return artists.filter((artist): artist is Doc<"artists"> => artist !== null && artist.status !== "declined");
+  return artists.filter((artist): artist is Doc<"artists"> => artist !== null && artist.status !== "declined" && !artist.hidden);
 }
 
 // Who a credited artist's share is paid to: the member who claimed it, else the hidden payee.
@@ -184,6 +185,8 @@ const shownValidator = v.object({
 });
 
 async function shownCredits(ctx: Ctx, work: Doc<"works">) {
+  // Shown only where new sales pay credited artists (economics v5).
+  if (!artistSharesOn()) return [];
   const works = await paidWorks(ctx, work);
   const out: Array<{ name: string; slug: string; claimed: boolean; via: string | null }> = [];
   const seen = new Set<string>();
@@ -270,7 +273,8 @@ export const page = query({
   ),
   handler: async (ctx, args) => {
     const artist = await ctx.db.query("artists").withIndex("by_slug", (q) => q.eq("slug", args.slug)).unique();
-    if (!artist) return null;
+    // Hidden by staff, or a deployment where sales don't pay artists: no page.
+    if (!artist || artist.hidden || !artistSharesOn()) return null;
     const rows = await ctx.db.query("artistCredits").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(60);
     const urls = imageUrlReader(ctx);
     const works = [];
@@ -400,6 +404,8 @@ const adminArtist = v.object({
   claimedBy: v.union(v.string(), v.null()),
   credits: v.number(),
   heldCents: v.number(),
+  // Hidden by staff (adminUpdateArtist).
+  hidden: v.boolean(),
 });
 
 export const adminOverview = query({
@@ -416,7 +422,9 @@ export const adminOverview = query({
         submittedAt: v.number(),
         // Whether the proof link is on one of the artist's own sites (instagram.com for an
         // instagram.com link). A comment or a lookalike elsewhere is flagged for a closer look.
-        proofOnArtistSite: v.boolean(),
+        // page: on one of the artist's own pages (or under it). site: the same site but another
+        // page, like a comment or a lookalike account, so check who posted it. elsewhere: another site.
+        proofMatch: v.union(v.literal("page"), v.literal("site"), v.literal("elsewhere")),
         // Members who credited this artist while publishing; the claimant among them is flagged.
         creditedBy: v.array(v.string()),
         claimantCredited: v.boolean(),
@@ -433,7 +441,15 @@ export const adminOverview = query({
       const user = await ctx.db.get("users", claim.userId);
       if (!artist) continue;
       const proof = claim.proofUrl ? normalizeLink(claim.proofUrl) : null;
-      const proofHost = proof ? linkKey(proof).split(/[/?]/u)[0] : null;
+      const proofKey = proof ? linkKey(proof) : null;
+      const hostOf = (key: string) => key.split(/[/?]/u)[0];
+      const proofMatch = !proofKey
+        ? ("elsewhere" as const)
+        : artist.linkKeys.some((key) => proofKey === key || proofKey.startsWith(key + "/") || proofKey.startsWith(key + "?"))
+          ? ("page" as const)
+          : artist.linkKeys.some((key) => hostOf(key) === hostOf(proofKey))
+            ? ("site" as const)
+            : ("elsewhere" as const);
       const credits = await ctx.db.query("artistCredits").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(50);
       const crediters = [...new Set(credits.filter((c) => c.source === "creator").map((c) => c.addedBy))];
       const creditedBy = [];
@@ -446,7 +462,7 @@ export const adminOverview = query({
         proofUrl: claim.proofUrl ?? null,
         note: claim.note ?? null,
         submittedAt: claim.submittedAt ?? claim.createdAt,
-        proofOnArtistSite: proofHost !== null && artist.linkKeys.some((key) => key.split(/[/?]/u)[0] === proofHost),
+        proofMatch,
         creditedBy,
         claimantCredited: crediters.includes(claim.userId),
       });
@@ -465,6 +481,7 @@ export const adminOverview = query({
         claimedBy: claimer?.username ?? null,
         credits: credits.length,
         heldCents: artist.status === "unclaimed" ? await heldCents(ctx, artist.payeeId) : 0,
+        hidden: artist.hidden ?? false,
       });
     }
     return { claims, artists };
@@ -580,7 +597,8 @@ export const moveHeld = internalMutation({
 });
 
 // Staff rename an artist (the first member to credit a link names them for everyone) or hide one:
-// hidden works like a decline, so pages stop showing the credit and new sales stop paying it.
+// a hidden artist has no page, designs stop showing the credit, and new sales stop paying it. It's
+// staff's own switch, apart from an artist's decline, which only the artist changes.
 export const adminUpdateArtist = mutation({
   args: { artistId: v.id("artists"), name: v.optional(v.string()), hidden: v.optional(v.boolean()) },
   returns: v.null(),
@@ -595,7 +613,7 @@ export const adminUpdateArtist = mutation({
       patch.name = name;
       patch.nameLower = name.toLowerCase();
     }
-    if (args.hidden !== undefined) patch.status = args.hidden ? "declined" : artist.claimedBy ? "claimed" : "unclaimed";
+    if (args.hidden !== undefined) patch.hidden = args.hidden || undefined;
     await ctx.db.patch("artists", artist._id, patch);
     return null;
   },

@@ -14,12 +14,22 @@ export const ECONOMIC_CONFIGS: Readonly<Record<number, EconomicConfig>> = {
 
 // New orders follow the current rules; each order line keeps the version it was sold under.
 // v5 adds artist credits. docs/decisions.md keeps it off production until costs-first sharing
-// joins it, so production (DEPLOYMENT_ENV=prod) stays on v4 unless ECONOMICS_VERSION=5 is set
-// there on purpose: lines keep their version, so a rules version that reached production by
-// accident couldn't be taken back. Every other deployment runs v5.
+// joins it, so only dev and staging run v5 by themselves; production, and a deployment whose
+// DEPLOYMENT_ENV isn't recognized, stay on v4 unless ECONOMICS_VERSION=5 is set there on purpose.
+// Lines keep their version, so a rules version that reached production by accident couldn't be
+// taken back.
 export function currentEconomicConfig(env: Record<string, string | undefined> = process.env): EconomicConfig {
-  const production = env.DEPLOYMENT_ENV?.trim().toLowerCase() === "prod";
-  return production && env.ECONOMICS_VERSION?.trim() !== "5" ? ECONOMIC_CONFIG_V4 : ECONOMIC_CONFIG_V5;
+  // DEPLOYMENT_ENV read as convex/lib/shopFlags.ts deploymentEnv reads it (not imported: this file
+  // also ships to the browser for /economics/v<n>.json).
+  const where = env.DEPLOYMENT_ENV?.trim().toLowerCase();
+  const v5Here = where === "dev" || where === "development" || where === "staging";
+  return v5Here || env.ECONOMICS_VERSION?.trim() === "5" ? ECONOMIC_CONFIG_V5 : ECONOMIC_CONFIG_V4;
+}
+
+// Whether new sales pay credited artists, which is what the publish sheet's credit question and
+// the artist pages promise; they're hidden where it's off.
+export function artistSharesOn(env: Record<string, string | undefined> = process.env): boolean {
+  return Boolean(currentEconomicConfig(env).artistShareBps);
 }
 
 export function economicsConfigPath(version: number) {

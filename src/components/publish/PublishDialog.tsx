@@ -501,7 +501,7 @@ export function PublishDialog({
             />
           </label>
 
-          <ArtistCreditChoice value={artists} onChange={setArtists} disabled={saving} />
+          {preview?.artistCredits && <ArtistCreditChoice value={artists} onChange={setArtists} disabled={saving} />}
 
           <fieldset disabled={saving}>
             <legend className="flex w-full items-baseline justify-between text-sm font-bold uppercase tracking-wider">

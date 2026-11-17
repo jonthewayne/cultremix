@@ -18,6 +18,9 @@ export const artistsTables = {
     // unclaimed: shares are held for them. claimed: they proved they're the artist and are paid.
     // declined: a claimed artist turned the credit down; no share from new sales, and pages don't show it.
     status: v.union(v.literal("unclaimed"), v.literal("claimed"), v.literal("declined")),
+    // Staff hid it (a misleading name, a credit that shouldn't stand): no page, no credit shown,
+    // no share from new sales. Apart from status, which the artist controls.
+    hidden: v.optional(v.boolean()),
     // The hidden account their shares are paid to while unclaimed.
     payeeId: v.id("users"),
     // The member who claimed it.

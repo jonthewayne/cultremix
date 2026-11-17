@@ -10,6 +10,9 @@ describe("the current rules version", () => {
     expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "5" })).toBe(ECONOMIC_CONFIG_V5);
     expect(currentEconomicConfig({ DEPLOYMENT_ENV: "dev" })).toBe(ECONOMIC_CONFIG_V5);
     expect(currentEconomicConfig({ DEPLOYMENT_ENV: "staging" })).toBe(ECONOMIC_CONFIG_V5);
+    // An unset or unrecognized environment is treated like production.
+    expect(currentEconomicConfig({})).toBe(ECONOMIC_CONFIG_V4);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "production" })).toBe(ECONOMIC_CONFIG_V4);
   });
 });
 

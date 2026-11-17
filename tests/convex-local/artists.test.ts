@@ -241,6 +241,41 @@ describe("crediting an outside artist", () => {
     expect(rows.every((r) => r.state === "pending")).toBe(true);
   });
 
+  it("hides artist credits where sales don't pay them, and tells staff how close a claim's proof is", async () => {
+    const t = newTest();
+    await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });
+    const a = await makeUser(t, { name: "A", creatorNumber: 2 });
+    await t.run((ctx) => ctx.db.insert("users", { name: "Jane", authId: ARTIST.subject, username: "janedoe", usernameLower: "janedoe" }));
+    await makeWork(t, { creatorId: a, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
+    const owner = t.withIdentity(ADMIN);
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [{ name: "Jane Doe", link: "instagram.com/janedoe" }] });
+    const artist = (await t.run((ctx) => ctx.db.query("artists").collect()))[0];
+    const her = t.withIdentity(ARTIST);
+    for (const [proofUrl, match] of [
+      ["https://instagram.com/janedoe/p/abc", "page"],
+      ["https://instagram.com/janedoe.official", "site"],
+      ["https://janedoe-fan.blog/post", "elsewhere"],
+    ] as const) {
+      const claimId = await her.mutation(api.artists.startClaim, { artistId: artist._id });
+      await her.mutation(api.artists.submitClaim, { claimId, proofUrl });
+      expect((await owner.query(api.artists.adminOverview, {})).claims[0]).toMatchObject({ proofMatch: match });
+    }
+
+    // Hidden by staff: no page and no credit, and an artist can't undo it.
+    await owner.mutation(api.artists.adminUpdateArtist, { artistId: artist._id, hidden: true });
+    expect(await t.query(api.artists.page, { slug: "jane-doe" })).toBeNull();
+    expect(await t.query(api.artists.forWork, { cr: "101-001" })).toEqual([]);
+    await owner.mutation(api.artists.adminUpdateArtist, { artistId: artist._id, hidden: false });
+    expect(await t.query(api.artists.forWork, { cr: "101-001" })).toHaveLength(1);
+
+    // Production without v5 turned on: nothing promises an artist a share.
+    vi.stubEnv("DEPLOYMENT_ENV", "prod");
+    vi.stubEnv("ECONOMICS_VERSION", "");
+    expect(await t.query(api.artists.page, { slug: "jane-doe" })).toBeNull();
+    expect(await t.query(api.artists.forWork, { cr: "101-001" })).toEqual([]);
+    expect((await t.query(api.workEconomics.panel, { cr: "101-001" }))?.configVersion).toBe(4);
+  });
+
   it("lets a creator credit artists while publishing, and checks what they typed", async () => {
     const t = newTest();
     const b = await makeUser(t, { name: "B", creatorNumber: 3, authId: B.subject });
