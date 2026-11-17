@@ -67,13 +67,15 @@ function HowItWorksPage() {
 
         <Step number={4} title="Share in the sale">
           <p>
-            Designs go on shirts, printed to order. 15% of every sale goes to the people behind the design: an
-            original’s creator gets all of it, and a remix splits it with the designs it came from. That’s 15% of the
-            price before tax and shipping. Share a design and your link pays you 5% of what it sells. A brand that
-            owns a family has its own deal: up to 30% of each sale goes to the brand and the family’s creators
-            together, and the brand decides how it’s split, never under 5% for creators. The design’s page always
-            shows the split. The rules are{" "}
-            <a href="/economics/v4.json" className={linkClass}>
+            Designs go on shirts, printed to order. Each sale first covers what it costs: making the shirt, the
+            card fee, shipping, and a small allowance to run CultRemix. Then 15% of what’s left goes to the people
+            behind the design: an original’s creator gets all of it, and a remix splits it with the designs it came
+            from. Share a design and your link pays you 5% of what’s left, funded by CultRemix. A brand that owns a
+            family has its own deal: up to 30% of what’s left goes to the brand and the family’s creators together,
+            and the brand decides how it’s split, never under 5% for creators. A design inspired by an outside
+            artist can credit them, and a fifth of its creator’s share is set aside for the artist. The design’s
+            page always shows the split. The rules are{" "}
+            <a href="/economics/v6.json" className={linkClass}>
               a public file
             </a>{" "}
             anyone can check. While buying isn’t open yet, a design’s page takes your email instead.

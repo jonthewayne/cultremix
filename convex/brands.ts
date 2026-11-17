@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { currentEconomicConfig } from "./lib/economicsConfigs";
+import { unitDistributable } from "./lib/saleCosts";
 import { requireAdmin } from "./lib/adminAccess";
 import { notifyOpsAlert } from "./lib/notifications";
 import { offeredShopProducts } from "./lib/shopProduct";
@@ -240,6 +241,10 @@ export const mine = query({
       // The default product and its price for S to XL, for the example sale.
       exampleName: v.string(),
       examplePriceCents: v.number(),
+      // What the example sale leaves to share: after costs under costs-first rules (v6), else the
+      // price. The brand's and creators' percentages are of this.
+      exampleShareBaseCents: v.number(),
+      costsFirst: v.boolean(),
       // Whether the brand set the creators' share itself, rather than keeping where its deal started.
       setByBrand: v.boolean(),
     }),
@@ -259,6 +264,8 @@ export const mine = query({
       suggestedCreatorBps: limits.defaultCreatorBps,
       exampleName: product.name,
       examplePriceCents: product.priceCents,
+      exampleShareBaseCents: await shareBaseFor(ctx, product.printfulProductId, product.priceCents),
+      costsFirst: Boolean(currentEconomicConfig().costsFirst),
       setByBrand: row.creatorBpsSetBy === row.userId,
     };
   },
@@ -301,3 +308,19 @@ export const setCreatorShare = mutation({
     return null;
   },
 });
+
+// What a one-unit sale at this price leaves to share under the current rules: after costs (v6,
+// convex/lib/saleCosts.ts, at the product's costliest S-XL Printful price), or the price itself.
+async function shareBaseFor(ctx: QueryCtx, printfulProductId: number, priceCents: number) {
+  const config = currentEconomicConfig();
+  if (!config.costsFirst) return priceCents;
+  const row = await ctx.db
+    .query("merchProducts")
+    .withIndex("by_provider_product", (q) => q.eq("provider", "printful").eq("productId", printfulProductId))
+    .unique();
+  const costs = (row?.colors ?? []).flatMap((color) =>
+    color.variants.flatMap((v) => (v.costCents !== undefined && ["XS", "S", "M", "L", "XL"].includes(v.size) ? [v.costCents] : [])),
+  );
+  if (costs.length === 0) return 0;
+  return Math.max(0, unitDistributable(priceCents, Math.max(...costs), config.operatingAllowanceCents ?? 0));
+}

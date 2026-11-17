@@ -20,7 +20,9 @@ export function percent(bps: number) {
 
 function explanation(panel: Panel) {
   const pool = percent(panel.creatorPoolBps);
-  const lead = `${pool} of every sale, before tax and shipping, goes to the people behind the design.`;
+  const lead = panel.costsFirst
+    ? `${pool} of what's left of every sale after its costs (making it, the card fee, shipping, and a small allowance) goes to the people behind the design.`
+    : `${pool} of every sale, before tax and shipping, goes to the people behind the design.`;
   if (panel.kind === "original") return `${lead} This is an original, so its creator gets all of it.`;
   if (panel.kind === "fork") return `${lead} A fork shares with the design it came from.`;
   if (panel.shares.some((share) => share.roles.includes("upstream"))) {
@@ -72,7 +74,7 @@ export function EconomicsPanel({ cr }: { cr: string }) {
       )}
       {panel.affiliateBps !== null && (
         <p className="mt-2 text-sm">
-          Share it: when your link brings a buyer, you get {percent(panel.affiliateBps)} of the price.
+          Share it: when your link brings a buyer, you get {percent(panel.affiliateBps)} of {panel.costsFirst ? "what's left of the sale after costs" : "the price"}.
         </p>
       )}
       <p className="mt-3 text-xs text-neutral-500">

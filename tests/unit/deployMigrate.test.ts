@@ -140,8 +140,8 @@ describe("deploy data steps", () => {
   it("picks steps with --from, --only, and --skip, and names the steps when one is unknown", () => {
     const names = (argv: Array<string>) => pickSteps(argv).map((s) => s.name);
     expect(names([])).toEqual(STEPS.map((s) => s.name));
-    expect(names(["--prod", "--from", "notes"])).toEqual(["notes", "reread", "words", "parts", "activity", "lineage", "trending"]);
-    expect(names(["--from=lineage"])).toEqual(["lineage", "trending"]);
+    expect(names(["--prod", "--from", "notes"])).toEqual(["notes", "reread", "words", "parts", "activity", "lineage", "trending", "costs"]);
+    expect(names(["--from=lineage"])).toEqual(["lineage", "trending", "costs"]);
     expect(names(["--only", "notes,trending"])).toEqual(["notes", "trending"]);
     expect(names(["--skip", "reread"])).not.toContain("reread");
     expect(() => pickSteps(["--only", "nots"])).toThrow(/no step called nots\. Steps: seed, organize/);

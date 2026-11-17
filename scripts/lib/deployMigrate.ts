@@ -267,6 +267,20 @@ export const STEPS: Array<Step> = [
       return { line: plural(result.hearts, "heart") + ", " + plural(result.remixes, "remix", "remixes") + ", " + plural(result.backs, "Back") };
     },
   },
+  {
+    name: "costs",
+    fn: "merch:refreshCosts",
+    does: "saves what Printful charges to make each product, which sales recover before sharing (economics v6)",
+    copy: "new on November 16, 2026 (no rehearsal figure)",
+    async run({ call }) {
+      const result = (await call("merch:refreshCosts", {})) as { products: number; updated: number; failed: number };
+      const line = "updated " + result.updated + " of " + plural(result.products, "product") + ", failed " + result.failed;
+      if (result.failed > 0 || result.updated === 0) {
+        return { line, attention: "Some products have no saved Printful prices, so their sales share nothing until they do. Run it again with --only costs; the Convex logs say why." };
+      }
+      return { line };
+    },
+  },
 ];
 
 function valueOf(argv: Array<string>, flag: string) {

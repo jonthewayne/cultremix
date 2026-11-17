@@ -29,6 +29,8 @@ export const panel = query({
     v.object({
       kind: v.union(v.literal("original"), v.literal("variation"), v.literal("fork")),
       configVersion: v.number(),
+      // From v6: every percentage is of what's left of a sale after its costs, not of the price.
+      costsFirst: v.boolean(),
       // The creators' share of the price for this design: the standard share, or its brand's.
       creatorPoolBps: v.number(),
       // The member whose link brings a buyer gets this share of the price (null before v2).
@@ -68,6 +70,7 @@ export const panel = query({
     const creatorPoolBps = creatorPoolFor(config, familyBrand ? familyBrand.creatorBps : null);
     const base = {
       configVersion: config.version,
+      costsFirst: Boolean(config.costsFirst),
       creatorPoolBps,
       affiliateBps: config.affiliateBps ?? null,
       brand: familyBrand

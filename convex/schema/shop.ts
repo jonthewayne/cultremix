@@ -368,6 +368,19 @@ export const shopTables = {
     lineageSnapshot: v.optional(lineageValidator),
     recipients: v.array(v.object({ who: v.id("users"), roles: v.array(roleValidator), bps: v.number() })),
     baseCents: v.number(),
+    // Costs first (economics v6): what the line recovered before sharing, in cents, and what was
+    // left to share (convex/lib/saleCosts.ts). Saved at sale so the split stays auditable.
+    costs: v.optional(
+      v.object({
+        productionCents: v.number(),
+        feeCents: v.number(),
+        shippingCents: v.number(),
+        allowanceCents: v.number(),
+        distributableCents: v.number(),
+        belowCost: v.boolean(),
+        known: v.boolean(),
+      }),
+    ),
     poolCents: v.number(),
     unitPoolCents: v.array(v.number()),
     printfulItemId: v.optional(v.number()),

@@ -1,11 +1,13 @@
 import { ConvexError, v } from "convex/values";
 import { garmentKindOf } from "../shared/config/print-products";
 import { api, internal } from "./_generated/api";
-import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAccess";
 import { GARMENT_COLORS, colorDistance, colorKey, colorsByNearness, nearestGarmentColor } from "./lib/garments";
 import { formatCr } from "./lib/r2";
 import { areaFor, chosenProducts, merchShopProduct, offeredShopProducts } from "./lib/shopProduct";
+import { unitDistributable } from "./lib/saleCosts";
+import { ECONOMIC_CONFIG_V6 } from "./lib/economics";
 import { garmentKindValidator, merchColor, printAreaValidator, relativePlacementValidator } from "./schema/merch";
 import { createPrintful, printfulConfigFromEnv } from "./lib/printful/client";
 import { areasFromPrintfiles } from "./lib/printful/setup";
@@ -167,6 +169,8 @@ const productView = v.object({
   placements: v.optional(v.array(v.object({ id: v.string(), extraCents: v.number() }))),
   // When its print areas were read from Printful's print files.
   areasCheckedAt: v.optional(v.number()),
+  // A price that doesn't cover what a sale costs at Printful's current prices (priceShortfall).
+  shortfall: v.union(v.string(), v.null()),
 });
 
 // Whether Printful's keys are in the env, so the page can offer "Check with Printful".
@@ -262,6 +266,7 @@ export const adminList = query({
         sale: saleView(p),
         ...(p.placements ? { placements: p.placements } : {}),
         ...(p.areasCheckedAt ? { areasCheckedAt: p.areasCheckedAt } : {}),
+        shortfall: priceShortfall(p),
       }));
   },
 });
@@ -326,17 +331,18 @@ export const adminAdd = action({
           image?: string;
           files?: Array<{ type?: string; additional_price?: string | null }>;
         };
-        variants: Array<{ id: number; size: string; color: string; color_code: string; image?: string; in_stock?: boolean }>;
+        variants: Array<{ id: number; size: string; color: string; color_code: string; image?: string; in_stock?: boolean; price?: string }>;
       };
     };
     const result = data.result;
     if (!result) throw new ConvexError({ code: "CATALOG", message: "That product isn't in the catalog." });
-    const byColor = new Map<string, { name: string; hex: string; image?: string; inStock: boolean; variants: Array<{ size: string; id: number }> }>();
+    const byColor = new Map<string, { name: string; hex: string; image?: string; inStock: boolean; variants: Array<{ size: string; id: number; costCents?: number }> }>();
     for (const variant of result.variants) {
       const key = colorKey(variant.color);
       if (!key || !/^#[0-9a-f]{6}$/iu.test(variant.color_code)) continue;
       const color = byColor.get(key) ?? { name: variant.color, hex: variant.color_code.toLowerCase(), image: variant.image, inStock: false, variants: [] };
-      color.variants.push({ size: variant.size, id: variant.id });
+      const costCents = catalogCents(variant.price);
+      color.variants.push({ size: variant.size, id: variant.id, ...(costCents !== undefined ? { costCents } : {}) });
       color.inStock = color.inStock || variant.in_stock !== false;
       byColor.set(key, color);
     }
@@ -615,6 +621,9 @@ export const adminSetSale = mutation({
       a?.widthIn === b?.widthIn && a?.heightIn === b?.heightIn;
     // Areas typed in by hand are no longer the ones Printful's print files gave.
     const keepsChecked = same(frontArea, product.frontArea) && same(backArea, product.backArea);
+    // Every price has to cover what the sale costs before anything is shared (economics v6).
+    const short = priceShortfall({ ...product, priceCents, largePriceCents, backExtraCents });
+    if (short) throw new ConvexError({ code: "BELOW_COST", message: short });
     await ctx.db.patch("merchProducts", product._id, {
       shopName,
       kind: args.kind,
@@ -641,3 +650,114 @@ export const adminRemove = mutation({
     return null;
   },
 });
+
+// A catalog price ("12.95") in cents, or undefined when it isn't a positive amount.
+function catalogCents(price: string | undefined): number | undefined {
+  const cents = Math.round(Number(price) * 100);
+  return Number.isFinite(cents) && cents > 0 ? cents : undefined;
+}
+
+// Economics v6 recovers what Printful charges to make each unit before sharing, so every saved
+// product keeps its catalog prices current: daily (convex/crons.ts), at each deploy
+// (deploy:migrate's costs step), and whenever an admin adds or refreshes a product. A product the
+// catalog doesn't answer for keeps the prices it had.
+export const refreshCosts = internalAction({
+  args: {},
+  returns: v.object({ products: v.number(), updated: v.number(), failed: v.number() }),
+  handler: async (ctx): Promise<{ products: number; updated: number; failed: number }> => {
+    const ids: Array<number> = await ctx.runQuery(internal.merch.savedProductIds, {});
+    let updated = 0;
+    let failed = 0;
+    for (const productId of ids) {
+      try {
+        const response = await fetch(`${PRINTFUL}/products/${productId}`, { signal: AbortSignal.timeout(FETCH_MS) });
+        if (!response.ok) throw new Error(`Printful answered ${response.status}`);
+        const data = (await response.json()) as {
+          result?: { product?: { files?: Array<{ type?: string; additional_price?: string | null }> }; variants?: Array<{ id: number; price?: string }> };
+        };
+        const costs = (data.result?.variants ?? []).flatMap((variant) => {
+          const cents = catalogCents(variant.price);
+          return cents === undefined ? [] : [{ id: variant.id, cents }];
+        });
+        const placements = (data.result?.product?.files ?? [])
+          .filter((file) => file.type && DTG_PLACEMENTS.has(file.type))
+          .map((file) => ({ id: file.type!, extraCents: Math.round(Number(file.additional_price ?? 0) * 100) || 0 }));
+        if (costs.length === 0) throw new Error("no prices");
+        await ctx.runMutation(internal.merch.saveCosts, { productId, costs, placements });
+        updated++;
+      } catch (error) {
+        failed++;
+        console.error("refreshCosts", productId, error instanceof Error ? error.message : error);
+      }
+    }
+    return { products: ids.length, updated, failed };
+  },
+});
+
+export const savedProductIds = internalQuery({
+  args: {},
+  returns: v.array(v.number()),
+  handler: async (ctx) => (await ctx.db.query("merchProducts").take(100)).map((row) => row.productId),
+});
+
+export const saveCosts = internalMutation({
+  args: {
+    productId: v.number(),
+    costs: v.array(v.object({ id: v.number(), cents: v.number() })),
+    placements: v.array(v.object({ id: v.string(), extraCents: v.number() })),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("merchProducts")
+      .withIndex("by_provider_product", (q) => q.eq("provider", "printful").eq("productId", args.productId))
+      .unique();
+    if (!row) return null;
+    const byId = new Map(args.costs.map((cost) => [cost.id, cost.cents]));
+    const colors = row.colors.map((color) => ({
+      ...color,
+      variants: color.variants.map((variant) => {
+        const cents = byId.get(variant.id);
+        return cents === undefined ? variant : { ...variant, costCents: cents };
+      }),
+    }));
+    await ctx.db.patch("merchProducts", row._id, { colors, ...(args.placements.length > 0 ? { placements: args.placements } : {}) });
+    return null;
+  },
+});
+
+const REGULAR = new Set(["XS", "S", "M", "L", "XL"]);
+
+// Says which price doesn't cover what a sale costs (Printful's price for the costliest size it
+// covers, the card fee, shipping beyond what the buyer pays, and the operating allowance), and the
+// least it could be; null when every price covers them, or no costs are saved yet to check against.
+export function priceShortfall(product: Doc<"merchProducts">): string | null {
+  const shop = merchShopProduct(product);
+  const sized = product.colors.flatMap((color) => color.variants.flatMap((v) => (v.costCents === undefined ? [] : [{ size: v.size, cents: v.costCents }])));
+  if (sized.length === 0) return null;
+  const most = (large: boolean) => {
+    const cents = sized.filter((row) => REGULAR.has(row.size) !== large).map((row) => row.cents);
+    return cents.length > 0 ? Math.max(...cents) : null;
+  };
+  const backCost = product.placements?.find((p) => p.id === "back")?.extraCents ?? 0;
+  const allowance = ECONOMIC_CONFIG_V6.operatingAllowanceCents ?? 0;
+  const checks: Array<{ label: string; price: number; cost: number | null }> = [
+    { label: "The price", price: shop.priceCents, cost: most(false) },
+    { label: "The 2XL price", price: shop.largePriceCents, cost: most(true) },
+  ];
+  if (shop.back) {
+    checks.push({ label: "The price with a back print", price: shop.priceCents + shop.backExtraCents, cost: most(false) === null ? null : most(false)! + backCost });
+    checks.push({ label: "The 2XL price with a back print", price: shop.largePriceCents + shop.backExtraCents, cost: most(true) === null ? null : most(true)! + backCost });
+  }
+  for (const check of checks) {
+    if (check.cost === null || unitDistributable(check.price, check.cost, allowance) >= 0) continue;
+    let least = check.price;
+    while (unitDistributable(least, check.cost, allowance) < 0 && least < MAX_PRICE_CENTS) least += 50;
+    return `${check.label} (${dollars(check.price)}) doesn't cover what a sale costs: Printful's ${dollars(check.cost)}, the card fee, shipping, and ${dollars(allowance)} to run things. It needs to be at least ${dollars(least)}.`;
+  }
+  return null;
+}
+
+function dollars(cents: number) {
+  return "$" + (cents / 100).toFixed(2);
+}

@@ -13,6 +13,9 @@ const BROWSER_SAFE = new Set([
   // The published economics config (served at /economics/v1.json) and its pure share math.
   "convex/lib/economics.ts",
   "convex/lib/economicsConfigs.ts",
+  // Costs before sharing (v6) and the refund spread it uses: pure math, shown in Admin, Brands.
+  "convex/lib/saleCosts.ts",
+  "convex/lib/creatorPool.ts",
   // Shirt colors and the contrast check; the early-access email rules.
   "convex/lib/garments.ts",
   "convex/lib/earlyAccess.ts",

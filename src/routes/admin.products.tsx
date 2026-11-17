@@ -309,6 +309,7 @@ function SaleSettings({ product }: { product: Product }) {
       {catalogExtras.length > 0 && (
         <p className="mt-1 text-xs text-muted-foreground">Printful charges extra for: {catalogExtras.join(", ")}.</p>
       )}
+      {product.shortfall && <p className="mt-1 text-sm font-semibold text-destructive">{product.shortfall}</p>}
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {product.areasCheckedAt
           ? `Print areas read from Printful's print files on ${new Date(product.areasCheckedAt).toLocaleDateString()}.`

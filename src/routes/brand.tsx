@@ -60,7 +60,8 @@ function DealView({ deal }: { deal: Deal }) {
   useEffect(() => setValue(deal.creatorBps / 100), [deal.creatorBps]);
   const creatorBps = value * 100;
   const brandBps = deal.totalBps - creatorBps;
-  const part = (bps: number) => Math.floor((deal.examplePriceCents * bps) / 10000);
+  const part = (bps: number) => Math.floor((deal.exampleShareBaseCents * bps) / 10000);
+  const basis = deal.costsFirst ? "of what's left of each sale after costs" : "of the shirt's price";
 
   const save = async () => {
     setBusy(true);
@@ -79,8 +80,8 @@ function DealView({ deal }: { deal: Deal }) {
     <>
       <h1 className="pt-6 text-[14vw] font-black leading-[0.85] tracking-[-0.05em] md:pt-10 md:text-[6vw]">{deal.name}</h1>
       <p className="mt-6 max-w-xl text-lg">
-        Every sale of a design in your families pays {percent(deal.totalBps)} of the shirt's price to you and the creators who made it. You
-        decide how it's split.
+        Your allocation: {percent(deal.totalBps)} {basis} of a design in your families, for you and the creators who made it. You decide how
+        it's split. CultRemix funds referral rewards separately, so they never come out of your allocation.
       </p>
       <p className="mt-3 text-sm text-muted-foreground">
         Your {deal.families.length === 1 ? "family" : "families"}:{" "}
@@ -123,12 +124,13 @@ function DealView({ deal }: { deal: Deal }) {
           className="mt-4 w-full accent-black"
         />
         <p className="mt-2 text-sm text-muted-foreground">
-          From {percent(deal.minCreatorBps)} to {percent(deal.totalBps)}. We suggest {percent(deal.suggestedCreatorBps)}, so the people remixing
+          Each percent here is {basis}. From {percent(deal.minCreatorBps)} to {percent(deal.totalBps)}. We suggest {percent(deal.suggestedCreatorBps)}, so the people remixing
           your designs keep earning from them.
         </p>
         <p className="mt-4">
-          On a {formatCents(deal.examplePriceCents)} {deal.exampleName}, its creators share {formatCents(part(creatorBps))} and you get{" "}
-          {formatCents(part(brandBps))}.
+          On a {formatCents(deal.examplePriceCents)} {deal.exampleName}
+          {deal.costsFirst ? `, which leaves ${formatCents(deal.exampleShareBaseCents)} after making it, the card fee, and shipping,` : ""} its creators
+          share {formatCents(part(creatorBps))} and you get {formatCents(part(brandBps))}.
         </p>
         <button
           type="button"

@@ -39,6 +39,13 @@
 // to the credited artists, split evenly in whole hundreds of basis points of the pool so every share
 // stays a whole basis point of the price; any rounding stays with the creator. Credits travel with
 // the lineage: a variation of a credited original pays the artist out of the family root's part.
+//
+// Version 6 (November 2026) shares what's left after costs (docs/decisions.md, "Recover protected
+// costs before sharing earnings"). Each line first recovers its protected costs (convex/lib/
+// saleCosts.ts): making it, its part of the card fee, any shipping Printful charges beyond what the
+// buyer paid, and operatingAllowanceCents per unit. Every percentage above (creators, brand,
+// affiliate, artists) is then of that remainder, not of the price; CultRemix keeps the rest. The
+// amounts each line used are saved on it. v5 never reached production; production goes from v4 to v6.
 
 export type EconomicRole = "creator" | "family_root" | "upstream" | "affiliate" | "brand" | "artist";
 
@@ -62,6 +69,10 @@ export type EconomicConfig = {
   // From v5: the share of a crediting creator's part of the pool that goes to the outside artists
   // they credited, in basis points of that part.
   artistShareBps?: number;
+  // From v6: shares are of what's left of each line after its protected costs (costsFirst), which
+  // include this operating allowance per unit.
+  costsFirst?: boolean;
+  operatingAllowanceCents?: number;
   // Days after a unit ships before its earnings become Available (when no refund holds it).
   maturityDays: number;
   // Shares of the pool, in basis points of 10000, by work kind.
@@ -110,6 +121,13 @@ export const ECONOMIC_CONFIG_V5: EconomicConfig = {
   ...ECONOMIC_CONFIG_V4,
   version: 5,
   artistShareBps: 2000,
+};
+
+export const ECONOMIC_CONFIG_V6: EconomicConfig = {
+  ...ECONOMIC_CONFIG_V5,
+  version: 6,
+  costsFirst: true,
+  operatingAllowanceCents: 100,
 };
 
 // The outside artists credited by each paid role's work, by recipient id (an artist's payee):
@@ -187,6 +205,18 @@ export function linePool(
   config: EconomicConfig = ECONOMIC_CONFIG_V1,
 ): { baseCents: number; poolCents: number; units: Array<number> } {
   return linePoolAt(args, config.creatorPoolBps);
+}
+
+// A pool at poolBps of an amount (v6: what's left after costs), split per unit the same way.
+export function poolFromAmount(amountCents: number, quantity: number, poolBps: number): { poolCents: number; units: Array<number> } {
+  const poolCents = Math.floor((Math.max(0, amountCents) * poolBps) / 10000);
+  const units: Array<number> = [];
+  if (quantity > 0) {
+    const each = Math.floor(poolCents / quantity);
+    const extra = poolCents - each * quantity;
+    for (let i = 0; i < quantity; i++) units.push(each + (i < extra ? 1 : 0));
+  }
+  return { poolCents, units };
 }
 
 // A line's pool at poolBps of its base, split per unit the same way.

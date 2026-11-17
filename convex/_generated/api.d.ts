@@ -121,6 +121,8 @@ import type * as lib_remixWords from "../lib/remixWords.js";
 import type * as lib_requestGuard from "../lib/requestGuard.js";
 import type * as lib_resize from "../lib/resize.js";
 import type * as lib_roleReader from "../lib/roleReader.js";
+import type * as lib_saleCostBasis from "../lib/saleCostBasis.js";
+import type * as lib_saleCosts from "../lib/saleCosts.js";
 import type * as lib_saleEmail from "../lib/saleEmail.js";
 import type * as lib_salePrep from "../lib/salePrep.js";
 import type * as lib_sessions from "../lib/sessions.js";
@@ -320,6 +322,8 @@ declare const fullApi: ApiFromModules<{
   "lib/requestGuard": typeof lib_requestGuard;
   "lib/resize": typeof lib_resize;
   "lib/roleReader": typeof lib_roleReader;
+  "lib/saleCostBasis": typeof lib_saleCostBasis;
+  "lib/saleCosts": typeof lib_saleCosts;
   "lib/saleEmail": typeof lib_saleEmail;
   "lib/salePrep": typeof lib_salePrep;
   "lib/sessions": typeof lib_sessions;

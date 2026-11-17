@@ -8,8 +8,9 @@ export const merchColor = v.object({
   key: v.string(),
   name: v.string(),
   hex: v.string(),
-  // The catalog's variant ids by size, for ordering.
-  variants: v.array(v.object({ size: v.string(), id: v.number() })),
+  // The catalog's variant ids by size, for ordering, and what Printful charges to make each
+  // (its catalog price, front print included), which sales recover before sharing (economics v6).
+  variants: v.array(v.object({ size: v.string(), id: v.number(), costCents: v.optional(v.number()) })),
   // A photo of the blank product in this color, from the catalog.
   image: v.optional(v.string()),
   inStock: v.boolean(),

@@ -90,7 +90,7 @@ function AdminBrands() {
     try {
       await save({ username, name, totalBps, creatorBps, families: list, ...(note.trim() ? { note } : {}) });
       setStatus(
-        `Saved ${name.trim()}: ${percentText(totalBps)} of each sale in ${list.length === 1 ? "family" : "families"} ${list.join(", ")}, ${percentText(totalBps - creatorBps)} to the brand and ${percentText(creatorBps)} to creators.`,
+        `Saved ${name.trim()}: ${percentText(totalBps)} of what's left after costs on each sale in ${list.length === 1 ? "family" : "families"} ${list.join(", ")}, ${percentText(totalBps - creatorBps)} to the brand and ${percentText(creatorBps)} to creators.`,
       );
       setUsername("");
       setName("");
@@ -134,7 +134,7 @@ function AdminBrands() {
         title="Brands"
         description={
           limits
-            ? `A brand deal is one number: its families' share of each sale, which the brand splits with the families' creators. It comes out of CultRemix's share, so it's the only number that changes what we keep. Deals start at ${percentText(limits.defaultTotalBps)} (${percentText(limits.defaultTotalBps - limits.defaultCreatorBps)} to the brand, ${percentText(limits.defaultCreatorBps)} to creators) and go up to ${percentText(limits.maxTotalBps)}. The brand can move the creators' part on its brand page, never under ${percentText(limits.minCreatorBps)}. Only admins make brands. Orders already paid keep the split they were sold under.`
+            ? `A brand deal is one number: its families' share of what's left of each sale after costs, which the brand splits with the families' creators. Costs come back to CultRemix first, so no deal can sell at a loss; the deal comes out of CultRemix's part of what's left. Each brand's deal is private: public pages name the brand but never its numbers. Deals start at ${percentText(limits.defaultTotalBps)} (${percentText(limits.defaultTotalBps - limits.defaultCreatorBps)} to the brand, ${percentText(limits.defaultCreatorBps)} to creators) and go up to ${percentText(limits.maxTotalBps)}. The brand can move the creators' part on its brand page, never under ${percentText(limits.minCreatorBps)}. Only admins make brands. Orders already paid keep the split they were sold under.`
             : "Loading…"
         }
       >
@@ -177,7 +177,7 @@ function AdminBrands() {
           <p className={cn("text-sm font-semibold", problem && "text-destructive")}>
             {problem ??
               (split
-                ? `The brand gets ${percentText(split.brandBps)} and the families' creators share ${percentText(split.creatorBps)} of each sale.`
+                ? `The brand gets ${percentText(split.brandBps)} and the families' creators share ${percentText(split.creatorBps)} of what's left of each sale after costs.`
                 : "")}
           </p>
           {limits && <ShirtMoney split={split} limits={limits} />}
@@ -204,7 +204,7 @@ function AdminBrands() {
                     {!brand.active && <span className="ml-2 text-sm font-bold text-muted-foreground">Stopped</span>}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {percentText(brand.totalBps)} of each sale: {percentText(brand.brandBps)} to the brand, {percentText(brand.creatorBps)} to creators
+                    {percentText(brand.totalBps)} of what's left after costs: {percentText(brand.brandBps)} to the brand, {percentText(brand.creatorBps)} to creators
                     {brand.setByBrand ? " (set by the brand)" : ""} · {brand.families.length === 1 ? "family" : "families"} {brand.families.join(", ")}
                   </p>
                   {brand.note && <p className="mt-1 text-sm">{brand.note}</p>}
@@ -314,7 +314,7 @@ function ShirtMoney({ split, limits }: { split: ShirtSplit | null; limits: Limit
         One shirt in a one-shirt order, front print, with a share link (the case that leaves us least). The buyer pays{" "}
         {formatCents(SHOP_COSTS.shippingChargedCents)} shipping and Printful charges {formatCents(SHOP_COSTS.printfulShippingCents)}; Printful is its
         catalog price for the size (the costliest color) plus that shipping. The card fee is 2.9% + 30¢ of everything the buyer pays. Shares
-        are of the shirt's price. Red means we'd keep less than {formatCents(SHOP_COSTS.keepFloorCents)}.
+        are of what's left after Printful's price, the card fee, and the $1 allowance, the same math a sale uses. Red means we'd keep less than {formatCents(SHOP_COSTS.keepFloorCents)}.
       </p>
     </div>
   );

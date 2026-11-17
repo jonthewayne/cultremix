@@ -20,6 +20,8 @@ crons.interval("shopify tracking retry", { minutes: 15 }, internal.shopifyFulfil
 // Orders that can't go on by themselves tell the owner and ops (convex/orderAlerts.ts).
 crons.interval("stuck order alerts", { minutes: 15 }, internal.orderAlerts.alertStuck, {});
 crons.interval("earnings maturity", { hours: 1 }, internal.earnings.matureDue, {});
+// What Printful charges to make each product, which sales recover before sharing (economics v6).
+crons.daily("refresh product costs", { hourUTC: 8, minuteUTC: 40 }, internal.merch.refreshCosts, {});
 crons.daily("webhook payload purge", { hourUTC: 9, minuteUTC: 15 }, internal.orders.purgeExpiredPayloads, {});
 // Buyer addresses: removed 30 days after shipping or cancellation, and redactions that waited
 // for Printful (convex/privacy.ts).

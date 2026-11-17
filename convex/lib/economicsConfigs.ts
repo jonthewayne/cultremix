@@ -1,7 +1,7 @@
 // Published economics configs by version (V1 plan U10, judging evidence). Each is served at
 // /economics/v<version>.json as exactly canonicalConfigJson(config); its SHA-256 is what work pages
 // show and the registry records.
-import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, ECONOMIC_CONFIG_V5, canonicalConfigJson } from "./economics";
+import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, ECONOMIC_CONFIG_V5, ECONOMIC_CONFIG_V6, canonicalConfigJson } from "./economics";
 import type { EconomicConfig } from "./economics";
 
 export const ECONOMIC_CONFIGS: Readonly<Record<number, EconomicConfig>> = {
@@ -10,20 +10,24 @@ export const ECONOMIC_CONFIGS: Readonly<Record<number, EconomicConfig>> = {
   3: ECONOMIC_CONFIG_V3,
   4: ECONOMIC_CONFIG_V4,
   5: ECONOMIC_CONFIG_V5,
+  6: ECONOMIC_CONFIG_V6,
 };
 
 // New orders follow the current rules; each order line keeps the version it was sold under.
-// v5 adds artist credits. docs/decisions.md keeps it off production until costs-first sharing
-// joins it, so only dev and staging run v5 by themselves; production, and a deployment whose
-// DEPLOYMENT_ENV isn't recognized, stay on v4 unless ECONOMICS_VERSION=5 is set there on purpose.
-// Lines keep their version, so a rules version that reached production by accident couldn't be
-// taken back.
+// v6 is costs-first sharing with artist credits (docs/decisions.md). Dev and staging run it by
+// themselves; production, and a deployment whose DEPLOYMENT_ENV isn't recognized, stay on v4 until
+// ECONOMICS_VERSION=6 is set there on purpose. Lines keep their version, so a rules version that
+// reached production by accident couldn't be taken back. v5 (artist credits on the price) only ever
+// ran on dev and is kept for the lines sold under it. ECONOMICS_VERSION names any published
+// version explicitly (the in-memory tests run v5's math unless a test asks for v6).
 export function currentEconomicConfig(env: Record<string, string | undefined> = process.env): EconomicConfig {
   // DEPLOYMENT_ENV read as convex/lib/shopFlags.ts deploymentEnv reads it (not imported: this file
   // also ships to the browser for /economics/v<n>.json).
   const where = env.DEPLOYMENT_ENV?.trim().toLowerCase();
-  const v5Here = where === "dev" || where === "development" || where === "staging";
-  return v5Here || env.ECONOMICS_VERSION?.trim() === "5" ? ECONOMIC_CONFIG_V5 : ECONOMIC_CONFIG_V4;
+  const named = Number(env.ECONOMICS_VERSION?.trim());
+  if (Number.isInteger(named) && Object.prototype.hasOwnProperty.call(ECONOMIC_CONFIGS, named)) return ECONOMIC_CONFIGS[named];
+  const latestHere = where === "dev" || where === "development" || where === "staging";
+  return latestHere ? ECONOMIC_CONFIG_V6 : ECONOMIC_CONFIG_V4;
 }
 
 // Whether new sales pay credited artists, which is what the publish sheet's credit question and

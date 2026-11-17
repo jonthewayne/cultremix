@@ -2,7 +2,12 @@ import { ConvexError, v } from "convex/values";
 import { orderGid } from "../shared/config/shopify";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { linePoolAt, saleRecipients } from "./lib/economics";
+import { linePoolAt, poolFromAmount, saleRecipients } from "./lib/economics";
+import { orderLineCosts } from "./lib/saleCosts";
+import { unitCostFor } from "./lib/saleCostBasis";
+import { staff } from "./opsAlerts";
+import { notifyOrderAttention } from "./lib/notifications";
+import type { LineCosts } from "./lib/saleCosts";
 import { saleCredits } from "./artists";
 import { currentEconomicConfig } from "./lib/economicsConfigs";
 import { brandForFamily } from "./brands";
@@ -162,6 +167,8 @@ const hydratedOrderValidator = v.object({
   financialState: v.string(),
   currency: v.string(),
   totalCents: v.number(),
+  // Shipping the buyer paid (absent on snapshots from before economics v6 read it).
+  shippingCents: v.optional(v.number()),
   ref: v.union(v.string(), v.null()),
   economicEventAt: v.union(v.number(), v.null()),
   recipient: v.union(v.null(), recipientValidator),
@@ -274,14 +281,10 @@ export async function affiliateFor(
   return member._id;
 }
 
-async function createItem(
-  ctx: MutationCtx,
-  orderId: Id<"orders">,
-  line: HydratedOrder["lines"][number],
-  now: number,
-  affiliateId: Id<"users"> | null,
-): Promise<void> {
-  // The variant decides the work; the cart attributes are only a cross-check.
+type PreparedLine = { line: HydratedOrder["lines"][number]; work: Doc<"works"> | null; variant: Doc<"workVariants"> | null };
+
+// The variant decides the work; the cart attributes are only a cross-check.
+async function prepareLine(ctx: MutationCtx, line: HydratedOrder["lines"][number]): Promise<PreparedLine> {
   const variant = line.variantId
     ? await ctx.db
         .query("workVariants")
@@ -289,7 +292,41 @@ async function createItem(
         .first()
     : null;
   const work = variant ? await ctx.db.get("works", variant.workId) : null;
-  await insertItem(ctx, orderId, line, work, variant, now, affiliateId);
+  return { line, work, variant };
+}
+
+// Under costs-first rules (economics v6), what each new line of an order recovers before sharing,
+// worked out across the order's new lines together (the card fee and any shipping shortfall are the
+// order's). Undefined under earlier rules.
+async function linesCosts(
+  ctx: MutationCtx,
+  order: { totalCents: number; shippingCollectedCents: number | null },
+  prepared: ReadonlyArray<PreparedLine>,
+): Promise<Array<LineCosts | undefined>> {
+  const config = currentEconomicConfig();
+  if (!config.costsFirst) return prepared.map(() => undefined);
+  const inputs = [];
+  for (const { line, work, variant } of prepared) {
+    inputs.push({
+      baseCents: Math.max(0, line.unitPriceCents * line.quantity - line.discountCents),
+      quantity: line.quantity,
+      unitCostCents: work ? await unitCostFor(ctx, work, variant) : 0,
+    });
+  }
+  return orderLineCosts(order, inputs, config.operatingAllowanceCents ?? 0);
+}
+
+// Tells the owner and ops when a sale can't pay its shares: the price after discounts didn't cover
+// what it costs, or what it costs isn't known. The order still goes to print; shares wait for them.
+async function flagCosts(ctx: MutationCtx, orderName: string, costs: ReadonlyArray<LineCosts | undefined>) {
+  const below = costs.filter((c) => c?.belowCost).length;
+  const unknown = costs.filter((c) => c && !c.costKnown).length;
+  if (below === 0 && unknown === 0) return;
+  const reason =
+    below > 0
+      ? "Its price after discounts doesn't cover what it costs, so it shares nothing. Check the discount, or the product's prices in Admin, Products."
+      : "What it costs to make isn't saved yet, so it shares nothing. Run merch:refreshCosts and look at the product in Admin, Products.";
+  for (const user of (await staff(ctx)).everyone) await notifyOrderAttention(ctx, { recipientId: user._id, orderName, reason });
 }
 
 // One order line, with its lineage, recipients, and pool frozen now: the creators' share, plus
@@ -302,6 +339,7 @@ async function insertItem(
   variant: Doc<"workVariants"> | null,
   now: number,
   affiliateId: Id<"users"> | null,
+  costs?: LineCosts,
 ): Promise<void> {
   const config = currentEconomicConfig();
   let recipients: Array<Recipient> = [];
@@ -320,10 +358,12 @@ async function insertItem(
     recipients = split.recipients as Array<Recipient>;
     poolBps = split.poolBps;
   }
-  const pool = linePoolAt(
+  const priced = linePoolAt(
     { unitPriceCents: line.unitPriceCents, quantity: line.quantity, discountCents: line.discountCents },
     poolBps,
   );
+  // Costs first (v6): the shares are of what's left after the line's protected costs.
+  const pool = costs ? { baseCents: priced.baseCents, ...poolFromAmount(costs.distributableCents, line.quantity, poolBps) } : priced;
   await ctx.db.insert("orderItems", {
     orderId,
     shopifyLineItemId: line.lineItemId,
@@ -338,6 +378,19 @@ async function insertItem(
     lineageSnapshot,
     recipients,
     baseCents: pool.baseCents,
+    ...(costs
+      ? {
+          costs: {
+            productionCents: costs.productionCents,
+            feeCents: costs.feeCents,
+            shippingCents: costs.shippingCents,
+            allowanceCents: costs.allowanceCents,
+            distributableCents: costs.distributableCents,
+            belowCost: costs.belowCost,
+            known: costs.costKnown,
+          },
+        }
+      : {}),
     // An unmapped line pays no one; the order goes to needs_attention.
     poolCents: work ? pool.poolCents : 0,
     unitPoolCents: work ? pool.units : [],
@@ -425,7 +478,11 @@ export const applyHydratedOrder = internalMutation({
     const existing = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(250);
     const fresh = snapshot.lines.filter((line) => !existing.some((item) => item.shopifyLineItemId === line.lineItemId));
     const affiliateId = fresh.length > 0 ? await affiliateFor(ctx, order.ref, order.recipient?.email) : null;
-    for (const line of fresh) await createItem(ctx, orderId, line, now, affiliateId);
+    const prepared = [];
+    for (const line of fresh) prepared.push(await prepareLine(ctx, line));
+    const costs = await linesCosts(ctx, { totalCents: snapshot.totalCents, shippingCollectedCents: snapshot.shippingCents ?? null }, prepared);
+    for (const [i, { line, work, variant }] of prepared.entries()) await insertItem(ctx, orderId, line, work, variant, now, affiliateId, costs[i]);
+    if (!snapshot.test) await flagCosts(ctx, snapshot.name, costs);
     // Sale rows written while applying this snapshot; their recipients hear about them at the end.
     const freshSales = await syncOrderEarnings(ctx, orderId);
 
@@ -806,7 +863,8 @@ export const simulateSale = mutation({
       workIdAttr: work._id,
       crAttr: cr,
     };
-    await insertItem(ctx, orderId, line, work, null, now, await affiliateFor(ctx, args.ref, undefined));
+    const [costs] = await linesCosts(ctx, { totalCents: unitPriceCents * quantity, shippingCollectedCents: null }, [{ line, work, variant: null }]);
+    await insertItem(ctx, orderId, line, work, null, now, await affiliateFor(ctx, args.ref, undefined), costs);
     const fresh = await syncOrderEarnings(ctx, orderId);
     await notifyNewSales(ctx, orderId, fresh);
     const [item] = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(1);

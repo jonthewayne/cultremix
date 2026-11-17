@@ -1,15 +1,18 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, ECONOMIC_CONFIG_V5, canonicalConfigJson } from "../../convex/lib/economics";
+import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, ECONOMIC_CONFIG_V5, ECONOMIC_CONFIG_V6, canonicalConfigJson } from "../../convex/lib/economics";
 import { currentEconomicConfig, economicsConfigFile, economicsConfigPath, sha256Hex } from "../../convex/lib/economicsConfigs";
 import { economicsConfigResponse } from "../../src/lib/economicsRoute";
 
 describe("the current rules version", () => {
-  it("keeps production on v4 until v5 is turned on there on purpose", () => {
+  it("keeps production on v4 until v6 is turned on there on purpose", () => {
     expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod" })).toBe(ECONOMIC_CONFIG_V4);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "5" })).toBe(ECONOMIC_CONFIG_V5);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "dev" })).toBe(ECONOMIC_CONFIG_V5);
-    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "staging" })).toBe(ECONOMIC_CONFIG_V5);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "6" })).toBe(ECONOMIC_CONFIG_V6);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "dev" })).toBe(ECONOMIC_CONFIG_V6);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "staging" })).toBe(ECONOMIC_CONFIG_V6);
+    // A named version wins; an unknown one is ignored.
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "dev", ECONOMICS_VERSION: "5" })).toBe(ECONOMIC_CONFIG_V5);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "9" })).toBe(ECONOMIC_CONFIG_V4);
     // An unset or unrecognized environment is treated like production.
     expect(currentEconomicConfig({})).toBe(ECONOMIC_CONFIG_V4);
     expect(currentEconomicConfig({ DEPLOYMENT_ENV: "production" })).toBe(ECONOMIC_CONFIG_V4);
@@ -65,7 +68,7 @@ describe("/economics/v1.json", () => {
     expect(canonicalConfigJson(ECONOMIC_CONFIG_V4)).not.toContain("artistShareBps");
   });
 
-  it.each(["v6.json", "v1", "v1.json.bak", "../v1.json", "V1.json", "v01x.json", "v01.json", "constructor.json", "vtoString.json"])(
+  it.each(["v7.json", "v1", "v1.json.bak", "../v1.json", "V1.json", "v01x.json", "v01.json", "constructor.json", "vtoString.json"])(
     "returns 404 for %s",
     (file) => {
       expect(economicsConfigResponse(file).status).toBe(404);
@@ -75,5 +78,14 @@ describe("/economics/v1.json", () => {
 
   it("names the path by version", () => {
     expect(economicsConfigPath(1)).toBe("/economics/v1.json");
+  });
+});
+
+describe("/economics/v6.json", () => {
+  it("serves costs-first sharing with artist credits, and leaves v5's bytes as they were", async () => {
+    const v6 = await economicsConfigResponse("v6.json").text();
+    expect(v6).toBe(canonicalConfigJson(ECONOMIC_CONFIG_V6));
+    expect(JSON.parse(v6)).toMatchObject({ version: 6, costsFirst: true, operatingAllowanceCents: 100, artistShareBps: 2000, creatorPoolBps: 1500 });
+    expect(canonicalConfigJson(ECONOMIC_CONFIG_V5)).not.toContain("costsFirst");
   });
 });

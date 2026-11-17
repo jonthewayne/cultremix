@@ -17,6 +17,7 @@ query HydrateOrder($id: ID!) {
     displayFinancialStatus
     currencyCode
     totalPriceSet { shopMoney { amount currencyCode } }
+    totalShippingPriceSet { shopMoney { amount } }
     customAttributes { key value }
     shippingAddress { name company address1 address2 city provinceCode countryCodeV2 zip phone }
     lineItems(first: 100) {
@@ -64,6 +65,7 @@ export type RawOrder = {
   displayFinancialStatus?: string | null;
   currencyCode?: string | null;
   totalPriceSet?: Money;
+  totalShippingPriceSet?: Money;
   customAttributes?: Array<Attr> | null;
   shippingAddress?: {
     name?: string | null;
@@ -118,6 +120,8 @@ export type HydratedOrder = {
   financialState: string;
   currency: string;
   totalCents: number;
+  // Shipping the buyer paid.
+  shippingCents?: number;
   ref: string | null;
   // processedAt of the first successful SALE or CAPTURE (KTD-18); null means no earnings.
   economicEventAt: number | null;
@@ -224,6 +228,7 @@ export function normalizeOrder(raw: RawOrder): HydratedOrder {
     financialState: raw.displayFinancialStatus ?? "UNKNOWN",
     currency: raw.currencyCode ?? raw.totalPriceSet?.shopMoney?.currencyCode ?? "USD",
     totalCents: moneyCents(raw.totalPriceSet),
+    ...(raw.totalShippingPriceSet ? { shippingCents: moneyCents(raw.totalShippingPriceSet) } : {}),
     ref: attr(raw.customAttributes, "_ref"),
     economicEventAt: paidAt ?? null,
     recipient,
