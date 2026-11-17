@@ -853,7 +853,7 @@ export const simulateSale = mutation({
       financialState: "PAID",
       cancelled: false,
       currency: "USD",
-      totalCents: unitPriceCents * quantity,
+      totalCents: unitPriceCents * quantity + SHOP_COSTS.shippingChargedCents,
       ...(args.ref ? { ref: args.ref.trim().toLowerCase() } : {}),
       configVersion: currentEconomicConfig().version,
       fulfillmentState: "test_ignored",
@@ -877,6 +877,7 @@ export const simulateSale = mutation({
       [{ line, work, variant: null }],
     );
     await insertItem(ctx, orderId, line, work, null, now, await affiliateFor(ctx, args.ref, undefined), costs);
+    await flagCosts(ctx, orderName, [costs]);
     const fresh = await syncOrderEarnings(ctx, orderId);
     await notifyNewSales(ctx, orderId, fresh);
     const [item] = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(1);

@@ -119,10 +119,12 @@ export async function setWorkCredits(
 }
 
 // A credited artist as Monad knows them: a SHA-256 of their CultRemix artist ID keyed with a server
-// secret (ARTIST_HASH_SECRET, or AUTH_SECRET where it isn't set), never their name or links, so the
-// public artist ID can't be matched to the record. The same artist always gets the same hash.
-async function artistHash(artistId: Id<"artists">) {
-  const secret = process.env.ARTIST_HASH_SECRET ?? process.env.AUTH_SECRET ?? "";
+// secret (ARTIST_HASH_SECRET, its own so rotating others never changes it), never their name or
+// links, so the public artist ID can't be matched to the record. The same artist always gets the
+// same hash. Without the secret, no record is made (null).
+async function artistHash(artistId: Id<"artists">): Promise<string | null> {
+  const secret = process.env.ARTIST_HASH_SECRET?.trim();
+  if (!secret) return null;
   return await sha256Hex(`cultremix-artist:${secret}:${artistId}`);
 }
 
@@ -133,8 +135,15 @@ export async function recordCredits(ctx: MutationCtx, workId: Id<"works">, by: I
   const work = await ctx.db.get("works", workId);
   if (!work || work.keep !== undefined || work.status === "private" || work.status === "withdrawn") return;
   const artists = await creditedArtists(ctx, workId);
-  const hashes = [];
-  for (const artist of artists) hashes.push(await artistHash(artist._id));
+  const hashes: Array<string> = [];
+  for (const artist of artists) {
+    const hash = await artistHash(artist._id);
+    if (hash === null) {
+      console.error("recordCredits: ARTIST_HASH_SECRET isn't set, so credits aren't recorded on Monad");
+      return;
+    }
+    hashes.push(hash);
+  }
   const rows = await ctx.db.query("lineageAmendments").withIndex("by_work_sequence", (q) => q.eq("workId", workId)).take(200);
   // A work never credited on Monad needs no "none" record.
   if (hashes.length === 0 && !rows.some((row) => row.artistCredit)) return;

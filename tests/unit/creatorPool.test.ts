@@ -215,4 +215,25 @@ describe("refunds under costs first (v6)", () => {
     const half = allocateRefund([line], { lines: [{ lineItemId: "L", quantity: 0, subtotalCents: 700, taxCents: 0 }], shippingCents: 0, totalCents: 700 });
     expect(half.lines[0].units.reduce((sum, u) => sum + u.cents, 0)).toBe(105);
   });
+
+  it("gives back only a refunded unit's own share when a whole unit comes back", () => {
+    const recipients = [{ who: "c", roles: ["creator" as const], bps: 1500 }];
+    // Two shirts at $30, $29.96 left after costs, pool $4.49 (225 + 224).
+    const line = {
+      itemId: "i",
+      lineItemId: "L",
+      baseCents: 6000,
+      distributableCents: 2996,
+      refundedQuantity: 0,
+      poolCents: 449,
+      unitPoolCents: [225, 224],
+      recipients,
+      unitStatus: ["unshipped" as const, "unshipped" as const],
+      consumed: [new Map<string, number>(), new Map<string, number>()],
+      refundedAmountCents: 0,
+      refundedPoolCents: 0,
+    };
+    const one = allocateRefund([line], { lines: [{ lineItemId: "L", quantity: 1, subtotalCents: 3000, taxCents: 0 }], shippingCents: 0, totalCents: 3000 });
+    expect(one.lines[0].units.reduce((sum, u) => sum + u.cents, 0)).toBe(224);
+  });
 });

@@ -91,11 +91,13 @@ export async function orderLedger(ctx: MutationCtx, orderId: Id<"orders">, now: 
     };
     let refundedAmountCents = 0;
     let refundedPoolCents = 0;
+    let refundedQuantity = 0;
     for (const refund of refunds) {
       if (refund.status === "failed") continue;
       for (const line of refund.lines) {
         if (line.orderItemId !== item._id) continue;
         refundedAmountCents += line.amountCents;
+        refundedQuantity += line.quantity;
         for (const unit of line.units) {
           refundedPoolCents += unit.cents;
           for (const part of unit.split) add(unit.unit, part.who, part.cents);
@@ -120,7 +122,7 @@ export async function orderLedger(ctx: MutationCtx, orderId: Id<"orders">, now: 
       itemId: item._id,
       lineItemId: item.shopifyLineItemId,
       baseCents: item.baseCents,
-      ...(item.costs ? { distributableCents: item.costs.distributableCents } : {}),
+      ...(item.costs ? { distributableCents: item.costs.distributableCents, refundedQuantity } : {}),
       poolCents: item.poolCents,
       unitPoolCents: item.unitPoolCents,
       recipients: item.recipients,

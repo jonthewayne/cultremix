@@ -762,7 +762,9 @@ export const requestedForChain = internalQuery({
     const rows = await ctx.db
       .query("lineageAmendments")
       .withIndex("by_status", (q) => q.eq("status", "requested"))
-      .take(Math.min(Math.max(args.limit ?? 20, 1), 100));
+      // Rows waiting their turn (a credit record behind a correction, a work still registering)
+      // stay requested, so the window reaches well past them.
+      .take(Math.min(Math.max(args.limit ?? 20, 1), 300));
     return await Promise.all(
       rows.map(async (row) => ({
         amendmentId: row._id,

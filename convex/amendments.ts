@@ -133,7 +133,7 @@ const WAIT_CODES = new Set(["NOT_REGISTERED", "PARENT_NOT_REGISTERED", "IN_FLIGH
  */
 export async function sendRequestedCorrections(ctx: MutationCtx): Promise<number> {
   if (!(await chainWritesEnabled(ctx))) return 0;
-  const rows = await ctx.runQuery(internal.lineage.requestedForChain, { limit: 100 });
+  const rows = await ctx.runQuery(internal.lineage.requestedForChain, { limit: 300 });
   let sent = 0;
   for (const row of rows) {
     // A credit record waits while a correction of the same work is open, so it goes out after it

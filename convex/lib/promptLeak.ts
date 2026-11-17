@@ -27,7 +27,9 @@ export function mightAskForPrompt(request: string) {
 export function promptOnlyWords(prompt: string, request: string) {
   const quoted = [...prompt.matchAll(/[“"]([^”"]{1,200})[”"]/gu)].map((m) => m[1]).join(" ");
   const allowed = new Set(normalizeWords(request + " " + quoted).split(" "));
-  return new Set(normalizeWords(prompt).split(" ").filter((word) => [...word].length >= 4 && !allowed.has(word)));
+  const only = new Set(normalizeWords(prompt).split(" ").filter((word) => [...word].length >= 4 && !allowed.has(word)));
+  allowedWhole.set(only, new Set([...allowed].flatMap((word) => [word, [...word].reverse().join("")])));
+  return only;
 }
 
 // A design's lettered words, as read: each word, the letter-spaced runs put back together
@@ -74,14 +76,16 @@ function split(word: string, promptOnly: ReadonlySet<string>): Array<string> {
   return parts.length > 0 ? parts : [word];
 }
 
-// Only runs rebuilt from spaced-out letters are split; a word lettered whole stays as it was
-// (a long word the member asked for isn't taken apart into prompt words).
-function lettered(lettering: ReadonlyArray<string>) {
-  return new Set(lettering.flatMap((piece) => normalizeWords(piece).split(" ")).flatMap((word) => [word, [...word].reverse().join("")]));
+// Words a design may letter whole without being split into prompt words: the member's own words
+// and the images' quoted words (promptOnlyWords leaves them out of the prompt-only set), and their
+// mirrored spellings. Everything else long, a run of words lettered without gaps included, is split.
+const allowedWhole = new WeakMap<ReadonlySet<string>, Set<string>>();
+function lettered(promptOnly: ReadonlySet<string>) {
+  return allowedWhole.get(promptOnly) ?? new Set<string>();
 }
 
 function wordsFor(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray<string>) {
-  const whole = lettered(lettering);
+  const whole = lettered(promptOnly);
   return letteredWords(lettering).flatMap((word) => (whole.has(word) ? [word] : split(word, promptOnly)));
 }
 
@@ -107,7 +111,7 @@ export function isLeak(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray
   if (distinct >= LEAK_ANYWHERE) return true;
   if (distinct < LEAK_THRESHOLD) return false;
   const read = letteredWords(lettering);
-  const whole = lettered(lettering);
+  const whole = lettered(promptOnly);
   const half = read.length / 2;
   // Forwards, then backwards (a mirrored leak reads the prompt's order backwards).
   const ordered = [...read.slice(0, half), ...read.slice(half).reverse()];

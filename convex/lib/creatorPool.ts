@@ -53,6 +53,8 @@ export type LineLedger = {
   // Costs first (economics v6): what the line had left to share after its costs. A refund comes
   // out of that first, since the costs were spent either way.
   distributableCents?: number;
+  // Units earlier refunds that haven't failed gave back whole.
+  refundedQuantity?: number;
   poolCents: number;
   unitPoolCents: Array<number>;
   recipients: Array<RecipientShare>;
@@ -108,6 +110,22 @@ function sumValues(map: Map<string, number>): number {
   return total;
 }
 
+// Costs first (v6): how much of a line's pool its refunds so far take back. Units refunded whole
+// take back their own share of the pool, along with their part of the price. Any other refunded
+// amount comes out of what the line's other units left after costs first, since those costs were
+// spent: refunding $15 of a one-shirt line that left $14 to share takes back its whole pool.
+function costsFirstTarget(line: LineLedger, refundedCents: number, refundedUnits: number) {
+  const units = Math.max(1, line.unitPoolCents.length);
+  const whole = Math.min(units, Math.max(0, refundedUnits));
+  const wholePool = Math.floor((line.poolCents * whole) / units);
+  const wholeBase = Math.floor((line.baseCents * whole) / units);
+  const restPool = line.poolCents - wholePool;
+  const restLeft = Math.floor(((line.distributableCents ?? 0) * (units - whole)) / units);
+  const extra = Math.max(0, refundedCents - wholeBase);
+  const restTaken = restLeft > 0 ? restPool - Math.floor((restPool * Math.max(0, restLeft - extra)) / restLeft) : restPool;
+  return wholePool + restTaken;
+}
+
 // Fixes a refund's unit allocation. Lines not in the order's ledger (unmapped lines) take nothing.
 export function allocateRefund(lines: Array<LineLedger>, refund: RefundInput): RefundAllocation {
   const lineTotals = refund.lines.reduce((sum, l) => sum + l.subtotalCents + l.taxCents, 0);
@@ -126,13 +144,9 @@ export function allocateRefund(lines: Array<LineLedger>, refund: RefundInput): R
     const remainders = line.unitPoolCents.map((_, i) => unitRemaining(line, i + 1));
     const available = remainders.reduce((sum, m) => sum + sumValues(m), 0);
     const refundedSoFar = line.refundedAmountCents + amountCents;
-    // Shares are of what's left after costs, so a refund takes from that first: refunding $15 of
-    // a line that left $14 after costs takes the whole pool.
     const target =
       line.distributableCents !== undefined
-        ? line.distributableCents > 0
-          ? line.poolCents - Math.floor((line.poolCents * Math.max(0, line.distributableCents - refundedSoFar)) / line.distributableCents)
-          : line.poolCents
+        ? costsFirstTarget(line, refundedSoFar, (line.refundedQuantity ?? 0) + quantity)
         : line.baseCents > 0
           ? Math.floor((line.poolCents * Math.min(line.baseCents, refundedSoFar)) / line.baseCents)
           : 0;
