@@ -379,9 +379,10 @@ export function checkWordChanges(
   return { ok: true, changes };
 }
 
-// A piece's text as the prompt quotes it; a slash marks each line break.
+// A piece's text as the prompt quotes it; a slash marks each line break. A straight double quote
+// inside it is drawn curly, so box text can't close the quote and add an instruction of its own.
 function quoted(text: string) {
-  return `"${text.split("\n").join(" / ")}"`;
+  return `"${text.split("\n").join(" / ").replace(/"/gu, "”")}"`;
 }
 
 // New words that fit where the old ones were (the limit before boxes took up to 80 characters).

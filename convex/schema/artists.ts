@@ -30,7 +30,8 @@ export const artistsTables = {
     .index("by_slug", ["slug"])
     .index("by_nameLower", ["nameLower"])
     .index("by_claimedBy", ["claimedBy"])
-    .index("by_payee", ["payeeId"]),
+    .index("by_payee", ["payeeId"])
+    .index("by_createdBy", ["createdBy", "createdAt"]),
 
   // Each artist link's match key, so the same link always finds the same artist, whatever name
   // a creator typed or the artist renamed their page to (convex/artists.ts artistFor).

@@ -4,7 +4,7 @@ import { internalAction, internalMutation, internalQuery, mutation, query } from
 import { internal } from "./_generated/api";
 import { linePoolAt, saleRecipients } from "./lib/economics";
 import { saleCredits } from "./artists";
-import { CURRENT_ECONOMIC_CONFIG } from "./lib/economicsConfigs";
+import { currentEconomicConfig } from "./lib/economicsConfigs";
 import { brandForFamily } from "./brands";
 import { allocateRefund } from "./lib/creatorPool";
 import { ORDER_QUERY, normalizeOrder } from "./lib/shopify/orderQuery";
@@ -303,7 +303,7 @@ async function insertItem(
   now: number,
   affiliateId: Id<"users"> | null,
 ): Promise<void> {
-  const config = CURRENT_ECONOMIC_CONFIG;
+  const config = currentEconomicConfig();
   let recipients: Array<Recipient> = [];
   let poolBps = config.creatorPoolBps;
   let lineageSnapshot: Doc<"orderItems">["lineageSnapshot"];
@@ -396,7 +396,7 @@ export const applyHydratedOrder = internalMutation({
         totalCents: snapshot.totalCents,
         ref: snapshot.ref ?? undefined,
         recipient: snapshot.recipient ?? undefined,
-        configVersion: CURRENT_ECONOMIC_CONFIG.version,
+        configVersion: currentEconomicConfig().version,
         fulfillmentState: "waiting",
         createdAt: now,
         updatedAt: now,
@@ -791,7 +791,7 @@ export const simulateSale = mutation({
       currency: "USD",
       totalCents: unitPriceCents * quantity,
       ...(args.ref ? { ref: args.ref.trim().toLowerCase() } : {}),
-      configVersion: CURRENT_ECONOMIC_CONFIG.version,
+      configVersion: currentEconomicConfig().version,
       fulfillmentState: "test_ignored",
       createdAt: now,
       updatedAt: now,

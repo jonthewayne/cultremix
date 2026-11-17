@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { CURRENT_ECONOMIC_CONFIG } from "./lib/economicsConfigs";
+import { currentEconomicConfig } from "./lib/economicsConfigs";
 import { requireAdmin } from "./lib/adminAccess";
 import { notifyOpsAlert } from "./lib/notifications";
 import { offeredShopProducts } from "./lib/shopProduct";
@@ -21,7 +21,7 @@ export type FamilyBrand = { brandId: Id<"brands">; userId: Id<"users">; name: st
 // A deal's bounds under the current rules: the most a family can get, the least its creators get,
 // what a new deal starts with, and the standard shares around it (for the money shown in Admin).
 export function dealLimits() {
-  const config = CURRENT_ECONOMIC_CONFIG;
+  const config = currentEconomicConfig();
   const defaultCreatorBps = config.brandCreatorDefaultBps ?? config.creatorPoolBps;
   return {
     maxTotalBps: config.brandFamilyMaxBps ?? 5000,
@@ -36,7 +36,7 @@ export function dealLimits() {
 // A brand's deal: the family's share and its two parts. A deal from before v4 has no total of its
 // own: it's the brand's rate plus the creators' share.
 export function dealOf(row: Doc<"brands">) {
-  const creatorBps = row.creatorBps ?? CURRENT_ECONOMIC_CONFIG.creatorPoolBps;
+  const creatorBps = row.creatorBps ?? currentEconomicConfig().creatorPoolBps;
   return { totalBps: row.totalBps ?? row.bps + creatorBps, creatorBps, brandBps: row.bps };
 }
 

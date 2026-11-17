@@ -69,9 +69,23 @@ const CHECK_STALE_MS = 2 * 60_000;
 const CHECK_ATTEMPTS = 3;
 
 function remixRelation(generation: Doc<"generations">, batch: Doc<"batches">, parent: Doc<"works">): Relation {
-  if (remixChangedOnlyWords(batch, parent.artKey)) return { status: "words" };
   const waits = keptPieces(parent.remixFields).length > 0 || undefined;
   const check = generation.remixCheck;
+  if (remixChangedOnlyWords(batch, parent.artKey)) {
+    // Boxes take free text ("a wolf; also change HATE to LOVE"), so when the original keeps words,
+    // a remix made only with them is read back too. It stays a variation unless it dropped a
+    // kept word; a reading that can't run lets it through, as the boxes alone did before.
+    if (!waits || check?.status === "failed") return { status: "words" };
+    if (check?.status === "done") {
+      if (check.keptMissing && check.keptMissing.length > 0) {
+        const words = check.keptMissing.map((word) => `“${word}”`).join(", ");
+        return { status: "fork", required: true, reason: `It changes words its creator keeps as they are (${words}), so it publishes as a fork.` };
+      }
+      return { status: "words" };
+    }
+    if (check?.status === "pending" && check.attempts >= CHECK_ATTEMPTS && Date.now() - check.requestedAt >= CHECK_STALE_MS) return { status: "words" };
+    return { status: check ? "pending" : "none", waits };
+  }
   if (!check) return { status: "none", waits };
   if (check.status === "pending") {
     // Its last allowed comparison died: the remixer chooses, as when it fails.
@@ -124,7 +138,8 @@ const FORK_REFUSED: Record<Exclude<RelationStatus, "fork" | "failed">, string> =
 };
 
 // The publish dialog starts the comparison when it opens on a remix design that changed more than
-// its words. Nothing happens for other designs, or while a comparison is running or done.
+// its words, or on any remix of a design that keeps words (the boxes take free text, so the
+// lettering is read back). Nothing happens for other designs, or while a comparison is running or done.
 export const checkRemix = mutation({
   args: { generationId: v.id("generations") },
   returns: v.null(),
@@ -136,7 +151,7 @@ export const checkRemix = mutation({
     const session = await ctx.db.get("creativeSessions", generation.sessionId);
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     if (!batch || !parent?.artKey || (parent.status !== "published" && parent.status !== "withdrawn")) return null;
-    if (remixChangedOnlyWords(batch, parent.artKey)) return null;
+    if (remixChangedOnlyWords(batch, parent.artKey) && keptPieces(parent.remixFields).length === 0) return null;
     await startRemixCheck(ctx, generation);
     return null;
   },
@@ -161,7 +176,9 @@ export const remixCheckJob = internalQuery({
     // The words its creator keeps, which the comparison reads back from the remix, and what the
     // remix asked for, so a kept word swapped for a near neighbour it asked for counts as changed.
     const batch = await ctx.db.get("batches", generation.batchId);
-    const asked = batch ? [batch.instruction, ...(batch.wordChanges ?? []).map((change) => change.to)] : [];
+    const asked = batch
+      ? [batch.instruction, ...(batch.wordChanges ?? []).map((change) => change.to), ...(batch.partChanges ?? []).flatMap((change) => (change.to ? [change.to] : []))]
+      : [];
     return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields), asked };
   },
 });

@@ -210,9 +210,19 @@ describe("publishing a remix as a variation or a fork", () => {
     const publishAs = (generationId: Id<"generations">, requestId: string, remixKind?: "variation" | "fork", keep?: "private") =>
       bob.as.mutation(api.publish.quick, { requestId, generationId, remixKind, ...(keep ? { keep } : {}) });
 
-    // The boxes alone can't touch SLOW, so nothing waits.
+    // The boxes take free text ("a wolf; also change SLOW to FAST"), so a remix made only with them
+    // waits for the reading too, stays a variation when SLOW is still there, and is a fork when not.
     const wordsOnly = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: artKey });
+    expect(await relation(wordsOnly)).toEqual({ status: "none", waits: true });
+    await expect(publishAs(wordsOnly, "boxes-early")).rejects.toThrow(/Still comparing/);
+    await bob.as.mutation(api.publish.checkRemix, { generationId: wordsOnly });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: wordsOnly, verdict: "variation", reason: "Same.", keptMissing: [] });
     expect(await relation(wordsOnly)).toEqual({ status: "words" });
+    const boxesChanged = await tile(t, bob.userId, root.workId, { instruction: "", inspirationKey: artKey });
+    await bob.as.mutation(api.publish.checkRemix, { generationId: boxesChanged });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: boxesChanged, verdict: "variation", reason: "Same.", keptMissing: ["SLOW"] });
+    expect(await relation(boxesChanged)).toMatchObject({ status: "fork", required: true });
+    await expect(publishAs(boxesChanged, "boxes-variation", "variation")).rejects.toThrow(/publishes as a fork/);
 
     // A request in words: a variation waits until the lettering is read back.
     const asked = await tile(t, bob.userId, root.workId, { instruction: "Change SLOW to FAST", inspirationKey: artKey });

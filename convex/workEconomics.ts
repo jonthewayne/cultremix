@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { canonicalConfigJson, creatorPoolFor, recipientShares } from "./lib/economics";
-import { CURRENT_ECONOMIC_CONFIG, economicsConfigPath, sha256Hex } from "./lib/economicsConfigs";
+import { currentEconomicConfig, economicsConfigPath, sha256Hex } from "./lib/economicsConfigs";
 import { LineageError, economicLineage } from "./lib/lineage";
 import { toLineageWork, workByCr, worksReader } from "./lineage";
 import { brandForFamily } from "./brands";
@@ -61,7 +61,7 @@ export const panel = query({
   handler: async (ctx, args) => {
     const work = await workByCr(ctx, args.cr);
     if (!work || work.status !== "published") return null;
-    const config = CURRENT_ECONOMIC_CONFIG;
+    const config = currentEconomicConfig();
     const reader = worksReader(ctx);
     const familyBrand = config.brandDefaultBps === undefined ? null : await brandForFamily(ctx, work.crFamily);
     const brandUser = familyBrand ? await ctx.db.get("users", familyBrand.userId) : null;

@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { configHashFor } from "./lib/chain/ids";
 import { CHAIN_WRITES_FLAG, chainWritesEnabled, enqueueConfig, enqueueRegisterWork, resetWrite, writeBySubject } from "./lib/chain/queue";
 import { canonicalConfigJson } from "./lib/economics";
-import { CURRENT_ECONOMIC_CONFIG, ECONOMIC_CONFIGS } from "./lib/economicsConfigs";
+import { currentEconomicConfig, ECONOMIC_CONFIGS } from "./lib/economicsConfigs";
 import { requirePlatformCapability, requireSuperAdmin } from "./lib/permissions";
 import { formatCr } from "./lib/r2";
 import { chainWriteKindValidator, chainWriteStatusValidator } from "./schema/chain";
@@ -23,7 +23,7 @@ const BACKFILL_BATCH = 100;
 const STATUSES = ["waiting_wallet", "waiting_parent", "pending", "submitted", "confirmed", "rejected", "failed"] as const;
 
 // A published config's registry payload: its version and the SHA-256 of its canonical JSON.
-function economicConfig(version: number = CURRENT_ECONOMIC_CONFIG.version) {
+function economicConfig(version: number = currentEconomicConfig().version) {
   const json = canonicalConfigJson(ECONOMIC_CONFIGS[version]);
   return { version, json, hash: configHashFor(json) };
 }
@@ -247,7 +247,7 @@ export const registerEconomicConfig = mutation({
   returns: v.object({ version: v.number(), configHash: v.string() }),
   handler: async (ctx) => {
     await requirePlatformCapability(ctx, "chain:manage");
-    for (let version = 1; version < CURRENT_ECONOMIC_CONFIG.version; version++) {
+    for (let version = 1; version < currentEconomicConfig().version; version++) {
       const earlier = economicConfig(version);
       await enqueueConfig(ctx, earlier.version, earlier.hash);
     }

@@ -7,7 +7,7 @@ import { requireAdmin } from "./lib/adminAccess";
 import { imageUrlReader } from "./lib/imageUrls";
 import { formatCr, parseCr } from "./lib/r2";
 import { setCreatorAccess } from "./lib/creators";
-import { cleanArtistInputs, claimCode, slugBase } from "./lib/artistCredits";
+import { cleanArtistInputs, claimCode, linkKey, normalizeLink, slugBase } from "./lib/artistCredits";
 import { redirectClaimedPayees } from "./earnings";
 import type { ArtistCredits } from "./lib/economics";
 import type { ArtistInput, CleanArtist } from "./lib/artistCredits";
@@ -24,6 +24,8 @@ type Ctx = QueryCtx | MutationCtx;
 type Role = keyof ArtistCredits;
 
 const inputValidator = v.object({ name: v.string(), link: v.string() });
+// New artists one member can name a day, while publishing.
+const NEW_ARTISTS_PER_DAY = 10;
 // Claims one member can have open at once.
 const MAX_OPEN_CLAIMS = 5;
 // A claim started and not sent within a week expires: it can't be sent, and asking again starts a new one.
@@ -49,7 +51,7 @@ async function uniqueSlug(ctx: MutationCtx, name: string) {
 // one artist, a renamed page still matches its link, and a declined artist stays declined. Two
 // artists with the same name but different links stay apart. Artists made before the link table
 // are found by name and link once and then indexed.
-async function artistFor(ctx: MutationCtx, input: CleanArtist, by: Id<"users">): Promise<Doc<"artists">> {
+async function artistFor(ctx: MutationCtx, input: CleanArtist, by: Id<"users">, source: "creator" | "staff"): Promise<Doc<"artists">> {
   const linked = await ctx.db.query("artistLinks").withIndex("by_key", (q) => q.eq("key", input.key)).first();
   const byLink = linked ? await ctx.db.get("artists", linked.artistId) : null;
   if (byLink) return byLink;
@@ -63,6 +65,16 @@ async function artistFor(ctx: MutationCtx, input: CleanArtist, by: Id<"users">):
     return match;
   }
   const now = Date.now();
+  // A member can name a handful of new artists a day; staff can name any number.
+  if (source === "creator") {
+    const recent = await ctx.db
+      .query("artists")
+      .withIndex("by_createdBy", (q) => q.eq("createdBy", by).gt("createdAt", now - 24 * 60 * 60 * 1000))
+      .take(NEW_ARTISTS_PER_DAY);
+    if (recent.length >= NEW_ARTISTS_PER_DAY) {
+      throw new ConvexError({ code: "TOO_MANY_ARTISTS", message: "You've credited a lot of new artists today. Try again tomorrow, or leave the credit off for now." });
+    }
+  }
   // The payee never signs in and gets no wallet: walletStatus "ready" keeps the wallet cron away.
   const payeeId = await ctx.db.insert("users", { name: input.name, artistPayee: true, walletStatus: "ready" });
   const id = await ctx.db.insert("artists", {
@@ -95,7 +107,7 @@ export async function setWorkCredits(
   for (const row of old) await ctx.db.delete("artistCredits", row._id);
   const now = Date.now();
   for (const input of cleaned.artists) {
-    const artist = await artistFor(ctx, input, by);
+    const artist = await artistFor(ctx, input, by, source);
     await ctx.db.insert("artistCredits", { workId, artistId: artist._id, source, addedBy: by, createdAt: now });
   }
 }
@@ -402,6 +414,12 @@ export const adminOverview = query({
         proofUrl: v.union(v.string(), v.null()),
         note: v.union(v.string(), v.null()),
         submittedAt: v.number(),
+        // Whether the proof link is on one of the artist's own sites (instagram.com for an
+        // instagram.com link). A comment or a lookalike elsewhere is flagged for a closer look.
+        proofOnArtistSite: v.boolean(),
+        // Members who credited this artist while publishing; the claimant among them is flagged.
+        creditedBy: v.array(v.string()),
+        claimantCredited: v.boolean(),
       }),
     ),
     artists: v.array(adminArtist),
@@ -414,6 +432,12 @@ export const adminOverview = query({
       const artist = await ctx.db.get("artists", claim.artistId);
       const user = await ctx.db.get("users", claim.userId);
       if (!artist) continue;
+      const proof = claim.proofUrl ? normalizeLink(claim.proofUrl) : null;
+      const proofHost = proof ? linkKey(proof).split(/[/?]/u)[0] : null;
+      const credits = await ctx.db.query("artistCredits").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(50);
+      const crediters = [...new Set(credits.filter((c) => c.source === "creator").map((c) => c.addedBy))];
+      const creditedBy = [];
+      for (const id of crediters.slice(0, 10)) creditedBy.push((await ctx.db.get("users", id))?.username ?? "member");
       claims.push({
         id: claim._id,
         artist: { name: artist.name, slug: artist.slug, links: artist.links },
@@ -422,6 +446,9 @@ export const adminOverview = query({
         proofUrl: claim.proofUrl ?? null,
         note: claim.note ?? null,
         submittedAt: claim.submittedAt ?? claim.createdAt,
+        proofOnArtistSite: proofHost !== null && artist.linkKeys.some((key) => key.split(/[/?]/u)[0] === proofHost),
+        creditedBy,
+        claimantCredited: crediters.includes(claim.userId),
       });
     }
     const all = await ctx.db.query("artists").order("desc").take(100);
@@ -548,6 +575,28 @@ export const moveHeld = internalMutation({
       return null;
     }
     await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: args.userId });
+    return null;
+  },
+});
+
+// Staff rename an artist (the first member to credit a link names them for everyone) or hide one:
+// hidden works like a decline, so pages stop showing the credit and new sales stop paying it.
+export const adminUpdateArtist = mutation({
+  args: { artistId: v.id("artists"), name: v.optional(v.string()), hidden: v.optional(v.boolean()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, "manage");
+    const artist = await ctx.db.get("artists", args.artistId);
+    if (!artist) throw new ConvexError({ code: "NOT_FOUND", message: "No such artist." });
+    const patch: Partial<Doc<"artists">> = { updatedAt: Date.now() };
+    if (args.name !== undefined) {
+      const name = args.name.replace(/\s+/gu, " ").trim();
+      if (!name || [...name].length > 60) throw new ConvexError({ code: "INVALID_INPUT", message: "Give the artist a name, up to 60 characters." });
+      patch.name = name;
+      patch.nameLower = name.toLowerCase();
+    }
+    if (args.hidden !== undefined) patch.status = args.hidden ? "declined" : artist.claimedBy ? "claimed" : "unclaimed";
+    await ctx.db.patch("artists", artist._id, patch);
     return null;
   },
 });

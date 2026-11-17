@@ -1,8 +1,17 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { ECONOMIC_CONFIG_V1, ECONOMIC_CONFIG_V2, ECONOMIC_CONFIG_V3, ECONOMIC_CONFIG_V4, ECONOMIC_CONFIG_V5, canonicalConfigJson } from "../../convex/lib/economics";
-import { economicsConfigFile, economicsConfigPath, sha256Hex } from "../../convex/lib/economicsConfigs";
+import { currentEconomicConfig, economicsConfigFile, economicsConfigPath, sha256Hex } from "../../convex/lib/economicsConfigs";
 import { economicsConfigResponse } from "../../src/lib/economicsRoute";
+
+describe("the current rules version", () => {
+  it("keeps production on v4 until v5 is turned on there on purpose", () => {
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod" })).toBe(ECONOMIC_CONFIG_V4);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "prod", ECONOMICS_VERSION: "5" })).toBe(ECONOMIC_CONFIG_V5);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "dev" })).toBe(ECONOMIC_CONFIG_V5);
+    expect(currentEconomicConfig({ DEPLOYMENT_ENV: "staging" })).toBe(ECONOMIC_CONFIG_V5);
+  });
+});
 
 describe("/economics/v1.json", () => {
   it("serves exactly the canonical config bytes as JSON", async () => {

@@ -13,9 +13,14 @@ export const ECONOMIC_CONFIGS: Readonly<Record<number, EconomicConfig>> = {
 };
 
 // New orders follow the current rules; each order line keeps the version it was sold under.
-// v5 adds artist credits and isn't registered on Monad yet: costs-first sharing (docs/decisions.md)
-// joins it before it reaches production.
-export const CURRENT_ECONOMIC_CONFIG = ECONOMIC_CONFIG_V5;
+// v5 adds artist credits. docs/decisions.md keeps it off production until costs-first sharing
+// joins it, so production (DEPLOYMENT_ENV=prod) stays on v4 unless ECONOMICS_VERSION=5 is set
+// there on purpose: lines keep their version, so a rules version that reached production by
+// accident couldn't be taken back. Every other deployment runs v5.
+export function currentEconomicConfig(env: Record<string, string | undefined> = process.env): EconomicConfig {
+  const production = env.DEPLOYMENT_ENV?.trim().toLowerCase() === "prod";
+  return production && env.ECONOMICS_VERSION?.trim() !== "5" ? ECONOMIC_CONFIG_V4 : ECONOMIC_CONFIG_V5;
+}
 
 export function economicsConfigPath(version: number) {
   return `/economics/v${version}.json`;

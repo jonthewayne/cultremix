@@ -43,23 +43,71 @@ function AdminArtists() {
         ) : (
           <ul className="divide-y divide-border">
             {data.artists.map((artist) => (
-              <li key={artist.id} className="flex flex-wrap items-baseline justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <Link to="/artist/$slug" params={{ slug: artist.slug }} className="font-black hover:underline">
-                    {artist.name}
-                  </Link>{" "}
-                  <span className="text-sm text-muted-foreground">
-                    {artist.status === "claimed" ? `claimed by @${artist.claimedBy ?? "member"}` : artist.status} · {artist.credits}{" "}
-                    {artist.credits === 1 ? "design" : "designs"} · {artist.links.join(", ")}
-                  </span>
-                </div>
-                {artist.status === "unclaimed" && <span className="font-bold tabular-nums">{formatCents(artist.heldCents)} held</span>}
-              </li>
+              <ArtistRow key={artist.id} artist={artist} />
             ))}
           </ul>
         )}
       </AdminSection>
     </div>
+  );
+}
+
+type ArtistView = NonNullable<ReturnType<typeof useQuery<typeof api.artists.adminOverview>>>["artists"][number];
+
+// One credited artist: its page, status, and what's held, with a rename and a hide for staff.
+function ArtistRow({ artist }: { artist: ArtistView }) {
+  const update = useMutation(api.artists.adminUpdateArtist);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(artist.name);
+  const [error, setError] = useState("");
+  const run = async (action: () => Promise<unknown>) => {
+    setError("");
+    try {
+      await action();
+      setEditing(false);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  const id = artist.id as Id<"artists">;
+  return (
+    <li className="space-y-2 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <Link to="/artist/$slug" params={{ slug: artist.slug }} className="font-black hover:underline">
+            {artist.name}
+          </Link>{" "}
+          <span className="text-sm text-muted-foreground">
+            {artist.status === "claimed" ? `claimed by @${artist.claimedBy ?? "member"}` : artist.status === "declined" ? "hidden" : artist.status} ·{" "}
+            {artist.credits} {artist.credits === 1 ? "design" : "designs"} · {artist.links.join(", ")}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-3">
+          {artist.status === "unclaimed" && <span className="font-bold tabular-nums">{formatCents(artist.heldCents)} held</span>}
+          <button type="button" className={adminQuietButton} onClick={() => setEditing(!editing)}>
+            Rename
+          </button>
+          <button type="button" className={adminQuietButton} onClick={() => void run(() => update({ artistId: id, hidden: artist.status !== "declined" }))}>
+            {artist.status === "declined" ? "Show" : "Hide"}
+          </button>
+        </div>
+      </div>
+      {editing && (
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void run(() => update({ artistId: id, name }));
+          }}
+        >
+          <input className={adminInput} value={name} onChange={(e) => setName(e.target.value)} aria-label="Artist name" />
+          <button type="submit" className={adminButton}>
+            Save
+          </button>
+        </form>
+      )}
+      {error && <p className="text-sm font-semibold text-destructive">{error}</p>}
+    </li>
   );
 }
 
@@ -98,6 +146,17 @@ function ClaimRow({ claim }: { claim: Claim }) {
         )}
       </p>
       {claim.note && <p className="text-sm text-muted-foreground">{claim.note}</p>}
+      {!claim.proofOnArtistSite && (
+        <p className="text-sm font-semibold text-destructive">
+          The proof isn't on any of the artist's own sites. A comment or a lookalike page anyone can post to isn't proof.
+        </p>
+      )}
+      {claim.creditedBy.length > 0 && (
+        <p className={claim.claimantCredited ? "text-sm font-semibold text-destructive" : "text-sm text-muted-foreground"}>
+          Credited while publishing by {claim.creditedBy.map((name) => `@${name}`).join(", ")}
+          {claim.claimantCredited ? ". The claimant credited this artist themselves." : "."}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         <button type="button" className={adminButton} onClick={() => void run(() => approve({ claimId: claim.id as Id<"artistClaims"> }))}>
           Approve
