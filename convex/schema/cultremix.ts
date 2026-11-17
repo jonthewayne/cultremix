@@ -276,6 +276,9 @@ export const cultremixTables = {
         model: v.optional(v.string()),
         // Kept words the remix no longer shows (convex/lib/keptWords.ts).
         keptMissing: v.optional(v.array(v.string())),
+        // The kept words it was read against; when the original's creator keeps others later,
+        // the comparison runs again (convex/publish.ts staleKept).
+        keptCompared: v.optional(v.array(v.string())),
         error: v.optional(v.string()),
       }),
     ),

@@ -28,11 +28,19 @@ export const compare = internalAction({
       try {
         const started = Date.now();
         const [original, remix] = await Promise.all([fetchPublicImage(job.parentKey, ctx), fetchPublicImage(job.designKey, ctx)]);
-        const [result, lettering] = await Promise.all([
-          compareRemix(original, remix, undefined, job.allowed),
-          job.kept.length > 0 ? readDesignWords(remix) : null,
+        // A remix made only with the boxes stays a variation unless a kept word is gone, so it skips
+        // the comparison. The original's lettering is read too, so a kept word the reader can't make
+        // out even on the original (hand-drawn lettering) isn't counted as missing from the remix.
+        const kept = job.kept.length > 0;
+        const [result, lettering, before] = await Promise.all([
+          job.boxesOnly
+            ? Promise.resolve({ verdict: "variation" as const, reason: "It changed only its remixable words and parts.", subject: undefined, layout: undefined, style: undefined, model: undefined, costCents: 0 })
+            : compareRemix(original, remix, undefined, job.allowed),
+          kept ? readDesignWords(remix) : null,
+          kept ? readDesignWords(original) : null,
         ]);
-        const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words, job.asked) : undefined;
+        const unreadable = new Set(before ? missingKeptWords(job.kept, before.words) : []);
+        const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words, job.asked).filter((word) => !unreadable.has(word)) : undefined;
         console.log(
           "remixCheck ok",
           generationId,
@@ -52,6 +60,7 @@ export const compare = internalAction({
           style: result.style,
           model: result.model,
           keptMissing,
+          keptCompared: job.kept,
         });
         return null;
       } catch (error) {

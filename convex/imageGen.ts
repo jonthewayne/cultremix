@@ -362,8 +362,8 @@ async function photoImage(
 // and one that prints the prompt is dropped (convex/lib/promptLeak.ts). Only requests that use the
 // words such a request needs are read, about 0.3 cents a design. typed: what the member typed
 // (the request and a remix's new words and characters). A reading that fails lets the design through.
-async function lettersPrompt(prompt: string, typed: string, png: Uint8Array) {
-  if (!mightAskForPrompt(typed)) return false;
+async function lettersPrompt(prompt: string, typed: string, png: Uint8Array, unscreened = false) {
+  if (!unscreened && !mightAskForPrompt(typed)) return false;
   try {
     return isLeak(promptOnlyWords(prompt, typed), (await readDesignWords(png)).words);
   } catch (error) {
@@ -408,6 +408,7 @@ export const runTile = internalAction({
       let bytes: Uint8Array = new Uint8Array();
       let info: { width: number; height: number; hasAlpha: boolean };
       let text: string;
+      let unscreened = false;
       let provider: string | null;
       let imageCount: number;
       if (job.engine) {
@@ -416,7 +417,7 @@ export const runTile = internalAction({
         const one = job.model === NANO_BANANA_MODEL ? "nano-banana" : job.model === RECRAFT_MODEL ? "recraft" : "gpt";
         const blind = one === "recraft";
         let refused: boolean;
-        ({ text, refused } = await batchPrompt({ ...job, layout: "single", blind }));
+        ({ text, refused, unscreened } = await batchPrompt({ ...job, layout: "single", blind }));
         if (refused) throw new Error(REQUEST_REFUSED);
         const images = blind ? [] : await Promise.all(job.attachments.map((a) => fetchPublicImage(a.key, ctx)));
         imageCount = images.length;
@@ -444,7 +445,9 @@ export const runTile = internalAction({
           info = pngInfo(bytes);
         }
       } else {
-        if ((await screenRequest(job.typed))?.reveal) throw new Error(REQUEST_REFUSED);
+        const screen = await screenRequest(job.typed);
+        if (screen?.reveal) throw new Error(REQUEST_REFUSED);
+        unscreened = screen === null && Boolean(job.typed.trim());
         text = studioPrompt({
           layout: "single",
           // Style words from the previous studio's buttons, on batches it started.
@@ -471,7 +474,7 @@ export const runTile = internalAction({
         info = pngInfo(bytes);
       }
       // The same last check as a grid's: a design that letters the prompt isn't stored.
-      if (await lettersPrompt(text, job.typed, bytes)) {
+      if (await lettersPrompt(text, job.typed, bytes, unscreened)) {
         console.log("runTile dropped a design that lettered the prompt", generationId);
         throw new Error(PROMPT_LETTERED);
       }
@@ -544,7 +547,7 @@ export const runBatch = internalAction({
       if (!job) throw new Error("The batch was removed.");
       // What the request wants from each numbered image (GPT-6 Luna, about 2.5 s) and the prompt
       // itself, built the way the image test suite builds it (convex/lib/batchPrompt.ts).
-      const { text, roles, read, styleJobs, refused } = await batchPrompt(job);
+      const { text, roles, read, styleJobs, refused, unscreened } = await batchPrompt(job);
       if (refused) throw new Error(REQUEST_REFUSED);
       // Nano Banana can't make a transparent background: its grid is drawn on a key color that
       // chromaKey clears before the cut.
@@ -580,7 +583,7 @@ export const runBatch = internalAction({
             cells.slice(i, i + 2).map(async (cell): Promise<DesignResult> => {
               if (!cell.tile) return { index: cell.index, error: cell.reason === "merged" ? GRID_MERGED : GRID_EMPTY };
               const png = await encodePng(cell.tile);
-              if (await lettersPrompt(text, job!.typed, png)) {
+              if (await lettersPrompt(text, job!.typed, png, unscreened)) {
                 console.log("runBatch dropped a design that lettered the prompt", batchId, cell.index);
                 return { index: cell.index, error: PROMPT_LETTERED };
               }

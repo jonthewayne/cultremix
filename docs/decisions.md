@@ -8,7 +8,7 @@ This is the durable record of agreed product behavior and the architectural cons
 
 ## 2026-10-15: Recover protected costs before sharing earnings
 
-**Status: agreed; implementation pending.** The current dev economics v4 still calculates shares from the discounted item price before costs. Its admin margin table can show a loss on expensive products. That is evidence of an unsafe deal or price, rather than permission to sell at a loss. This decision supersedes the price-based sharing assumptions in the October 14 after-judging plan.
+**Status: agreed and built (November 16, 2026) as economics v6; see "As built" below.** Economics v4 calculates shares from the discounted item price before costs. Its admin margin table can show a loss on expensive products. That is evidence of an unsafe deal or price, rather than permission to sell at a loss. This decision supersedes the price-based sharing assumptions in the October 14 after-judging plan.
 
 For new sales under the future rules:
 
@@ -23,9 +23,19 @@ The exact operating allowance, fee allocation across multi-item orders, and trea
 
 Percentages of the remainder pay different dollar amounts than the same percentages of retail price. Update the admin, brand and creator explanations, policies, versioned rules, and earnings calculation together. Recording v4 on Monad alone does not implement this decision. Choose and register the appropriate new rules version only after implementation and verification.
 
+**As built (November 16, 2026, economics v6).** v6 is v5's artist credits plus costs first; v5 never reached production, so production goes from v4 to v6 (`ECONOMICS_VERSION=6`). The implementation choices the decision left open:
+
+- **Production cost** is Printful's catalog price for the sold variant, plus each placement beyond the first (a back print, a chest mark with it). Every product's prices are saved (`merchProducts` variants' `costCents`) and refreshed daily, at each deploy (`deploy:migrate`'s costs step), and when an admin adds a product. When the exact variant has no saved price, the product's highest stands in, so the estimate errs high.
+- **Card fee:** 2.9% + 30¢ of everything the buyer paid, spread over the order's lines by their price.
+- **Shipping shortfall:** Printful's shipping ($5.35 for the first item, $2.60 for each more) beyond what the buyer paid for shipping, spread over lines by units. With today's flat $5.95, a one-item order has none.
+- **Operating allowance:** $1 per unit, in the published rules (`operatingAllowanceCents`).
+- **Below cost:** a line whose price after discounts doesn't cover its costs, or whose cost isn't saved, shares nothing, and the owner and ops get an order notification. Prices can't be set below cost: Admin, Products refuses one and names the least that works, and flags any product a later Printful price change pushed under.
+- **Auditable:** each order line saves its production, fee, shipping, and allowance cents and what was left to share (`orderItems.costs`). Admin, Brands' money table uses the same math (`convex/lib/saleCosts.ts`).
+- Shares, the brand allocation, the five-point creator minimum, the affiliate's 5%, and artist credits are all percentages of what's left. Earlier lines keep their version.
+
 ## 2026-10-15: A brand controls the creator portion of its allocation
 
-**Status: agreed.** Dev v4 already has a combined brand-and-creator allocation and a brand-controlled creator share. Applying them after protected costs is pending the decision above.
+**Status: agreed and built.** v4 has the combined brand-and-creator allocation and the brand-controlled creator share; v6 applies them to the amount after protected costs, and the brand page states each percentage's basis.
 
 - CultRemix negotiates and sets the brand's total allocation. Brand status is granted by admins; it is not an automatic member entitlement. A brand cannot increase its own allocation.
 - The brand chooses how much of that allocation goes to the creator pool, up to the total allocation.
@@ -40,7 +50,7 @@ Suggested brand-page wording: “Your allocation: 25% of the amount remaining af
 
 ## 2026-10-15: Keep individual brand agreements confidential
 
-**Status: agreed direction; public-response and UI changes pending.** General economics rules and individual negotiated deals are different data. The versioned rules JSON describes general defaults, limits, and lineage splits; its hash is recorded on Monad. It does not contain a named brand's individual agreement. The current public `convex/workEconomics.ts` query and `EconomicsPanel` nevertheless expose exact per-brand percentages, so the current application does not meet the desired confidentiality.
+**Status: agreed and built (November 16, 2026): public responses carry no brand rate or allocation, and Monad's wording says what it records.** General economics rules and individual negotiated deals are different data. The versioned rules JSON describes general defaults, limits, and lineage splits; its hash is recorded on Monad. It does not contain a named brand's individual agreement. The current public `convex/workEconomics.ts` query and `EconomicsPanel` nevertheless expose exact per-brand percentages, so the current application does not meet the desired confidentiality.
 
 - Keep negotiated brand rates, total allocations, and agreement notes in the backend. Super admins can see agreements; each brand can see its own rates and allocation. Internal agreement notes remain admin-only.
 - Public pages may show the brand's identity and attribution without returning its negotiated rate or total allocation. Remove confidential fields from public API responses, not just rendered text. Retain this boundary for private-design responses too.
@@ -50,7 +60,7 @@ Suggested brand-page wording: “Your allocation: 25% of the amount remaining af
 
 ## 2026-10-15: A remixable phrase does not confer ownership of matching words
 
-**Status: agreed product policy; implementation audit pending.** A phrase can be a prominent, top-level remixable element. It can offer “Keep this phrase, reimagine the design” without giving its first uploader control over everyone else's use of those words.
+**Status: agreed product policy; audited November 16, 2026: a design's parent is set only by an explicit remix (the studio session's remixOfWorkId) or a staff lineage correction, never by matching words.** A phrase can be a prominent, top-level remixable element. It can offer “Keep this phrase, reimagine the design” without giving its first uploader control over everyone else's use of those words.
 
 - Attribution and earnings follow the work someone builds from. A remix created from an existing work keeps that relationship, even if its appearance changes substantially.
 - Matching a phrase alone must never automatically create ancestry, attach royalties, grant exclusivity, or give an earlier uploader control over an independently created design. Being first to upload is not a rights-verification mechanism.
@@ -101,7 +111,7 @@ With two or three artists, each artist gets an equal part of the same one fifth.
 - **Too close to the artist's style or work:** staff suspend the design and ask its creator to remix it further until it's distinct. The creator's own design keeps its place in its family; the change shows in its history.
 - **A copy of a specific artwork, or a trademark:** that's a different question from style. A valid copyright or trademark notice goes through the existing takedown path, and staff follow the law.
 
-**As built (dev, November 16).** The publish sheet asks "Inspired by an artist?" (optional, up to three, a name and a link each). Admin, **Artists** has waiting claims, a design's credits by CR number, and every artist with what's held. Each design page shows "Inspired by Jane Doe (unclaimed)" (with "via CR …" when the credit comes from an earlier design in the lineage), and its economics panel lists the artist's share. /artist/<slug> lists the designs that credit them and what's set aside, and is where they claim it. An unclaimed artist's shares are paid to a hidden payee account and held there; approving a claim gives the claimant creator access, moves everything held to their account, and redirects later syncs of those orders too. Splitting among artists rounds to whole hundredths of the pool, so three artists get 600 basis points each and the creator keeps the 200 left over. Code: `convex/artists.ts`, `convex/lib/artistCredits.ts`, v5 in `convex/lib/economics.ts`; tests in `tests/unit/artistCredits.test.ts` and `tests/convex-local/artists.test.ts`. Not built yet: the Monad record of credits (a hashed artist ID), notifications when a claim is decided, and the Terms' wording.
+**As built (dev, November 16).** The publish sheet asks "Inspired by an artist?" (optional, up to three, a name and a link each). Admin, **Artists** has waiting claims, a design's credits by CR number, and every artist with what's held. Each design page shows "Inspired by Jane Doe (unclaimed)" (with "via CR …" when the credit comes from an earlier design in the lineage), and its economics panel lists the artist's share. /artist/<slug> lists the designs that credit them and what's set aside, and is where they claim it. An unclaimed artist's shares are paid to a hidden payee account and held there; approving a claim gives the claimant creator access, moves everything held to their account, and redirects later syncs of those orders too. Splitting among artists rounds to whole hundredths of the pool, so three artists get 600 basis points each and the creator keeps the 200 left over. Code: `convex/artists.ts`, `convex/lib/artistCredits.ts`, v5 in `convex/lib/economics.ts`; tests in `tests/unit/artistCredits.test.ts` and `tests/convex-local/artists.test.ts`. Since built (November 16): the Monad record of credits, claim notifications, and the Terms' wording (see below).
 
 **Review fixes (November 16, cross-model review with Fable 5.2).**
 
@@ -110,9 +120,17 @@ With two or three artists, each artist gets an equal part of the same one fifth.
 - **A claimant already paid on a line.** When the artist is also the design's creator, or one person claims two artist pages credited on the same line, their shares fold into one: the line's recipient adds the basis points and roles, and the held sale becomes a "claim" adjustment on the member's own sale, in that sale's state, so nothing already paid is rewritten. Cancellations, disputes, and refunds reverse the folded total.
 - **Pages appear when they should.** An unclaimed artist page shows once a published design credits it. A member can have five claims open; a claim started and not sent for a week stops counting.
 - **Brand rates stay private.** The public economics panel names a family's brand and the creators' share its agreement sets, but its response no longer carries the brand's rate.
-- **v5 can't reach production by accident.** Only dev and staging run v5 by themselves; production, or a deployment whose `DEPLOYMENT_ENV` isn't recognized, runs v4 unless `ECONOMICS_VERSION=5` is set there on purpose. Where v5 is off, the publish sheet doesn't ask about artists, designs don't show credits, and artist pages don't exist, so nothing promises a share that isn't paid. Turning it on is the step that waits for costs-first sharing.
+- **A rules version can't reach production by accident.** Only dev and staging run the latest (now v6) by themselves; production, or a deployment whose `DEPLOYMENT_ENV` isn't recognized, runs v4 unless `ECONOMICS_VERSION` names another version there on purpose (now `6`, which replaced v5 as the version that reaches production). Where artist credits are off, the publish sheet doesn't ask about artists, designs don't show credits, and artist pages don't exist, so nothing promises a share that isn't paid. Costs-first sharing joined artist credits as v6 on November 16, and production was set to v6 in that deploy.
 - **Claims get a closer look.** The admin claim row warns when the proof link is on another site, or on the same site but not the artist's credited page (a comment or a lookalike account), and when the claimant credited the artist themselves. Staff can rename or hide an artist; a hidden artist has no page and no share, and only staff change it, apart from an artist's own decline. A member can name ten new artists a day.
-- **Still open:** an admin un-claim that moves money back, a holding period before moved shares become payable (payouts are manual for now, which is the gate), credit roles from the amended lineage before staff amend a credited work's kind, and a lettering check that survives other languages or spaced-out letters (the request screen covers those).
+- **Built after the review (November 16):**
+  - **A review window instead of moving money back.** Approving a claim gives the member the page, and for 14 days nothing moves: sales keep holding the artist's share, and an admin can undo the claim (Admin, Artists, **Undo the claim**) with nothing to reverse. When the window ends, the member gets creator access and everything held moves to them. After that, a wrong claim is corrected by hand.
+  - **Notifications.** The claimant hears when a claim is approved, rejected, undone, and when the money moves.
+  - **On Monad.** The registry has no credit field, so a public design's credits go through its lineage correction call with the lineage unchanged. The reason names each artist only by a SHA-256 of their CultRemix artist ID ("Artist credit: 3f9a…"), Monad keeps its keccak256, and the design's Lineage section lists it under "Artist credits on Monad", apart from corrections. A change before it's sent replaces the waiting record. A private keep's credits are recorded when it's shared.
+  - **Terms.** The Earnings policy says a credit is recognition and not a license, that a style can't be owned, how the share is held and claimed, and that unclaimed amounts are handled as the law requires.
+  - **Lineage corrections.** Sales and credits follow a confirmed correction (`effectiveKind`, `effectiveParentWorkId`), as the work page does.
+  - **Prompt leaks.** The lettering check also reads requests in Spanish, French, German, Italian, Portuguese, Chinese, Japanese, Korean, and Russian, reads every design when the request screen couldn't answer, and sees letter-spaced or mirrored lettering.
+  - **Kept words.** The original's own lettering is read beside the remix's, so a word the reader can't make out even on the original isn't counted as missing; a boxes-only remix skips the full comparison; and a comparison runs again when the original's creator keeps other words later.
+- **Still open:** how long unclaimed money is held and where it goes (a lawyer and an accountant decide before checkout opens), and registering v5 and v6 on Monad (the registry takes versions in order, so v5 goes first; Admin, Chain).
 
 **Rules and Monad.** This adds an "artist" role to the economics rules, so it ships as a new rules version, ideally together with costs-first sharing. Monad records the credit under a hashed artist ID and never stores the artist's private details. The Terms should explain that a credit is recognition, not a license.
 

@@ -12,8 +12,13 @@ import { normalizeWords } from "./spelling";
 const SUSPECT =
   /\b(?:above|before|earlier|previous|preceding|instruct\w*|prompt\w*|rules?|system|told|given|sent|notes?|descri\w*|definitions?|verbatim|word.for.word|repeat\w*|quot\w*|context|hidden|secret|guidelines?|directions?|translat\w*|reveal\w*|disclos\w*|config\w*|summar\w*|setup|behind the scenes)\b/iu;
 
+// The same words in the languages members write in most, beside English. A request in another
+// language the screen couldn't answer is read anyway (convex/imageGen.ts lettersPrompt).
+const SUSPECT_ELSEWHERE =
+  /(?:instrucci|anterior|indicaciones|sistema|consign|précédent|precedent|instruction|anweisung|vorherig|systemprompt|istruzion|precedent|instruç|anterior|指示|指令|提示词|提示|系统|プロンプト|指示文|システム|이전|지시|프롬프트|инструкц|промпт|системн)/iu;
+
 export function mightAskForPrompt(request: string) {
-  return SUSPECT.test(request);
+  return SUSPECT.test(request) || SUSPECT_ELSEWHERE.test(request);
 }
 
 // Words the prompt says that the design has no business lettering: the prompt's words of four
@@ -25,10 +30,58 @@ export function promptOnlyWords(prompt: string, request: string) {
   return new Set(normalizeWords(prompt).split(" ").filter((word) => [...word].length >= 4 && !allowed.has(word)));
 }
 
+// A design's lettered words, as read: each word, the letter-spaced runs put back together
+// ("T R A N S P A R E N T"), and each read backwards, so spacing or mirroring doesn't hide a leak.
+export function letteredWords(lettering: ReadonlyArray<string>): Array<string> {
+  const out: Array<string> = [];
+  for (const piece of lettering) {
+    const words = normalizeWords(piece).split(" ").filter(Boolean);
+    let run = "";
+    for (const word of [...words, ""]) {
+      if ([...word].length === 1) {
+        run += word;
+        continue;
+      }
+      if ([...run].length >= 4) out.push(run);
+      run = "";
+      if (word) out.push(word);
+    }
+  }
+  return [...out, ...out.map((word) => [...word].reverse().join(""))];
+}
+
+// Letter-spaced lettering reads without its word gaps ("FULLYTRANSPARENTBACKGROUND"): a long
+// run that isn't a prompt word is split into the prompt words it's made of, longest first.
+function split(word: string, promptOnly: ReadonlySet<string>): Array<string> {
+  if (promptOnly.has(word) || [...word].length < 8) return [word];
+  const parts: Array<string> = [];
+  let i = 0;
+  while (i < word.length) {
+    let next = "";
+    for (let j = word.length; j >= i + 4; j--) {
+      if (promptOnly.has(word.slice(i, j))) {
+        next = word.slice(i, j);
+        break;
+      }
+    }
+    if (next) {
+      parts.push(next);
+      i += next.length;
+    } else {
+      i += 1;
+    }
+  }
+  return parts.length > 0 ? parts : [word];
+}
+
+function wordsFor(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray<string>) {
+  return letteredWords(lettering).flatMap((word) => split(word, promptOnly));
+}
+
 // The prompt-only words a design's lettering shows, each once.
 export function leakedWords(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray<string>) {
   const found = new Set<string>();
-  for (const piece of lettering) for (const word of normalizeWords(piece).split(" ")) if (promptOnly.has(word)) found.add(word);
+  for (const word of wordsFor(promptOnly, lettering)) if (promptOnly.has(word)) found.add(word);
   return [...found];
 }
 
@@ -46,8 +99,12 @@ export function isLeak(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray
   const distinct = leakedWords(promptOnly, lettering).length;
   if (distinct >= LEAK_ANYWHERE) return true;
   if (distinct < LEAK_THRESHOLD) return false;
-  const hits = lettering
-    .flatMap((piece) => normalizeWords(piece).split(" "))
+  const read = letteredWords(lettering);
+  const half = read.length / 2;
+  // Forwards, then backwards (a mirrored leak reads the prompt's order backwards).
+  const ordered = [...read.slice(0, half), ...read.slice(half).reverse()];
+  const hits = ordered
+    .flatMap((word) => split(word, promptOnly))
     .filter((word) => [...word].length >= 4)
     .map((word) => promptOnly.has(word));
   for (let i = 0; i < hits.length; i++) {

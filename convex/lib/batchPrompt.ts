@@ -48,6 +48,9 @@ export async function batchPrompt(job: {
   // The request asks for the studio's own prompt or notes (convex/lib/requestGuard.ts): the batch
   // stops before the image call.
   refused: boolean;
+  // The request screen didn't answer (no key, a timeout, an answer it couldn't read): the lettering
+  // check then reads every design rather than only suspect requests (convex/imageGen.ts).
+  unscreened: boolean;
 }> {
   // Style words from the previous studio's buttons, on batches it started.
   const instruction = job.presets.length > 0 ? `${job.instruction} Style: ${job.presets.join(", ")}.` : job.instruction;
@@ -107,5 +110,6 @@ export async function batchPrompt(job: {
     styleHair,
     styleJobs: Object.entries(jobs).map(([n, job]) => ({ attachment: Number(n), job })),
     refused: screen?.reveal === true,
+    unscreened: screen === null && Boolean((job.typed ?? job.instruction).trim()),
   };
 }

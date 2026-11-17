@@ -248,6 +248,18 @@ describe("publishing a remix as a variation or a fork", () => {
     await bob.as.mutation(api.publish.checkRemix, { generationId: fine });
     await t.mutation(internal.publish.saveRemixCheck, { generationId: fine, verdict: "variation", reason: "Recolored.", keptMissing: [] });
     expect(await relation(fine)).toEqual({ status: "variation", reason: "Recolored." });
+
+    // The original's creator keeps GROW too: a comparison read against SLOW alone is stale and runs again.
+    const later = await tile(t, bob.userId, root.workId, { instruction: "Make the mushrooms red", inspirationKey: artKey });
+    await bob.as.mutation(api.publish.checkRemix, { generationId: later });
+    await t.mutation(internal.publish.saveRemixCheck, { generationId: later, verdict: "variation", reason: "Recolored.", keptMissing: [], keptCompared: ["SLOW"] });
+    expect(await relation(later)).toEqual({ status: "variation", reason: "Recolored." });
+    const fields = (await t.run((ctx) => ctx.db.get("works", root.workId)))!.remixFields!;
+    await t.run((ctx) => ctx.db.patch("works", root.workId, { remixFields: fields.map((f) => ({ ...f, on: false })) }));
+    expect(await relation(later)).toEqual({ status: "none", waits: true });
+    await bob.as.mutation(api.publish.checkRemix, { generationId: later });
+    expect(await relation(later)).toEqual({ status: "pending", waits: true });
+    await t.run((ctx) => ctx.db.patch("works", root.workId, { remixFields: fields }));
     expect((await publishAs(fine, "fine")).cr).toBe("101-002");
 
     // Sharing a kept remix that dropped a kept word makes it a fork without asking.

@@ -70,9 +70,20 @@ const CHECK_STALE_MS = 2 * 60_000;
 // A remix design is compared at most this many times.
 const CHECK_ATTEMPTS = 3;
 
+// A finished comparison read the remix against the words the original kept then. If its creator
+// has since kept other words, the comparison is stale and runs again.
+function staleKept(check: Doc<"generations">["remixCheck"], kept: ReadonlyArray<string>) {
+  if (check?.status !== "done") return false;
+  const compared = check.keptCompared ?? (check.keptMissing ? undefined : []);
+  if (!compared) return false;
+  return compared.length !== kept.length || compared.some((word, i) => word !== kept[i]);
+}
+
 function remixRelation(generation: Doc<"generations">, batch: Doc<"batches">, parent: Doc<"works">): Relation {
-  const waits = keptPieces(parent.remixFields).length > 0 || undefined;
-  const check = generation.remixCheck;
+  const kept = keptPieces(parent.remixFields);
+  const waits = kept.length > 0 || undefined;
+  const fresh = generation.remixCheck;
+  const check = staleKept(fresh, kept) ? undefined : fresh;
   if (remixChangedOnlyWords(batch, parent.artKey)) {
     // Boxes take free text ("a wolf; also change HATE to LOVE"), so when the original keeps words,
     // a remix made only with them is read back too. It stays a variation unless it dropped a
@@ -119,9 +130,11 @@ function checkRemixKind(relation: Relation, kind: "variation" | "fork") {
   }
 }
 
-// Starts a remix design's comparison with its original, unless one is running or done.
-async function startRemixCheck(ctx: MutationCtx, generation: Doc<"generations">) {
-  const check = generation.remixCheck;
+// Starts a remix design's comparison with its original, unless one is running or done (and done
+// against the words the original keeps now).
+async function startRemixCheck(ctx: MutationCtx, generation: Doc<"generations">, kept: ReadonlyArray<string> = []) {
+  const stale = staleKept(generation.remixCheck, kept);
+  const check = stale ? undefined : generation.remixCheck;
   const now = Date.now();
   if (check?.status === "done") return;
   if (check?.status === "pending" && now - check.requestedAt < CHECK_STALE_MS) return;
@@ -154,7 +167,7 @@ export const checkRemix = mutation({
     const parent = session?.remixOfWorkId ? await ctx.db.get("works", session.remixOfWorkId) : null;
     if (!batch || !parent?.artKey || (parent.status !== "published" && parent.status !== "withdrawn")) return null;
     if (remixChangedOnlyWords(batch, parent.artKey) && keptPieces(parent.remixFields).length === 0) return null;
-    await startRemixCheck(ctx, generation);
+    await startRemixCheck(ctx, generation, keptPieces(parent.remixFields));
     return null;
   },
 });
@@ -164,7 +177,16 @@ export const remixCheckJob = internalQuery({
   args: { generationId: v.id("generations") },
   returns: v.union(
     v.null(),
-    v.object({ parentKey: v.string(), designKey: v.string(), allowed: v.optional(v.string()), kept: v.array(v.string()), asked: v.array(v.string()) }),
+    v.object({
+      parentKey: v.string(),
+      designKey: v.string(),
+      allowed: v.optional(v.string()),
+      kept: v.array(v.string()),
+      asked: v.array(v.string()),
+      // Made only with the remix boxes: it's a variation unless a kept word is gone, so only the
+      // lettering is read, not the whole comparison.
+      boxesOnly: v.boolean(),
+    }),
   ),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
@@ -181,7 +203,8 @@ export const remixCheckJob = internalQuery({
     const asked = batch
       ? [batch.instruction, ...(batch.wordChanges ?? []).map((change) => change.to), ...(batch.partChanges ?? []).flatMap((change) => (change.to ? [change.to] : []))]
       : [];
-    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields), asked };
+    const boxesOnly = batch ? remixChangedOnlyWords(batch, parent.artKey) : false;
+    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields), asked, boxesOnly };
   },
 });
 
@@ -198,6 +221,8 @@ export const saveRemixCheck = internalMutation({
     model: v.optional(v.string()),
     // Kept words the remix no longer shows (convex/lib/keptWords.ts); absent when none were checked.
     keptMissing: v.optional(v.array(v.string())),
+    // The kept words it was read against.
+    keptCompared: v.optional(v.array(v.string())),
     error: v.optional(v.string()),
   },
   returns: v.null(),
@@ -220,6 +245,7 @@ export const saveRemixCheck = internalMutation({
             style: args.style,
             model: args.model,
             keptMissing: args.keptMissing,
+            keptCompared: args.keptCompared,
           }
         : { status: "failed", requestedAt, attempts, finishedAt, error: (args.error ?? "The comparison failed.").slice(0, 200) },
     });
@@ -491,7 +517,7 @@ export const shareKeep = mutation({
       // to wait for it returns instead of throwing.
       const unsettled = relation.status === "none" || relation.status === "pending";
       if (unsettled && (relation.waits || remixKind === "fork") && generation?.fullKey) {
-        await startRemixCheck(ctx, generation);
+        await startRemixCheck(ctx, generation, keptPieces(parent.remixFields));
         return { comparing: true as const };
       }
       checkRemixKind(relation, remixKind);
