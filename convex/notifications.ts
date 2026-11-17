@@ -43,6 +43,8 @@ const notificationItem = v.object({
   order: v.optional(v.object({ name: v.string(), reason: v.string() })),
   // For ops_alert (admins only): what needs them.
   alert: v.optional(v.string()),
+  // For artist_claim: what happened to the claim, and the artist page.
+  artistClaim: v.optional(v.object({ message: v.string(), slug: v.string() })),
 });
 
 // The bell: how many are unread, and when the viewer last opened the list. Signed out, nothing.
@@ -99,6 +101,7 @@ export const list = query({
             : {}),
           ...(row.kind === "order_attention" ? { order: { name: row.orderName ?? "An order", reason: row.note ?? "" } } : {}),
           ...(row.kind === "ops_alert" ? { alert: row.note ?? "" } : {}),
+          ...(row.kind === "artist_claim" ? { artistClaim: { message: row.note ?? "", slug: row.artistSlug ?? "" } } : {}),
           // Only its own creator gets this, and only while it's still kept.
           ...(row.kind === "kept_ready" && work?.status === "private" && work.creatorId === viewer._id
             ? { kept: { workId: work._id, title: work.title, thumbUrl: (await urls(work.artKey)).thumbUrl } }

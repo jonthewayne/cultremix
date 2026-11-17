@@ -99,7 +99,8 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
     item.kind === "restored" ||
     item.kind === "kept_ready" ||
     item.kind === "order_attention" ||
-    item.kind === "ops_alert";
+    item.kind === "ops_alert" ||
+    item.kind === "artist_claim";
   const body = (
     <>
       {fromCultRemix ? (
@@ -170,6 +171,10 @@ function NotificationRow({ item, isNew, now }: { item: Notification; isNew: bool
         <Link to="/admin/orders" className={cn(rowClass, "hover:bg-neutral-50")}>
           {body}
         </Link>
+      ) : item.artistClaim?.slug ? (
+        <Link to="/artist/$slug" params={{ slug: item.artistClaim.slug }} className={cn(rowClass, "hover:bg-neutral-50")}>
+          {body}
+        </Link>
       ) : item.kind === "ops_alert" ? (
         <Link to="/admin" className={cn(rowClass, "hover:bg-neutral-50")}>
           {body}
@@ -221,6 +226,8 @@ function Message({ item }: { item: Notification }) {
       return <SaleMessage item={item} />;
     case "ops_alert":
       return <>{item.alert || "Something needs you in Admin."}</>;
+    case "artist_claim":
+      return <>{item.artistClaim?.message || "Your artist page claim was decided."}</>;
     case "order_attention":
       return item.order ? (
         <>

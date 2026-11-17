@@ -12,16 +12,27 @@ import type { EconomicLineage } from "./economics";
 
 const MAX_WALK = 50;
 
+// A confirmed lineage correction (convex/lineage.ts amendments) sets effectiveKind and
+// effectiveParentWorkId; sales follow it from then on, as the work page's panel does. Until one
+// confirms, the work's own kind and parent stand.
+export function effectiveKind(work: Doc<"works">): Doc<"works">["kind"] {
+  return work.effectiveKind ?? work.kind;
+}
+export function effectiveParent(work: Doc<"works">): Id<"works"> | undefined {
+  return work.effectiveKind !== undefined ? work.effectiveParentWorkId : work.parentWorkId;
+}
+
 type Db = GenericDatabaseReader<DataModel>;
 
 async function forkParentCreator(db: Db, fork: Doc<"works">): Promise<string | null> {
-  if (!fork.parentWorkId) return null;
-  const parent = await db.get("works", fork.parentWorkId);
+  const parentId = effectiveParent(fork);
+  if (!parentId) return null;
+  const parent = await db.get("works", parentId);
   return parent ? parent.creatorId : null;
 }
 
-async function familyRoot(db: Db, work: Doc<"works">): Promise<Doc<"works"> | null> {
-  if (work.familyRootId && work.familyRootId !== work._id) {
+export async function familyRoot(db: Db, work: Doc<"works">): Promise<Doc<"works"> | null> {
+  if (work.effectiveKind === undefined && work.familyRootId && work.familyRootId !== work._id) {
     const root = await db.get("works", work.familyRootId);
     if (root) return root;
   }
@@ -30,24 +41,26 @@ async function familyRoot(db: Db, work: Doc<"works">): Promise<Doc<"works"> | nu
   for (let i = 0; i < MAX_WALK && current; i++) {
     if (seen.has(current._id)) return null;
     seen.add(current._id);
-    if (current._id !== work._id && current.kind !== "variation") return current;
-    if (!current.parentWorkId) return current._id === work._id ? null : current;
-    current = await db.get("works", current.parentWorkId);
+    if (current._id !== work._id && effectiveKind(current) !== "variation") return current;
+    const parentId = effectiveParent(current);
+    if (!parentId) return current._id === work._id ? null : current;
+    current = await db.get("works", parentId);
   }
   return null;
 }
 
 export async function resolveLineage(db: Db, work: Doc<"works">): Promise<EconomicLineage> {
   const creator = work.creatorId as string;
-  if (work.kind === "fork") {
+  const kind = effectiveKind(work);
+  if (kind === "fork") {
     const parentCreator = await forkParentCreator(db, work);
     // A fork whose parent is gone pays its own creator in both roles.
     return { kind: "fork", creator, parentCreator: parentCreator ?? creator };
   }
-  if (work.kind === "original" || !work.parentWorkId) return { kind: "original", creator };
+  if (kind === "original" || !effectiveParent(work)) return { kind: "original", creator };
   const root = await familyRoot(db, work);
   if (!root) return { kind: "original", creator };
-  if (root.kind === "fork") {
+  if (effectiveKind(root) === "fork") {
     const parentCreator = await forkParentCreator(db, root);
     return {
       kind: "variation",

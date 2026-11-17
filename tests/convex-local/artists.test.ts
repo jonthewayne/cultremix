@@ -276,6 +276,55 @@ describe("crediting an outside artist", () => {
     expect((await t.query(api.workEconomics.panel, { cr: "101-001" }))?.configVersion).toBe(4);
   });
 
+  it("holds a claim in review for two weeks, lets staff undo it then, and tells the claimant each step", async () => {
+    const t = newTest();
+    await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });
+    const a = await makeUser(t, { name: "A", creatorNumber: 2 });
+    const jane = await t.run((ctx) => ctx.db.insert("users", { name: "Jane", authId: ARTIST.subject, username: "janedoe", usernameLower: "janedoe" }));
+    const root = await makeWork(t, { creatorId: a, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
+    await makeOnSale(t, root, "101-001", 1000);
+    const owner = t.withIdentity(ADMIN);
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [{ name: "Jane Doe", link: "instagram.com/janedoe" }] });
+    const artist = (await t.run((ctx) => ctx.db.query("artists").collect()))[0];
+    shopify.set(rawOrder({ id: ORDER_ID, lines: [{ id: 11, variant: 1002, quantity: 1, price: "36.00" }] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+    const her = t.withIdentity(ARTIST);
+    const notes = async () =>
+      (await t.run((ctx) => ctx.db.query("notifications").filter((q) => q.eq(q.field("recipientId"), jane)).collect())).map((n) => n.note ?? "");
+
+    // Approved: the page is hers, but nothing moves and the share stays held during review.
+    const first = await her.mutation(api.artists.startClaim, { artistId: artist._id });
+    await her.mutation(api.artists.submitClaim, { claimId: first, proofUrl: "https://instagram.com/janedoe/p/1" });
+    await owner.mutation(api.artists.approveClaim, { claimId: first });
+    expect((await earningsFor(t, artist.payeeId)).length).toBe(1);
+    expect(await earningsFor(t, jane)).toHaveLength(0);
+    expect((await owner.query(api.artists.adminOverview, {})).artists[0]).toMatchObject({ status: "claimed", reviewUntil: expect.any(Number) });
+    expect((await notes()).at(-1)).toMatch(/approved/u);
+
+    // Staff undo it in the window: unclaimed again, still held, and she hears why.
+    await owner.mutation(api.artists.adminUnclaim, { artistId: artist._id, reason: "That account isn't hers." });
+    expect((await t.run((ctx) => ctx.db.get("artists", artist._id)))?.status).toBe("unclaimed");
+    expect((await notes()).at(-1)).toMatch(/undone: That account isn't hers/u);
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await earningsFor(t, jane)).toHaveLength(0);
+
+    // A rejection is told too.
+    const second = await her.mutation(api.artists.startClaim, { artistId: artist._id });
+    await her.mutation(api.artists.submitClaim, { claimId: second, proofUrl: "https://instagram.com/janedoe/p/2" });
+    await owner.mutation(api.artists.rejectClaim, { claimId: second, reason: "No code there." });
+    expect((await notes()).at(-1)).toMatch(/wasn't approved: No code there/u);
+
+    // Approved again and left to finish: the money moves after the window, and it can't be undone then.
+    const third = await her.mutation(api.artists.startClaim, { artistId: artist._id });
+    await her.mutation(api.artists.submitClaim, { claimId: third, proofUrl: "https://instagram.com/janedoe/p/3" });
+    await owner.mutation(api.artists.approveClaim, { claimId: third });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await earningsFor(t, artist.payeeId)).toHaveLength(0);
+    expect((await earningsFor(t, jane)).length).toBe(1);
+    expect((await notes()).at(-1)).toMatch(/in your earnings now/u);
+    await expect(owner.mutation(api.artists.adminUnclaim, { artistId: artist._id, reason: "" })).rejects.toThrow(/by hand/u);
+  });
+
   it("lets a creator credit artists while publishing, and checks what they typed", async () => {
     const t = newTest();
     const b = await makeUser(t, { name: "B", creatorNumber: 3, authId: B.subject });

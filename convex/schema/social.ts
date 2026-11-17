@@ -35,6 +35,8 @@ export const notificationKindValidator = v.union(
   // For the owner and ops: something about running CultRemix needs them, such as the image credit
   // running low (convex/opsAlerts.ts); note says what.
   v.literal("ops_alert"),
+  // An artist page claim was decided (convex/artists.ts); note says how, artistSlug which page.
+  v.literal("artist_claim"),
 );
 
 export const socialTables = {
@@ -120,6 +122,8 @@ export const socialTables = {
     note: v.optional(v.string()),
     // For order_attention: the Shopify order's name ("#1001").
     orderName: v.optional(v.string()),
+    // For artist_claim: the artist page's slug.
+    artistSlug: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_recipient_created", ["recipientId", "createdAt"])

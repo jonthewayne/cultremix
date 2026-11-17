@@ -7,9 +7,11 @@ import { requireAdmin } from "./lib/adminAccess";
 import { imageUrlReader } from "./lib/imageUrls";
 import { formatCr, parseCr } from "./lib/r2";
 import { setCreatorAccess } from "./lib/creators";
+import { notifyArtistClaim } from "./lib/notifications";
 import { cleanArtistInputs, claimCode, linkKey, normalizeLink, slugBase } from "./lib/artistCredits";
 import { artistSharesOn } from "./lib/economicsConfigs";
 import { redirectClaimedPayees } from "./earnings";
+import { effectiveKind, effectiveParent, familyRoot } from "./lib/shopLineage";
 import type { ArtistCredits } from "./lib/economics";
 import type { ArtistInput, CleanArtist } from "./lib/artistCredits";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -115,32 +117,22 @@ export async function setWorkCredits(
 
 // ---- Which credits a sale pays, and which a page shows ----
 
-async function familyRootOf(ctx: Ctx, work: Doc<"works">): Promise<Doc<"works"> | null> {
-  if (work.familyRootId && work.familyRootId !== work._id) return await ctx.db.get("works", work.familyRootId);
-  let current: Doc<"works"> | null = work;
-  const seen = new Set<string>();
-  for (let i = 0; i < 50 && current; i++) {
-    if (seen.has(current._id)) return null;
-    seen.add(current._id);
-    if (current._id !== work._id && current.kind !== "variation") return current;
-    if (!current.parentWorkId) return current._id === work._id ? null : current;
-    current = await ctx.db.get("works", current.parentWorkId);
-  }
-  return null;
-}
-
 // The works whose creators a sale of this work pays, by role, as convex/lib/shopLineage.ts reads
-// the lineage: the work itself, its family's first work, and the work a fork came from.
+// the lineage (a confirmed correction included): the work itself, its family's first work, and the
+// work a fork came from.
 async function paidWorks(ctx: Ctx, work: Doc<"works">): Promise<Partial<Record<Role, Doc<"works">>>> {
-  if (work.kind === "fork") {
-    const parent = work.parentWorkId ? await ctx.db.get("works", work.parentWorkId) : null;
+  const kind = effectiveKind(work);
+  const parentId = effectiveParent(work);
+  if (kind === "fork") {
+    const parent = parentId ? await ctx.db.get("works", parentId) : null;
     return parent ? { creator: work, upstream: parent } : { creator: work };
   }
-  if (work.kind === "original" || !work.parentWorkId) return { creator: work };
-  const root = await familyRootOf(ctx, work);
+  if (kind === "original" || !parentId) return { creator: work };
+  const root = await familyRoot(ctx.db, work);
   if (!root) return { creator: work };
-  if (root.kind === "fork") {
-    const upstream = root.parentWorkId ? await ctx.db.get("works", root.parentWorkId) : null;
+  if (effectiveKind(root) === "fork") {
+    const upstreamId = effectiveParent(root);
+    const upstream = upstreamId ? await ctx.db.get("works", upstreamId) : null;
     return upstream ? { creator: work, family_root: root, upstream } : { creator: work, family_root: root };
   }
   return { creator: work, family_root: root };
@@ -154,7 +146,8 @@ async function creditedArtists(ctx: Ctx, workId: Id<"works">) {
 
 // Who a credited artist's share is paid to: the member who claimed it, else the hidden payee.
 export function artistRecipient(artist: Doc<"artists">): Id<"users"> {
-  return artist.status === "claimed" && artist.claimedBy ? artist.claimedBy : artist.payeeId;
+  // In its review window, sales still hold the share on the payee (approveClaim).
+  return artist.status === "claimed" && artist.claimedBy && artist.reviewUntil === undefined ? artist.claimedBy : artist.payeeId;
 }
 
 // The artists a sale of this work pays, by the role whose part their share comes from, and each
@@ -308,7 +301,7 @@ export const page = query({
       links: artist.links,
       status: artist.status,
       claimedBy: claimer?.username ?? null,
-      heldCents: artist.status === "unclaimed" ? await heldCents(ctx, artist.payeeId) : 0,
+      heldCents: artist.status === "unclaimed" || artist.reviewUntil !== undefined ? await heldCents(ctx, artist.payeeId) : 0,
       works,
       viewer: { signedIn: Boolean(viewer), isClaimant: Boolean(viewer && artist.claimedBy === viewer._id), claim },
     };
@@ -406,6 +399,8 @@ const adminArtist = v.object({
   heldCents: v.number(),
   // Hidden by staff (adminUpdateArtist).
   hidden: v.boolean(),
+  // A claim in its review window: when the money moves (adminUnclaim can still undo it).
+  reviewUntil: v.union(v.number(), v.null()),
 });
 
 export const adminOverview = query({
@@ -480,8 +475,9 @@ export const adminOverview = query({
         status: artist.status,
         claimedBy: claimer?.username ?? null,
         credits: credits.length,
-        heldCents: artist.status === "unclaimed" ? await heldCents(ctx, artist.payeeId) : 0,
+        heldCents: artist.status === "unclaimed" || artist.reviewUntil !== undefined ? await heldCents(ctx, artist.payeeId) : 0,
         hidden: artist.hidden ?? false,
+        reviewUntil: artist.reviewUntil ?? null,
       });
     }
     return { claims, artists };
@@ -530,8 +526,12 @@ export const adminSetWorkCredits = mutation({
   },
 });
 
-// Approving a claim: the page becomes the member's, they get creator access (so their shares can
-// be paid), and everything held for the artist moves to their account.
+// Approving a claim gives the member the page right away, and starts a review window
+// (CLAIM_REVIEW_MS) before any money moves: sales keep holding the artist's share on its hidden
+// payee, and an admin can still undo the claim (adminUnclaim) with nothing to move back. When the
+// window ends, finishClaim gives the member creator access and moves everything held to them.
+const CLAIM_REVIEW_MS = 14 * 24 * 60 * 60 * 1000;
+
 export const approveClaim = mutation({
   args: { claimId: v.id("artistClaims") },
   returns: v.null(),
@@ -545,17 +545,81 @@ export const approveClaim = mutation({
     if (artist.status !== "unclaimed") throw new ConvexError({ code: "NOT_CLAIMABLE", message: "This artist is already claimed." });
     const now = Date.now();
     await ctx.db.patch("artistClaims", claim._id, { status: "approved", decidedAt: now, decidedBy: admin._id });
-    await ctx.db.patch("artists", artist._id, { status: "claimed", claimedBy: user._id, claimedAt: now, updatedAt: now });
-    await ctx.db.patch("users", artist.payeeId, { claimedBy: user._id });
+    const job = await ctx.scheduler.runAfter(CLAIM_REVIEW_MS, internal.artists.finishClaim, { artistId: artist._id });
+    await ctx.db.patch("artists", artist._id, {
+      status: "claimed",
+      claimedBy: user._id,
+      claimedAt: now,
+      reviewUntil: now + CLAIM_REVIEW_MS,
+      reviewJob: job,
+      updatedAt: now,
+    });
     // Other open claims on this artist are closed.
     for (const other of await ctx.db.query("artistClaims").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(50)) {
       if (other._id !== claim._id && (other.status === "started" || other.status === "submitted")) {
         await ctx.db.patch("artistClaims", other._id, { status: "rejected", reason: "Someone else's claim was approved.", decidedAt: now, decidedBy: admin._id });
+        await notifyArtistClaim(ctx, { recipientId: other.userId, slug: artist.slug, message: `Your claim to ${artist.name}'s page wasn't approved: someone else's was.` });
       }
     }
-    await setCreatorAccess(ctx, user, true, { grantedBy: admin._id, note: `artist: ${artist.name}` });
-    // Move what's held for the artist, a few orders at a time (moveHeld).
+    const days = Math.round(CLAIM_REVIEW_MS / (24 * 60 * 60 * 1000));
+    await notifyArtistClaim(ctx, {
+      recipientId: user._id,
+      slug: artist.slug,
+      message: `Your claim to ${artist.name}'s page was approved. What's set aside for you moves to your earnings in ${days} days, and later sales pay you from then.`,
+    });
+    return null;
+  },
+});
+
+// The end of a claim's review window: the member gets creator access (so their shares can be
+// paid), the hidden payee points at them, and everything held moves to them (moveHeld).
+export const finishClaim = internalMutation({
+  args: { artistId: v.id("artists") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const artist = await ctx.db.get("artists", args.artistId);
+    if (!artist || artist.status === "unclaimed" || !artist.claimedBy || artist.reviewUntil === undefined) return null;
+    const user = await ctx.db.get("users", artist.claimedBy);
+    if (!user) return null;
+    await ctx.db.patch("artists", artist._id, { reviewUntil: undefined, reviewJob: undefined, updatedAt: Date.now() });
+    await ctx.db.patch("users", artist.payeeId, { claimedBy: user._id });
+    await setCreatorAccess(ctx, user, true, { grantedBy: user._id, note: `artist: ${artist.name}` });
     await ctx.scheduler.runAfter(0, internal.artists.moveHeld, { payeeId: artist.payeeId, userId: user._id });
+    await notifyArtistClaim(ctx, { recipientId: user._id, slug: artist.slug, message: `What was set aside for ${artist.name} is in your earnings now.` });
+    return null;
+  },
+});
+
+// Undoes an approved claim while it's in review: nothing has moved yet, so the page goes back to
+// unclaimed and keeps holding its share. After the window, money has moved and staff correct it by hand.
+export const adminUnclaim = mutation({
+  args: { artistId: v.id("artists"), reason: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx, "manage");
+    const artist = await ctx.db.get("artists", args.artistId);
+    if (!artist || artist.status === "unclaimed" || !artist.claimedBy) throw new ConvexError({ code: "NOT_FOUND", message: "That artist isn't claimed." });
+    if (artist.reviewUntil === undefined) {
+      throw new ConvexError({ code: "TOO_LATE", message: "Its review window is over and the money has moved, so this needs a correction by hand." });
+    }
+    if (artist.reviewJob) await ctx.scheduler.cancel(artist.reviewJob);
+    const member = artist.claimedBy;
+    const now = Date.now();
+    await ctx.db.patch("artists", artist._id, {
+      status: "unclaimed",
+      claimedBy: undefined,
+      claimedAt: undefined,
+      reviewUntil: undefined,
+      reviewJob: undefined,
+      updatedAt: now,
+    });
+    const reason = args.reason.trim().slice(0, 300) || "We couldn't confirm it after all.";
+    for (const claim of await ctx.db.query("artistClaims").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(50)) {
+      if (claim.userId === member && claim.status === "approved") {
+        await ctx.db.patch("artistClaims", claim._id, { status: "rejected", reason, decidedAt: now, decidedBy: admin._id });
+      }
+    }
+    await notifyArtistClaim(ctx, { recipientId: member, slug: artist.slug, message: `Your claim to ${artist.name}'s page was undone: ${reason}` });
     return null;
   },
 });
@@ -634,6 +698,11 @@ export const rejectClaim = mutation({
       decidedAt: Date.now(),
       decidedBy: admin._id,
     });
+    const artist = await ctx.db.get("artists", claim.artistId);
+    if (artist) {
+      const reason = args.reason.trim().slice(0, 300) || "We couldn't confirm it.";
+      await notifyArtistClaim(ctx, { recipientId: claim.userId, slug: artist.slug, message: `Your claim to ${artist.name}'s page wasn't approved: ${reason}` });
+    }
     return null;
   },
 });

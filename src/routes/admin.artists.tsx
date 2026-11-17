@@ -20,7 +20,7 @@ function AdminArtists() {
     <div className="space-y-6">
       <AdminSection
         title="Claims"
-        description="Someone says they're the artist. Open their link and look for the code (or an email from the site's domain). Approving gives them the page, creator access, and everything set aside for the artist."
+        description="Someone says they're the artist. Open their link and look for the code (or an email from the site's domain). Approving gives them the page now; after a 14-day review, in which you can still undo it, they get creator access and everything set aside for the artist."
       >
         {!data ? (
           <p className="text-muted-foreground">Loading…</p>
@@ -57,6 +57,8 @@ type ArtistView = NonNullable<ReturnType<typeof useQuery<typeof api.artists.admi
 // One credited artist: its page, status, and what's held, with a rename and a hide for staff.
 function ArtistRow({ artist }: { artist: ArtistView }) {
   const update = useMutation(api.artists.adminUpdateArtist);
+  const unclaim = useMutation(api.artists.adminUnclaim);
+  const [undoReason, setUndoReason] = useState("");
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(artist.name);
   const [error, setError] = useState("");
@@ -84,7 +86,7 @@ function ArtistRow({ artist }: { artist: ArtistView }) {
           </span>
         </div>
         <div className="flex items-baseline gap-3">
-          {artist.status === "unclaimed" && <span className="font-bold tabular-nums">{formatCents(artist.heldCents)} held</span>}
+          {(artist.status === "unclaimed" || artist.reviewUntil !== null) && <span className="font-bold tabular-nums">{formatCents(artist.heldCents)} held</span>}
           <button type="button" className={adminQuietButton} onClick={() => setEditing(!editing)}>
             Rename
           </button>
@@ -106,6 +108,17 @@ function ArtistRow({ artist }: { artist: ArtistView }) {
             Save
           </button>
         </form>
+      )}
+      {artist.reviewUntil !== null && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">
+            In review: what's held moves to @{artist.claimedBy ?? "member"} on {new Date(artist.reviewUntil).toLocaleDateString()}.
+          </span>
+          <input className={adminInput} value={undoReason} onChange={(e) => setUndoReason(e.target.value)} placeholder="Why undo (they'll see it)" />
+          <button type="button" className={adminQuietButton} onClick={() => void run(() => unclaim({ artistId: id, reason: undoReason }))}>
+            Undo the claim
+          </button>
+        </div>
       )}
       {error && <p className="text-sm font-semibold text-destructive">{error}</p>}
     </li>

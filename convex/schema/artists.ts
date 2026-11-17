@@ -26,6 +26,10 @@ export const artistsTables = {
     // The member who claimed it.
     claimedBy: v.optional(v.id("users")),
     claimedAt: v.optional(v.number()),
+    // A newly approved claim's review window: until then nothing moves and an admin can undo it
+    // (convex/artists.ts approveClaim, finishClaim, adminUnclaim). reviewJob is finishClaim's run.
+    reviewUntil: v.optional(v.number()),
+    reviewJob: v.optional(v.id("_scheduled_functions")),
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.number(),

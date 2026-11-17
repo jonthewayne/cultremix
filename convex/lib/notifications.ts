@@ -119,6 +119,19 @@ export async function notifyOrderAttention(ctx: MutationCtx, args: { recipientId
   return id;
 }
 
+// Tells a member how their artist page claim went (convex/artists.ts).
+export async function notifyArtistClaim(ctx: MutationCtx, args: { recipientId: Id<"users">; slug: string; message: string }) {
+  const id = await ctx.db.insert("notifications", {
+    recipientId: args.recipientId,
+    kind: "artist_claim",
+    artistSlug: args.slug,
+    note: args.message.slice(0, 500),
+    createdAt: Date.now(),
+  });
+  await bumpUnread(ctx, args.recipientId);
+  return id;
+}
+
 // Tells an admin about something that needs them (convex/opsAlerts.ts).
 export async function notifyOpsAlert(ctx: MutationCtx, args: { recipientId: Id<"users">; message: string }) {
   const id = await ctx.db.insert("notifications", {
