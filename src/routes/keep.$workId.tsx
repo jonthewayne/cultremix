@@ -36,6 +36,7 @@ function KeptPage() {
   const [colorKey, setColorKey] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (kept === undefined) {
@@ -70,10 +71,22 @@ function KeptPage() {
     setSharing(true);
     setError(null);
     try {
-      const result = await share({ workId: kept.workId });
-      await navigate({ to: "/cr/$cr", params: { cr: result.cr } });
+      // A remix is compared with its original first; while that runs, ask again every few seconds.
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const result = await share({ workId: kept.workId });
+        if (!("comparing" in result)) {
+          await navigate({ to: "/cr/$cr", params: { cr: result.cr } });
+          return;
+        }
+        setComparing(true);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+      setError("The comparison with the original is taking a while. Try again in a minute.");
+      setComparing(false);
+      setSharing(false);
     } catch (err) {
       setError(errorMessage(err));
+      setComparing(false);
       setSharing(false);
     }
   };
@@ -164,7 +177,7 @@ function KeptPage() {
                 </p>
                 <div className="mt-3 flex flex-wrap gap-3">
                   <button type="button" disabled={sharing} onClick={() => void shareIt()} className="rounded-xl bg-black px-4 py-2 font-black text-white disabled:opacity-40">
-                    {sharing ? "Sharing…" : "Share it"}
+                    {comparing ? "Comparing with the original…" : sharing ? "Sharing…" : "Share it"}
                   </button>
                   <button type="button" disabled={sharing} onClick={() => setConfirming(false)} className="text-sm font-semibold underline underline-offset-4">
                     Not now

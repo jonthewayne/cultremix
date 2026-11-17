@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, query } from "./_generated/server";
 import { ECONOMIC_CONFIGS } from "./lib/economicsConfigs";
 import { saleSplits } from "./lib/creatorPool";
@@ -151,8 +152,11 @@ async function setGroupState(
 // Returns the sale rows it wrote, for notifyNewSales once the caller has applied everything.
 // An outside artist's shares move to their own account once their claim is approved
 // (convex/artists.ts approveClaim): on this order, every line, refund split, and earnings row that
-// names their hidden payee names the member instead, so a later sync keeps paying the member. A
-// line that already pays the member in another role keeps the payee, so no share is counted twice.
+// names their hidden payee names the member instead, so a later sync keeps paying the member. When
+// a line already pays the member in another role (an artist remixing a design that credits them),
+// the two shares fold into one: the line's recipient adds the artist's basis points and role, a
+// refund split adds its cents, and the payee's sale row becomes a "claim" adjustment on the
+// member's own sale, mirroring that sale's state, so nothing already paid is rewritten.
 export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"orders">) {
   const items = await ctx.db.query("orderItems").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(250);
   const target = new Map<string, Id<"users">>();
@@ -164,19 +168,31 @@ export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"order
     }
   }
   if (target.size === 0) return;
-  // Which (line, payee) pairs move.
+  // Which (line, payee) pairs move, and on which lines the member was already paid.
   const moves = new Map<string, Map<string, Id<"users">>>();
+  const folded = new Set<string>();
   for (const item of items) {
     const here = new Map<string, Id<"users">>();
     for (const recipient of item.recipients) {
       const to = target.get(recipient.who);
-      if (to && !item.recipients.some((r) => r.who === to)) here.set(recipient.who, to);
+      if (!to) continue;
+      here.set(recipient.who, to);
+      if (item.recipients.some((r) => r.who === to)) folded.add(`${item._id}|${recipient.who}`);
     }
     if (here.size === 0) continue;
     moves.set(item._id, here);
-    await ctx.db.patch("orderItems", item._id, {
-      recipients: item.recipients.map((r) => (here.has(r.who) ? { ...r, who: here.get(r.who)! } : r)),
-    });
+    const recipients: typeof item.recipients = [];
+    for (const recipient of item.recipients) {
+      const who = here.get(recipient.who) ?? recipient.who;
+      const same = recipients.find((r) => r.who === who);
+      if (same) {
+        same.bps += recipient.bps;
+        for (const role of recipient.roles) if (!same.roles.includes(role)) same.roles.push(role);
+      } else {
+        recipients.push({ ...recipient, who, roles: [...recipient.roles] });
+      }
+    }
+    await ctx.db.patch("orderItems", item._id, { recipients });
   }
   if (moves.size === 0) return;
   const refunds = await ctx.db.query("refunds").withIndex("by_order", (q) => q.eq("orderId", orderId)).take(100);
@@ -187,15 +203,18 @@ export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"order
       if (!here) return line;
       return {
         ...line,
-        units: line.units.map((unit) => ({
-          ...unit,
-          split: unit.split.map((part) => {
+        units: line.units.map((unit) => {
+          const split: typeof unit.split = [];
+          for (const part of unit.split) {
             const to = here.get(part.who);
-            if (!to) return part;
-            changed = true;
-            return { ...part, who: to };
-          }),
-        })),
+            if (to) changed = true;
+            const who = to ?? part.who;
+            const same = split.find((p) => p.who === who);
+            if (same) same.cents += part.cents;
+            else split.push({ ...part, who });
+          }
+          return { ...unit, split };
+        }),
       };
     });
     if (changed) await ctx.db.patch("refunds", refund._id, { lines });
@@ -204,8 +223,49 @@ export async function redirectClaimedPayees(ctx: MutationCtx, orderId: Id<"order
   const now = Date.now();
   for (const row of rows) {
     const to = moves.get(row.orderItemId)?.get(row.recipientId);
-    if (to) await ctx.db.patch("earnings", row._id, { recipientId: to, updatedAt: now });
+    if (!to) continue;
+    const memberSale = folded.has(`${row.orderItemId}|${row.recipientId}`)
+      ? rows.find((r) => r.kind === "sale" && r.orderItemId === row.orderItemId && r.unit === row.unit && r.recipientId === to)
+      : undefined;
+    if (!memberSale) {
+      await ctx.db.patch("earnings", row._id, { recipientId: to, updatedAt: now });
+      continue;
+    }
+    // Folded into the member's own sale on this unit: the row joins that sale's group, in its state.
+    const state =
+      row.state === "reversed" || memberSale.state === "reversed"
+        ? ("reversed" as const)
+        : memberSale.state === "available" || memberSale.state === "paid"
+          ? ("available" as const)
+          : memberSale.state;
+    const holdReason = state === "held" ? memberSale.holdReason : undefined;
+    if (row.kind === "sale") {
+      await ctx.db.insert("earnings", {
+        recipientId: to,
+        orderId,
+        orderItemId: row.orderItemId,
+        unit: row.unit,
+        kind: "reversal",
+        reason: "claim",
+        roles: row.roles,
+        amountCents: row.amountCents,
+        state,
+        holdReason,
+        simulated: row.simulated,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.delete("earnings", row._id);
+    } else {
+      await ctx.db.patch("earnings", row._id, { recipientId: to, state, holdReason, updatedAt: now });
+    }
   }
+}
+
+// What a sale group earned before reversals: its sale plus any artist share folded into it.
+function grossOf(group: Group) {
+  const claimed = group.reversals.filter((r) => r.reason === "claim").reduce((sum, r) => sum + r.amountCents, 0);
+  return (group.sale?.amountCents ?? 0) + claimed;
 }
 
 export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">): Promise<Array<Id<"earnings">>> {
@@ -369,7 +429,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
   if (order.cancelled) {
     for (const [key, group] of groups) {
       if (!group.sale) continue;
-      const target = Math.min(0, -(group.sale.amountCents - (nonFailedSplit.get(key) ?? 0)));
+      const target = Math.min(0, -(grossOf(group) - (nonFailedSplit.get(key) ?? 0)));
       const existing = group.reversals.filter((r) => r.reason === "cancel").reduce((sum, r) => sum + r.amountCents, 0);
       const delta = target - existing;
       if (delta < 0) await insertReversal(group, delta, "cancel", undefined);
@@ -382,7 +442,7 @@ export async function syncOrderEarnings(ctx: MutationCtx, orderId: Id<"orders">)
     for (const [key, group] of groups) {
       if (!group.sale) continue;
       const cancelled = group.reversals.filter((r) => r.reason === "cancel").reduce((sum, r) => sum + r.amountCents, 0);
-      const target = Math.min(0, -(group.sale.amountCents - (nonFailedSplit.get(key) ?? 0)) - cancelled);
+      const target = Math.min(0, -(grossOf(group) - (nonFailedSplit.get(key) ?? 0)) - cancelled);
       const existing = group.reversals.filter((r) => r.reason === "dispute").reduce((sum, r) => sum + r.amountCents, 0);
       const delta = target - existing;
       if (delta < 0) await insertReversal(group, delta, "dispute", undefined);
@@ -506,19 +566,24 @@ export const matureDue = internalMutation({
 // When a member gets creator access, or gets it back (lib/creators.ts schedules this), their
 // "not_creator" holds become Pending and mature on schedule (plan A1).
 export const releaseCreatorHolds = internalMutation({
-  args: { userId: v.id("users") },
+  args: { userId: v.id("users"), cursor: v.optional(v.string()) },
   returns: v.number(),
   handler: async (ctx, args) => {
     const now = Date.now();
-    const held = await ctx.db
+    // A page at a time: rows released leave the index, others (a refund hold) stay, so it pages
+    // by cursor and schedules the next page until the last one.
+    const page = await ctx.db
       .query("earnings")
       .withIndex("by_recipient_state", (q) => q.eq("recipientId", args.userId).eq("state", "held"))
-      .take(1000);
+      .paginate({ numItems: 500, cursor: args.cursor ?? null });
     let released = 0;
-    for (const row of held) {
+    for (const row of page.page) {
       if (row.holdReason !== "not_creator") continue;
       await ctx.db.patch("earnings", row._id, { state: "pending", holdReason: undefined, updatedAt: now });
       released++;
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: args.userId, cursor: page.continueCursor });
     }
     return released;
   },
@@ -615,7 +680,7 @@ export const mine = query({
         createdAt: row.createdAt,
         amountCents: row.amountCents,
         status: waits ? ("On hold" as const) : statusOf(row),
-        kind: row.kind === "sale" ? ("sale" as const) : (row.reason ?? "refund"),
+        kind: row.kind === "sale" || row.reason === "claim" ? ("sale" as const) : (row.reason ?? "refund"),
         test: row.simulated,
         cr: work?.cr ?? null,
         title: work?.title ?? null,

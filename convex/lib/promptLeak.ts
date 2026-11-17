@@ -32,9 +32,21 @@ export function leakedWords(promptOnly: ReadonlySet<string>, lettering: Readonly
   return [...found];
 }
 
-// Five distinct prompt-only words is a leak. A design's own lettering rarely shares more than a
-// word or two with the prompt that isn't in the request; the leaks in the suite showed dozens.
+// Five distinct prompt-only words, three of them in a row (shorter words between them don't break
+// the run), is a leak. A design's own lettering rarely shares more than a word or two with the
+// prompt that isn't in the request, and scattered ordinary words (MAKE, BOLD, COLOR) aren't a
+// sentence of it; the leaks in the suite showed dozens, in the prompt's own order.
 export const LEAK_THRESHOLD = 5;
+export const LEAK_RUN = 3;
 export function isLeak(promptOnly: ReadonlySet<string>, lettering: ReadonlyArray<string>) {
-  return leakedWords(promptOnly, lettering).length >= LEAK_THRESHOLD;
+  if (leakedWords(promptOnly, lettering).length < LEAK_THRESHOLD) return false;
+  let run = 0;
+  for (const piece of lettering) {
+    for (const word of normalizeWords(piece).split(" ")) {
+      if ([...word].length < 4) continue;
+      run = promptOnly.has(word) ? run + 1 : 0;
+      if (run >= LEAK_RUN) return true;
+    }
+  }
+  return false;
 }

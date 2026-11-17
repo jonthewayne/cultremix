@@ -358,6 +358,20 @@ async function photoImage(
   );
 }
 
+// A request that might be after the prompt: each design's lettering is read before it's stored,
+// and one that prints the prompt is dropped (convex/lib/promptLeak.ts). Only requests that use the
+// words such a request needs are read, about 0.3 cents a design. typed: what the member typed
+// (the request and a remix's new words and characters). A reading that fails lets the design through.
+async function lettersPrompt(prompt: string, typed: string, png: Uint8Array) {
+  if (!mightAskForPrompt(typed)) return false;
+  try {
+    return isLeak(promptOnlyWords(prompt, typed), (await readDesignWords(png)).words);
+  } catch (error) {
+    console.error("lettering check failed", error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+
 export const runTile = internalAction({
   args: { generationId: v.id("generations") },
   returns: v.null(),
@@ -430,7 +444,7 @@ export const runTile = internalAction({
           info = pngInfo(bytes);
         }
       } else {
-        if ((await screenRequest(job.instruction))?.reveal) throw new Error(REQUEST_REFUSED);
+        if ((await screenRequest(job.typed))?.reveal) throw new Error(REQUEST_REFUSED);
         text = studioPrompt({
           layout: "single",
           // Style words from the previous studio's buttons, on batches it started.
@@ -455,6 +469,11 @@ export const runTile = internalAction({
         sent = paid.spend;
         bytes = paid.out.bytes;
         info = pngInfo(bytes);
+      }
+      // The same last check as a grid's: a design that letters the prompt isn't stored.
+      if (await lettersPrompt(text, job.typed, bytes)) {
+        console.log("runTile dropped a design that lettered the prompt", generationId);
+        throw new Error(PROMPT_LETTERED);
       }
       const made = Date.now();
       // Stores the design with its thumbnail and medium, so pages never load the PNG first.
@@ -550,22 +569,9 @@ export const runBatch = internalAction({
         pixels = keyOut(pixels, key);
         bytes = await encodePng(pixels);
       }
-      const gridStored = storeObject(ctx, gridFileKey(place, randomCode()), bytes, "image/png");
       const cells = cutGrid(pixels);
       const cut = Date.now();
       const cpu1 = process.cpuUsage(cpu0);
-      // A request that might be after the prompt: each design's lettering is read before it's stored,
-      // and one that prints the prompt is dropped (convex/lib/promptLeak.ts). About 0.3 cents a design.
-      const promptOnly = mightAskForPrompt(job.instruction) ? promptOnlyWords(text, job.instruction) : null;
-      const lettersPrompt = async (png: Uint8Array) => {
-        if (!promptOnly) return false;
-        try {
-          return isLeak(promptOnly, (await readDesignWords(png)).words);
-        } catch (error) {
-          console.error("runBatch lettering check failed", error instanceof Error ? error.message : error);
-          return false;
-        }
-      };
       // Two designs at a time: four at once ran Convex's 512 MB Node runtime short of memory.
       const results: Array<DesignResult> = [];
       for (let i = 0; i < cells.length; i += 2) {
@@ -574,7 +580,7 @@ export const runBatch = internalAction({
             cells.slice(i, i + 2).map(async (cell): Promise<DesignResult> => {
               if (!cell.tile) return { index: cell.index, error: cell.reason === "merged" ? GRID_MERGED : GRID_EMPTY };
               const png = await encodePng(cell.tile);
-              if (await lettersPrompt(png)) {
+              if (await lettersPrompt(text, job!.typed, png)) {
                 console.log("runBatch dropped a design that lettered the prompt", batchId, cell.index);
                 return { index: cell.index, error: PROMPT_LETTERED };
               }
@@ -590,7 +596,9 @@ export const runBatch = internalAction({
           )),
         );
       }
-      const gridKey = await gridStored;
+      // The uncut grid is kept for the record, unless a design in it lettered the prompt.
+      const dropped = results.some((result) => result.error === PROMPT_LETTERED);
+      const gridKey = dropped ? undefined : await storeObject(ctx, gridFileKey(place, randomCode()), bytes, "image/png");
       const cpu2 = process.cpuUsage(cpu0);
       console.log(
         "runBatch ok", keys.length, "images", text.length, "chars", made - started, "ms; cut in", cut - made, "ms; stored in", Date.now() - cut, "ms;",

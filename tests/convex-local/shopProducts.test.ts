@@ -711,7 +711,7 @@ describe("a kept design, printed for its creator alone", () => {
     await synced(t, workId, "000-001", "kept");
     expect(await creator.query(api.shopify.keptOffer, { workId })).not.toBeNull();
 
-    const { cr } = await creator.mutation(api.publish.shareKeep, { workId });
+    const { cr } = (await creator.mutation(api.publish.shareKeep, { workId })) as { cr: string };
     // Its kept products come off sale, and their handles become the public number's.
     const paused = await rows(t, workId);
     expect(paused.map((row) => row.status)).toEqual(["paused", "paused"]);

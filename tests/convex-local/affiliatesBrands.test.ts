@@ -57,7 +57,8 @@ describe("economics: brands and affiliates", () => {
 
     // The design's page shows the brand and the share for sharing it.
     const panel = await t.query(api.workEconomics.panel, { cr: "101-001" });
-    expect(panel).toMatchObject({ configVersion: 5, affiliateBps: 500, brand: { name: "Nike", username: "Nike", bps: 1000, creatorBps: null } });
+    expect(panel).toMatchObject({ configVersion: 5, affiliateBps: 500, brand: { name: "Nike", username: "Nike", creatorBps: null } });
+    expect(panel?.brand).not.toHaveProperty("bps");
   });
 
   it("starts a deal at 25%, 15% to the brand and 10% to creators, and keeps it within the published bounds", async () => {
@@ -73,7 +74,8 @@ describe("economics: brands and affiliates", () => {
 
     // The design's page shows the family's split.
     const panel = await t.query(api.workEconomics.panel, { cr: "101-001" });
-    expect(panel).toMatchObject({ configVersion: 5, creatorPoolBps: 1000, brand: { name: "Nike", bps: 1500, creatorBps: 1000 } });
+    expect(panel).toMatchObject({ configVersion: 5, creatorPoolBps: 1000, brand: { name: "Nike", creatorBps: 1000 } });
+    expect(panel?.brand).not.toHaveProperty("bps");
 
     // Whole percents; the families' share from 5% to 30%; creators from 5% to the families' share.
     const save = (totalBps: number, creatorBps: number) =>

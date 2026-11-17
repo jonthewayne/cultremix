@@ -108,6 +108,99 @@ describe("crediting an outside artist", () => {
     void admin;
   });
 
+  it("folds the artist's held share into a claimant who is already paid on the line, and a cancellation takes both back", async () => {
+    const t = newTest();
+    await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });
+    const a = await makeUser(t, { name: "A", creatorNumber: 2 });
+    // Jane is a member who remixed the original that credits her outside identity.
+    const jane = await makeUser(t, { name: "Jane", creatorNumber: 3, authId: ARTIST.subject });
+    await t.run((ctx) => ctx.db.patch("users", jane, { username: "janedoe", usernameLower: "janedoe" }));
+    const root = await makeWork(t, { creatorId: a, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
+    const work = await makeWork(t, { creatorId: jane, family: 101, expression: 2, parent: root, root, printKey: "works/101/002/print-y/print.png" });
+    await makeOnSale(t, work, "101-002", 1000);
+    const owner = t.withIdentity(ADMIN);
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [{ name: "Jane Doe", link: "instagram.com/janedoe" }] });
+    const artist = (await t.run((ctx) => ctx.db.query("artists").collect()))[0];
+
+    shopify.set(rawOrder({ id: ORDER_ID, lines: [{ id: 11, variant: 1002, quantity: 1, price: "36.00" }] }));
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+    expect((await earningsFor(t, jane)).map((r) => [r.amountCents, r.state])).toEqual([[270, "pending"]]);
+    expect((await earningsFor(t, artist.payeeId)).map((r) => r.amountCents)).toEqual([54]);
+
+    const her = t.withIdentity(ARTIST);
+    const claimId = await her.mutation(api.artists.startClaim, { artistId: artist._id });
+    await her.mutation(api.artists.submitClaim, { claimId, proofUrl: "https://instagram.com/p/abc" });
+    await owner.mutation(api.artists.approveClaim, { claimId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    // Nothing is left on the payee: her sale keeps its 270, and the 54 joins it as a claim adjustment.
+    expect(await earningsFor(t, artist.payeeId)).toHaveLength(0);
+    const rows = await earningsFor(t, jane);
+    expect(rows.map((r) => [r.kind, r.reason ?? null, r.amountCents, r.state])).toEqual([
+      ["sale", null, 270, "pending"],
+      ["reversal", "claim", 54, "pending"],
+    ]);
+    const item = await t.run(async (ctx) => (await ctx.db.query("orderItems").collect())[0]);
+    expect(item.recipients.filter((r) => r.who === jane)).toEqual([{ who: jane, roles: ["creator", "artist"], bps: 900 }]);
+    expect(item.recipients.some((r) => r.who === artist.payeeId)).toBe(false);
+    // Her earnings page shows the adjustment as a sale.
+    const mine = await her.query(api.earnings.mine, {});
+    expect(mine?.entries.map((e) => [e.kind, e.amountCents]).sort()).toEqual([["sale", 270], ["sale", 54]].sort());
+
+    // A replay changes nothing; a cancellation reverses both parts.
+    await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID } });
+    expect((await earningsFor(t, jane)).length).toBe(2);
+    shopify.set(rawOrder({ id: ORDER_ID, lines: [{ id: 11, variant: 1002, quantity: 1, price: "36.00" }], cancelledAt: "2026-11-03T00:00:00Z" }));
+    await deliver(t, { topic: "orders/cancelled", body: { id: ORDER_ID } });
+    const net = (await earningsFor(t, jane)).reduce((sum, r) => sum + r.amountCents, 0);
+    expect(net).toBe(0);
+  });
+
+  it("treats the same link as the same artist, whatever the name, and keeps a declined artist declined", async () => {
+    const t = newTest();
+    await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });
+    const a = await makeUser(t, { name: "A", creatorNumber: 2 });
+    await makeWork(t, { creatorId: a, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
+    await makeWork(t, { creatorId: a, family: 102, expression: 1, printKey: "works/102/001/print-x/print.png" });
+    const owner = t.withIdentity(ADMIN);
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [{ name: "Jane Doe", link: "instagram.com/janedoe" }] });
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "102-001", artists: [{ name: "J. Doe", link: "https://instagram.com/janedoe/" }] });
+    const artists = await t.run((ctx) => ctx.db.query("artists").collect());
+    expect(artists).toHaveLength(1);
+    // Declined: crediting her again by her link doesn't open a fresh page that holds shares.
+    await t.run((ctx) => ctx.db.patch("artists", artists[0]._id, { status: "declined" }));
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "102-001", artists: [{ name: "Jane D", link: "instagram.com/janedoe" }] });
+    expect(await t.run((ctx) => ctx.db.query("artists").collect())).toHaveLength(1);
+    expect(await t.query(api.artists.forWork, { cr: "102-001" })).toEqual([]);
+  });
+
+  it("moves a claimed artist's held shares across many orders, a few at a time", async () => {
+    const t = newTest();
+    await makeUser(t, { name: "Owner", platformRole: "super_admin_owner", authId: ADMIN.subject });
+    const a = await makeUser(t, { name: "A", creatorNumber: 2 });
+    const jane = await t.run((ctx) => ctx.db.insert("users", { name: "Jane", authId: ARTIST.subject, username: "janedoe", usernameLower: "janedoe" }));
+    const root = await makeWork(t, { creatorId: a, family: 101, expression: 1, printKey: "works/101/001/print-x/print.png" });
+    await makeOnSale(t, root, "101-001", 1000);
+    const owner = t.withIdentity(ADMIN);
+    await owner.mutation(api.artists.adminSetWorkCredits, { cr: "101-001", artists: [{ name: "Jane Doe", link: "instagram.com/janedoe" }] });
+    const artist = (await t.run((ctx) => ctx.db.query("artists").collect()))[0];
+    const ORDERS = 25;
+    for (let i = 0; i < ORDERS; i++) {
+      shopify.set(rawOrder({ id: ORDER_ID + 100 + i, lines: [{ id: 200 + i, variant: 1002, quantity: 1, price: "36.00" }] }));
+      await deliver(t, { topic: "orders/paid", body: { id: ORDER_ID + 100 + i } });
+    }
+    expect(await earningsFor(t, artist.payeeId)).toHaveLength(ORDERS);
+    const her = t.withIdentity(ARTIST);
+    const claimId = await her.mutation(api.artists.startClaim, { artistId: artist._id });
+    await her.mutation(api.artists.submitClaim, { claimId, proofUrl: "https://instagram.com/p/abc" });
+    await owner.mutation(api.artists.approveClaim, { claimId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await earningsFor(t, artist.payeeId)).toHaveLength(0);
+    const rows = await earningsFor(t, jane);
+    expect(rows).toHaveLength(ORDERS);
+    expect(rows.every((r) => r.state === "pending")).toBe(true);
+  });
+
   it("lets a creator credit artists while publishing, and checks what they typed", async () => {
     const t = newTest();
     const b = await makeUser(t, { name: "B", creatorNumber: 3, authId: B.subject });

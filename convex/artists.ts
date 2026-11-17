@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { getViewerUser } from "./identity";
 import { requireMember } from "./studio";
 import { requireAdmin } from "./lib/adminAccess";
@@ -24,6 +24,8 @@ type Ctx = QueryCtx | MutationCtx;
 type Role = keyof ArtistCredits;
 
 const inputValidator = v.object({ name: v.string(), link: v.string() });
+// Claims one member can have open at once.
+const MAX_OPEN_CLAIMS = 5;
 
 // ---- Creating artists and credits ----
 
@@ -37,15 +39,24 @@ async function uniqueSlug(ctx: MutationCtx, name: string) {
   return `${base}-${Date.now()}`;
 }
 
-// The artist with this name and link, or a new one with its hidden payee account. Two artists with
-// the same name but different links stay apart.
+// The artist with this link, or a new one with its hidden payee account. The link decides who an
+// artist is; the name is only how they're shown. So "J. Doe" and "Jane Doe" with the same link are
+// one artist, a renamed page still matches its link, and a declined artist stays declined. Two
+// artists with the same name but different links stay apart. Artists made before the link table
+// are found by name and link once and then indexed.
 async function artistFor(ctx: MutationCtx, input: CleanArtist, by: Id<"users">): Promise<Doc<"artists">> {
+  const linked = await ctx.db.query("artistLinks").withIndex("by_key", (q) => q.eq("key", input.key)).first();
+  const byLink = linked ? await ctx.db.get("artists", linked.artistId) : null;
+  if (byLink) return byLink;
   const sameName = await ctx.db
     .query("artists")
     .withIndex("by_nameLower", (q) => q.eq("nameLower", input.name.toLowerCase()))
     .take(20);
   const match = sameName.find((artist) => artist.linkKeys.includes(input.key));
-  if (match) return match;
+  if (match) {
+    await ctx.db.insert("artistLinks", { key: input.key, artistId: match._id });
+    return match;
+  }
   const now = Date.now();
   // The payee never signs in and gets no wallet: walletStatus "ready" keeps the wallet cron away.
   const payeeId = await ctx.db.insert("users", { name: input.name, artistPayee: true, walletStatus: "ready" });
@@ -61,6 +72,7 @@ async function artistFor(ctx: MutationCtx, input: CleanArtist, by: Id<"users">):
     createdAt: now,
     updatedAt: now,
   });
+  await ctx.db.insert("artistLinks", { key: input.key, artistId: id });
   return (await ctx.db.get("artists", id))!;
 }
 
@@ -256,12 +268,15 @@ export const page = query({
         backgroundColor: work.backgroundColor,
       });
     }
+    // An unclaimed page appears once a published design credits the artist; until then it's only
+    // a name a member typed (a private keep can credit one too).
+    if (works.length === 0 && artist.status === "unclaimed") return null;
     const viewer = await getViewerUser(ctx);
     const claimer = artist.claimedBy ? await ctx.db.get("users", artist.claimedBy) : null;
     let claim = null;
     if (viewer) {
-      const mine = await ctx.db.query("artistClaims").withIndex("by_user", (q) => q.eq("userId", viewer._id)).take(50);
-      const latest = mine.filter((c) => c.artistId === artist._id).sort((a, b) => b.createdAt - a.createdAt)[0];
+      const claims = await ctx.db.query("artistClaims").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(100);
+      const latest = claims.filter((c) => c.userId === viewer._id).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (latest) {
         claim = { id: latest._id, code: latest.code, status: latest.status, proofUrl: latest.proofUrl ?? null, reason: latest.reason ?? null };
       }
@@ -291,9 +306,14 @@ export const startClaim = mutation({
     if (!artist || artist.status !== "unclaimed") {
       throw new ConvexError({ code: "NOT_CLAIMABLE", message: "This page has already been claimed." });
     }
-    const mine = await ctx.db.query("artistClaims").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
-    const open = mine.find((c) => c.artistId === artist._id && (c.status === "started" || c.status === "submitted"));
+    const claims = await ctx.db.query("artistClaims").withIndex("by_artist", (q) => q.eq("artistId", artist._id)).take(100);
+    const open = claims.find((c) => c.userId === user._id && (c.status === "started" || c.status === "submitted"));
     if (open) return open._id;
+    // A member can have a few claims open at once, so claims can't be opened in bulk.
+    const mine = await ctx.db.query("artistClaims").withIndex("by_user", (q) => q.eq("userId", user._id)).order("desc").take(100);
+    if (mine.filter((c) => c.status === "started" || c.status === "submitted").length >= MAX_OPEN_CLAIMS) {
+      throw new ConvexError({ code: "TOO_MANY_CLAIMS", message: "You have a few claims open already. Finish one first." });
+    }
     return await ctx.db.insert("artistClaims", {
       artistId: artist._id,
       userId: user._id,
@@ -483,14 +503,39 @@ export const approveClaim = mutation({
       }
     }
     await setCreatorAccess(ctx, user, true, { grantedBy: admin._id, note: `artist: ${artist.name}` });
-    // Move what's held for the artist, order by order.
+    // Move what's held for the artist, a few orders at a time (moveHeld).
+    await ctx.scheduler.runAfter(0, internal.artists.moveHeld, { payeeId: artist.payeeId, userId: user._id });
+    return null;
+  },
+});
+
+// Moves a claimed artist's held shares to the member, a few orders per run: each run takes the
+// payee's next earnings rows, redirects their orders (convex/earnings.ts redirectClaimedPayees,
+// which takes every payee row on those orders off the payee), and schedules the next run. Once no
+// row is left on the payee, the member's "not_creator" holds are released.
+const MOVE_ROWS = 100;
+const MOVE_ORDERS = 10;
+export const moveHeld = internalMutation({
+  args: { payeeId: v.id("users"), userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
     const rows = await ctx.db
       .query("earnings")
-      .withIndex("by_recipient_created", (q) => q.eq("recipientId", artist.payeeId))
-      .take(2000);
-    const orders = new Set(rows.map((row) => row.orderId));
-    for (const orderId of orders) await redirectClaimedPayees(ctx, orderId);
-    await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: user._id });
+      .withIndex("by_recipient_created", (q) => q.eq("recipientId", args.payeeId))
+      .take(MOVE_ROWS);
+    if (rows.length > 0) {
+      const orders = [...new Set(rows.map((row) => row.orderId))].slice(0, MOVE_ORDERS);
+      for (const orderId of orders) await redirectClaimedPayees(ctx, orderId);
+      // The first row moved (or folded away), so there's progress: go on. A row that can't move
+      // (its line no longer names the payee) would otherwise loop forever.
+      const first = await ctx.db.get("earnings", rows[0]._id);
+      if (first?.recipientId !== args.payeeId) {
+        await ctx.scheduler.runAfter(0, internal.artists.moveHeld, args);
+        return null;
+      }
+      console.warn(`moveHeld: earnings row ${rows[0]._id} stays on artist payee ${args.payeeId}`);
+    }
+    await ctx.scheduler.runAfter(0, internal.earnings.releaseCreatorHolds, { userId: args.userId });
     return null;
   },
 });

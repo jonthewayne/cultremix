@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { brandShareFor, canonicalConfigJson, creatorPoolFor, recipientShares } from "./lib/economics";
+import { canonicalConfigJson, creatorPoolFor, recipientShares } from "./lib/economics";
 import { CURRENT_ECONOMIC_CONFIG, economicsConfigPath, sha256Hex } from "./lib/economicsConfigs";
 import { LineageError, economicLineage } from "./lib/lineage";
 import { toLineageWork, workByCr, worksReader } from "./lineage";
@@ -33,11 +33,12 @@ export const panel = query({
       creatorPoolBps: v.number(),
       // The member whose link brings a buyer gets this share of the price (null before v2).
       affiliateBps: v.union(v.null(), v.number()),
-      // The brand that owns or licenses this design's family, its share of the price, and the
-      // creators' share its agreement sets in the family (null when creators keep the standard share).
+      // The brand that owns or licenses this design's family and the creators' share its agreement
+      // sets in the family (null when creators keep the standard share). A brand's own rate is a
+      // private deal (docs/decisions.md, 2026-10-15), so this public response never carries it.
       brand: v.union(
         v.null(),
-        v.object({ name: v.string(), username: v.string(), bps: v.number(), creatorBps: v.union(v.null(), v.number()) }),
+        v.object({ name: v.string(), username: v.string(), creatorBps: v.union(v.null(), v.number()) }),
       ),
       configPath: v.string(),
       configSha256: v.string(),
@@ -73,7 +74,6 @@ export const panel = query({
         ? {
             name: familyBrand.name,
             username: brandUser?.username ?? "member",
-            bps: brandShareFor(config, familyBrand.bps, creatorPoolBps),
             creatorBps: creatorPoolBps === config.creatorPoolBps ? null : creatorPoolBps,
           }
         : null,

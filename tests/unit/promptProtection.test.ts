@@ -67,6 +67,8 @@ describe("prompt protection", () => {
     expect(isLeak(only, ["KING OF THE BLOCK", "COOL CAT"])).toBe(false);
     expect(leakedWords(only, ["Arrange them in a 2x2 grid on a fully transparent background: one complete graphic centered in each quarter"]).length).toBeGreaterThanOrEqual(5);
     expect(isLeak(only, ["Arrange them in a 2x2 grid on a fully transparent background: one complete graphic centered in each quarter"])).toBe(true);
+    // Five ordinary prompt words scattered through a design's own lettering aren't a leak.
+    expect(isLeak(new Set(["MAKE", "BOLD", "CLEAN", "COLOR", "SPACE", "FOUR"]), ["MAKE IT LOUD", "BOLD MOVES", "CLEAN UP CREW", "COLOR ME", "SPACE CADET"])).toBe(false);
   });
 
   it("finds kept words a remix dropped or replaced, and forgives slips", () => {
@@ -82,6 +84,21 @@ describe("prompt protection", () => {
     expect(missingKeptWords(["OF", "BLOCK", "BLOCK PARTY"], ["NIGHT SHIFT"])).toEqual(["BLOCK", "PARTY"]);
     // Nothing read at all: every kept word is missing.
     expect(missingKeptWords(["WILD AT HEART"], [])).toEqual(["WILD", "HEART"]);
+    // Run together is kept; a kept word inside another word isn't.
+    expect(missingKeptWords(["NIGHT SHIFT"], ["NIGHTSHIFT"])).toEqual([]);
+    expect(missingKeptWords(["ART"], ["SMART PEOPLE"])).toEqual(["ART"]);
+    expect(missingKeptWords(["THE END"], ["OTHER BENDS"])).toEqual(["THE", "END"]);
+    // Swapped for a neighbouring word: two letters off a short word is a different word.
+    expect(missingKeptWords(["LOVE"], ["LIFE"])).toEqual(["LOVE"]);
+    expect(missingKeptWords(["HATE"], ["HOPE"])).toEqual(["HATE"]);
+    expect(missingKeptWords(["DOGS"], ["DAYS"])).toEqual(["DOGS"]);
+    // One letter off is a slip, unless the request asked for that word.
+    expect(missingKeptWords(["LOVE"], ["LIVE"])).toEqual([]);
+    expect(missingKeptWords(["LOVE"], ["LIVE"], ["Change LOVE to live"])).toEqual(["LOVE"]);
+    expect(missingKeptWords(["SHIFT"], ["SHIRT"], ["make it say shirt"])).toEqual(["SHIFT"]);
+    expect(missingKeptWords(["TRASH"], ["TRUTH"], ["", "TRUTH"])).toEqual(["TRASH"]);
+    // A request that only names the kept word changes nothing.
+    expect(missingKeptWords(["TRASH ROYALTY"], ["TrROH ROYALTY"], ["Make TRASH ROYALTY gold"])).toEqual([]);
     expect(keptPieces([
       { on: true, text: "GROW" },
       { on: false, text: "SLOW" },

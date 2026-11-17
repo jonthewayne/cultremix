@@ -433,7 +433,9 @@ export const shopTables = {
     unit: v.number(),
     kind: v.union(v.literal("sale"), v.literal("reversal")),
     refundId: v.optional(v.id("refunds")),
-    reason: v.optional(v.union(v.literal("refund"), v.literal("cancel"), v.literal("dispute"))),
+    // "claim": a positive adjustment, an outside artist's share folded into the member's own sale
+    // on the unit once they claimed it (convex/earnings.ts redirectClaimedPayees).
+    reason: v.optional(v.union(v.literal("refund"), v.literal("cancel"), v.literal("dispute"), v.literal("claim"))),
     roles: v.array(roleValidator),
     amountCents: v.number(),
     state: earningStateValidator,

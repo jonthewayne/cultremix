@@ -262,7 +262,7 @@ describe("keep it just for you", () => {
 
     // Shared later: it takes the original's next number as a variation and publishes publicly.
     await expect(alice.as.mutation(api.publish.shareKeep, { workId: kept.workId })).rejects.toThrow(/kept designs/);
-    const shared = await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId });
+    const shared = (await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId })) as { cr: string };
     expect(shared.cr).toBe("101-002");
     expect(await t.query(internal.publish.assetJob, { workId: kept.workId })).toMatchObject({ crFamily: 101, crExpression: 2 });
     expect((await t.query(internal.publish.assetJob, { workId: kept.workId }))?.keep).toBeUndefined();

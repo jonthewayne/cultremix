@@ -32,6 +32,13 @@ export const artistsTables = {
     .index("by_claimedBy", ["claimedBy"])
     .index("by_payee", ["payeeId"]),
 
+  // Each artist link's match key, so the same link always finds the same artist, whatever name
+  // a creator typed or the artist renamed their page to (convex/artists.ts artistFor).
+  artistLinks: defineTable({
+    key: v.string(),
+    artistId: v.id("artists"),
+  }).index("by_key", ["key"]),
+
   // A work's credit to an artist. Remixes inherit it through the lineage (convex/artists.ts
   // saleCredits); it's stored once, on the work whose creator added it.
   artistCredits: defineTable({

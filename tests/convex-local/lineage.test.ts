@@ -243,12 +243,17 @@ describe("publishing a remix as a variation or a fork", () => {
     // Sharing a kept remix that dropped a kept word makes it a fork without asking.
     // (Kept designs finish preparing in an action that can't run here.)
     await t.run((ctx) => ctx.db.patch("works", kept.workId, { status: "private" }));
+    // Shared before any comparison ran: it starts one and says to ask again, rather than refusing
+    // (a refusal would roll the start back, and the share could never go through).
+    await t.run((ctx) => ctx.db.patch("generations", asked, { remixCheck: undefined }));
+    expect(await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId })).toEqual({ comparing: true });
+    expect((await t.run((ctx) => ctx.db.get("generations", asked)))?.remixCheck).toMatchObject({ status: "pending", attempts: 1 });
     await t.run((ctx) =>
       ctx.db.patch("generations", asked, {
         remixCheck: { status: "done", requestedAt: Date.now(), attempts: 1, verdict: "variation", keptMissing: ["SLOW"] },
       }),
     );
-    const shared = await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId });
+    const shared = (await bob.as.mutation(api.publish.shareKeep, { workId: kept.workId })) as { cr: string };
     expect(shared.cr).toBe("103-001");
     expect((await getWork(t, kept.workId))!.kind).toBe("fork");
   });

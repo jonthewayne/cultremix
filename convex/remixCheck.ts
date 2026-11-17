@@ -32,7 +32,7 @@ export const compare = internalAction({
           compareRemix(original, remix, undefined, job.allowed),
           job.kept.length > 0 ? readDesignWords(remix) : null,
         ]);
-        const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words) : undefined;
+        const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words, job.asked) : undefined;
         console.log(
           "remixCheck ok",
           generationId,

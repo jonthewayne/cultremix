@@ -30,6 +30,8 @@ export async function batchPrompt(job: {
   styles: Array<{ attachment: number; weight: number; position?: number }>;
   // Image 1 is the published design being remixed.
   remixOfParent: boolean;
+  // What the member typed: the request and a remix's new words and characters (convex/studio.ts).
+  typed?: string;
   wordChanges?: string;
   partChanges?: string;
   // One design per call (the separate-call models) instead of a 2x2 grid.
@@ -66,7 +68,7 @@ export async function batchPrompt(job: {
       mixerPositions: mixerStyles.map((style, i) => style.position ?? i + 1),
       remix: job.remixOfParent,
     }),
-    screenRequest([job.instruction, job.partChanges ?? ""].join("\n")),
+    screenRequest(job.typed ?? job.instruction),
   ]);
   // A part's photo is always worked on (its likeness), whatever the request says about it.
   const roles = (read?.roles ?? rolesFromWords(job.instruction, numbered.length, job.remixOfParent)).map((role, i) =>

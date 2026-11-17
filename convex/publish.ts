@@ -73,7 +73,11 @@ function remixRelation(generation: Doc<"generations">, batch: Doc<"batches">, pa
   const waits = keptPieces(parent.remixFields).length > 0 || undefined;
   const check = generation.remixCheck;
   if (!check) return { status: "none", waits };
-  if (check.status === "pending") return { status: "pending", waits };
+  if (check.status === "pending") {
+    // Its last allowed comparison died: the remixer chooses, as when it fails.
+    if (check.attempts >= CHECK_ATTEMPTS && Date.now() - check.requestedAt >= CHECK_STALE_MS) return { status: "failed" };
+    return { status: "pending", waits };
+  }
   if (check.status === "failed") return { status: "failed" };
   if (check.keptMissing && check.keptMissing.length > 0) {
     const words = check.keptMissing.map((word) => `“${word}”`).join(", ");
@@ -141,7 +145,10 @@ export const checkRemix = mutation({
 // For convex/remixCheck.ts: the parent's art and the design to compare.
 export const remixCheckJob = internalQuery({
   args: { generationId: v.id("generations") },
-  returns: v.union(v.null(), v.object({ parentKey: v.string(), designKey: v.string(), allowed: v.optional(v.string()), kept: v.array(v.string()) })),
+  returns: v.union(
+    v.null(),
+    v.object({ parentKey: v.string(), designKey: v.string(), allowed: v.optional(v.string()), kept: v.array(v.string()), asked: v.array(v.string()) }),
+  ),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get("generations", args.generationId);
     if (!generation?.fullKey || generation.remixCheck?.status !== "pending") return null;
@@ -151,8 +158,11 @@ export const remixCheckJob = internalQuery({
     // The parts the parent's creator made remixable, so changing them (five elves where there were
     // three) doesn't count toward a fork.
     const allowed = allowedChangesNote(parent.remixParts ?? []) || undefined;
-    // The words its creator keeps, which the comparison reads back from the remix.
-    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields) };
+    // The words its creator keeps, which the comparison reads back from the remix, and what the
+    // remix asked for, so a kept word swapped for a near neighbour it asked for counts as changed.
+    const batch = await ctx.db.get("batches", generation.batchId);
+    const asked = batch ? [batch.instruction, ...(batch.wordChanges ?? []).map((change) => change.to)] : [];
+    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields), asked };
   },
 });
 
@@ -431,7 +441,9 @@ export const quick = mutation({
 // publishing's public steps: its own public folder, the feed, a model photo, the onchain record.
 export const shareKeep = mutation({
   args: { workId: v.id("works"), remixKind: v.optional(v.union(v.literal("variation"), v.literal("fork"))) },
-  returns: v.object({ workId: v.id("works"), cr: v.string() }),
+  // comparing: the comparison with its original has to finish first; it's running, so ask again
+  // in a moment (the keep page does).
+  returns: v.union(v.object({ workId: v.id("works"), cr: v.string() }), v.object({ comparing: v.literal(true) })),
   handler: async (ctx, args) => {
     const user = await requireMember(ctx);
     const work = await ctx.db.get("works", args.workId);
@@ -455,7 +467,13 @@ export const shareKeep = mutation({
     if (parent) {
       const relation: Relation = generation && batch ? remixRelation(generation, batch, parent) : { status: "none" };
       if (!args.remixKind && relation.required) remixKind = "fork";
-      if (relation.waits && relation.status === "none" && generation?.fullKey) await startRemixCheck(ctx, generation);
+      // Starting the comparison and then refusing would roll the start back, so a share that has
+      // to wait for it returns instead of throwing.
+      const unsettled = relation.status === "none" || relation.status === "pending";
+      if (unsettled && (relation.waits || remixKind === "fork") && generation?.fullKey) {
+        await startRemixCheck(ctx, generation);
+        return { comparing: true as const };
+      }
       checkRemixKind(relation, remixKind);
     }
     const { placement, crFamily, crExpression } = await allocateNumber(ctx, parent, remixKind);

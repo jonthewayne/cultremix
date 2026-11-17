@@ -8,27 +8,39 @@ import { editDistance, normalizeWords } from "./spelling";
 
 // How far a reading can be off and still be the kept word: the image model's slips and the reader's
 // misreads count as kept (TRASH drawn as TrROH is two letters off). One letter for words of up to
-// four letters, about a third beyond, and one more when it starts with the same letter.
-function allowedSlip(word: string, token: string) {
+// four letters, two up to six, about a third beyond. A near reading the remix's request asked for
+// (LIFE in "change LOVE to LIFE") is a replacement, not a slip.
+function allowedSlip(word: string) {
   const length = [...word].length;
-  return (length <= 4 ? 1 : Math.max(2, Math.round(length / 3))) + (token[0] === word[0] ? 1 : 0);
+  return length <= 4 ? 1 : length <= 6 ? 2 : Math.round(length / 3);
 }
 
 // The kept words a design's lettering no longer shows, in the order given, each once. Words of two
 // letters or fewer aren't checked: a reader skips them, and they rarely carry a design. Lettering
-// read in pieces ("NIGH T SHIFT") still counts.
-export function missingKeptWords(kept: ReadonlyArray<string>, read: ReadonlyArray<string>): Array<string> {
+// read in pieces ("NIGH T SHIFT") or run together ("NIGHTSHIFT") still counts; a kept word inside
+// another word (ART in SMART) doesn't. asked: the remix request's words and new remix-box words.
+export function missingKeptWords(
+  kept: ReadonlyArray<string>,
+  read: ReadonlyArray<string>,
+  asked: ReadonlyArray<string> = [],
+): Array<string> {
   const tokens = read.flatMap((piece) => normalizeWords(piece).split(" ").filter(Boolean));
   const have = new Set(tokens);
-  const joined = tokens.join("");
+  // Neighbouring pieces read together: NIGH + T.
+  for (let i = 0; i < tokens.length; i++) {
+    for (let k = 2; k <= 3 && i + k <= tokens.length; k++) have.add(tokens.slice(i, i + k).join(""));
+  }
+  const requested = new Set(asked.flatMap((text) => normalizeWords(text).split(" ").filter(Boolean)));
   const missing: Array<string> = [];
   const seen = new Set<string>();
   for (const piece of kept) {
     for (const word of normalizeWords(piece).split(" ")) {
       if ([...word].length < 3 || seen.has(word)) continue;
       seen.add(word);
-      if (have.has(word) || joined.includes(word)) continue;
-      const close = tokens.some((token) => Math.abs([...token].length - [...word].length) <= allowedSlip(word, token) && editDistance(word, token) <= allowedSlip(word, token));
+      if (have.has(word)) continue;
+      const runTogether = [...word].length >= 4 && tokens.some((token) => token.length > word.length && (token.startsWith(word) || token.endsWith(word)));
+      if (runTogether) continue;
+      const close = tokens.some((token) => !requested.has(token) && editDistance(word, token) <= allowedSlip(word));
       if (!close) missing.push(word);
     }
   }

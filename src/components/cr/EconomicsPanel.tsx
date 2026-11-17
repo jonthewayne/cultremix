@@ -66,7 +66,7 @@ export function EconomicsPanel({ cr }: { cr: string }) {
           <a href={`/u/${panel.brand.username}`} className="text-neutral-500 hover:underline">
             @{panel.brand.username}
           </a>{" "}
-          gets {percent(panel.brand.bps)} of the price as the brand behind this family.
+          is the brand behind this family.
           {panel.brand.creatorBps !== null && ` The brand sets the creators’ share in this family at ${percent(panel.brand.creatorBps)}.`}
         </p>
       )}
@@ -83,7 +83,9 @@ export function EconomicsPanel({ cr }: { cr: string }) {
       </p>
       <p className="mt-1 break-all font-mono text-xs text-neutral-500">SHA-256 {panel.configSha256}</p>
       <p className="mt-2 text-sm font-semibold">
-        {panel.provenance === "confirmed" ? "These shares are recorded on Monad." : "These shares will be recorded on Monad."}
+        {panel.provenance === "confirmed"
+          ? "This design and its lineage are recorded on Monad."
+          : "This design and its lineage will be recorded on Monad."}
       </p>
     </div>
   );

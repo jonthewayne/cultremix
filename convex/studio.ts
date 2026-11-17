@@ -1117,6 +1117,9 @@ const jobInputs = {
   model: v.string(),
   provider: v.string(),
   remixOfParent: v.boolean(),
+  // What the member typed for this batch: the request, plus a remix's new words and characters.
+  // The request screen and the lettering check read it (convex/lib/requestGuard.ts, promptLeak.ts).
+  typed: v.string(),
   // A remix's word changes, written for the prompt (convex/lib/remixFields.ts). Server only.
   wordChanges: v.optional(v.string()),
   // A remix's part changes, written for the prompt (convex/lib/remixParts.ts). Server only.
@@ -1215,6 +1218,11 @@ async function batchInputs(ctx: QueryCtx, batch: Doc<"batches">) {
     instruction: batch.instruction,
     presets: batch.presets,
     remixOfParent,
+    typed: [
+      batch.instruction,
+      ...(remixOfParent ? (batch.wordChanges ?? []).map((change) => change.to) : []),
+      ...(remixOfParent ? (batch.partChanges ?? []).flatMap((change) => (change.omit || !change.to ? [] : [change.to])) : []),
+    ].join("\n"),
     wordChanges,
     partChanges,
     attachments,
