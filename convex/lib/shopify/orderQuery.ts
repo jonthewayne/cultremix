@@ -18,6 +18,7 @@ query HydrateOrder($id: ID!) {
     currencyCode
     totalPriceSet { shopMoney { amount currencyCode } }
     totalShippingPriceSet { shopMoney { amount } }
+    shippingLines(first: 10) { nodes { discountedPriceSet { shopMoney { amount } } } }
     customAttributes { key value }
     shippingAddress { name company address1 address2 city provinceCode countryCodeV2 zip phone }
     lineItems(first: 100) {
@@ -66,6 +67,7 @@ export type RawOrder = {
   currencyCode?: string | null;
   totalPriceSet?: Money;
   totalShippingPriceSet?: Money;
+  shippingLines?: { nodes?: Array<{ discountedPriceSet?: Money } | null> | null } | null;
   customAttributes?: Array<Attr> | null;
   shippingAddress?: {
     name?: string | null;
@@ -228,7 +230,13 @@ export function normalizeOrder(raw: RawOrder): HydratedOrder {
     financialState: raw.displayFinancialStatus ?? "UNKNOWN",
     currency: raw.currencyCode ?? raw.totalPriceSet?.shopMoney?.currencyCode ?? "USD",
     totalCents: moneyCents(raw.totalPriceSet),
-    ...(raw.totalShippingPriceSet ? { shippingCents: moneyCents(raw.totalShippingPriceSet) } : {}),
+    // What the buyer actually paid for shipping: the shipping lines after their discounts (a free-
+    // shipping code), else the order's shipping total.
+    ...(raw.shippingLines?.nodes
+      ? { shippingCents: raw.shippingLines.nodes.reduce((sum, line) => sum + moneyCents(line?.discountedPriceSet), 0) }
+      : raw.totalShippingPriceSet
+        ? { shippingCents: moneyCents(raw.totalShippingPriceSet) }
+        : {}),
     ref: attr(raw.customAttributes, "_ref"),
     economicEventAt: paidAt ?? null,
     recipient,

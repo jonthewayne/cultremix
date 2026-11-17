@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { missingKeptWords, keptPieces } from "../../convex/lib/keptWords";
+import { exactWords, missingKeptWords, keptPieces } from "../../convex/lib/keptWords";
 import { GRID_CLOSING, SINGLE_CLOSING, keyedPrompt, studioPrompt } from "../../convex/lib/prompts";
 import { parseGuard } from "../../convex/lib/requestGuard";
 import { PROMPT_LETTERED, REQUEST_REFUSED, publicTileError } from "../../convex/lib/imageErrors";
@@ -114,6 +114,10 @@ describe("prompt protection", () => {
     expect(missingKeptWords(["EVER"], ["NEVER"], ["put an N in front of the first word"])).toEqual(["EVER"]);
     expect(missingKeptWords(["LOVE"], ["GLOVE"])).toEqual(["LOVE"]);
     expect(missingKeptWords(["SUN"], ["SUNSET"], ["", "SET"])).toEqual([]);
+    // Where a typed request could ask for it, a word the original shows exactly must read exactly.
+    expect(missingKeptWords(["LOVE"], ["LIVE"], ["swap the O in the big word for an I"], new Set(["LOVE"]))).toEqual(["LOVE"]);
+    expect(missingKeptWords(["TRASH ROYALTY"], ["TRASH ROYALTY"], ["make it gold"], new Set(["TRASH", "ROYALTY"]))).toEqual([]);
+    expect(exactWords(["TRASH ROYALTY"], ["TRASH", "R0YALTY"])).toEqual(["TRASH"]);
     expect(missingKeptWords(["ART"], ["SMART PEOPLE"])).toEqual(["ART"]);
     expect(missingKeptWords(["THE END"], ["OTHER BENDS"])).toEqual(["THE", "END"]);
     // Swapped for a neighbouring word: two letters off a short word is a different word.

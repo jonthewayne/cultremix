@@ -482,11 +482,26 @@ export const applyHydratedOrder = internalMutation({
       for (const line of snapshot.lines) prepared.push(await prepareLine(ctx, line));
       const costs = await linesCosts(ctx, { totalCents: snapshot.totalCents, shippingCollectedCents: snapshot.shippingCents ?? null }, prepared);
       const freshIds = new Set(fresh.map((line) => line.lineItemId));
+      // Lines saved earlier keep the costs they saved, so whatever more of the order's card fee and
+      // shipping shortfall now falls to them is recovered from the new lines instead.
+      let owed = 0;
+      for (const [i, { line }] of prepared.entries()) {
+        const saved = existing.find((item) => item.shopifyLineItemId === line.lineItemId)?.costs;
+        const now_ = costs[i];
+        if (saved && now_) owed += Math.max(0, now_.feeCents + now_.shippingCents - (saved.feeCents + saved.shippingCents));
+      }
       const freshCosts = [];
       for (const [i, { line, work, variant }] of prepared.entries()) {
         if (!freshIds.has(line.lineItemId)) continue;
-        await insertItem(ctx, orderId, line, work, variant, now, affiliateId, costs[i]);
-        freshCosts.push(costs[i]);
+        let lineCosts = costs[i];
+        if (lineCosts && owed > 0) {
+          const take = owed;
+          owed = 0;
+          const left = lineCosts.distributableCents - take;
+          lineCosts = { ...lineCosts, shippingCents: lineCosts.shippingCents + take, distributableCents: Math.max(0, left), belowCost: lineCosts.belowCost || (lineCosts.costKnown && left < 0) };
+        }
+        await insertItem(ctx, orderId, line, work, variant, now, affiliateId, lineCosts);
+        freshCosts.push(lineCosts);
       }
       if (!snapshot.test) await flagCosts(ctx, snapshot.name, freshCosts);
     }

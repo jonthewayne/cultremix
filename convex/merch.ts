@@ -702,7 +702,7 @@ export const refreshCosts = internalAction({
 export const savedProductIds = internalQuery({
   args: {},
   returns: v.array(v.number()),
-  handler: async (ctx) => (await ctx.db.query("merchProducts").take(100)).map((row) => row.productId),
+  handler: async (ctx) => (await ctx.db.query("merchProducts").take(300)).map((row) => row.productId),
 });
 
 export const saveCosts = internalMutation({

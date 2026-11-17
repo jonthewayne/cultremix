@@ -23,6 +23,10 @@ export function missingKeptWords(
   kept: ReadonlyArray<string>,
   read: ReadonlyArray<string>,
   asked: ReadonlyArray<string> = [],
+  // Kept words that must read exactly (or run together with another): no slip allowed. For a
+  // remix whose request asked for changes in words, a near reading of a word the original shows
+  // exactly is more likely a different word (LOVE as LIVE) than a misdrawn one.
+  strict: ReadonlySet<string> = new Set(),
 ): Array<string> {
   const tokens = read.flatMap((piece) => normalizeWords(piece).split(" ").filter(Boolean));
   const have = new Set(tokens);
@@ -51,7 +55,7 @@ export function missingKeptWords(
       if (runTogether) continue;
       // A slip changes letters inside the word; letters added at either end make another word
       // (LOVE into GLOVE, RAIN into TRAIN).
-      const close = tokens.some(
+      const close = !strict.has(word) && tokens.some(
         (token) => !requested.has(token) && !token.startsWith(word) && !token.endsWith(word) && editDistance(word, token) <= allowedSlip(word),
       );
       if (!close) missing.push(word);
@@ -63,4 +67,10 @@ export function missingKeptWords(
 // The kept pieces of a design's remixable words: every switched-off field's text.
 export function keptPieces(fields: ReadonlyArray<{ on: boolean; text: string }> | undefined): Array<string> {
   return (fields ?? []).filter((field) => !field.on && field.text.trim()).map((field) => field.text.trim());
+}
+
+// The kept words a reading shows letter for letter (the original's own lettering, read the same way).
+export function exactWords(kept: ReadonlyArray<string>, read: ReadonlyArray<string>): Array<string> {
+  const tokens = new Set(read.flatMap((piece) => normalizeWords(piece).split(" ").filter(Boolean)));
+  return [...new Set(kept.flatMap((piece) => normalizeWords(piece).split(" ")))].filter((word) => [...word].length >= 3 && tokens.has(word));
 }

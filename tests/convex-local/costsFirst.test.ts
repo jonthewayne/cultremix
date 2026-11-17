@@ -92,6 +92,24 @@ describe("costs before sharing", () => {
     expect(held).toMatchObject({ fulfillmentState: "needs_attention", attentionReason: expect.stringMatching(/less than it costs/u) });
   });
 
+  it("charges a line added later with the fee and shipping it brought, leaving earlier lines as saved", async () => {
+    const t = newTest();
+    await setup(t, 1295);
+    shopify.set(rawOrder({ id: 7004, lines: [{ id: 14, variant: 1002, quantity: 1, price: "36.00" }] }));
+    await deliver(t, { topic: "orders/paid", body: { id: 7004 } });
+    const first = await t.run(async (ctx) => (await ctx.db.query("orderItems").collect())[0]);
+    // Staff add a second shirt to the order in Shopify.
+    shopify.set(rawOrder({ id: 7004, updatedAt: "2026-10-02T18:00:00Z", lines: [{ id: 14, variant: 1002, quantity: 1, price: "36.00" }, { id: 15, variant: 1003, quantity: 1, price: "36.00" }] }));
+    await deliver(t, { topic: "refunds/create", body: { order_id: 7004, id: 1 } });
+    const items = await t.run((ctx) => ctx.db.query("orderItems").collect());
+    expect(items).toHaveLength(2);
+    expect(items.find((i) => i._id === first._id)?.costs).toEqual(first.costs);
+    const added = items.find((i) => i._id !== first._id)!;
+    // The order's card fee on $72 is 239; the first line kept 134, so the second recovers the rest,
+    // and the order's shipping shortfall (535 + 260 - 595 = 200) falls to it too.
+    expect(added.costs!.feeCents + added.costs!.shippingCents).toBe(239 - 134 + 200);
+  });
+
   it("shares nothing until a product's cost is saved", async () => {
     const t = newTest();
     const { a } = await setup(t, null);

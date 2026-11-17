@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { compareRemix } from "./lib/remixCompare";
-import { missingKeptWords } from "./lib/keptWords";
+import { exactWords, missingKeptWords } from "./lib/keptWords";
 import { fetchPublicImage } from "./lib/storage";
 import { readDesignWords } from "./lib/wordReader";
 
@@ -40,7 +40,12 @@ export const compare = internalAction({
           kept ? readDesignWords(original) : null,
         ]);
         const unreadable = new Set(before ? missingKeptWords(job.kept, before.words) : []);
-        const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words, job.asked).filter((word) => !unreadable.has(word)) : undefined;
+        // A request typed in words could ask for a kept word to change by a letter ("swap the O for
+        // an I"), so a kept word the original shows exactly has to read exactly in the remix. A remix
+        // made only with the boxes can't ask that, so a misdrawn letter is forgiven there.
+        const typedRequest = !job.boxesOnly && Boolean(job.asked[0]?.trim());
+        const strict = new Set(typedRequest && before ? exactWords(job.kept, before.words) : []);
+        const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words, job.asked, strict).filter((word) => !unreadable.has(word)) : undefined;
         console.log(
           "remixCheck ok",
           generationId,

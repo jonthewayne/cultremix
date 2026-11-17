@@ -421,6 +421,7 @@ export const updateMine = mutation({
     }
     if (args.decline !== undefined) patch.status = args.decline ? "declined" : "claimed";
     await ctx.db.patch("artists", artist._id, patch);
+    if (args.decline !== undefined) await rerecordArtist(ctx, artist._id, user._id);
     return null;
   },
 });
@@ -619,6 +620,8 @@ export const finishClaim = internalMutation({
   handler: async (ctx, args) => {
     const artist = await ctx.db.get("artists", args.artistId);
     if (!artist || artist.status === "unclaimed" || !artist.claimedBy || artist.reviewUntil === undefined) return null;
+    // Hidden by staff during review: the claim doesn't finish (adminUnclaim can still undo it).
+    if (artist.hidden) return null;
     const user = await ctx.db.get("users", artist.claimedBy);
     if (!user) return null;
     await ctx.db.patch("artists", artist._id, { reviewUntil: undefined, reviewJob: undefined, updatedAt: Date.now() });
@@ -708,7 +711,7 @@ export const adminUpdateArtist = mutation({
   args: { artistId: v.id("artists"), name: v.optional(v.string()), hidden: v.optional(v.boolean()) },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireAdmin(ctx, "manage");
+    const admin = await requireAdmin(ctx, "manage");
     const artist = await ctx.db.get("artists", args.artistId);
     if (!artist) throw new ConvexError({ code: "NOT_FOUND", message: "No such artist." });
     const patch: Partial<Doc<"artists">> = { updatedAt: Date.now() };
@@ -720,6 +723,7 @@ export const adminUpdateArtist = mutation({
     }
     if (args.hidden !== undefined) patch.hidden = args.hidden || undefined;
     await ctx.db.patch("artists", artist._id, patch);
+    if (args.hidden !== undefined) await rerecordArtist(ctx, artist._id, admin._id);
     return null;
   },
 });
@@ -767,3 +771,10 @@ export const recordAllCredits = internalMutation({
     return { checked: works.length, cursor: page.isDone ? null : page.continueCursor, secret };
   },
 });
+
+// Queues fresh Monad records for every public design crediting this artist, after a decline or a
+// hide changes which credits stand.
+async function rerecordArtist(ctx: MutationCtx, artistId: Id<"artists">, by: Id<"users">) {
+  const rows = await ctx.db.query("artistCredits").withIndex("by_artist", (q) => q.eq("artistId", artistId)).take(200);
+  for (const workId of new Set(rows.map((row) => row.workId))) await recordCredits(ctx, workId, by);
+}

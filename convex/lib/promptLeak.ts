@@ -10,7 +10,7 @@ import { normalizeWords } from "./spelling";
 // which keeps the reading off ordinary batches. Pure, for tests.
 
 const SUSPECT =
-  /\b(?:above|before|earlier|previous|preceding|instruct\w*|prompt\w*|rules?|system|told|given|sent|notes?|descri\w*|definitions?|verbatim|word.for.word|repeat\w*|quot\w*|context|hidden|secret|guidelines?|directions?|translat\w*|reveal\w*|disclos\w*|config\w*|summar\w*|setup|behind the scenes)\b/iu;
+  /\b(?:above|brief|asked|received|before|earlier|previous|preceding|instruct\w*|prompt\w*|rules?|system|told|given|sent|notes?|descri\w*|definitions?|verbatim|word.for.word|repeat\w*|quot\w*|context|hidden|secret|guidelines?|directions?|translat\w*|reveal\w*|disclos\w*|config\w*|summar\w*|setup|behind the scenes)\b/iu;
 
 // The same words in the languages members write in most, beside English. A request in another
 // language the screen couldn't answer is read anyway (convex/imageGen.ts lettersPrompt).
