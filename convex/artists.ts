@@ -724,6 +724,12 @@ export const adminUpdateArtist = mutation({
     if (args.hidden !== undefined) patch.hidden = args.hidden || undefined;
     await ctx.db.patch("artists", artist._id, patch);
     if (args.hidden !== undefined) await rerecordArtist(ctx, artist._id, admin._id);
+    // Shown again while a claim's review was due: finish it when the window ends, or now.
+    if (args.hidden === false && artist.hidden && artist.reviewUntil !== undefined) {
+      const at = Math.max(0, artist.reviewUntil - Date.now());
+      const job = await ctx.scheduler.runAfter(at, internal.artists.finishClaim, { artistId: artist._id });
+      await ctx.db.patch("artists", artist._id, { reviewJob: job });
+    }
     return null;
   },
 });
@@ -775,6 +781,7 @@ export const recordAllCredits = internalMutation({
 // Queues fresh Monad records for every public design crediting this artist, after a decline or a
 // hide changes which credits stand.
 async function rerecordArtist(ctx: MutationCtx, artistId: Id<"artists">, by: Id<"users">) {
+  // At most this many designs at once; the deploy step (recordAllCredits) catches any beyond it.
   const rows = await ctx.db.query("artistCredits").withIndex("by_artist", (q) => q.eq("artistId", artistId)).take(200);
   for (const workId of new Set(rows.map((row) => row.workId))) await recordCredits(ctx, workId, by);
 }

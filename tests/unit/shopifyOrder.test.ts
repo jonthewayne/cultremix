@@ -4,6 +4,14 @@ import { listUpdatedOrders } from "../../convex/lib/shopify/reconcile";
 import { rawOrder } from "../fixtures/shopifyOrder";
 
 describe("normalizeOrder", () => {
+  it("reads the shipping the buyer paid after discounts, from the shipping lines", () => {
+    const base = rawOrder({ lines: [{ id: 1, variant: 2, quantity: 1, price: "24.00" }] });
+    const m = (amount: string) => ({ shopMoney: { amount, currencyCode: "USD" } });
+    expect(normalizeOrder({ ...base, totalShippingPriceSet: m("5.95"), shippingLines: { nodes: [{ discountedPriceSet: m("0.00") }] } }).shippingCents).toBe(0);
+    expect(normalizeOrder({ ...base, totalShippingPriceSet: m("5.95") }).shippingCents).toBe(595);
+    expect(normalizeOrder(base).shippingCents).toBeUndefined();
+  });
+
   it("reads lines, payment time, and the shipping recipient", () => {
     const order = normalizeOrder(
       rawOrder({

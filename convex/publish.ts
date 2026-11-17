@@ -187,6 +187,9 @@ export const remixCheckJob = internalQuery({
       // Made only with the remix boxes: it's a variation unless a kept word is gone, so only the
       // lettering is read, not the whole comparison.
       boxesOnly: v.boolean(),
+      // Free text was typed: a request, or a character box's words. Text can ask for a kept word to
+      // change by a letter, so a kept word then has to read exactly.
+      typed: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -205,7 +208,8 @@ export const remixCheckJob = internalQuery({
       ? [batch.instruction, ...(batch.wordChanges ?? []).map((change) => change.to), ...(batch.partChanges ?? []).flatMap((change) => (change.to ? [change.to] : []))]
       : [];
     const boxesOnly = batch ? remixChangedOnlyWords(batch, parent.artKey) : false;
-    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields), asked, boxesOnly };
+    const typed = Boolean(batch && (batch.instruction.trim() || (batch.partChanges ?? []).some((change) => change.to?.trim())));
+    return { parentKey: parent.artKey, designKey: generation.fullKey, allowed, kept: keptPieces(parent.remixFields), asked, boxesOnly, typed };
   },
 });
 

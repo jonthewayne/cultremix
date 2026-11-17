@@ -478,7 +478,7 @@ export const applyHydratedOrder = internalMutation({
     // Costs are worked out across every line of the order (the card fee and any shipping shortfall
     // are the order's), and saved on the lines seen for the first time.
     if (fresh.length > 0) {
-      const prepared = [];
+      const prepared: Array<PreparedLine> = [];
       for (const line of snapshot.lines) prepared.push(await prepareLine(ctx, line));
       const costs = await linesCosts(ctx, { totalCents: snapshot.totalCents, shippingCollectedCents: snapshot.shippingCents ?? null }, prepared);
       const freshIds = new Set(fresh.map((line) => line.lineItemId));
@@ -490,15 +490,27 @@ export const applyHydratedOrder = internalMutation({
         const now_ = costs[i];
         if (saved && now_) owed += Math.max(0, now_.feeCents + now_.shippingCents - (saved.feeCents + saved.shippingCents));
       }
+      // Spread over the new lines that have something to share, each taking what it can; anything
+      // none can take falls on the last, which then reads as below cost and waits for the owner.
+      const takers = prepared
+        .map((p, i) => ({ i, c: costs[i] }))
+        .filter(({ i, c }) => freshIds.has(prepared[i].line.lineItemId) && c?.costKnown && prepared[i].work);
+      const extra = new Map<number, number>();
+      for (const [n, { i, c }] of takers.entries()) {
+        if (owed <= 0) break;
+        const take = n === takers.length - 1 ? owed : Math.min(owed, c!.distributableCents);
+        extra.set(i, take);
+        owed -= take;
+      }
       const freshCosts = [];
       for (const [i, { line, work, variant }] of prepared.entries()) {
         if (!freshIds.has(line.lineItemId)) continue;
         let lineCosts = costs[i];
-        if (lineCosts && owed > 0) {
-          const take = owed;
-          owed = 0;
+        const take = extra.get(i) ?? 0;
+        if (lineCosts && take > 0) {
           const left = lineCosts.distributableCents - take;
-          lineCosts = { ...lineCosts, shippingCents: lineCosts.shippingCents + take, distributableCents: Math.max(0, left), belowCost: lineCosts.belowCost || (lineCosts.costKnown && left < 0) };
+          // Recorded with its shipping: the earlier lines' part of the order's fee and shortfall.
+          lineCosts = { ...lineCosts, shippingCents: lineCosts.shippingCents + take, distributableCents: Math.max(0, left), belowCost: lineCosts.belowCost || left < 0 };
         }
         await insertItem(ctx, orderId, line, work, variant, now, affiliateId, lineCosts);
         freshCosts.push(lineCosts);

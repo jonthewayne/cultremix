@@ -40,11 +40,10 @@ export const compare = internalAction({
           kept ? readDesignWords(original) : null,
         ]);
         const unreadable = new Set(before ? missingKeptWords(job.kept, before.words) : []);
-        // A request typed in words could ask for a kept word to change by a letter ("swap the O for
-        // an I"), so a kept word the original shows exactly has to read exactly in the remix. A remix
-        // made only with the boxes can't ask that, so a misdrawn letter is forgiven there.
-        const typedRequest = !job.boxesOnly && Boolean(job.asked[0]?.trim());
-        const strict = new Set(typedRequest && before ? exactWords(job.kept, before.words) : []);
+        // Typed text (a request, or a character box's words) could ask for a kept word to change by a
+        // letter ("swap the O for an I"), so a kept word the original shows exactly has to read
+        // exactly in the remix. Where nothing was typed, a misdrawn letter is forgiven.
+        const strict = new Set(job.typed && before ? exactWords(job.kept, before.words) : []);
         const keptMissing = lettering ? missingKeptWords(job.kept, lettering.words, job.asked, strict).filter((word) => !unreadable.has(word)) : undefined;
         console.log(
           "remixCheck ok",
